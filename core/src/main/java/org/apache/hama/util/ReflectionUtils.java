@@ -29,6 +29,7 @@ import com.google.common.base.Preconditions;
 /**
  * Refelction utility for BSP programmes.
  */
+@Deprecated
 public class ReflectionUtils {
 
   public static final Log LOG = LogFactory.getLog(ReflectionUtils.class);

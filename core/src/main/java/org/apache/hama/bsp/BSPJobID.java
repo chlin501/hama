@@ -27,7 +27,7 @@ import org.apache.hadoop.io.Text;
 /**
  * BSPJobID represents the immutable and unique identifier for the job.
  */
-public class BSPJobID extends ID implements Comparable<ID> {
+public final class BSPJobID extends ID implements Comparable<ID> {
   protected static final String JOB = "job";
   private final Text jtIdentifier;
 

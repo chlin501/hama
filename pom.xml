@@ -91,6 +91,7 @@
     <commons-configuration.version>1.7</commons-configuration.version>
     <commons-lang.version>2.6</commons-lang.version>
     <commons-httpclient.version>3.0.1</commons-httpclient.version>
+    <commons-collections.version>3.2.1</commons-collections.version>
     <commons-io.version>2.4</commons-io.version>
     <hadoop.version>1.2.0</hadoop.version>
     <protobuf.version>2.5.0</protobuf.version>
@@ -101,6 +102,8 @@
     <log4j.version>1.2.16</log4j.version>
     <zookeeper.version>3.4.5</zookeeper.version>
     <ant.version>1.7.1</ant.version>
+    <scala.version>2.10</scala.version>
+    <akka.version>2.2.3</akka.version>
   </properties>
 
   <repositories>
@@ -114,6 +117,16 @@
       <snapshots>
         <enabled>false</enabled>
       </snapshots>
+    </repository>
+    <repository>
+      <id>scala-tools.org releases</id>
+      <name>Scala-Tools Maven2 Repository</name>
+      <url>http://oss.sonatype.org/content/repositories/releases</url>
+    </repository>
+    <repository>
+      <id>scala-tools.org snapshot</id>
+      <name>Scala-Tools Maven2 Repository</name>
+      <url>https://oss.sonatype.org/content/repositories/snapshots</url>
     </repository>
     <repository>
       <id>cloudera-repo</id>
@@ -226,6 +239,11 @@
         <groupId>commons-httpclient</groupId>
         <artifactId>commons-httpclient</artifactId>
         <version>${commons-httpclient.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>commons-collections</groupId>
+        <artifactId>commons-collections</artifactId>
+        <version>${commons-collections.version}</version>
       </dependency>
       <dependency>
         <groupId>org.mortbay.jetty</groupId>

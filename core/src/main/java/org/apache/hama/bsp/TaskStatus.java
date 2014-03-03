@@ -76,10 +76,18 @@ public class TaskStatus implements Writable, Cloneable {
     this.taskId = taskId;
     this.progress = progress;
     this.runState = runState;
+    if(null == this.runState)
+      throw new IllegalArgumentException("State is not provided.");
     this.stateString = stateString;
+    if(null == this.stateString)
+      throw new IllegalArgumentException("stateString is not provided.");
     this.groomServer = groomServer;
     this.phase = phase;
+    if(null == this.phase)
+      throw new IllegalArgumentException("Phase is not provided.");
     this.counters = counters;
+    if(null == this.counters)
+      throw new IllegalArgumentException("Counters is not provided.");
   }
 
   // //////////////////////////////////////////////////
