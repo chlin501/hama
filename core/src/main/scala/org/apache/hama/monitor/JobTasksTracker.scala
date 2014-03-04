@@ -20,41 +20,25 @@ package org.apache.hama.monitor
 import akka.actor._
 import akka.event._
 
+import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.master._
 
-class DefaultMonitor(conf: HamaConfiguration) extends Actor {
+class JobTasksTracker(conf: HamaConfiguration) extends Actor {
 
   val LOG = Logging(context.system, this)
 
-  var services = Map.empty[String, ActorRef]
-
-  def initialize() {
-    val jobTasksTracker = 
-      context.actorOf(Props(classOf[JobTasksTracker], conf), 
-                      "job-tasks-tracker")
-    jobTasksTracker ! Ready
-  }
-
-  override def preStart() {
-    initialize()
-  }
+  var mapping = Map.empty[BSPJobID, Task]
 
   def receive = {
-    case Ready => {
-      if(1 == services.size) {
-        sender ! Ack("monitor")
-      } else LOG.info("Only {} are available.", services.keys.mkString(", "))
-    } 
-    case Ack(name) => {
-      services ++= Map(name -> sender)
-      context.watch(sender)
-      LOG.info("{} is loaded", name)
+    case Ready =>  sender ! Ack("jobTasksTracker")
+    case Report(task) => { 
+       
     }
     case _ => {
       LOG.warning("Unknown monitor message.")
     }
-
   }
 
 

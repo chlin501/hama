@@ -58,10 +58,10 @@ class TestMasterSpec extends TestKit(ActorSystem("TestMasterSpec",
   "a master actor" must {
     "wait for other actors" in {
       val master = TestActorRef(new Master(new HamaConfiguration))
-      for(i <- 1 to 5)
-        master ! Ready
+      import system.dispatcher
+      system.scheduler.schedule(1.seconds, 1.seconds, master, Ready)
       var flag = false
-      receiveWhile(3 seconds) {
+      receiveWhile(10 seconds) {
         case msg => {
           LOG.info("Master returns "+msg)
           if(msg.equals(Ack("yes"))) flag = true
