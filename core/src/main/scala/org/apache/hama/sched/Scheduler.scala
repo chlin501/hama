@@ -17,18 +17,12 @@
  */
 package org.apache.hama.sched
 
-import akka.actor._
-import akka.event._
-
-import org.apache.hama.HamaConfiguration
+import org.apache.hama._
 import org.apache.hama.master._
 
-class Scheduler(conf: HamaConfiguration) extends Actor {
-
-  val LOG = Logging(context.system, this)
+class Scheduler(conf: HamaConfiguration) extends Director(conf) {
  
-  def receive = {
-    case Ready => sender ! Ack("sched")
-    case _ => LOG.warning("Unknown message for sched.")
-  }
+  override def receive = {
+    ({case Ready => { sender ! Ack("sched") }}: Receive) orElse unknown
+  } 
 }

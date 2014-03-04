@@ -17,29 +17,25 @@
  */
 package org.apache.hama.monitor
 
-import akka.actor._
-import akka.event._
-
+import org.apache.hama._
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.HamaConfiguration
 import org.apache.hama.master._
 
-class JobTasksTracker(conf: HamaConfiguration) extends Actor {
+final class JobTasksTracker(conf: HamaConfiguration) extends Director(conf) {
 
-  val LOG = Logging(context.system, this)
+  var tasksMapping = Map.empty[BSPJobID, Task]
 
-  var mapping = Map.empty[BSPJobID, Task]
-
-  def receive = {
+  override def receive = {
     case Ready =>  sender ! Ack("jobTasksTracker")
-    case Report(task) => { 
-       
-    }
-    case _ => {
-      LOG.warning("Unknown monitor message.")
-    }
-  }
+    ({case Report(newTask) => { 
+      val bspJobId = newTask.getId.getJobID
+      tasksMapping.get(bspJobId) match {
+        case Some(oldTask) => tasksMapping ++= Map(bspJobId -> newTask)
+        case None =>  tasksMapping ++= Map(bspJobId -> newTask)
+      }
+    }}: Receive) orElse unknown
+  } 
 
 
 }

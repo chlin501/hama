@@ -17,24 +17,16 @@
  */
 package org.apache.hama.master
 
-import akka.actor.{Actor, ActorSystem, Props}
-import akka.event.Logging
-
-import org.apache.hama.HamaConfiguration
+import org.apache.hama._
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.master._
 
-class Receptionist(conf: HamaConfiguration) extends Actor {
+class Receptionist(conf: HamaConfiguration) extends Director(conf) {
 
-  val LOG = Logging(context.system, this)
-
-  def receive = {
+  override def receive = {
     case Ready => sender ! Ack("receptionist")
-    case Submit(job: Job) => {
+    ({case Submit(job: Job) => {
       LOG.info("Client submit job ..."+job.getName) 
-    }
-
-  }
-
-
+    }}: Receive) orElse unknown
+  } 
 }

@@ -15,6 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master
+package org.apache.hama.groom
 
-case object Ready
+import org.apache.hama._
+import org.apache.hama.master._
+
+class GroomServer(conf: HamaConfiguration) extends Director(conf) {
+
+  override def receive = {
+    ({case Ready => {
+      sender ! Ack("groomServer")
+    }}: Receive) orElse unknown
+  } 
+}

@@ -24,7 +24,7 @@ import akka.testkit._
 
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
-import org.apache.hama.HamaConfiguration
+import org.apache.hama._
 import org.junit.runner.RunWith
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.WordSpecLike

@@ -17,22 +17,13 @@
  */
 package org.apache.hama.master
 
-import akka.actor.{Actor, ActorSystem, Props}
-import akka.event.Logging
-
-import org.apache.hama.HamaConfiguration
+import org.apache.hama._
 import org.apache.hama.bsp.v2.GroomServerStatus
 import org.apache.hama.master._
 
-class GroomManager(conf: HamaConfiguration) extends Actor {
+class GroomManager(conf: HamaConfiguration) extends Director(conf) {
 
-  val LOG = Logging(context.system, this)
-
-  def receive = {
-    case Ready => sender ! Ack("groomManager")
-    case Register(groomStatus: GroomServerStatus) => {
-      //  
-    }
-
-  }
+  override def receive = {
+    ({case Ready => {sender ! Ack("groomManager")}} : Receive) orElse unknown
+  } 
 }
