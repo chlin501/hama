@@ -38,7 +38,7 @@
     </dependency>
     <dependency>
       <groupId>com.typesafe.akka</groupId>
-      <artifactId>akka-kernel_${scala.version}</artifactId>
+      <artifactId>akka-contrib_${scala.version}</artifactId>
       <version>${akka.version}</version>
     </dependency>
     <dependency>
@@ -131,8 +131,8 @@
     </dependency>
     <dependency>
       <groupId>com.typesafe.akka</groupId>
-      <artifactId>akka-testkit_2.10</artifactId>
-      <version>2.2.3</version>
+      <artifactId>akka-testkit_${scala.version}</artifactId>
+      <version>${akka.version}</version>
     </dependency>
     <dependency>
       <groupId>junit</groupId>
