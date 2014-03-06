@@ -20,11 +20,11 @@ package org.apache.hama.master
 import akka.actor._
 import akka.actor.SupervisorStrategy._
 import org.apache.hama._
-import org.apache.hama.sched.Scheduler
-import org.apache.hama.monitor.DefaultMonitor
 import scala.concurrent.duration._
 
-class Master(conf: HamaConfiguration) extends Director(conf) {
+class Master(conf: HamaConfiguration) extends Service(conf) {
+
+  override def name: String = conf.get("bsp.master.name", "bspmaster")
  
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
@@ -33,20 +33,16 @@ class Master(conf: HamaConfiguration) extends Director(conf) {
       case _: Exception                => Escalate
     }
 
-  def initialize() {
+  override def initialize() {
     create("groomManager", classOf[GroomManager]) 
-    create("monitor", classOf[DefaultMonitor]) 
+    create("monitor", classOf[Monitor]) 
     create("sched", classOf[Scheduler]) 
     create("receptionist", classOf[Receptionist]) 
   }
 
-  override def preStart() {
-    initialize() 
-  }
-
   override def receive = {
     ({case Ready => {
-      if(4 != services.size) {
+      if(serviceCount != services.size) {
         LOG.info("Currently {} services are ready.", services.size)
         sender ! Ack("no") // perhaps skip
       } else {

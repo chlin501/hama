@@ -15,34 +15,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.monitor
+package org.apache.hama.groom
 
-import akka.actor._
 import org.apache.hama._
-import org.apache.hama.master._
+import org.apache.hama.groom.monitor._
 
-class DefaultMonitor(conf: HamaConfiguration) extends Director(conf) {
+class Monitor(conf: HamaConfiguration) extends Service(conf) {
 
-  var bspmaster: ActorRef = _
+  override def name: String = "monitor"
 
-  def initialize() {
-    create("jobTasksTracker", classOf[JobTasksTracker])
+  override def initialize() {
+    create("tasksReporter", classOf[TasksReporter])
   }
 
-  override def preStart() {
-    initialize()
-  }
-
-  override def receive = {
-    case Proxy(master) => {
-      bspmaster = master
-    }
-    ({case Ready => {
-      if(1 == services.size) {
-        sender ! Ack("monitor")
-      } else LOG.info("Only {} are available.", services.keys.mkString(", "))
-    }}: Receive) orElse ack orElse unknown
-  } 
-
+  override def receive = ready orElse ack orElse unknown
 
 }

@@ -19,10 +19,12 @@ package org.apache.hama.groom
 
 import org.apache.hama._
 
-class Registrator(conf: HamaConfiguration) extends Service(conf) {
+abstract class GroomAssistant(conf: HamaConfiguration) extends Service(conf) {
 
-  override def name: String = "registrator"
-
-  override def receive = ack orElse unknown
+  protected val masterInfo = 
+    ProxyInfo(conf.get("bsp.msater.name", "bspmaster"),
+              conf.get("bsp.master.actor-system.name", "MasterSystem"),
+              conf.get("bsp.master.address", "localhost"),
+              conf.getInt("bsp.master.port", 40000))
 
 }

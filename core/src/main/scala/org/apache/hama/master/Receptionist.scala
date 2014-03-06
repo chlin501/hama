@@ -21,12 +21,20 @@ import org.apache.hama._
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.master._
 
-class Receptionist(conf: HamaConfiguration) extends Director(conf) {
+/**
+ * Receive job submission from clients and put the job to the wait queue.
+ */
+class Receptionist(conf: HamaConfiguration) extends Service(conf) {
+
+  def name: String = "receptionist"
+
+  // val wait queue
 
   override def receive = {
-    case Ready => sender ! Ack("receptionist")
+    ready orElse
     ({case Submit(job: Job) => {
       LOG.info("Client submit job ..."+job.getName) 
+      // add to wait queue
     }}: Receive) orElse unknown
   } 
 }

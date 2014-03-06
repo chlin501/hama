@@ -21,37 +21,15 @@ import akka.actor._
 import akka.event._
 import scala.concurrent.duration._
 
-abstract class Director(conf: HamaConfiguration) extends Actor {
+trait Agent extends Actor {
   
   protected val LOG = Logging(context.system, this)
 
-  protected var services = Map.empty[String, ActorRef]
-  protected var cancelWhenReady = Map.empty[String, Cancellable]
-  
-  protected def create[A <: Actor](name: String, target: Class[A]) {
-    val actor = context.actorOf(Props(target, conf), name)
-    import context.dispatcher
-    val cancellable = 
-      context.system.scheduler.schedule(0.seconds, 2.seconds, actor, Ready)
-    cancelWhenReady ++= Map(name -> cancellable)
-  }
+  protected def name: String 
 
-  def ack: Receive = {
-    case Ack(name) => {
-      LOG.info("Actor {} is ready.", name)
-      services ++= Map(name -> sender)
-      context.watch(sender)
-      cancelWhenReady.get(name) match {
-        case Some(cancellable) => cancellable.cancel
-        case None => LOG.warning("Can't cancel message for {}.", name)
-      }
-    }
-  }
-
-  def unknown: Receive = {
+  protected def unknown: Receive = {
     case _ => {
-      LOG.warning("Unknown message for master.")
+      LOG.warning("Unknown message for {}.", name)
     }
   }
- 
 }

@@ -21,9 +21,20 @@ import org.apache.hama._
 import org.apache.hama.bsp.v2.GroomServerStatus
 import org.apache.hama.master._
 
-class GroomManager(conf: HamaConfiguration) extends Director(conf) {
+/**
+ * A service that manages a set of {@link org.apache.hama.groom.GroomServer}s.
+ * @param conf contains specific configuration for this service. 
+ */
+class GroomManager(conf: HamaConfiguration) extends Service(conf) {
+
+  def name: String = "groomManager"
+
+  def mapping = Map.empty[String, GroomServerStatus]
 
   override def receive = {
-    ({case Ready => {sender ! Ack("groomManager")}} : Receive) orElse unknown
-  } 
+    ready orElse 
+    ({case Register(groom) => {
+      LOG.info("GroomServer {} now registers.", groom.name) 
+     }}: Receive) orElse unknown
+  }
 }

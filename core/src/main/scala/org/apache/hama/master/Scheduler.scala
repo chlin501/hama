@@ -15,8 +15,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.monitor
+package org.apache.hama.master
 
-import org.apache.hama.bsp.v2.Task
+import org.apache.hama._
 
-case class Report(task: Task)
+class Scheduler(conf: HamaConfiguration) extends Service(conf) {
+
+  override def name: String = "sched"
+ 
+  override def receive = ready orElse unknown
+
+}

@@ -19,4 +19,4 @@ package org.apache.hama
 
 import akka.actor._
 
-case class Proxy(bspmaster: ActorRef)
+case class Proxy(target: String, ref: ActorRef)

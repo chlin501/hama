@@ -15,14 +15,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama.groom.monitor
 
 import org.apache.hama._
+import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.bsp.v2.Task
+import org.apache.hama.master._
 
-class Registrator(conf: HamaConfiguration) extends Service(conf) {
+final class TasksReporter(conf: HamaConfiguration) extends Service(conf) {
 
-  override def name: String = "registrator"
+  var tasksMapping = Map.empty[BSPJobID, Task]
 
-  override def receive = ack orElse unknown
+  override def name: String = "taskReporter"
 
+  override def receive = {
+    ready orElse
+    ({case Report(newTask) => { 
+      val bspJobId = newTask.getId.getJobID
+      tasksMapping.get(bspJobId) match {
+        case Some(oldTask) => tasksMapping ++= Map(bspJobId -> newTask)
+        case None =>  tasksMapping ++= Map(bspJobId -> newTask)
+      }
+    }}: Receive) orElse unknown
+  } 
 }

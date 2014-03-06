@@ -15,19 +15,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master
+package org.apache.hama.groom
 
-import akka.actor._
 import org.apache.hama._
 
-class TaskManager(conf: HamaConfiguration) extends Director(conf) {
+class TaskManager(conf: HamaConfiguration) extends Service(conf) {
 
-  var bspmaster: ActorRef = _
+  override def name: String = "taskManager"
 
-  override def receive = {
-    case Proxy(master) => {
-      bspmaster = master   
-    }
-    ({case Ready => { sender ! Ack("taskManager") }} : Receive) orElse unknown
-  } 
+  override def receive = ready orElse unknown
 }

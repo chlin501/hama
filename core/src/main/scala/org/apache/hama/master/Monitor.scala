@@ -15,27 +15,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.monitor
+package org.apache.hama.master
 
+import akka.actor._
 import org.apache.hama._
-import org.apache.hama.bsp.BSPJobID
-import org.apache.hama.bsp.v2.Task
-import org.apache.hama.master._
+import org.apache.hama.master.monitor._
 
-final class JobTasksTracker(conf: HamaConfiguration) extends Director(conf) {
+class Monitor(conf: HamaConfiguration) extends Service(conf) {
 
-  var tasksMapping = Map.empty[BSPJobID, Task]
+  override def name: String = "monitor"
+
+  override def initialize() {
+    create("jobTasksTracker", classOf[JobTasksTracker])
+  }
 
   override def receive = {
-    case Ready =>  sender ! Ack("jobTasksTracker")
-    ({case Report(newTask) => { 
-      val bspJobId = newTask.getId.getJobID
-      tasksMapping.get(bspJobId) match {
-        case Some(oldTask) => tasksMapping ++= Map(bspJobId -> newTask)
-        case None =>  tasksMapping ++= Map(bspJobId -> newTask)
-      }
-    }}: Receive) orElse unknown
+    ({case Ready => {
+      if(serviceCount == services.size) {
+        sender ! Ack("monitor")
+      } else LOG.info("Only {} are available.", services.keys.mkString(", "))
+    }}: Receive) orElse ack orElse unknown
   } 
-
-
 }

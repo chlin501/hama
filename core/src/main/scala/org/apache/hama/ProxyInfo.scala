@@ -15,14 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama
 
-import org.apache.hama._
-
-class Registrator(conf: HamaConfiguration) extends Service(conf) {
-
-  override def name: String = "registrator"
-
-  override def receive = ack orElse unknown
-
+case class ProxyInfo(actorName: String,
+                     system: String, 
+                     host: String,
+                     port: Int) {
+  val path = "akka.tcp://"+system+"@"+host+":"+port+"/user/"+actorName
 }

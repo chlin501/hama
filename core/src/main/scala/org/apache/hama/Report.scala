@@ -15,14 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.sched
+package org.apache.hama
 
-import org.apache.hama._
-import org.apache.hama.master._
+import org.apache.hama.bsp.v2.Task
 
-class Scheduler(conf: HamaConfiguration) extends Director(conf) {
- 
-  override def receive = {
-    ({case Ready => { sender ! Ack("sched") }}: Receive) orElse unknown
-  } 
-}
+case class Report(task: Task)
