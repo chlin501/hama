@@ -23,6 +23,6 @@ class Registrator(conf: HamaConfiguration) extends Service(conf) {
 
   override def name: String = "registrator"
 
-  override def receive = ack orElse unknown
+  override def receive = ready orElse ack orElse unknown
 
 }

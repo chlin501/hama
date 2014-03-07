@@ -59,12 +59,15 @@ abstract class Service(conf: HamaConfiguration) extends Agent {
   /**
    * Logic for intantiating necessary prerequisite operations.
    */
-  def initialize = { LOG.warning("Default initialize method is called.") }
+  def initialize = { }
 
   override def preStart = initialize
   
   /**
    * Create a service actor and schedule message checking if it's ready.
+   * Another service must be in the same jvm as actor that creates the service,
+   * so keep sending message instead of scheduleOnce.
+   *
    * @param service is the name of the service actor.
    * @param target denotes the class name of that actor.
    */
@@ -80,6 +83,10 @@ abstract class Service(conf: HamaConfiguration) extends Agent {
   /**
    * Lookup a proxy actor by sending an {@link Identify} and schedule a message
    * indicating timeout if no reply.
+   * When timeout, the actor needs to explicitly lookup() again, so we use 
+   * scheduleOnce instead of schedule function. This is due to proxy is inter-
+   * jvm, which is different from create().
+   *
    * @param target denotes the remote target actor name.
    * @param path indicate the actor path of target actor.
    */
@@ -88,8 +95,7 @@ abstract class Service(conf: HamaConfiguration) extends Agent {
       context.system.actorSelection(path) ! Identify(path)
       import context.dispatcher
       val cancellable =
-        context.system.scheduler.schedule(0.seconds, 3.seconds, self,
-                                          Timeout(target))
+        context.system.scheduler.scheduleOnce(3.seconds, self, Timeout(target))
       cancelProxiesWhenReady ++= Map(target -> cancellable)
     }
   }
@@ -107,7 +113,8 @@ abstract class Service(conf: HamaConfiguration) extends Agent {
     proxies ++= Map(target -> proxy)
     cancelProxiesWhenReady.get(target) match {
       case Some(cancellable) => cancellable.cancel
-      case None => LOG.warning("Can't cancel message for {}.", target)
+      case None => 
+        LOG.warning("Can't cancel for proxy {} not found!", target)
     }
   }
 
@@ -122,7 +129,8 @@ abstract class Service(conf: HamaConfiguration) extends Agent {
       context.watch(sender)
       cancelServicesWhenReady.get(service) match {
         case Some(cancellable) => cancellable.cancel
-        case None => LOG.warning("Can't cancel message for {}.", service)
+        case None => 
+          LOG.warning("Can't cancel for service {} not found!", service)
       }
     }
   }

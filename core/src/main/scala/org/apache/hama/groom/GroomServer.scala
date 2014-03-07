@@ -22,7 +22,14 @@ import akka.actor.SupervisorStrategy._
 import org.apache.hama._
 import scala.concurrent.duration._
 
-final class GroomServer(conf: HamaConfiguration) extends GroomAssistant(conf) {
+final class GroomServer(conf: HamaConfiguration) extends Service(conf) {
+
+  private[groom] val masterInfo =
+    ProxyInfo(conf.get("bsp.msater.name", "bspmaster"),
+              conf.get("bsp.master.actor-system.name", "MasterSystem"),
+              conf.get("bsp.master.address", "localhost"),
+              conf.getInt("bsp.master.port", 40000))
+
  
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
@@ -40,23 +47,9 @@ final class GroomServer(conf: HamaConfiguration) extends GroomAssistant(conf) {
   }
 
   def receive = {
-/*
-    case ActorIdentity(`masterPath`, Some(master)) => {
-      link(matsterInfo.actorName, master)
-    }
-    case ActorIdentity(`masterPath`, None) => {
-      LOG.warning("Can't find master server at {}:{}.", 
-                  masterInfo.host, masterInfo.port) 
-    }
-    case Timeout(target) => {
-      LOG.info("Timeout! Lookup {} again ...", target)
-      lookup(masterInfo.actorName, masterPath)
-    }
-*/
     ({case Ready => { // reply to external check if service is ready.
-      if(4 != services.size) {
-        LOG.info("Currently {} services are ready.", services.size)
-        sender ! Ack("no") // perhaps skip
+      if(serviceCount != services.size) {
+        LOG.info("Currently only {} services are ready.", services.size)
       } else {
         sender ! Ack("yes")
       }     

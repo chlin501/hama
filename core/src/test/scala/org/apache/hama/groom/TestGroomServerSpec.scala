@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master
+package org.apache.hama.groom
  
 import com.typesafe.config.ConfigFactory
 
@@ -32,9 +32,7 @@ import org.scalatest.junit.JUnitRunner
 import org.scalatest.matchers.MustMatchers
 import scala.concurrent.duration._
 
-
-
-object TestMasterSpec {
+object TestGroomServerSpec {
   val config = """
     akka {
       loglevel = "DEBUG"
@@ -43,28 +41,28 @@ object TestMasterSpec {
 }
 
 @RunWith(classOf[JUnitRunner]) 
-class TestMasterSpec extends TestKit(ActorSystem("TestMasterSpec", 
+class TestGroomServerSpec extends TestKit(ActorSystem("TestGroomServerSpec", 
                                                  ConfigFactory.parseString(
-                                                   TestMasterSpec.config))) 
+                                                   TestGroomServerSpec.config))) 
                      with DefaultTimeout with ImplicitSender 
                      with WordSpecLike with MustMatchers with BeforeAndAfterAll {
 
-  val LOG = LogFactory.getLog(classOf[TestMasterSpec])
+  val LOG = LogFactory.getLog(classOf[TestGroomServerSpec])
 
   override def afterAll {
     shutdown(system)
   }
 
-  "a master" must {
+  "a groom server" must {
     "wait for other services" in {
-      val master = TestActorRef(new Master(new HamaConfiguration))
+      val groom = TestActorRef(new GroomServer(new HamaConfiguration))
       import system.dispatcher
       val cancellable = 
-        system.scheduler.schedule(1.seconds, 1.seconds, master, Ready)
+        system.scheduler.schedule(1.seconds, 1.seconds, groom, Ready)
       var flag = false
       receiveWhile(10 seconds) {
         case msg => {
-          LOG.info("Master returns "+msg)
+          LOG.info("Groom replies "+msg)
           if(msg.equals(Ack("yes"))) {
             flag = true
             cancellable.cancel

@@ -43,8 +43,7 @@ class Master(conf: HamaConfiguration) extends Service(conf) {
   override def receive = {
     ({case Ready => {
       if(serviceCount != services.size) {
-        LOG.info("Currently {} services are ready.", services.size)
-        sender ! Ack("no") // perhaps skip
+        LOG.info("Currently only {} services are ready.", services.size)
       } else {
         sender ! Ack("yes")
       }     

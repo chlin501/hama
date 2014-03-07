@@ -15,16 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama.master
 
-import org.apache.hama._
-
-abstract class GroomAssistant(conf: HamaConfiguration) extends Service(conf) {
-
-  protected val masterInfo = 
-    ProxyInfo(conf.get("bsp.msater.name", "bspmaster"),
-              conf.get("bsp.master.actor-system.name", "MasterSystem"),
-              conf.get("bsp.master.address", "localhost"),
-              conf.getInt("bsp.master.port", 40000))
-
-}
+private[master] case object Take

@@ -28,6 +28,12 @@ class Monitor(conf: HamaConfiguration) extends Service(conf) {
     create("tasksReporter", classOf[TasksReporter])
   }
 
-  override def receive = ready orElse ack orElse unknown
+  override def receive = {
+    ({case Ready => {
+      if(serviceCount == services.size) {
+        sender ! Ack("monitor")
+      } else LOG.info("Only {} are available.", services.keys.mkString(", "))
+    }}: Receive) orElse ack orElse unknown
+  }
 
 }
