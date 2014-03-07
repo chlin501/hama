@@ -17,12 +17,46 @@
  */
 package org.apache.hama.groom
 
+import akka.actor._
 import org.apache.hama._
 
 class Registrator(conf: HamaConfiguration) extends Service(conf) {
 
+  val groomManagerInfo = 
+    ProxyInfo("groomManager",
+              conf.get("bsp.master.actor-system.name", "MasterSystem"),
+              conf.get("bsp.master.address", "localhost"),
+              conf.getInt("bsp.master.port", 40000))
+
+  val groomManagerPath = groomManagerInfo.path
+
   override def name: String = "registrator"
 
-  override def receive = ready orElse ack orElse unknown
+  override def initialize = {
+    lookup("groomManager", groomManagerPath)
+  }
 
+  def isGroomManagerReady: Receive = {
+    case ActorIdentity(`groomManagerPath`, Some(groomManager)) => {
+      link(groomManagerPath, groomManager)
+    }
+    case ActorIdentity(`groomManagerPath`, None) => {
+      LOG.info("{} is not yet available.", groomManagerPath)
+    }
+  }
+
+  def timout: Receive = {
+    case Timeout(proxy) => {
+      if("groomManager".equals(proxy))
+        lookup("groomManager", groomManagerPath)
+      else 
+        LOG.warning("Unknown proxy {} lookup!", proxy)
+    }
+  }
+
+  override def receive = {
+    ({case Ready => {
+      if(proxiesCount == proxies.size) sender ! Ack(name)
+    }}: Receive) orElse isGroomManagerReady orElse timout orElse ack orElse unknown
+  }
 }

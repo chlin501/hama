@@ -46,6 +46,11 @@ abstract class Service(conf: HamaConfiguration) extends Agent {
   protected var cancelServicesWhenReady = Map.empty[String, Cancellable]
 
   /**
+   * A fixed count of proxies expected to be available.
+   */
+  protected var proxiesCount: Int = _
+
+  /**
    * A collection of {@link akka.contrib.pattern.ReliableProxy}s links to a 
    * remote server.
    */
@@ -83,20 +88,22 @@ abstract class Service(conf: HamaConfiguration) extends Agent {
   /**
    * Lookup a proxy actor by sending an {@link Identify} and schedule a message
    * indicating timeout if no reply.
-   * When timeout, the actor needs to explicitly lookup() again, so we use 
+   * When timeout, the actor needs to explicitly lookup again, so we use 
    * scheduleOnce instead of schedule function. This is due to proxy is inter-
    * jvm, which is different from create().
    *
    * @param target denotes the remote target actor name.
-   * @param path indicate the actor path of target actor.
+   * @param path indicate the path of target actor.
    */
-  protected def lookup(target: String, path: String) {
+  protected def lookup(target: String, path: String, 
+                       timeout: FiniteDuration = 5.seconds) {
     if(null == proxies.getOrElse(target, null)) {
       context.system.actorSelection(path) ! Identify(path)
       import context.dispatcher
       val cancellable =
-        context.system.scheduler.scheduleOnce(3.seconds, self, Timeout(target))
+        context.system.scheduler.scheduleOnce(timeout, self, Timeout(target))
       cancelProxiesWhenReady ++= Map(target -> cancellable)
+      proxiesCount += 1
     }
   }
 

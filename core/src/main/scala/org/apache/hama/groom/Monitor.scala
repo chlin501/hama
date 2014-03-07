@@ -31,7 +31,7 @@ class Monitor(conf: HamaConfiguration) extends Service(conf) {
   override def receive = {
     ({case Ready => {
       if(serviceCount == services.size) {
-        sender ! Ack("monitor")
+        sender ! Ack(name)
       } else LOG.info("Only {} are available.", services.keys.mkString(", "))
     }}: Receive) orElse ack orElse unknown
   }

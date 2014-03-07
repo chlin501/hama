@@ -24,11 +24,13 @@ import scala.concurrent.duration._
 
 final class GroomServer(conf: HamaConfiguration) extends Service(conf) {
 
+/*
   private[groom] val masterInfo =
     ProxyInfo(conf.get("bsp.msater.name", "bspmaster"),
               conf.get("bsp.master.actor-system.name", "MasterSystem"),
               conf.get("bsp.master.address", "localhost"),
               conf.getInt("bsp.master.port", 40000))
+*/
 
  
   override val supervisorStrategy =
