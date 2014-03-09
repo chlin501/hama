@@ -27,12 +27,12 @@ import scala.concurrent.duration._
  * A service may hold a collection of services, and proxies link to a remote
  * server.
  */
-abstract class Service(conf: HamaConfiguration) extends Agent {
+trait Service extends Agent {
 
   /**
    * A fixed count of services expected to be available.
    */
-  protected var serviceCount: Int = _
+  protected var servicesCount: Int = _
 
   /**
    * A service can hold other services e.g. plugin.
@@ -64,9 +64,11 @@ abstract class Service(conf: HamaConfiguration) extends Agent {
   /**
    * Logic for intantiating necessary prerequisite operations.
    */
-  def initialize = { }
+  def initializeServices = {}
 
-  override def preStart = initialize
+  def configuration: HamaConfiguration
+
+  override def preStart = initializeServices 
   
   /**
    * Create a service actor and schedule message checking if it's ready.
@@ -77,12 +79,14 @@ abstract class Service(conf: HamaConfiguration) extends Agent {
    * @param target denotes the class name of that actor.
    */
   protected def create[A <: Actor](service: String, target: Class[A]) {
-    val actor = context.actorOf(Props(target, conf), service)
+    // TODO: maybe use Option[HamaConfiguration] for null check
+    val actor = context.actorOf(Props(target, configuration), service)
     import context.dispatcher
     val cancellable = 
-      context.system.scheduler.schedule(0.seconds, 2.seconds, actor, Ready)
+      context.system.scheduler.schedule(0.seconds, 2.seconds, actor, 
+                                        IsServiceReady)
     cancelServicesWhenReady ++= Map(service -> cancellable)
-    serviceCount += 1
+    servicesCount += 1
   }
 
   /**
@@ -128,7 +132,6 @@ abstract class Service(conf: HamaConfiguration) extends Agent {
   /**
    * An external service acks so the current service caches and cancels 
    * scheduling {@link Timeout} messages. 
-   */
   protected def ack: Receive = {
     case Ack(service) => {
       LOG.info("Service {} is ready.", service)
@@ -141,6 +144,7 @@ abstract class Service(conf: HamaConfiguration) extends Agent {
       }
     }
   }
+   */
 
   /**
    * Default replying mechanism.

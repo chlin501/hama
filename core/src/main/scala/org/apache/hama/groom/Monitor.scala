@@ -20,20 +20,24 @@ package org.apache.hama.groom
 import org.apache.hama._
 import org.apache.hama.groom.monitor._
 
-class Monitor(conf: HamaConfiguration) extends Service(conf) {
+class Monitor(conf: HamaConfiguration) extends Service {
+
+  override def configuration: HamaConfiguration = conf
 
   override def name: String = "monitor"
 
-  override def initialize() {
+  override def initializeServices {
     create("tasksReporter", classOf[TasksReporter])
   }
 
-  override def receive = {
-    ({case Ready => {
-      if(serviceCount == services.size) {
-        sender ! Ack(name)
-      } else LOG.info("Only {} are available.", services.keys.mkString(", "))
-    }}: Receive) orElse ack orElse unknown
+  def isServiceReady: Receive = {
+    case IsServiceReady => {
+      if(servicesCount == services.size) { // TODO: use fsm? no
+        sender ! Load(name, self)
+      } else LOG.info("{} are available.", services.keys.mkString(", "))
+    }
   }
+
+  def receive = isServiceReady orElse unknown
 
 }

@@ -19,9 +19,17 @@ package org.apache.hama.groom
 
 import org.apache.hama._
 
-class TaskManager(conf: HamaConfiguration) extends Service(conf) {
+class TaskManager(conf: HamaConfiguration) extends Service {
+
+  override def configuration: HamaConfiguration = conf
 
   override def name: String = "taskManager"
 
-  override def receive = ready orElse unknown
+  def isServiceReady: Receive = {
+    case IsServiceReady => {
+      sender ! Load(name, self) 
+    }
+  }
+
+  override def receive = isServiceReady orElse unknown
 }

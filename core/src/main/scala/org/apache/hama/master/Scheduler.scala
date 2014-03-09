@@ -22,13 +22,14 @@ import akka.routing._
 import org.apache.hama._
 import scala.concurrent.duration._
 
-class Scheduler(conf: HamaConfiguration) extends Service(conf) {
+class Scheduler(conf: HamaConfiguration) extends Service {
 
   val queuePath = "/usr/receptionist"
   var cancelQueueWhenReady: Cancellable = _
   var queue: ActorRef = _
-
   // var job_resource = Map.empty[String, Resource]
+
+  override def configuration: HamaConfiguration = conf
 
   override def name: String = "sched"
 
@@ -43,7 +44,7 @@ class Scheduler(conf: HamaConfiguration) extends Service(conf) {
   //private def find = {
   //}
 
-  override def initialize = { 
+  override def initializeServices { 
     cancelQueueWhenReady = subscribe(queuePath)
     // command dispatcher
     // resouce consultant

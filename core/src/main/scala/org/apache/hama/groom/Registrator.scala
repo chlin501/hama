@@ -20,7 +20,7 @@ package org.apache.hama.groom
 import akka.actor._
 import org.apache.hama._
 
-class Registrator(conf: HamaConfiguration) extends Service(conf) {
+class Registrator(conf: HamaConfiguration) extends Service {
 
   val groomManagerInfo = 
     ProxyInfo("groomManager",
@@ -30,9 +30,11 @@ class Registrator(conf: HamaConfiguration) extends Service(conf) {
 
   val groomManagerPath = groomManagerInfo.path
 
+  override def configuration: HamaConfiguration = conf
+
   override def name: String = "registrator"
 
-  override def initialize = {
+  override def initializeServices {
     lookup("groomManager", groomManagerPath)
   }
 
@@ -54,9 +56,13 @@ class Registrator(conf: HamaConfiguration) extends Service(conf) {
     }
   }
 
+  def isServiceReady: Receive = {
+    case IsServiceReady => {
+      if(proxiesCount == proxies.size) sender ! Load(name, self)
+    } 
+  }
+
   override def receive = {
-    ({case Ready => {
-      if(proxiesCount == proxies.size) sender ! Ack(name)
-    }}: Receive) orElse isGroomManagerReady orElse timout orElse ack orElse unknown
+    isServiceReady orElse isGroomManagerReady orElse timout orElse unknown
   }
 }

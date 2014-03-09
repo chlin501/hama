@@ -25,11 +25,13 @@ import org.apache.hama.master._
  * A service that manages a set of {@link org.apache.hama.groom.GroomServer}s.
  * @param conf contains specific configuration for this service. 
  */
-class GroomManager(conf: HamaConfiguration) extends Service(conf) {
+class GroomManager(conf: HamaConfiguration) extends Service {
 
-  def name: String = "groomManager"
+  override def configuration: HamaConfiguration = conf
 
-  def mapping = Map.empty[String, GroomServerStatus]
+  override def name: String = "groomManager"
+
+  //def mapping = Map.empty[String, GroomServerStatus]
 
   override def receive = {
     ready orElse 

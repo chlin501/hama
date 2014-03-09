@@ -15,11 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama
+package org.apache.hama.groom
 
-case class ProxyInfo(actorName: String,
-                     system: String, 
-                     host: String,
-                     port: Int) {
-  val path: String = "akka.tcp://"+system+"@"+host+":"+port+"/user/"+actorName
-}
+sealed trait State
+
+private[groom] case object StartUp extends State 
+private[groom] case object Normal extends State
+private[groom] case object CleanUp extends State
+private[groom] case object Stopped extends State
+private[groom] case object Failed extends State

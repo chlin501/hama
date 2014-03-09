@@ -22,9 +22,11 @@ import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.master._
 
-final class JobTasksTracker(conf: HamaConfiguration) extends Service(conf) {
+final class JobTasksTracker(conf: HamaConfiguration) extends Service {
 
   var tasksMapping = Map.empty[BSPJobID, Task]
+
+  override def configuration: HamaConfiguration = conf
 
   override def name: String = "jobTasksTracker"
 

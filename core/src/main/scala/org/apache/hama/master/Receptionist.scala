@@ -26,11 +26,13 @@ import scala.collection.immutable.Queue
 /**
  * Receive job submission from clients and put the job to the wait queue.
  */
-class Receptionist(conf: HamaConfiguration) extends Service(conf) with Listeners {
+class Receptionist(conf: HamaConfiguration) extends Service with Listeners {
 
   private[this] var waitQueue = Queue[Job]()
 
-  def name: String = "receptionist"
+  override def configuration: HamaConfiguration = conf
+
+  override def name: String = "receptionist"
 
   override def receive = {
     //case JobDispatchAck(job) => { 

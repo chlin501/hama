@@ -15,11 +15,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama
+package org.apache.hama.groom
 
-case class ProxyInfo(actorName: String,
-                     system: String, 
-                     host: String,
-                     port: Int) {
-  val path: String = "akka.tcp://"+system+"@"+host+":"+port+"/user/"+actorName
-}
+import akka.actor._
+
+/**
+ * Init event signify the state is initializing.
+ */
+private[groom] case object Init
+
+/**
+ * Load a particular service with name and its actor reference in pair.
+ */
+private[groom] case class Load(name: String, ref: ActorRef)
+
+/**
+ * Unload a service, denoted by name, out of services cache.
+ */
+private[groom] case class Unload(name: String)
+
+/**
+ * Trigger if the current state is Normal.
+ */
+private[groom] case object InNormal
+
+/**
+ * Shutdown the entire server.
+ */
+private[groom] case object Shutdown
+

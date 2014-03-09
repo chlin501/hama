@@ -18,11 +18,21 @@
 package org.apache.hama.groom
 
 import akka.actor._
+import akka.routing._
 import akka.actor.SupervisorStrategy._
 import org.apache.hama._
 import scala.concurrent.duration._
 
-final class GroomServer(conf: HamaConfiguration) extends Service(conf) {
+/**
+ * Client calls Subscribe(state, self) // where selfs is client's actor ref.
+ * And then cleint defines 
+ *   def groomIsReady: Receive = {
+ *     case Ready => {
+ *       // groom is ready
+ *     }
+ *   }
+ */
+final class GroomServer(conf: HamaConfiguration) extends GroomServerFSM {
 
 /*
   private[groom] val masterInfo =
@@ -40,21 +50,27 @@ final class GroomServer(conf: HamaConfiguration) extends Service(conf) {
       case _: Exception                => Escalate
     }
 
+  override def configuration: HamaConfiguration = conf
+
   override def name: String = conf.get("bsp.groom-server.name", "groomServer") 
 
-  override def initialize() {
+  override def initializeServices {
     create("taskManager", classOf[TaskManager]) 
     create("monitor", classOf[Monitor]) 
     create("registrator", classOf[Registrator]) 
   }
 
-  def receive = {
-    ({case Ready => { // reply to external check if service is ready.
-      if(serviceCount != services.size) {
+/*
+  override def serviceIsReady: Receive = {
+    case ServiceIsReady => {
+      if(servicesCount != services.size) {
         LOG.info("Currently only {} services are ready.", services.size)
       } else {
         sender ! Ack("yes")
-      }     
-    }}: Receive) orElse ack orElse unknown 
-  } 
+      }
+    }
+  }
+*/
+
+  override def receive = groomStateListenerManagement orElse unknown 
 }

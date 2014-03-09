@@ -21,19 +21,21 @@ import akka.actor._
 import org.apache.hama._
 import org.apache.hama.master.monitor._
 
-class Monitor(conf: HamaConfiguration) extends Service(conf) {
+class Monitor(conf: HamaConfiguration) extends Service {
+
+  override def configuration: HamaConfiguration = conf
 
   override def name: String = "monitor"
 
-  override def initialize() {
+  override def initializeServices {
     create("jobTasksTracker", classOf[JobTasksTracker])
   }
 
   override def receive = {
     ({case Ready => {
-      if(serviceCount == services.size) {
+      if(servicesCount == services.size) {
         sender ! Ack("monitor")
       } else LOG.info("Only {} are available.", services.keys.mkString(", "))
-    }}: Receive) orElse ack orElse unknown
+    }}: Receive) orElse unknown
   } 
 }
