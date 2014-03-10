@@ -26,34 +26,19 @@ sealed trait HamaServices
 case object Uninitialized extends HamaServices
 case class Cache(services: Map[String, ActorRef]) extends HamaServices
 
-private[groom] case class WhichState(stateName: State)
-// hack for akka fsm don't know its current state by itself.
-// https://groups.google.com/d/msg/akka-user/0UVhOP_agIA/vyVQdbizUVYJ
-private[groom] final class CurrentStateChecker extends Actor {
-  val LOG = Logging(context.system, this)
-  def receive = {
-    case WhichState(stateName) => {
-      if(Normal.equals(stateName)) {
-        LOG.info("Current state {} is Normal. Trigger InNormal event.", 
-                 stateName)
-        sender ! InNormal
-      }
-    }
-  }
-}
+private[groom] case object WhichState
 
 trait GroomServerFSM extends FSM[State, HamaServices] with Service 
                                                       with GroomStateListener {
 
-  var checkCancellable: Cancellable = _
+  var stateChecker: Cancellable = _
 
   override def preStart { 
-    val checker = 
-      context.system.actorOf(Props(classOf[CurrentStateChecker]))
+    super.preStart
     import context.dispatcher
-    checkCancellable = 
-      context.system.scheduler.schedule(0.seconds, 3.seconds, checker, 
-                                        WhichState(stateName))
+    stateChecker = 
+      context.system.scheduler.schedule(0.seconds, 3.seconds, self, 
+                                        WhichState)
   }
 
   startWith(StartUp, Uninitialized)
@@ -90,12 +75,6 @@ trait GroomServerFSM extends FSM[State, HamaServices] with Service
    * Handle events in Normal state.
    */
   when(Normal) {
-    case Event(InNormal, s @ Cache(services)) => {
-      checkCancellable.cancel
-      LOG.info("Notify all listeners that Groom is in Normal state.") 
-      notifyAllWith(Normal)(GroomIsReady)
-      stay using s
-    }
     case Event(Shutdown, s @ Cache(services)) => {
       LOG.info("Shutting down server ...")
       services.view.foreach{
@@ -130,9 +109,17 @@ trait GroomServerFSM extends FSM[State, HamaServices] with Service
    * Capture unhandled event 
    */
   whenUnhandled {
+    case Event(WhichState, s @ Cache(service)) => {
+      if(Normal.equals(stateName)) {
+        LOG.debug("StateName [{}] should be in Normal.", stateName)
+        stateChecker.cancel
+        notify(Normal)(GroomIsReady)
+      }
+      stay using s 
+    }
     case Event(e, s) => {
       LOG.warning("Unknown event {} with services {}.", e, s)
-      stay
+      stay using s
     }
   }
 

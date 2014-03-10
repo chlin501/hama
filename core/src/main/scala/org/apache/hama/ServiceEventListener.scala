@@ -19,29 +19,29 @@ package org.apache.hama.groom
 
 import akka.actor._
 
-sealed trait StateMessage
-case class SubscribeState(state: State, ref: ActorRef) extends StateMessage
-case class UnsubscribeState(state: State, ref: ActorRef) extends StateMessage
+sealed trait EventMessage
+case class SubscribeEvent(event: Event, ref: ActorRef) extends EventMessage
+case class UnsubscribeEvent(event: Event, ref: ActorRef) extends EventMessage
 
-trait GroomStateListener { self: Actor => 
-  protected var mapping = Map.empty[State, Set[ActorRef]]
+sealed trait Event
+case object Ready extends Event
 
-  protected def groomStateListenerManagement: Receive = {
-    case SubscribeState(state, ref) => {
+trait ServiceEventListener { self: Actor => 
+  protected var mapping = Map.empty[Event, Set[ActorRef]]
+
+  protected def serviceEventListenerManagement: Receive = {
+    case SubscribeEvent(event, ref) => {
       mapping = 
-        mapping.filter( p => state.equals(p._1)).mapValues { refs => refs+ref }
+        mapping.filter( p => event.equals(p._1)).mapValues { refs => refs+ref }
     }
-    case UnsubscribeState(state, ref) => {
+    case UnsubscribeEvent(event, ref) => {
       mapping =
-        mapping.filter( p => state.equals(p._1)).mapValues { refs => refs-ref }
+        mapping.filter( p => event.equals(p._1)).mapValues { refs => refs-ref }
     }
   }
 
-  /**
-   * Notify listeners when a specific state is triggered.
-   */
-  protected def notify(state: State)(message: Any): Unit = {
-    mapping.filter(p => state.equals(p._1)).values.flatten.foreach( ref => {
+  protected def notify(event: Event)(message: Any): Unit = {
+    mapping.filter(p => event.equals(p._1)).values.flatten.foreach( ref => {
       ref ! message
     })
   }

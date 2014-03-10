@@ -66,8 +66,14 @@ trait Service extends Agent {
    */
   def initializeServices = {}
 
+  /**
+   * A configuration file specific to Hama system.
+   */
   def configuration: HamaConfiguration
 
+  /**
+   * Initialize either groom's or master's subservices.
+   */
   override def preStart = initializeServices 
   
   /**
