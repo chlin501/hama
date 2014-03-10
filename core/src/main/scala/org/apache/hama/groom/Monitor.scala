@@ -30,7 +30,7 @@ class Monitor(conf: HamaConfiguration) extends Service {
     create("tasksReporter", classOf[TasksReporter])
   }
 
-  def isServiceReady: Receive = {
+  override def isServiceReady: Receive = {
     case IsServiceReady => {
       if(servicesCount == services.size) { // TODO: use fsm? no
         sender ! Load(name, self)

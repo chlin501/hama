@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama
 
 import akka.actor._
 
@@ -23,10 +23,10 @@ sealed trait StateMessage
 case class SubscribeState(state: State, ref: ActorRef) extends StateMessage
 case class UnsubscribeState(state: State, ref: ActorRef) extends StateMessage
 
-trait GroomStateListener { self: Actor => 
+trait ServiceStateListener { self: Actor => 
   protected var mapping = Map.empty[State, Set[ActorRef]]
 
-  protected def groomStateListenerManagement: Receive = {
+  protected def serviceStateListenerManagement: Receive = {
     case SubscribeState(state, ref) => {
       mapping = 
         mapping.filter( p => state.equals(p._1)).mapValues { refs => refs+ref }

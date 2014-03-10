@@ -91,7 +91,7 @@ class Scheduler(conf: HamaConfiguration) extends Service {
     ({case NewJobNotification => {
       // check with resource consultant if free slots available
       // resourceConsultant ! jobName 
-    }}: Receive) orElse isQueueReady orElse ready orElse unknown
+    }}: Receive) orElse isQueueReady orElse isServiceReady orElse unknown
   }
 
 }

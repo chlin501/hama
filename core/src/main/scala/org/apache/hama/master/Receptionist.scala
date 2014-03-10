@@ -26,7 +26,7 @@ import scala.collection.immutable.Queue
 /**
  * Receive job submission from clients and put the job to the wait queue.
  */
-class Receptionist(conf: HamaConfiguration) extends Service with Listeners {
+class Receptionist(conf: HamaConfiguration) extends Service /*with Listeners */ {
 
   private[this] var waitQueue = Queue[Job]()
 
@@ -52,7 +52,7 @@ class Receptionist(conf: HamaConfiguration) extends Service with Listeners {
     ({case Submit(job: Job) => {
       LOG.info("Client submit job ..."+job.getName) 
       waitQueue = waitQueue.enqueue(job)
-      gossip(NewJobNotification)
-    }}: Receive) orElse ready orElse listenerManagement orElse unknown
+      //gossip(NewJobNotification)
+    }}: Receive) orElse isServiceReady /*orElse listenerManagement*/ orElse unknown
   } 
 }

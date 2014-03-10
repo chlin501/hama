@@ -15,32 +15,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama
 
-import akka.actor._
-
-/**
- * Init event signify the state is initializing.
- */
-private[groom] case object Init
+sealed trait State
 
 /**
- * Load a particular service with name and its actor reference in pair.
+ * The system in the stage where services are starting up.
  */
-private[groom] case class Load(name: String, ref: ActorRef)
+private[hama] case object StartUp extends State 
 
 /**
- * Unload a service, denoted by name, out of services cache.
+ * The system services are ready.
  */
-private[groom] case class Unload(name: String)
+private[hama] case object Normal extends State
 
 /**
- * Trigger if the current state is Normal.
+ * The system services are shutting down.
  */
-private[groom] case object InNormal
+private[hama] case object CleanUp extends State
 
 /**
- * Shutdown the entire server.
+ * The system is stopped.
  */
-private[groom] case object Shutdown
+private[hama] case object Stopped extends State
 
+/**
+ * The system is failed.
+ */
+private[hama] case object Failed extends State

@@ -25,11 +25,5 @@ class TaskManager(conf: HamaConfiguration) extends Service {
 
   override def name: String = "taskManager"
 
-  def isServiceReady: Receive = {
-    case IsServiceReady => {
-      sender ! Load(name, self) 
-    }
-  }
-
   override def receive = isServiceReady orElse unknown
 }

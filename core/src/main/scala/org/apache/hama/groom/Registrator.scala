@@ -56,7 +56,10 @@ class Registrator(conf: HamaConfiguration) extends Service {
     }
   }
 
-  def isServiceReady: Receive = {
+  /**
+   * Need to connect remote proxies, so override service loading mechanism.
+   */
+  override def isServiceReady: Receive = {
     case IsServiceReady => {
       if(proxiesCount == proxies.size) sender ! Load(name, self)
     } 

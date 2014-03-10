@@ -31,7 +31,7 @@ final class JobTasksTracker(conf: HamaConfiguration) extends Service {
   override def name: String = "jobTasksTracker"
 
   override def receive = {
-    ready orElse
+    isServiceReady orElse
     ({case Report(newTask) => { 
       val bspJobId = newTask.getId.getJobID
       tasksMapping.get(bspJobId) match {

@@ -22,7 +22,7 @@ import akka.actor.SupervisorStrategy._
 import org.apache.hama._
 import scala.concurrent.duration._
 
-class Master(conf: HamaConfiguration) extends Service {
+class Master(conf: HamaConfiguration) extends ServiceStateMachine {
 
   override def configuration: HamaConfiguration = conf
 
@@ -43,12 +43,6 @@ class Master(conf: HamaConfiguration) extends Service {
   }
 
   override def receive = {
-    ({case Ready => {
-      if(servicesCount != services.size) {
-        LOG.info("Currently only {} services are ready.", services.size)
-      } else {
-        sender ! Ack("yes")
-      }     
-    }}: Receive) orElse unknown 
-  } 
+    serviceStateListenerManagement orElse unknown 
+  }
 }

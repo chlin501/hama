@@ -17,7 +17,30 @@
  */
 package org.apache.hama
 
+import akka.actor._
+
 /**
- * Indicate that GroomServer is in State.Normal.
+ * Init event signify the state is initializing.
  */
-case object GroomIsReady
+private[hama] case object Init
+
+/**
+ * Load a particular service with name and its actor reference in pair.
+ */
+private[hama] case class Load(name: String, ref: ActorRef)
+
+/**
+ * Unload a service, denoted by name, out of services cache.
+ */
+private[hama] case class Unload(name: String)
+
+/**
+ * Trigger if the current state is Normal.
+ */
+private[hama] case object InNormal
+
+/**
+ * Shutdown the entire server.
+ */
+private[hama] case object Shutdown
+

@@ -34,7 +34,7 @@ class GroomManager(conf: HamaConfiguration) extends Service {
   //def mapping = Map.empty[String, GroomServerStatus]
 
   override def receive = {
-    ready orElse 
+    isServiceReady orElse
     ({case Register(groom) => {
       LOG.info("GroomServer {} now registers.", groom.name) 
      }}: Receive) orElse unknown

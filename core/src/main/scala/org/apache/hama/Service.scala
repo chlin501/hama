@@ -96,6 +96,19 @@ trait Service extends Agent {
   }
 
   /**
+   * Cancel sending IsServiceReady message when the service finishes loading.
+   * This function will be executed in {@link ServiceStateMachine}.
+   */
+  protected def cancelServicesChecker(name: String, service: ActorRef) {
+    context.watch(service)
+    cancelServicesWhenReady.get(name) match {
+      case Some(cancellable) => cancellable.cancel
+      case None =>
+        LOG.warning("Can't cancel for service {} not found!", name)
+    }
+  }
+
+  /**
    * Lookup a proxy actor by sending an {@link Identify} and schedule a message
    * indicating timeout if no reply.
    * When timeout, the actor needs to explicitly lookup again, so we use 
@@ -151,6 +164,16 @@ trait Service extends Agent {
     }
   }
    */
+
+  /**
+   * Default mechanism in loading services by sending service name and its actor
+   * reference.
+   */
+  protected def isServiceReady: Receive = {
+    case IsServiceReady => {
+      sender ! Load(name, self)
+    }
+  }
 
   /**
    * Default replying mechanism.

@@ -17,4 +17,4 @@
  */
 package org.apache.hama
 
-case object Ready
+case class Ready(systemName: String)

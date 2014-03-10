@@ -31,11 +31,19 @@ class Monitor(conf: HamaConfiguration) extends Service {
     create("jobTasksTracker", classOf[JobTasksTracker])
   }
 
+  /**
+   * Monitor needs to load sub services so it requires to override 
+   * isServiceReady function.
+   */
+  override def isServiceReady: Receive = {
+    case IsServiceReady => {
+      if(servicesCount == services.size) { 
+        sender ! Load(name, self)
+      } else LOG.info("{} are available.", services.keys.mkString(", "))
+    }
+  }
+
   override def receive = {
-    ({case Ready => {
-      if(servicesCount == services.size) {
-        sender ! Ack("monitor")
-      } else LOG.info("Only {} are available.", services.keys.mkString(", "))
-    }}: Receive) orElse unknown
+    isServiceReady orElse unknown
   } 
 }

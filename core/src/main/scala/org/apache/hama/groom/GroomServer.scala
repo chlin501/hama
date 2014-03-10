@@ -24,24 +24,15 @@ import org.apache.hama._
 import scala.concurrent.duration._
 
 /**
- * Client calls Subscribe(state, self) // where selfs is client's actor ref.
- * And then cleint defines 
- *   def groomIsReady: Receive = {
- *     case Ready => {
- *       // groom is ready
+ * Client calls SubscribeState(state, self) // where selfs is client's actor ref.
+ * And then the cleint defines 
+ *   def systemsIsReady: Receive = {
+ *     case Ready(name) => {
+ *       // name system is ready
  *     }
  *   }
  */
-final class GroomServer(conf: HamaConfiguration) extends GroomServerFSM {
-
-/*
-  private[groom] val masterInfo =
-    ProxyInfo(conf.get("bsp.msater.name", "bspmaster"),
-              conf.get("bsp.master.actor-system.name", "MasterSystem"),
-              conf.get("bsp.master.address", "localhost"),
-              conf.getInt("bsp.master.port", 40000))
-*/
-
+final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
  
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
@@ -60,17 +51,5 @@ final class GroomServer(conf: HamaConfiguration) extends GroomServerFSM {
     create("registrator", classOf[Registrator]) 
   }
 
-/*
-  override def serviceIsReady: Receive = {
-    case ServiceIsReady => {
-      if(servicesCount != services.size) {
-        LOG.info("Currently only {} services are ready.", services.size)
-      } else {
-        sender ! Ack("yes")
-      }
-    }
-  }
-*/
-
-  override def receive = groomStateListenerManagement orElse unknown 
+  override def receive = serviceStateListenerManagement orElse unknown 
 }
