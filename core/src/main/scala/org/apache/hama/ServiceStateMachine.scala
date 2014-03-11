@@ -21,25 +21,32 @@ import akka.actor._
 import akka.event._
 import scala.concurrent.duration._
 
+sealed trait StateMessage
+case class SubscribeState(state: ServiceState, ref: ActorRef) 
+     extends StateMessage
+case class UnsubscribeState(state: ServiceState, ref: ActorRef) 
+     extends StateMessage
+
 sealed trait HamaServices
-private case object Uninitialized extends HamaServices
 private case class Cache(services: Map[String, ActorRef]) extends HamaServices
 
 sealed trait StateChecker
-private case object IsNormal extends StateChecker
-private case object IsStopped extends StateChecker
+private case object WhichState extends StateChecker
 
 /**
  * This trait defines generic states a system will use.
  */
-trait ServiceStateMachine extends FSM[State, HamaServices] 
-                          with Service with ServiceStateListener {
+trait ServiceStateMachine extends FSM[ServiceState, HamaServices] with Service {
 
-  var normalStateChecker: Cancellable = _
+  /**
+   * Mapping ServiceState to a set of Actor to be notified.
+   */
+  var mapping = Map.empty[ServiceState, Set[ActorRef]]
+  var stateChecker: Cancellable = _
   var stoppedStateChecker: Cancellable = _
 
   /**
-   * Periodically check if <State>.equals(stateName).
+   * Periodically check if <ServiceState>.equals(stateName).
    * If ture, act based upon that state e.g. notify clients.
    */
   private def check(stateChecker: StateChecker,
@@ -51,25 +58,21 @@ trait ServiceStateMachine extends FSM[State, HamaServices]
 
   override def preStart { 
     super.preStart
-    normalStateChecker = check(IsNormal)
-    stoppedStateChecker = check(IsStopped)
+    stateChecker = check(WhichState)
   }
 
-  startWith(StartUp, Uninitialized)
+  startWith(StartUp, Cache(Map.empty[String, ActorRef]))
 
   /**
    * Handle events in StartUp state.
    */
   when(StartUp) {
-    case Event(Init, Uninitialized) => {
-      LOG.info("Initialize services ...")
-      stay using Cache(Map.empty[String, ActorRef])
-    }
-
     case Event(Load(name, service), s @ Cache(prevServices)) => {
       LOG.info("Loading service {}", name)
       val currentServices = prevServices ++ Map(name -> service)
-      services = currentServices // services in Services.scala
+      services = currentServices // Service.scala#services
+      LOG.debug("Current services available: {}", services.mkString(", "))
+      context.watch(service)
       cancelServicesChecker(name, service)
       val cache = s.copy(currentServices)
       if(servicesCount == currentServices.size) {
@@ -84,12 +87,7 @@ trait ServiceStateMachine extends FSM[State, HamaServices]
    * Handle events in Normal state.
    */
   when(Normal) {
-    case Event(IsNormal, s @ Cache(services)) => {
-      LOG.info("StateName [{}] should be in Normal.", stateName)
-      normalStateChecker.cancel
-      notify(Normal)(Ready(name))
-      stay using s 
-    }
+    
     case Event(Shutdown, s @ Cache(services)) => {
       LOG.info("Shutting down server ...")
       services.view.foreach {
@@ -120,16 +118,6 @@ trait ServiceStateMachine extends FSM[State, HamaServices]
     }
   }
 
-  when(Stopped) {
-    case Event(IsStopped, s @ Cache(services)) => {
-      LOG.info("StateName [{}] should be in Stopped.", stateName)
-      // TODO: check if services map is empty, if not throws exception
-      stoppedStateChecker.cancel
-      notify(Stopped)(Ready(name))
-      stop(FSM.Normal, Uninitialized)
-    }  
-  }
-
   /**
    * Capture unhandled events.
    * StateChecker type is a special event that used to check if current state is 
@@ -139,25 +127,65 @@ trait ServiceStateMachine extends FSM[State, HamaServices]
    * ready.
    */
   whenUnhandled {
+    case Event(WhichState, s @ Cache(services)) => {
+      var tmp: State = stay using s // FSM State
+      if(Normal.equals(stateName)) {
+        LOG.debug("StateName [{}] should be Normal.", stateName)
+        stateChecker.cancel
+        notify(Normal)(Ready(name))
+      } else if(Stopped.equals(stateName)) {
+        LOG.debug("StateName [{}] should be Stopped.", stateName)
+        // TODO: check if services map is empty, if not throws exception
+        stoppedStateChecker.cancel
+        notify(Stopped)(Halt(name))
+        tmp = stop(FSM.Normal, Cache(Map.empty[String, ActorRef]))
+      }
+      tmp
+    } 
+    /**
+     * Event such as Load, SubscribeState may go to here
+     */
     case Event(e, s) => {
-      LOG.warning("Unknown event {} with services {}.", e, s)
+      LOG.warning("[current state:{}] Unknown event {} with services {}.", 
+                  stateName, e, s)
       stay using s
     }
   }
 
-  /** 
-   * onTransition is needed only when the server needs to perform steps before
-   * State is transferred to the next one.
-   * It's `stateData' will be the old one before replaced with the new data.
-   * For example, in CleanUp -> Stopped, stateData will have 1 services left, 
-   * instead of 0.
-  onTransition {
-    case StartUp -> Normal => { }
-    case Normal -> CleanUp => { }
-    case CleanUp -> Stopped => { }
+  protected def serviceStateListenerManagement: Receive = {
+    case SubscribeState(state, ref) => {
+      mapping.get(state) match {
+        case Some(refs) => {
+          mapping = mapping.mapValues { refs => refs+ref}
+        }
+        case None => {
+          mapping ++= Map(state -> Set(ref))
+        }
+      }
+      LOG.debug("Mapping: {}", mapping)
+    }
+    case UnsubscribeState(state, ref) => {
+      mapping.get(state) match {
+        case Some(refs) => {
+          mapping = mapping.mapValues { refs => refs-ref}
+        }
+        case None => 
+          LOG.warning("No matching actor to unsubscribe with state {}.", state) 
+      }
+    }
   }
-   */
 
-  initialize
+  /**
+   * Notify listeners when a specific state is triggered.
+   */
+  protected def notify(state: ServiceState)(message: Any): Unit = {
+    LOG.debug("state: {}, message, {}, mapping {}", state, message, mapping)
+    mapping.filter(p => state.equals(p._1)).values.flatten.foreach( ref => {
+      LOG.debug("Send msg to ref {}!", ref)
+      ref ! message
+    })
+  }
+
+  initialize()
 
 }

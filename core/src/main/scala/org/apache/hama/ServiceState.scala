@@ -17,8 +17,29 @@
  */
 package org.apache.hama
 
+sealed trait ServiceState
+
 /**
- * Notify when the system is in Normal state.
- * @param systemName of the server.
+ * The system in the stage where services are starting up.
  */
-case class Ready(systemName: String)
+private[hama] case object StartUp extends ServiceState 
+
+/**
+ * The system services are ready.
+ */
+private[hama] case object Normal extends ServiceState
+
+/**
+ * The system services are shutting down.
+ */
+private[hama] case object CleanUp extends ServiceState
+
+/**
+ * The system is stopped.
+ */
+private[hama] case object Stopped extends ServiceState
+
+/**
+ * The system is failed.
+ */
+private[hama] case object Failed extends ServiceState

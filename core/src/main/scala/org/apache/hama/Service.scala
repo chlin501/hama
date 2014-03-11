@@ -92,7 +92,18 @@ trait Service extends Agent {
       context.system.scheduler.schedule(0.seconds, 2.seconds, actor, 
                                         IsServiceReady)
     cancelServicesWhenReady ++= Map(service -> cancellable)
+    LOG.debug("Services checker: {}", 
+              cancelServicesWhenReady.keys.mkString(", "))
     servicesCount += 1
+  }
+
+  /**
+   * Cache service to Service#services map.
+   */
+  protected def cacheService(name: String, service: ActorRef) {
+    services ++= Map(name -> service)
+    context.watch(service)
+    cancelServicesChecker(name, service)
   }
 
   /**
@@ -100,7 +111,6 @@ trait Service extends Agent {
    * This function will be executed in {@link ServiceStateMachine}.
    */
   protected def cancelServicesChecker(name: String, service: ActorRef) {
-    context.watch(service)
     cancelServicesWhenReady.get(name) match {
       case Some(cancellable) => cancellable.cancel
       case None =>
@@ -149,23 +159,6 @@ trait Service extends Agent {
   }
 
   /**
-   * An external service acks so the current service caches and cancels 
-   * scheduling {@link Timeout} messages. 
-  protected def ack: Receive = {
-    case Ack(service) => {
-      LOG.info("Service {} is ready.", service)
-      services ++= Map(service -> sender)
-      context.watch(sender)
-      cancelServicesWhenReady.get(service) match {
-        case Some(cancellable) => cancellable.cancel
-        case None => 
-          LOG.warning("Can't cancel for service {} not found!", service)
-      }
-    }
-  }
-   */
-
-  /**
    * Default mechanism in loading services by sending service name and its actor
    * reference.
    */
@@ -175,10 +168,4 @@ trait Service extends Agent {
     }
   }
 
-  /**
-   * Default replying mechanism.
-   * Upon reception of Ready message, ack back with this service name.
-   */
-  protected def ready: Receive = { case Ready => sender ! Ack(name) }
-  
 }

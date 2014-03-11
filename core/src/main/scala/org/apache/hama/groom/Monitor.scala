@@ -32,7 +32,7 @@ class Monitor(conf: HamaConfiguration) extends Service {
 
   override def isServiceReady: Receive = {
     case IsServiceReady => {
-      if(servicesCount == services.size) { // TODO: use fsm? no
+      if(servicesCount == services.size) { 
         sender ! Load(name, self)
       } else LOG.info("{} are available.", services.keys.mkString(", "))
     }

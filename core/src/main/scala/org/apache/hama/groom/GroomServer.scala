@@ -51,5 +51,7 @@ final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
     create("registrator", classOf[Registrator]) 
   }
 
-  override def receive = serviceStateListenerManagement orElse unknown 
+  override def receive = {
+   super.receive orElse serviceStateListenerManagement orElse unknown 
+  }
 }

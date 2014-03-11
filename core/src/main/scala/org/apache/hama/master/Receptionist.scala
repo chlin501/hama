@@ -34,11 +34,18 @@ class Receptionist(conf: HamaConfiguration) extends Service /*with Listeners */ 
 
   override def name: String = "receptionist"
 
+  override def isServiceReady: Receive = {
+    case IsServiceReady => {
+      sender ! Load(name, self)
+    }
+  }
+
   override def receive = {
+    isServiceReady orElse 
     //case JobDispatchAck(job) => { 
       // remove the corresponded job from the wait queue.
     //}
-    case Take => {
+    ({case Take => {
       var result: Option[Job] = None
       if(0 < waitQueue.size) {
         val (head, rest) = waitQueue.dequeue
@@ -48,11 +55,11 @@ class Receptionist(conf: HamaConfiguration) extends Service /*with Listeners */ 
                  head.getName, waitQueue.size)
       } 
       sender ! TakeResult(result)
-    }
+    }}: Receive) orElse
     ({case Submit(job: Job) => {
       LOG.info("Client submit job ..."+job.getName) 
       waitQueue = waitQueue.enqueue(job)
       //gossip(NewJobNotification)
-    }}: Receive) orElse isServiceReady /*orElse listenerManagement*/ orElse unknown
+    }}: Receive) /*orElse listenerManagement*/ orElse unknown
   } 
 }

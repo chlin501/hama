@@ -25,7 +25,8 @@ import akka.actor._
 private[hama] case object Init
 
 /**
- * Load a particular service with name and its actor reference in pair.
+ * Load a particular service with name and its actor reference to services 
+ * cache.
  */
 private[hama] case class Load(name: String, ref: ActorRef)
 

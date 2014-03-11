@@ -29,7 +29,7 @@ trait Agent extends Actor {
 
   protected def unknown: Receive = {
     case _ => {
-      LOG.warning("Unknown message for {}.", name)
+      LOG.warning("Unknown message {} for {}.", x$1, name)
     }
   }
 }

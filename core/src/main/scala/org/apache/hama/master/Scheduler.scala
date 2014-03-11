@@ -24,7 +24,7 @@ import scala.concurrent.duration._
 
 class Scheduler(conf: HamaConfiguration) extends Service {
 
-  val queuePath = "/usr/receptionist"
+  val queuePath = "/user/bspmaster/receptionist"
   var cancelQueueWhenReady: Cancellable = _
   var queue: ActorRef = _
   // var job_resource = Map.empty[String, Resource]
@@ -53,7 +53,7 @@ class Scheduler(conf: HamaConfiguration) extends Service {
   private def isQueueReady: Receive = {
     case ActorIdentity(`queuePath`, Some(receptionist)) => {
       queue = receptionist
-      queue ! Listen(self)
+      //queue ! Listen(self)
       cancelQueueWhenReady.cancel 
     }
     case ActorIdentity(`queuePath`, None) => { 

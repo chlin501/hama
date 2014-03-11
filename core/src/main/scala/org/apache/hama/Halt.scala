@@ -17,29 +17,7 @@
  */
 package org.apache.hama
 
-sealed trait State
-
 /**
- * The system in the stage where services are starting up.
+ * Notify when the servicde is in Stopped state.
  */
-private[hama] case object StartUp extends State 
-
-/**
- * The system services are ready.
- */
-private[hama] case object Normal extends State
-
-/**
- * The system services are shutting down.
- */
-private[hama] case object CleanUp extends State
-
-/**
- * The system is stopped.
- */
-private[hama] case object Stopped extends State
-
-/**
- * The system is failed.
- */
-private[hama] case object Failed extends State
+case class Halt(systemName: String)

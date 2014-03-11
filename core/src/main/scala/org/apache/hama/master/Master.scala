@@ -36,13 +36,14 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
     }
 
   override def initializeServices {
+    create("receptionist", classOf[Receptionist]) 
     create("groomManager", classOf[GroomManager]) 
     create("monitor", classOf[Monitor]) 
     create("sched", classOf[Scheduler]) 
-    create("receptionist", classOf[Receptionist]) 
   }
-
+ 
   override def receive = {
-    serviceStateListenerManagement orElse unknown 
+    isServiceReady orElse serviceStateListenerManagement orElse super.receive orElse unknown 
   }
+  
 }
