@@ -19,17 +19,45 @@ package org.apache.hama
 
 import akka.actor._
 import akka.event._
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config._
 import org.apache.hama.groom._
 import scala.concurrent.duration._
+
+object GroomConfig {
+  def toConfig(): Config =
+    ConfigFactory.parseString("""
+      groom {
+        akka {
+          remote.netty.tcp.port = 1947
+          actor {
+            provider = "akka.remote.RemoteActorRefProvider"
+            serializers {
+              java = "akka.serialization.JavaSerializer"
+              proto = "akka.remote.serialization.ProtobufSerializer"
+              writable = "org.apache.hama.io.serialization.WritableSerializer"
+            }
+            serialization-bindings {
+              "com.google.protobuf.Message" = proto
+              "org.apache.hadoop.io.Writable" = writable
+            }
+          }
+          remote {
+            netty.tcp {
+              hostname = "127.0.0.1" # read from HamaConfiguration
+            }
+          }
+        }
+      }
+    """)
+}
 
 object GroomRunner {
 
   def main(args: Array[String]) {
     val conf = new HamaConfiguration() 
     val system = 
-      ActorSystem(conf.get("bsp.groom.actor-system.name", "GroomSystem"))//,
-                  //ConfigFactory.load().getConfig("groom"))
+      ActorSystem(conf.get("bsp.groom.actor-system.name", "GroomSystem"),
+                  GroomConfig.toConfig.getConfig("groom"))
     system.actorOf(Props(classOf[GroomRunner], conf), "groomRunner")
   }
 }

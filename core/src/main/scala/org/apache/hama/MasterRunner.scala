@@ -19,17 +19,49 @@ package org.apache.hama
 
 import akka.actor._
 import akka.event._
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config._
 import org.apache.hama.master._
 import scala.concurrent.duration._
+
+/**
+ * TODO: stores in HamaConfiguration, translating to Config
+ */
+object MasterConfig {
+
+  def toConfig(): Config = 
+    ConfigFactory.parseString("""
+      master {
+        akka {
+          remote.netty.tcp.port = 1931
+          actor {
+            provider = "akka.remote.RemoteActorRefProvider"
+            serializers {
+              java = "akka.serialization.JavaSerializer"
+              proto = "akka.remote.serialization.ProtobufSerializer"
+              writable = "org.apache.hama.io.serialization.WritableSerializer"
+            }
+            serialization-bindings {
+              "com.google.protobuf.Message" = proto
+              "org.apache.hadoop.io.Writable" = writable
+            }
+          }
+          remote {
+            netty.tcp {
+              hostname = "127.0.0.1" # read from HamaConfiguration
+            }
+          }
+        }
+      }
+    """)
+}
 
 object MasterRunner {
 
   def main(args: Array[String]) {
     val conf = new HamaConfiguration() 
     val system = 
-      ActorSystem(conf.get("bsp.master.actor-system.name", "MasterSystem"))//,
-                  //ConfigFactory.load().getConfig("master"))
+      ActorSystem(conf.get("bsp.master.actor-system.name", "MasterSystem"),
+                  MasterConfig.toConfig.getConfig("master"))
     system.actorOf(Props(classOf[MasterRunner], conf), "masterRunner")
   }
 }
