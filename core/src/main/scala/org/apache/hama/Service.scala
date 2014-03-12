@@ -146,6 +146,7 @@ trait Service extends Agent {
    * @param ref is the remote actor ref.
    */
   protected def link(target: String, ref: ActorRef) {
+    LOG.debug("link to remote target: {} ref: {}.", target, ref)
     val proxy = context.system.actorOf(Props(classOf[ReliableProxy],
                                            ref,
                                            100.millis),
@@ -156,6 +157,7 @@ trait Service extends Agent {
       case None => 
         LOG.warning("Can't cancel for proxy {} not found!", target)
     }
+    LOG.debug("Done linking to remote service {}.", target)
   }
 
   /**

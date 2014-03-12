@@ -33,13 +33,15 @@ import scala.concurrent.duration._
  *   }
  */
 final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
- 
+
+
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
       case _: NullPointerException     => Restart
       case _: IllegalArgumentException => Stop
       case _: Exception                => Escalate
     }
+
 
   override def configuration: HamaConfiguration = conf
 

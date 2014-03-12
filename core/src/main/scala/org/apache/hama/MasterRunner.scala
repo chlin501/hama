@@ -32,7 +32,7 @@ object MasterConfig {
     ConfigFactory.parseString("""
       master {
         akka {
-          remote.netty.tcp.port = 1931
+          remote.netty.tcp.port = 40000
           actor {
             provider = "akka.remote.RemoteActorRefProvider"
             serializers {

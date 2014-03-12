@@ -28,7 +28,7 @@ object GroomConfig {
     ConfigFactory.parseString("""
       groom {
         akka {
-          remote.netty.tcp.port = 1947
+          remote.netty.tcp.port = 50000
           actor {
             provider = "akka.remote.RemoteActorRefProvider"
             serializers {

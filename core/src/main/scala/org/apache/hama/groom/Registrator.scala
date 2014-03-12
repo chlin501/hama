@@ -22,36 +22,38 @@ import org.apache.hama._
 
 class Registrator(conf: HamaConfiguration) extends Service {
 
-  val groomManagerInfo = 
+  val groomManagerInfo =
     ProxyInfo("groomManager",
               conf.get("bsp.master.actor-system.name", "MasterSystem"),
-              conf.get("bsp.master.address", "localhost"),
-              conf.getInt("bsp.master.port", 40000))
+              conf.get("bsp.master.address", "127.0.0.1"),
+              conf.getInt("bsp.master.port", 40000),
+              "bspmaster/groomManager")
 
   val groomManagerPath = groomManagerInfo.path
+
 
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "registrator"
 
   override def initializeServices {
-    //lookup("groomManager", groomManagerPath)
+    lookup("groomManager", groomManagerPath)
   }
 
   def isGroomManagerReady: Receive = {
     case ActorIdentity(`groomManagerPath`, Some(groomManager)) => {
-      link(groomManagerPath, groomManager)
+      link("groomManager", groomManager)
     }
     case ActorIdentity(`groomManagerPath`, None) => {
       LOG.info("{} is not yet available.", groomManagerPath)
     }
   }
 
-  def timout: Receive = {
+  def timeout: Receive = {
     case Timeout(proxy) => {
       if("groomManager".equals(proxy))
         lookup("groomManager", groomManagerPath)
-      else 
+      else
         LOG.warning("Unknown proxy {} lookup!", proxy)
     }
   }
@@ -66,6 +68,6 @@ class Registrator(conf: HamaConfiguration) extends Service {
   }
 
   override def receive = {
-    isServiceReady orElse isGroomManagerReady orElse timout orElse unknown
+    isServiceReady orElse isGroomManagerReady orElse timeout orElse unknown
   }
 }
