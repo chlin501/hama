@@ -35,7 +35,7 @@ class Registrator(conf: HamaConfiguration) extends Service {
   override def name: String = "registrator"
 
   override def initializeServices {
-    lookup("groomManager", groomManagerPath)
+    //lookup("groomManager", groomManagerPath)
   }
 
   def isGroomManagerReady: Receive = {

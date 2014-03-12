@@ -47,9 +47,7 @@ class MasterRunner(conf: HamaConfiguration) extends Actor {
   }
 
   def receive = {
-    case Ready(systemName) => {
-      LOG.info("{} services are in Normal state!", systemName) 
-    }
+    case Ready(systemName) =>  LOG.info("{} is in Normal state!", systemName) 
     case Halt(systemName) => {
       LOG.info("{} services are stopped. Shutdown the system...", systemName)
       context.system.shutdown       

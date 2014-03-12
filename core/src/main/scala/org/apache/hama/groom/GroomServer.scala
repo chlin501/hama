@@ -51,7 +51,11 @@ final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
     create("registrator", classOf[Registrator]) 
   }
 
+  /**
+   * Provide function dealing with state notification.
+   * Note super.service orElse unknown should be appended at the end.
+   */
   override def receive = {
-   super.receive orElse serviceStateListenerManagement orElse unknown 
+   serviceStateListenerManagement orElse super.receive orElse unknown
   }
 }

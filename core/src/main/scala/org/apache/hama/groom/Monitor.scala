@@ -38,6 +38,12 @@ class Monitor(conf: HamaConfiguration) extends Service {
     }
   }
 
-  def receive = isServiceReady orElse unknown
+  def loadPlugin: Receive = {
+    case Load(name, ref) => {
+      cacheService(name, ref)
+    }
+  }
+
+  def receive = isServiceReady orElse loadPlugin orElse unknown
 
 }

@@ -87,7 +87,6 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices] with Service {
    * Handle events in Normal state.
    */
   when(Normal) {
-    
     case Event(Shutdown, s @ Cache(services)) => {
       LOG.info("Shutting down server ...")
       services.view.foreach {

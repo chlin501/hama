@@ -19,14 +19,17 @@ package org.apache.hama
 
 import akka.actor._
 import akka.event._
+import com.typesafe.config.ConfigFactory
 import org.apache.hama.groom._
+import scala.concurrent.duration._
 
 object GroomRunner {
 
   def main(args: Array[String]) {
     val conf = new HamaConfiguration() 
     val system = 
-      ActorSystem(conf.get("bsp.groom.actor-system.name", "GroomSystem"))
+      ActorSystem(conf.get("bsp.groom.actor-system.name", "GroomSystem"))//,
+                  //ConfigFactory.load().getConfig("groom"))
     system.actorOf(Props(classOf[GroomRunner], conf), "groomRunner")
   }
 }
@@ -38,15 +41,14 @@ class GroomRunner(conf: HamaConfiguration) extends Actor {
   var groom: ActorRef = _
 
   override def preStart {
-    groom = context.system.actorOf(Props(classOf[GroomServer], conf), "groom")
+    groom = context.system.actorOf(Props(classOf[GroomServer], conf), 
+                                   "groom")
     LOG.info("Subscribe to receive notificaiton when groom is in ready state.")
     groom ! SubscribeState(Normal, self)
   }
 
   def receive = {
-    case Ready(systemName) => {
-      LOG.info("{} services are ready!", systemName) 
-    }
+    case Ready(systemName) =>  LOG.info("{} is in Normal state!", systemName) 
     case Halt(systemName) => {
       LOG.info("{} services are stopped. Shutdown the system...", systemName)
       context.system.shutdown       

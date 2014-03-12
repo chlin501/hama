@@ -43,7 +43,7 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
   }
  
   override def receive = {
-    isServiceReady orElse serviceStateListenerManagement orElse super.receive orElse unknown 
+    serviceStateListenerManagement orElse super.receive orElse unknown 
   }
   
 }

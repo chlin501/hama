@@ -20,25 +20,17 @@ package org.apache.hama
 import akka.actor._
 
 /**
- * Init event signify the state is initializing.
- */
-private[hama] case object Init
-
-/**
  * Load a particular service with name and its actor reference to services 
  * cache.
+ * This happens when the service in the StartUp state.
  */
 private[hama] case class Load(name: String, ref: ActorRef)
 
 /**
  * Unload a service, denoted by name, out of services cache.
+ * This happens when the service in the CleanUp state.
  */
 private[hama] case class Unload(name: String)
-
-/**
- * Trigger if the current state is Normal.
- */
-private[hama] case object InNormal
 
 /**
  * Shutdown the entire server.
