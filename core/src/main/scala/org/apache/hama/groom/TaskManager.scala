@@ -19,7 +19,7 @@ package org.apache.hama.groom
 
 import org.apache.hama._
 
-class TaskManager(conf: HamaConfiguration) extends Service {
+class TaskManager(conf: HamaConfiguration) extends LocalService {
 
   override def configuration: HamaConfiguration = conf
 

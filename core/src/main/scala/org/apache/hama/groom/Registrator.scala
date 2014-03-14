@@ -22,7 +22,7 @@ import org.apache.hama._
 import org.apache.hama.master.Register
 import org.apache.hama.bsp.v2.GroomServerSpec
 
-class Registrator(conf: HamaConfiguration) extends Service {
+class Registrator(conf: HamaConfiguration) extends LocalService {
 
   val groomManagerInfo =
     ProxyInfo("groomManager",
@@ -43,6 +43,7 @@ class Registrator(conf: HamaConfiguration) extends Service {
 
   override def name: String = "registrator"
 
+/*
   def register {
     proxies.get("groomManager") match {
       case Some(groomManager) => {
@@ -54,11 +55,13 @@ class Registrator(conf: HamaConfiguration) extends Service {
       case None => throw new RuntimeException("Proxy groomManager not found!")
     }
   }
+*/
 
   override def initializeServices {
-    lookup("groomManager", groomManagerPath)
+    //lookup("groomManager", groomManagerPath)
   }
 
+/*
   def isGroomManagerReady: Receive = {
     case ActorIdentity(`groomManagerPath`, Some(groomManager)) => {
       link("groomManager", groomManager)
@@ -77,17 +80,9 @@ class Registrator(conf: HamaConfiguration) extends Service {
         LOG.warning("Unknown proxy {} lookup!", proxy)
     }
   }
-
-  /**
-   * Need to connect remote proxies, so override service loading mechanism.
-   */
-  override def isServiceReady: Receive = {
-    case IsServiceReady => {
-      if(proxiesCount == proxies.size) sender ! Load(name, self)
-    } 
-  }
+*/
 
   override def receive = {
-    isServiceReady orElse isGroomManagerReady orElse timeout orElse unknown
+    isServiceReady /*orElse isGroomManagerReady orElse timeout*/ orElse unknown
   }
 }

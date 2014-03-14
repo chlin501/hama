@@ -22,7 +22,7 @@ import akka.routing._
 import org.apache.hama._
 import scala.concurrent.duration._
 
-class Scheduler(conf: HamaConfiguration) extends Service {
+class Scheduler(conf: HamaConfiguration) extends LocalService {
 
   val queuePath = "/user/bspmaster/receptionist"
   var cancelQueueWhenReady: Cancellable = _
@@ -33,23 +33,26 @@ class Scheduler(conf: HamaConfiguration) extends Service {
 
   override def name: String = "sched"
 
+/*
   private def subscribe(path: String): Cancellable = {
     context.system.actorSelection(path) ! Identify(path)
     import context.dispatcher
     val cancellable = 
-      context.system.scheduler.scheduleOnce(3.seconds, self, Timeout(path))
+      context.system.scheduler.scheduleOnce(3.seconds, self, Timeout(target, path))
     cancellable
   } 
+*/
 
   //private def find = {
   //}
 
   override def initializeServices { 
-    cancelQueueWhenReady = subscribe(queuePath)
+    //cancelQueueWhenReady = subscribe(queuePath)
     // command dispatcher
     // resouce consultant
   }
 
+/*
   private def isQueueReady: Receive = {
     case ActorIdentity(`queuePath`, Some(receptionist)) => {
       queue = receptionist
@@ -63,6 +66,7 @@ class Scheduler(conf: HamaConfiguration) extends Service {
       cancelQueueWhenReady = subscribe(path)
     }
   }
+*/
  
   override def receive = {
     //case TakeResult(job) => {
@@ -91,7 +95,7 @@ class Scheduler(conf: HamaConfiguration) extends Service {
     ({case NewJobNotification => {
       // check with resource consultant if free slots available
       // resourceConsultant ! jobName 
-    }}: Receive) orElse isQueueReady orElse isServiceReady orElse unknown
+    }}: Receive) orElse /*isQueueReady orElse*/ isServiceReady orElse unknown
   }
 
 }

@@ -24,13 +24,13 @@ import akka.actor._
  * cache.
  * This happens when the service in the StartUp state.
  */
-private[hama] case class Load(name: String, ref: ActorRef)
+private[hama] case class Load
 
 /**
  * Unload a service, denoted by name, out of services cache.
  * This happens when the service in the CleanUp state.
  */
-private[hama] case class Unload(name: String)
+private[hama] case class Unload
 
 /**
  * Shutdown the entire server.

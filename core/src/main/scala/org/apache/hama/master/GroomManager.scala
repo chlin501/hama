@@ -30,7 +30,7 @@ import scala.concurrent.duration._
  * A service that manages a set of {@link org.apache.hama.groom.GroomServer}s.
  * @param conf contains specific configuration for this service. 
  */
-class GroomManager(conf: HamaConfiguration) extends Service {
+class GroomManager(conf: HamaConfiguration) extends LocalService {
 
   //var mapping = Map.empty[String, Groom]
 
@@ -42,6 +42,7 @@ class GroomManager(conf: HamaConfiguration) extends Service {
 
   override def name: String = "groomManager"
 
+/*
   def ask {
     context.system.actorSelection(schedPath) ! Identify(schedPath)
     import context.dispatcher
@@ -66,11 +67,11 @@ class GroomManager(conf: HamaConfiguration) extends Service {
   def timeout: Receive = {
     case Timeout(who) => ask  
   }
+*/
 
   /**
    * Notified when the remote actor is offline.
    * Trigger resched event.
-   */
   def isTerminated: Receive = {
     case Terminated => {
       LOG.info("{} is terminated! Reschedule all related tasks.", 
@@ -86,6 +87,7 @@ class GroomManager(conf: HamaConfiguration) extends Service {
       // send Load message back
     }
   }
+   */
 
   override def receive = {
     isServiceReady orElse 
@@ -96,6 +98,6 @@ class GroomManager(conf: HamaConfiguration) extends Service {
       context.watch(sender)
       // wait for notification if the groom fails
       // then raise resched message
-     }}: Receive) orElse isSchedReady orElse timeout orElse isTerminated orElse unknown
+     }}: Receive) /*orElse isSchedReady orElse timeout orElse isTerminated*/ orElse unknown
   }
 }

@@ -22,7 +22,7 @@ import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.master._
 
-final class TasksReporter(conf: HamaConfiguration) extends Service {
+final class TasksReporter(conf: HamaConfiguration) extends LocalService {
 
   var tasksMapping = Map.empty[BSPJobID, Task]
 

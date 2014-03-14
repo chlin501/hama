@@ -28,7 +28,7 @@ case class UnsubscribeState(state: ServiceState, ref: ActorRef)
      extends StateMessage
 
 sealed trait HamaServices
-private case class Cache(services: Map[String, ActorRef]) extends HamaServices
+private case class Cache(services: Set[ActorRef]) extends HamaServices
 
 sealed trait StateChecker
 private case object WhichState extends StateChecker
@@ -36,14 +36,16 @@ private case object WhichState extends StateChecker
 /**
  * This trait defines generic states a system will use.
  */
-trait ServiceStateMachine extends FSM[ServiceState, HamaServices] with Service {
+trait ServiceStateMachine extends FSM[ServiceState, HamaServices] 
+                          with LocalService {
 
   /**
    * Mapping ServiceState to a set of Actor to be notified.
    */
-  var mapping = Map.empty[ServiceState, Set[ActorRef]]
+  private var stateListeners = Map.empty[ServiceState, Set[ActorRef]]
   var stateChecker: Cancellable = _
-  var stoppedStateChecker: Cancellable = _
+  var isNotifiedInNormal = false 
+  var isNotifiedInStopped = false
 
   /**
    * Periodically check if <ServiceState>.equals(stateName).
@@ -61,19 +63,19 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices] with Service {
     stateChecker = check(WhichState)
   }
 
-  startWith(StartUp, Cache(Map.empty[String, ActorRef]))
+  startWith(StartUp, Cache(Set.empty[ActorRef]))
 
   /**
    * Handle events in StartUp state.
    */
   when(StartUp) {
-    case Event(Load(name, service), s @ Cache(prevServices)) => {
-      LOG.info("Loading service {}", name)
-      val currentServices = prevServices ++ Map(name -> service)
+    case Event(Load, s @ Cache(subServices)) => {
+      LOG.info("Loading service {}", sender.path.name)  
+      val currentServices = subServices ++ Set(sender)
       services = currentServices // Service.scala#services
       LOG.debug("Current services available: {}", services.mkString(", "))
-      context.watch(service)
-      cancelServicesChecker(name, service)
+      context.watch(sender) // watch sub service
+      cancelServiceLookup(sender.path.name, sender)
       val cache = s.copy(currentServices)
       if(servicesCount == currentServices.size) {
         goto(Normal) using cache
@@ -87,10 +89,10 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices] with Service {
    * Handle events in Normal state.
    */
   when(Normal) {
-    case Event(Shutdown, s @ Cache(services)) => {
+    case Event(Shutdown, s @ Cache(subServices)) => {
       LOG.info("Shutting down server ...")
-      services.view.foreach {
-        case (name, service) => {
+      subServices.view.foreach {
+        case service => {
           // service once receive Shutdown message MUST perform housekeeping 
           // (cleanup) tasks. In the end call sender ! Unload(name) where name
           // is the def of its own function name.
@@ -106,8 +108,9 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices] with Service {
    * Handle events in CleanUp state.
    */
   when(CleanUp) {
-    case Event(Unload(name), s @ Cache(services)) => {
-      val currentServices = services - name 
+    case Event(Unload, s @ Cache(subServices)) => {
+      val currentServices = subServices - sender 
+      context.unwatch(sender) // unwatch sub service
       val cache = s.copy(currentServices)
       if(0 == currentServices) {
         goto(Stopped) using cache
@@ -126,18 +129,19 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices] with Service {
    * ready.
    */
   whenUnhandled {
-    case Event(WhichState, s @ Cache(services)) => {
+    case Event(WhichState, s @ Cache(subServices)) => {
       var tmp: State = stay using s // FSM State
-      if(Normal.equals(stateName)) {
+      if(Normal.equals(stateName) && !isNotifiedInNormal) {
         LOG.debug("StateName [{}] should be Normal.", stateName)
-        stateChecker.cancel
         notify(Normal)(Ready(name))
-      } else if(Stopped.equals(stateName)) {
+        isNotifiedInNormal = true
+      } else if(Stopped.equals(stateName) && !isNotifiedInStopped) {
         LOG.debug("StateName [{}] should be Stopped.", stateName)
-        // TODO: check if services map is empty, if not throws exception
-        stoppedStateChecker.cancel
+        // TODO: check if subServices map is empty, if not throws exception
+        stateChecker.cancel
         notify(Stopped)(Halt(name))
-        tmp = stop(FSM.Normal, Cache(Map.empty[String, ActorRef]))
+        isNotifiedInStopped = true
+        tmp = stop(FSM.Normal, Cache(Set.empty[ActorRef]))
       }
       tmp
     } 
@@ -145,7 +149,7 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices] with Service {
      * Event such as Load, SubscribeState may go to here
      */
     case Event(e, s) => {
-      LOG.warning("[current state:{}] Unknown event {} with services {}.", 
+      LOG.warning("CurrentState {}, unknown event {}, services {}.", 
                   stateName, e, s)
       stay using s
     }
@@ -153,20 +157,20 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices] with Service {
 
   protected def serviceStateListenerManagement: Receive = {
     case SubscribeState(state, ref) => {
-      mapping.get(state) match {
+      stateListeners.get(state) match {
         case Some(refs) => {
-          mapping = mapping.mapValues { refs => refs+ref}
+          stateListeners = stateListeners.mapValues { refs => refs + ref }
         }
         case None => {
-          mapping ++= Map(state -> Set(ref))
+          stateListeners ++= Map(state -> Set(ref))
         }
       }
-      LOG.debug("Mapping: {}", mapping)
+      LOG.debug("Mapping: {}", stateListeners.mkString(", "))
     }
     case UnsubscribeState(state, ref) => {
-      mapping.get(state) match {
+      stateListeners.get(state) match {
         case Some(refs) => {
-          mapping = mapping.mapValues { refs => refs-ref}
+          stateListeners = stateListeners.mapValues { refs => refs - ref }
         }
         case None => 
           LOG.warning("No matching actor to unsubscribe with state {}.", state) 
@@ -178,13 +182,14 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices] with Service {
    * Notify listeners when a specific state is triggered.
    */
   protected def notify(state: ServiceState)(message: Any): Unit = {
-    LOG.debug("state: {}, message, {}, mapping {}", state, message, mapping)
-    mapping.filter(p => state.equals(p._1)).values.flatten.foreach( ref => {
+    LOG.debug("state: {}, message, {}, stateListeners {}", 
+              state, message, stateListeners.mkString(", "))
+    stateListeners.filter(p => state.equals(p._1)).values.flatten.
+                   foreach( ref => {
       LOG.debug("Send msg to ref {}!", ref)
       ref ! message
     })
   }
 
   initialize()
-
 }

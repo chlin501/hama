@@ -17,4 +17,9 @@
  */
 package org.apache.hama
 
-case class Timeout(name: String)
+/**
+ * Inidicate timeout when looking up proxy with name and path specificed.
+ * @param name is the name of the proxy
+ * @param path is the path pointed to the target proxy.
+ */
+case class Timeout(name: String, path: String)

@@ -21,7 +21,7 @@ import akka.actor._
 import org.apache.hama._
 import org.apache.hama.master.monitor._
 
-class Monitor(conf: HamaConfiguration) extends Service {
+class Monitor(conf: HamaConfiguration) extends LocalService {
 
   override def configuration: HamaConfiguration = conf
 
@@ -31,25 +31,11 @@ class Monitor(conf: HamaConfiguration) extends Service {
     create("jobTasksTracker", classOf[JobTasksTracker])
   }
 
-  /**
-   * Monitor needs to load sub services so it requires to override 
-   * isServiceReady function.
-   */
-  override def isServiceReady: Receive = {
-    case IsServiceReady => {
-      if(servicesCount == services.size) { 
-        sender ! Load(name, self)
-      } else LOG.info("{} are available.", services.keys.mkString(", "))
-    }
-  }
-
   def loadPlugin: Receive = {  
-    case Load(name, ref) => { 
-      cacheService(name, ref) 
-    }
+    case Load => cacheService(sender) 
   }
 
   override def receive = {
-    isServiceReady orElse loadPlugin orElse unknown
+    areSubServicesReady orElse loadPlugin orElse unknown
   } 
 }
