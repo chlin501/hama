@@ -33,6 +33,10 @@ private case class Cache(services: Set[ActorRef]) extends HamaServices
 sealed trait StateChecker
 private case object WhichState extends StateChecker
 
+sealed trait BroadcastMessage
+case object MasterIsUp extends BroadcastMessage
+case object GroomServerIsUp extends BroadcastMessage
+
 /**
  * This trait defines generic states a system will use.
  */
@@ -134,6 +138,7 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
       if(Normal.equals(stateName) && !isNotifiedInNormal) {
         LOG.debug("StateName [{}] should be Normal.", stateName)
         notify(Normal)(Ready(name))
+        broadcast
         isNotifiedInNormal = true
       } else if(Stopped.equals(stateName) && !isNotifiedInStopped) {
         LOG.debug("StateName [{}] should be Stopped.", stateName)
@@ -153,6 +158,10 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
                   stateName, e, s)
       stay using s
     }
+  }
+
+  private def broadcast { 
+    services.foreach( service => { service ! MasterIsUp })
   }
 
   protected def serviceStateListenerManagement: Receive = {

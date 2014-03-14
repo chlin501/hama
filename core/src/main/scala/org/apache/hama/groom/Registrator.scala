@@ -19,11 +19,10 @@ package org.apache.hama.groom
 
 import akka.actor._
 import org.apache.hama._
-import org.apache.hama.master.Register
 import org.apache.hama.bsp.v2.GroomServerSpec
 
 class Registrator(conf: HamaConfiguration) extends LocalService 
-                                           with RemoteService {
+                                              with RemoteService {
 
   val groomManagerInfo =
     ProxyInfo("groomManager",
@@ -48,11 +47,8 @@ class Registrator(conf: HamaConfiguration) extends LocalService
     lookup("groomManager", groomManagerPath)
   }
 
-  override def afterLinked(proxy: ActorRef) {
-    proxy ! new GroomServerSpec(groomServerName, 
-                                groomHostName, 
-                                port,
-                                3)
+  override def afterLinked(proxy: ActorRef) { 
+    proxy ! new GroomServerSpec(groomServerName, groomHostName, port, 3)
   }
 
   override def receive = {

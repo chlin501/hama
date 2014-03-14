@@ -89,6 +89,8 @@ trait LocalService extends Service {
 
   protected def servicesReady: Boolean = (servicesCount == services.size)
 
+  protected def offline(target: ActorRef) { }
+
   /**
    * Default mechanism in loading services by sending service name and its
    * actor reference.
@@ -105,6 +107,10 @@ trait LocalService extends Service {
         LOG.info("Expected {} services, but only {} services are available.", 
                  servicesCount, services.size)
     }
+  }
+
+  protected def isTerminated: Receive = {
+    case Terminated => offline(sender)
   }
 
 }

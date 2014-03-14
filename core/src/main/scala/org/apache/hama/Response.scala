@@ -15,8 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master
+package org.apache.hama
 
-import org.apache.hama.bsp.v2.GroomServerSpec
+import akka.actor._
 
-case class Register(spec: GroomServerSpec) 
+case class Response(ref: ActorRef)
