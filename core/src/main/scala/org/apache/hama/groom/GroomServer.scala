@@ -34,7 +34,6 @@ import scala.concurrent.duration._
  */
 final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
 
-
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
       case _: NullPointerException     => Restart
@@ -45,7 +44,7 @@ final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = conf.get("bsp.groom-server.name", "groomServer") 
+  override def name: String = conf.get("bsp.groom.name", "groomServer") 
 
   override def initializeServices {
     create("taskManager", classOf[TaskManager]) 

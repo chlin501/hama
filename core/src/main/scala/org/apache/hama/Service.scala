@@ -27,6 +27,7 @@ import scala.concurrent.duration._
  * A service may hold a collection of services, and proxies link to a remote
  * server.
  */
+// TODO: divide to Service (local), RemoteSerivce, ProxyService trait
 trait Service extends Agent {
 
   /**
@@ -37,7 +38,8 @@ trait Service extends Agent {
   /**
    * A service can hold other services e.g. plugin.
    */
-  protected var services = Map.empty[String, ActorRef]
+  //TODO: change to set because ActorRef.path.name knows which actor is used.
+  protected var services = Map.empty[String, ActorRef] 
 
   /**
    * Schedule to send messages to services, and cancel the scheduling once the
@@ -54,6 +56,7 @@ trait Service extends Agent {
    * A collection of {@link akka.contrib.pattern.ReliableProxy}s links to a 
    * remote server.
    */
+  // TODO: change to set because ActorRef.path.name knows which actor is used.
   protected var proxies = Map.empty[String, ActorRef]
 
   /**
@@ -117,7 +120,7 @@ trait Service extends Agent {
         LOG.warning("Can't cancel for service {} not found!", name)
     }
   }
-
+  
   /**
    * Lookup a proxy actor by sending an {@link Identify} and schedule a message
    * indicating timeout if no reply.

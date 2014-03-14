@@ -29,28 +29,32 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
-public final class GroomServerStatus implements Writable {
-  public static final Log LOG = LogFactory.getLog(GroomServerStatus.class);
+public final class GroomServerSpec implements Writable {
 
-  private String name;
-  private String host;
-  private List<Task> taskReports;
+  public static final Log LOG = LogFactory.getLog(GroomServerSpec.class);
+
+  private String name; // groom_<host>_<port>
+  private String host; // groom (rpc) host addr default 0.0.0.0
+  private int port;
   private int maxTasks;
 
-  public GroomServerStatus(final String name, final String host,  
-                           final int maxTasks, final List<Task> taskReports) {
+  public GroomServerSpec(final String name, final String host, final int port,
+                         final int maxTasks) {
     this.name = name;
     if(StringUtils.isBlank(this.name))
       throw new IllegalArgumentException("GroomServer name is not provided.");
+
     this.host = host;
     if(StringUtils.isBlank(this.host))
       throw new IllegalArgumentException("GroomServer host is not provided.");
+
+    this.port = port;
+    if(0 > this.port)
+      throw new IllegalArgumentException("Invalid port value!");
+
     this.maxTasks = maxTasks;
     if(0 >= this.maxTasks)
       throw new IllegalArgumentException("Invalid max tasks!");
-    this.taskReports = new ArrayList<Task>(taskReports);
-    if(null == taskReports || this.taskReports.isEmpty())
-      throw new IllegalArgumentException("Tasks list is empty!");
   }
 
   public String name() {
@@ -60,9 +64,9 @@ public final class GroomServerStatus implements Writable {
   public String host() {
     return host;
   }
-  
-  public List<Task> taskReports() {
-    return taskReports;
+
+  public int port() {
+    return this.port;
   }
 
   public int maxTasks() {
@@ -74,6 +78,7 @@ public final class GroomServerStatus implements Writable {
     int result = 17;
     result = 37 * result + name.hashCode();
     result = 37 * result + host.hashCode();
+    result = 37 * result + new Integer(port).hashCode(); // TODO
     return result;
   }
 
@@ -86,7 +91,7 @@ public final class GroomServerStatus implements Writable {
     if (getClass() != o.getClass())
       return false;
 
-    GroomServerStatus s = (GroomServerStatus) o;
+    GroomServerSpec s = (GroomServerSpec) o;
     if (!s.name.equals(name))
       return false;
     return true;
@@ -96,29 +101,16 @@ public final class GroomServerStatus implements Writable {
   public void readFields(DataInput in) throws IOException {
     this.name = Text.readString(in);
     this.host = Text.readString(in);
-
+    this.port = in.readInt();
     this.maxTasks = in.readInt();
-    taskReports.clear();
-    int numTasks = in.readInt();
-
-    Task task;
-    for (int i = 0; i < numTasks; i++) {
-      task = new Task();
-      task.readFields(in);
-      taskReports.add(task);
-    }
   }
 
   @Override
   public void write(DataOutput out) throws IOException {
     Text.writeString(out, name);
     Text.writeString(out, host);
-
+    out.writeInt(port);
     out.writeInt(maxTasks);
-    out.writeInt(taskReports.size());
-    for (final Task task: taskReports) {
-      task.write(out);
-    }
   }
 
 }
