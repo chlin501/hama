@@ -32,11 +32,15 @@ trait ServiceEventListener { self: Actor =>
   protected def serviceEventListenerManagement: Receive = {
     case SubscribeEvent(event, ref) => {
       mapping = 
-        mapping.filter( p => event.equals(p._1)).mapValues { refs => refs+ref }
+        mapping.filter( p => event.equals(p._1)).mapValues { 
+          refs => refs + ref 
+        }
     }
     case UnsubscribeEvent(event, ref) => {
       mapping =
-        mapping.filter( p => event.equals(p._1)).mapValues { refs => refs-ref }
+        mapping.filter( p => event.equals(p._1)).mapValues { 
+          refs => refs - ref 
+        }
     }
   }
 

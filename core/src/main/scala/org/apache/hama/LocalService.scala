@@ -57,7 +57,7 @@ trait LocalService extends Service {
       context.system.scheduler.schedule(0.seconds, 2.seconds, actor, 
                                         IsServiceReady)
     servicesLookup ++= Map(service -> cancellable)
-    LOG.debug("Services lookup: {}", servicesLookup.keys.mkString(", "))
+    LOG.debug("Services to be created: {}", servicesLookup.keys.mkString(", "))
     servicesCount += 1
   }
 

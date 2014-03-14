@@ -38,6 +38,8 @@ public final class GroomServerSpec implements Writable {
   private int port;
   private int maxTasks;
 
+  public GroomServerSpec() { } // for Serializer used only 
+
   public GroomServerSpec(final String name, final String host, final int port,
                          final int maxTasks) {
     this.name = name;
@@ -57,19 +59,19 @@ public final class GroomServerSpec implements Writable {
       throw new IllegalArgumentException("Invalid max tasks!");
   }
 
-  public String name() {
+  public String getName() {
     return name;
   }
 
-  public String host() {
+  public String getHost() {
     return host;
   }
 
-  public int port() {
+  public int getPort() {
     return this.port;
   }
 
-  public int maxTasks() {
+  public int getMaxTasks() {
     return maxTasks;
   }
   

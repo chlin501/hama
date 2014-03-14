@@ -70,7 +70,8 @@ class WritableSerializer(val system: ExtendedActorSystem) extends Serializer {
     bout.toByteArray
   }
 
-  override def fromBinary(bytes: Array[Byte], clazz: Option[Class[_]]): AnyRef = {
+  override def fromBinary(bytes: Array[Byte], clazz: Option[Class[_]]): 
+      AnyRef = {
     val bin = new ByteArrayInputStream(bytes)
     val in = new DataInputStream(bin)
     var writable: Writable = null
@@ -109,5 +110,4 @@ class WritableSerializer(val system: ExtendedActorSystem) extends Serializer {
     }
     writable
   }
-  
 }

@@ -22,7 +22,8 @@ import org.apache.hama._
 import org.apache.hama.master.Register
 import org.apache.hama.bsp.v2.GroomServerSpec
 
-class Registrator(conf: HamaConfiguration) extends LocalService {
+class Registrator(conf: HamaConfiguration) extends LocalService 
+                                           with RemoteService {
 
   val groomManagerInfo =
     ProxyInfo("groomManager",
@@ -43,46 +44,18 @@ class Registrator(conf: HamaConfiguration) extends LocalService {
 
   override def name: String = "registrator"
 
-/*
-  def register {
-    proxies.get("groomManager") match {
-      case Some(groomManager) => {
-        groomManager ! Register(new GroomServerSpec(groomServerName, 
-                                                    groomHostName, 
-                                                    port,
-                                                    3))
-      }
-      case None => throw new RuntimeException("Proxy groomManager not found!")
-    }
-  }
-*/
-
   override def initializeServices {
-    //lookup("groomManager", groomManagerPath)
+    lookup("groomManager", groomManagerPath)
   }
 
-/*
-  def isGroomManagerReady: Receive = {
-    case ActorIdentity(`groomManagerPath`, Some(groomManager)) => {
-      link("groomManager", groomManager)
-      register
-    }
-    case ActorIdentity(`groomManagerPath`, None) => {
-      LOG.info("{} is not yet available.", groomManagerPath)
-    }
+  override def afterLinked(proxy: ActorRef) {
+    proxy ! new GroomServerSpec(groomServerName, 
+                                groomHostName, 
+                                port,
+                                3)
   }
-
-  def timeout: Receive = {
-    case Timeout(proxy) => {
-      if("groomManager".equals(proxy))
-        lookup("groomManager", groomManagerPath)
-      else
-        LOG.warning("Unknown proxy {} lookup!", proxy)
-    }
-  }
-*/
 
   override def receive = {
-    isServiceReady /*orElse isGroomManagerReady orElse timeout*/ orElse unknown
+    isServiceReady orElse isProxyReady orElse timeout orElse unknown
   }
 }

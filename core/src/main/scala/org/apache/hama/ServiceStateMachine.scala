@@ -159,7 +159,9 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
     case SubscribeState(state, ref) => {
       stateListeners.get(state) match {
         case Some(refs) => {
-          stateListeners = stateListeners.mapValues { refs => refs + ref }
+          stateListeners = stateListeners.mapValues { 
+            refs => refs + ref 
+          }
         }
         case None => {
           stateListeners ++= Map(state -> Set(ref))
@@ -170,7 +172,9 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
     case UnsubscribeState(state, ref) => {
       stateListeners.get(state) match {
         case Some(refs) => {
-          stateListeners = stateListeners.mapValues { refs => refs - ref }
+          stateListeners = stateListeners.mapValues { 
+            refs => refs - ref 
+          }
         }
         case None => 
           LOG.warning("No matching actor to unsubscribe with state {}.", state) 

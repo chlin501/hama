@@ -91,9 +91,10 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
 
   override def receive = {
     isServiceReady orElse 
-    ({case Register(groomSpec) => {
+    ({case groomSpec: GroomServerSpec => {
       //mapping ++= Map(groomSpec.name -> Groom(sender, groomSpec))
-      LOG.info("GroomServer {} now registers.", groomSpec.name) 
+      LOG.info("GroomServer {} now registers from {}.", 
+               groomSpec.getName, sender.path.name) 
       // register to supervisor 
       context.watch(sender)
       // wait for notification if the groom fails
