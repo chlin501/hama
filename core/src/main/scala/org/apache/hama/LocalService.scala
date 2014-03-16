@@ -26,6 +26,8 @@ import scala.concurrent.duration._
  */
 trait LocalService extends Service {
 
+  var bspmaster: ActorRef = _
+
   /**
    * A fixed count of local services expected to be available.
    */
@@ -61,6 +63,27 @@ trait LocalService extends Service {
     servicesCount += 1
   }
 
+  protected def find(service: String, path: String, 
+                     delay: FiniteDuration = 3.seconds): Cancellable = {
+    context.system.actorSelection(path) ! Identify(service)
+    import context.dispatcher
+    context.system.scheduler.schedule(0.seconds, delay, self, 
+                                        Timeout(service, path))
+  }
+
+  /**
+   * After local service replies, the reaction of this actor.
+   * @param service is a local service such as Scheduler.
+   */
+  protected def whenFound(service: ActorRef) { }
+
+  /**
+   * Timeout when finding specific service.
+   * @param service to be found.
+   * @param path of the service in ActorSystem.
+   */
+  protected def localTimeout(service: String, path: String) { }
+
   /**
    * Cache service to Service#services map.
    */
@@ -80,7 +103,8 @@ trait LocalService extends Service {
     servicesLookup.get(name) match {
       case Some(cancellable) => {
         cancellable.cancel
-        servicesLookup -= "name"
+        servicesLookup -= name
+        LOG.debug("Unloaded services: {}", servicesLookup.mkString(", "))
       }
       case None =>
         LOG.warning("Can't cancel for service {} not found!", name)
@@ -89,6 +113,9 @@ trait LocalService extends Service {
 
   protected def servicesReady: Boolean = (servicesCount == services.size)
 
+  /**
+   * Notify the target GroomServer is offline.
+   */
   protected def offline(target: ActorRef) { }
 
   /**
@@ -96,7 +123,7 @@ trait LocalService extends Service {
    * actor reference.
    */
   protected def isServiceReady: Receive = {
-    case IsServiceReady => sender ! Load
+    case IsServiceReady =>  sender ! Load
   }
 
   protected def areSubServicesReady: Receive = {
@@ -109,8 +136,34 @@ trait LocalService extends Service {
     }
   }
 
-  protected def isTerminated: Receive = {
+  protected def isTerminated: Receive = { // TODO: move to remote?
     case Terminated => offline(sender)
   }
 
+  protected def localServiceReply: Receive = {
+    case ActorIdentity(target, Some(service)) => {
+      LOG.info("Local service {} is found.", target)
+      whenFound(service)
+    }
+    case ActorIdentity(target, None) =>
+      LOG.warning("Proxy {} is not yet available!", target)
+  }
+
+  protected def localTimeout: Receive = {
+    case Timeout(proxy, path) => {
+      LOG.debug("Timeout when finding local service {} ", proxy)
+      localTimeout(proxy, path)
+    }
+  }
+
+  // TODO: with bspmater var moves to another sub trait?
+  protected def serverIsUp: Receive = {
+    case ServerIsUp => {
+      if(!"bspmaster".equals(sender.path.name)) 
+        throw new RuntimeException(sender.path.name+" should not send "+
+                                   "ServerIsUp message.")
+      bspmaster = sender
+    }
+  }
+ 
 }

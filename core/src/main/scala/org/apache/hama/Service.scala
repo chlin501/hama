@@ -39,6 +39,11 @@ trait Service extends Agent {
   protected def configuration: HamaConfiguration
 
   /**
+   * Methods to be executed when shutting down.   
+  protected def shutdown 
+   */
+
+  /**
    * Initialize either groom's or master's subservices.
    */
   override def preStart = initializeServices 

@@ -36,6 +36,6 @@ class Monitor(conf: HamaConfiguration) extends LocalService {
   }
 
   override def receive = {
-    areSubServicesReady orElse loadPlugin orElse unknown
+    areSubServicesReady orElse serverIsUp orElse loadPlugin orElse unknown
   } 
 }

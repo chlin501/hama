@@ -34,8 +34,7 @@ sealed trait StateChecker
 private case object WhichState extends StateChecker
 
 sealed trait BroadcastMessage
-case object MasterIsUp extends BroadcastMessage
-case object GroomServerIsUp extends BroadcastMessage
+case object ServerIsUp extends BroadcastMessage
 
 /**
  * This trait defines generic states a system will use.
@@ -136,9 +135,8 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
     case Event(WhichState, s @ Cache(subServices)) => {
       var tmp: State = stay using s // FSM State
       if(Normal.equals(stateName) && !isNotifiedInNormal) {
-        LOG.debug("StateName [{}] should be Normal.", stateName)
+        broadcast(Normal)
         notify(Normal)(Ready(name))
-        broadcast
         isNotifiedInNormal = true
       } else if(Stopped.equals(stateName) && !isNotifiedInStopped) {
         LOG.debug("StateName [{}] should be Stopped.", stateName)
@@ -160,8 +158,8 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
     }
   }
 
-  private def broadcast { 
-    services.foreach( service => { service ! MasterIsUp })
+  protected def broadcast(state: ServiceState) {
+    if(Normal.equals(state)) services.foreach(service => service ! ServerIsUp)
   }
 
   protected def serviceStateListenerManagement: Receive = {

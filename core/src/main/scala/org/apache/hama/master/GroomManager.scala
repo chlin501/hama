@@ -24,7 +24,7 @@ import org.apache.hama.bsp.v2.GroomServerSpec
 import org.apache.hama.master._
 import scala.concurrent.duration._
 
-private[master] case class Groom(ref: ActorRef, spec: GroomServerSpec) 
+private[master] case class Groom(groom: ActorRef, spec: GroomServerSpec) 
 
 /**
  * A service that manages a set of {@link org.apache.hama.groom.GroomServer}s.
@@ -32,34 +32,43 @@ private[master] case class Groom(ref: ActorRef, spec: GroomServerSpec)
  */
 class GroomManager(conf: HamaConfiguration) extends LocalService {
 
-  var grooms = Set.empty[Groom]
-
-  var scheduler: ActorRef = _
+  var grooms = Set.empty[Groom] // TODO: move state out of master
+  var offlineGrooms = Set.empty[Groom]
 
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "groomManager"
 
-  def quarantine(offline: ActorRef) {
-    
+  /**
+   * Quarantine offline GroomServer.
+   */
+  def quarantine(offline: ActorRef, resched:(GroomServerSpec) => Unit) {
+    grooms.find(p=>p.groom.equals(offline)) match { // move to offline grooms
+      case Some(found) => {
+        grooms -= found
+        offlineGrooms += found
+        resched(found.spec) 
+      }
+      case None => 
+        LOG.warning("GroomServer {} is watched but not found in list!")
+    }
   }
 
-  def rescheduleTasks {
+  def rescheduleTasks(spec: GroomServerSpec) {
+    bspmaster ! Request("sched", RescheduleTasks(spec))
   }
 
-  override def offline(target: ActorRef) {
-    quarantine(target)
-    rescheduleTasks  
+  override def offline(groom: ActorRef) {
+    quarantine(groom, rescheduleTasks)
   }
 
   override def receive = {
-    case MasterIsUp => { sender ! Request("sched") }
-    case Response(sched) => { scheduler = sched }
+    isServiceReady orElse serverIsUp orElse
     ({case groomSpec: GroomServerSpec => { // register
       grooms ++= Set(Groom(sender, groomSpec))
       LOG.info("{} requests to register {}.", 
                sender.path.name, groomSpec.getName) 
       context.watch(sender) // watch remote
-     }}: Receive) orElse isServiceReady orElse isTerminated orElse unknown
+     }}: Receive) orElse isTerminated orElse unknown
   }
 }

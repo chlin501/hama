@@ -17,4 +17,6 @@
  */
 package org.apache.hama
 
-case class Response(service: String, result: Any)
+import akka.actor._
+
+case class Forward(message: Any, from: ActorRef)

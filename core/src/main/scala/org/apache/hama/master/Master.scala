@@ -43,9 +43,9 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
   }
  
   override def receive = {
-    ({case Request(service) => {
+    ({case Request(service, message) => { 
       services.find(p => service.equals(p.path.name)) match {
-        case Some(found) => sender ! Response(found)
+        case Some(found) => found ! Forward(message, sender)
         case None => throw new RuntimeException(service+" not found in cache!")
       }
     }}:Receive) orElse serviceStateListenerManagement orElse super.receive orElse unknown 

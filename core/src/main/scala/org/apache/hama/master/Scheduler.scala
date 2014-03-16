@@ -82,7 +82,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
       // else
       //   ack to receptionist for removing corresponded job
     //}
-    
     // resource consultant won't reply until resource avail
     // so resource consultant itself will wait if it finds not 
     // enough resource. 
@@ -92,10 +91,11 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
       // cache job with free slots information e.g job_resource
       // queue ! Take
     //}
+    isServiceReady orElse serverIsUp orElse
     ({case NewJobNotification => {
       // check with resource consultant if free slots available
       // resourceConsultant ! jobName 
-    }}: Receive) orElse /*isQueueReady orElse*/ isServiceReady orElse unknown
+    }}: Receive) orElse /*isQueueReady orElse*/ unknown
   }
 
 }

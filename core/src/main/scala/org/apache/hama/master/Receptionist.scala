@@ -43,7 +43,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService /*with Listener
 */
 
   override def receive = {
-    isServiceReady orElse 
+    isServiceReady orElse serverIsUp orElse
     //case JobDispatchAck(job) => { 
       // remove the corresponded job from the wait queue.
     //}
