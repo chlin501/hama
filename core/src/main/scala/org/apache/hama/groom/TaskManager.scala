@@ -25,5 +25,5 @@ class TaskManager(conf: HamaConfiguration) extends LocalService {
 
   override def name: String = "taskManager"
 
-  override def receive = isServiceReady orElse unknown
+  override def receive = isServiceReady orElse serverIsUp orElse unknown
 }

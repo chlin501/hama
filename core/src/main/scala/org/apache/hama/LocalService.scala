@@ -26,7 +26,7 @@ import scala.concurrent.duration._
  */
 trait LocalService extends Service {
 
-  var bspmaster: ActorRef = _
+  var mediator: ActorRef = _
 
   /**
    * A fixed count of local services expected to be available.
@@ -136,8 +136,9 @@ trait LocalService extends Service {
     }
   }
 
-  protected def isTerminated: Receive = { // TODO: move to remote?
-    case Terminated => offline(sender)
+  // TODO: move to remote?
+  protected def superviseeIsTerminated: Receive = { 
+    case Terminated(groom) => offline(groom)
   }
 
   protected def localServiceReply: Receive = {
@@ -159,10 +160,12 @@ trait LocalService extends Service {
   // TODO: with bspmater var moves to another sub trait?
   protected def serverIsUp: Receive = {
     case ServerIsUp => {
-      if(!"bspmaster".equals(sender.path.name)) 
-        throw new RuntimeException(sender.path.name+" should not send "+
-                                   "ServerIsUp message.")
-      bspmaster = sender
+      val master = configuration.get("bsp.master.name", "bspmaster")
+      val groom = configuration.get("bsp.groom.name", "groomServer")
+      if(master.equals(sender.path.name) || groom.equals(sender.path.name)) 
+        mediator = sender
+      else 
+        LOG.warning(sender.path.name+" shouldn't send ServerIsUp message!")
     }
   }
  

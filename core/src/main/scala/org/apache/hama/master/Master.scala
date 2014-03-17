@@ -26,7 +26,8 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = configuration.get("bsp.master.name", "bspmaster")
+  override def name: String = 
+    configuration.get("bsp.master.name", "bspmaster")
  
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {

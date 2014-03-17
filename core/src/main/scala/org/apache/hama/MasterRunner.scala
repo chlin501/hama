@@ -73,8 +73,10 @@ class MasterRunner(conf: HamaConfiguration) extends Actor {
   var master: ActorRef = _
 
   override def preStart {
-    master = context.system.actorOf(Props(classOf[Master], conf), "bspmaster")
-    LOG.info("Subscribe to receive notificaiton when master is in ready state.")
+    val masterName = conf.get("bsp.master.name", "bspmaster")
+    master = context.system.actorOf(Props(classOf[Master], conf), masterName)
+    LOG.info("Subscribe to receive notificaiton when master is in ready "+ 
+             "state.")
     master ! SubscribeState(Normal, self)
   }
 

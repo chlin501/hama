@@ -51,7 +51,5 @@ class Registrator(conf: HamaConfiguration) extends LocalService
     proxy ! new GroomServerSpec(groomServerName, groomHostName, port, 3)
   }
 
-  override def receive = {
-    isServiceReady orElse isProxyReady orElse timeout orElse unknown
-  }
+  override def receive = isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse unknown
 }

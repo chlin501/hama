@@ -55,7 +55,7 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
   }
 
   def rescheduleTasks(spec: GroomServerSpec) {
-    bspmaster ! Request("sched", RescheduleTasks(spec))
+    mediator ! Request("sched", RescheduleTasks(spec))
   }
 
   override def offline(groom: ActorRef) {
@@ -69,6 +69,6 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
       LOG.info("{} requests to register {}.", 
                sender.path.name, groomSpec.getName) 
       context.watch(sender) // watch remote
-     }}: Receive) orElse isTerminated orElse unknown
+     }}: Receive) orElse superviseeIsTerminated orElse unknown
   }
 }

@@ -34,6 +34,6 @@ class Monitor(conf: HamaConfiguration) extends LocalService {
     case Load => cacheService(sender)
   }
 
-  def receive = areSubServicesReady orElse loadPlugin orElse unknown
+  def receive = areSubServicesReady orElse serverIsUp orElse loadPlugin orElse unknown
 
 }

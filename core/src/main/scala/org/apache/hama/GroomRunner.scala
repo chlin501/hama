@@ -69,8 +69,9 @@ class GroomRunner(conf: HamaConfiguration) extends Actor {
   var groom: ActorRef = _
 
   override def preStart {
+    val groomName = conf.get("bsp.groom.name", "groomServer")
     groom = context.system.actorOf(Props(classOf[GroomServer], conf), 
-                                   "groom")
+                                   groomName)
     LOG.info("Subscribe to receive notificaiton when groom is in ready state.")
     groom ! SubscribeState(Normal, self)
   }
