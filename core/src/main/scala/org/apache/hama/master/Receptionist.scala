@@ -26,21 +26,13 @@ import scala.collection.immutable.Queue
 /**
  * Receive job submission from clients and put the job to the wait queue.
  */
-class Receptionist(conf: HamaConfiguration) extends LocalService /*with Listeners */ {
+class Receptionist(conf: HamaConfiguration) extends LocalService {
 
   private[this] var waitQueue = Queue[Job]()
 
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "receptionist"
-
-/*
-  override def isServiceReady: Receive = {
-    case IsServiceReady => {
-      sender ! Load(name, self)
-    }
-  }
-*/
 
   override def receive = {
     isServiceReady orElse serverIsUp orElse
@@ -59,9 +51,9 @@ class Receptionist(conf: HamaConfiguration) extends LocalService /*with Listener
       sender ! TakeResult(result)
     }}: Receive) orElse
     ({case Submit(job: Job) => {
-      LOG.info("Client submit job ..."+job.getName) 
+      LOG.info("Received job {} submitted from the client.",job.getName) 
       waitQueue = waitQueue.enqueue(job)
-      //gossip(NewJobNotification)
-    }}: Receive) /*orElse listenerManagement*/ orElse unknown
+      mediator ! Request("sched", JobSubmission) 
+    }}: Receive) orElse unknown
   } 
 }

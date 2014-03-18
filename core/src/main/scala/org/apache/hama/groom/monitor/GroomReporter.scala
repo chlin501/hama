@@ -15,26 +15,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama.groom.monitor
 
 import org.apache.hama._
+import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.bsp.v2.Task
+import org.apache.hama.master._
 
-class TaskManager(conf: HamaConfiguration) extends LocalService {
-
-  val maxTasks = conf.getInt("bsp.tasks.maximum", 3) 
-
-  /**
-   * The max size of slots can't exceed configured maxTasks.
-   */
-  private[this] var slots = Set.empty[Slot]
+/**
+ * Report GroomServer information.
+ * - free/ occupied task slots
+ * - slots occupied by which job relation.
+ * - slot master relation. (future)
+ */
+final class GroomReporter(conf: HamaConfiguration) extends LocalService {
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "taskManager"
+  override def name: String = "groomReporter"
 
-  override def initializeServices {
-    
-  }
-
-  override def receive = isServiceReady orElse serverIsUp orElse unknown
+  override def receive = {
+    isServiceReady orElse
+    /*({case UpdateGroomStat(stat) => { 
+     xxx 
+    }}: Receive) orElse*/ unknown
+  } 
 }

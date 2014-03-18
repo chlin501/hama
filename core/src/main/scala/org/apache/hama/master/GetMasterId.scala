@@ -15,26 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama.master
 
-import org.apache.hama._
-
-class TaskManager(conf: HamaConfiguration) extends LocalService {
-
-  val maxTasks = conf.getInt("bsp.tasks.maximum", 3) 
-
-  /**
-   * The max size of slots can't exceed configured maxTasks.
-   */
-  private[this] var slots = Set.empty[Slot]
-
-  override def configuration: HamaConfiguration = conf
-
-  override def name: String = "taskManager"
-
-  override def initializeServices {
-    
-  }
-
-  override def receive = isServiceReady orElse serverIsUp orElse unknown
-}
+/**
+ * Get master identifier.
+ */
+final case object GetMasterId

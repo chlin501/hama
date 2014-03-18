@@ -95,9 +95,10 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
     ({case RescheduleTasks(spec) => {
        LOG.info("Failed GroomServer having GroomServerSpec "+spec)
     }}: Receive) orElse 
-    ({case NewJobNotification => {
-      // check with resource consultant if free slots available
-      // resourceConsultant ! jobName 
+    ({case JobSubmission => {
+      // 1. async check with resource consultant if free slots available 
+      //    provided with job info.
+      // 2. resourceConsultant ! jobName 
     }}: Receive) orElse /*isQueueReady orElse*/ unknown
   }
 

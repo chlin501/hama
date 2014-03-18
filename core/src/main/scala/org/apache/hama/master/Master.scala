@@ -19,8 +19,12 @@ package org.apache.hama.master
 
 import akka.actor._
 import akka.actor.SupervisorStrategy._
+import java.text._
+import java.util._
 import org.apache.hama._
 import scala.concurrent.duration._
+
+final private[hama] case class Id(value: String)
 
 class Master(conf: HamaConfiguration) extends ServiceStateMachine {
 
@@ -42,8 +46,17 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
     create("monitor", classOf[Monitor]) 
     create("sched", classOf[Scheduler]) 
   }
+
+  def masterId: String =
+    new SimpleDateFormat("yyyyMMddHHmm").format(new Date())
  
   override def receive = {
+    case GetMasterId => {
+      //sender ! Id(masterId)
+    }
+    //case GetNewJobID => {
+      //sender ! new BSPJobId(masterId, id)
+    //}
     ({case Request(service, message) => { 
       services.find(p => service.equals(p.path.name)) match {
         case Some(found) => found forward message 

@@ -17,7 +17,4 @@
  */
 package org.apache.hama.master
 
-/**
- * Notify listener that a new job is submitted to the {@link Receptionist}.
- */
-private[master] case object NewJobNotification 
+final private[master] case object JobSubmission 

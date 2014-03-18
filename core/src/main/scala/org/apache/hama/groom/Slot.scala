@@ -17,24 +17,12 @@
  */
 package org.apache.hama.groom
 
-import org.apache.hama._
+import org.apache.hama.bsp.v2.Task
 
-class TaskManager(conf: HamaConfiguration) extends LocalService {
+/**
+ * A slot holds relation from its id sequence to a specific 
+ * {@link org.apache.hama.bsp.v2.Task}.
+ */
+// TODO: master need id 
+final private[groom] case class Slot(id: Int, task: Task, master: String)
 
-  val maxTasks = conf.getInt("bsp.tasks.maximum", 3) 
-
-  /**
-   * The max size of slots can't exceed configured maxTasks.
-   */
-  private[this] var slots = Set.empty[Slot]
-
-  override def configuration: HamaConfiguration = conf
-
-  override def name: String = "taskManager"
-
-  override def initializeServices {
-    
-  }
-
-  override def receive = isServiceReady orElse serverIsUp orElse unknown
-}
