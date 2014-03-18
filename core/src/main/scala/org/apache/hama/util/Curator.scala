@@ -71,12 +71,12 @@ class Curator(conf: HamaConfiguration) extends LocalService {
 
   override def receive = {
     isServiceReady orElse serverIsUp orElse
-    case Get(path) => {
+    //case Get(path) => {
       //sender ! getMasterId(path)
-    }
-    case Create(path, value) => {
+    //}
+    //case Create(path, value) => {
       // write to zk
-    }
+    //}
     /*({case GetNewJobId(job: Job) => {
       LOG.info("Received job {} submitted from the client.",job.getName) 
     }}: Receive) orElse*/ unknown
