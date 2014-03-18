@@ -63,13 +63,14 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
         offlineGroomsStat.get(groom.spec.getName) match {
           case Some(crashCount) => 
             offlineGroomsStat = offlineGroomsStat.mapValues{ cnt => cnt + 1 }
-          case None =>  offlineGroomsStat ++= Map(groom.spec.getName -> 1)
+          case None => offlineGroomsStat ++= Map(groom.spec.getName -> 1)
         }
         resched(groom.spec) 
       }
       case None => 
         LOG.warning("GroomServer {} is watched but not found in the list!")
     }
+    LOG.info("OfflineGroomsStat: {}", offlineGroomsStat.mkString(", "))
   }
 
   def rescheduleTasks(spec: GroomServerSpec) {
