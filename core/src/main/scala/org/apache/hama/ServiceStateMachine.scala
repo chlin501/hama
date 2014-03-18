@@ -165,7 +165,7 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
   protected def serviceStateListenerManagement: Receive = {
     case SubscribeState(state, ref) => {
       stateListeners.get(state) match {
-        case Some(refs) => {
+        case Some(foundRefs) => {
           stateListeners = stateListeners.mapValues { 
             refs => refs + ref 
           }
@@ -178,7 +178,7 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
     }
     case UnsubscribeState(state, ref) => {
       stateListeners.get(state) match {
-        case Some(refs) => {
+        case Some(foundRefs) => {
           stateListeners = stateListeners.mapValues { 
             refs => refs - ref 
           }

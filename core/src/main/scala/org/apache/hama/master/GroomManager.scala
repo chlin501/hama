@@ -32,8 +32,22 @@ private[master] case class Groom(groom: ActorRef, spec: GroomServerSpec)
  */
 class GroomManager(conf: HamaConfiguration) extends LocalService {
 
-  var grooms = Set.empty[Groom] // TODO: move state out of master
-  var offlineGrooms = Set.empty[Groom]
+  type GroomHostName = String
+  type CrashCount = Int
+
+  /**
+   * Store the GroomServerSpec information so that decision can be made during
+   * evaluation process.
+   */
+  private[this] var grooms = Set.empty[Groom] // TODO: move state out of master
+
+  /**
+   * Identical GroomServer host name logically represents the same GroomServer, 
+   * even if the underlying hardware is changed.
+   */
+  // TODO: may need to reset crash count or 
+  //       store more offline line grooms stat info.
+  private[this] var offlineGroomsStat = Map.empty[GroomHostName, CrashCount] 
 
   override def configuration: HamaConfiguration = conf
 
@@ -44,13 +58,17 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
    */
   def quarantine(offline: ActorRef, resched:(GroomServerSpec) => Unit) {
     grooms.find(p=>p.groom.equals(offline)) match { // move to offline grooms
-      case Some(found) => {
-        grooms -= found
-        offlineGrooms += found
-        resched(found.spec) 
+      case Some(groom) => {
+        grooms -= groom
+        offlineGroomsStat.get(groom.spec.getName) match {
+          case Some(crashCount) => 
+            offlineGroomsStat = offlineGroomsStat.mapValues{ cnt => cnt + 1 }
+          case None =>  offlineGroomsStat ++= Map(groom.spec.getName -> 1)
+        }
+        resched(groom.spec) 
       }
       case None => 
-        LOG.warning("GroomServer {} is watched but not found in list!")
+        LOG.warning("GroomServer {} is watched but not found in the list!")
     }
   }
 
@@ -62,12 +80,19 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
     quarantine(groom, rescheduleTasks)
   }
 
+  def checkIfRejoin(from: ActorRef, spec: GroomServerSpec) {
+    grooms ++= Set(Groom(from, spec))
+    // TODO: 
+    // 1. specific stat info recording groom crash info.
+    // 2. if spec is with refresh hardware, reset crashed count to 0
+  }
+
   override def receive = {
     isServiceReady orElse serverIsUp orElse
     ({case groomSpec: GroomServerSpec => { // register
-      grooms ++= Set(Groom(sender, groomSpec))
       LOG.info("{} requests to register {}.", 
                sender.path.name, groomSpec.getName) 
+      checkIfRejoin(sender, groomSpec)
       context.watch(sender) // watch remote
      }}: Receive) orElse superviseeIsTerminated orElse unknown
   }

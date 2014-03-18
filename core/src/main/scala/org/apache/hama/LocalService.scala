@@ -114,11 +114,6 @@ trait LocalService extends Service {
   protected def servicesReady: Boolean = (servicesCount == services.size)
 
   /**
-   * Notify the target GroomServer is offline.
-   */
-  protected def offline(target: ActorRef) { }
-
-  /**
    * Default mechanism in loading services by sending service name and its
    * actor reference.
    */
@@ -134,11 +129,6 @@ trait LocalService extends Service {
         LOG.info("Expected {} services, but only {} services are available.", 
                  servicesCount, services.size)
     }
-  }
-
-  // TODO: move to remote?
-  protected def superviseeIsTerminated: Receive = { 
-    case Terminated(groom) => offline(groom)
   }
 
   protected def localServiceReply: Receive = {

@@ -56,17 +56,26 @@ trait RemoteService extends Service {
   protected def lookup(target: String, path: String,
                        timeout: FiniteDuration = 5.seconds) {
     proxies.find(p => p.path.name.equals(target)) match {
-      case Some(ignore) => LOG.warning("Proxy {} is already cached.", target)
+      case Some(found) => {
+        proxies -= found 
+        refreshProxy(target, path)
+      }
       case None => {
-        context.system.actorSelection(path) ! Identify(target)
-        import context.dispatcher
-        val cancellable =
-          context.system.scheduler.scheduleOnce(timeout, self, 
-                                                Timeout(target, path))
-        proxiesLookup ++= Map(target -> cancellable)
+        refreshProxy(target, path)
         proxiesCount += 1
       }
     }
+  }
+
+  private def refreshProxy(target: String, path: String, 
+                           timeout: FiniteDuration = 5.seconds) {
+    LOG.debug("Lookup proxy {} at {}.", target, path)
+    context.system.actorSelection(path) ! Identify(target)
+    import context.dispatcher
+    val cancellable =
+      context.system.scheduler.scheduleOnce(timeout, self, 
+                                            Timeout(target, path))
+    proxiesLookup ++= Map(target -> cancellable)
   }
 
   /**
@@ -74,7 +83,7 @@ trait RemoteService extends Service {
    * @param target denotes the remote target actor name.
    * @param ref is the remote actor ref.
    */
-  protected def link(target: String, ref: ActorRef) {
+  protected def link(target: String, ref: ActorRef): ActorRef = {
     LOG.debug("link to remote target: {} ref: {}.", target, ref)
     val proxy = context.system.actorOf(Props(classOf[ReliableProxy],
                                            ref,
@@ -87,19 +96,21 @@ trait RemoteService extends Service {
         LOG.warning("Can't cancel for proxy {} not found!", target)
     }
     LOG.debug("Done linking to remote service {}.", target)
+    proxy
   }
 
   protected def afterLinked(proxy: ActorRef) {}
 
   /**
-   * A reply from the remote proxy indicating if the proxy is ready to provide
-   * the service.
+   * A reply from the remote actor indicating if the remote actor is ready to 
+   * provide its service.
    */
   protected def isProxyReady: Receive = {
-    case ActorIdentity(target, Some(proxy)) => {
+    case ActorIdentity(target, Some(remote)) => {
       LOG.info("Proxy {} is ready.", target)
-      link(proxy.path.name, proxy)
-      afterLinked(proxy)
+      context.watch(remote) // TODO: watch proxy instead?
+      val proxy = link(remote.path.name, remote)
+      afterLinked(remote) // TODO: need to switch using proxy
     }
     case ActorIdentity(target, None) => 
       LOG.warning("Proxy {} is not yet available!", target)

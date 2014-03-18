@@ -21,6 +21,7 @@ import akka.actor._
 import org.apache.hama._
 import org.apache.hama.bsp.v2.GroomServerSpec
 
+// TODO: merge to GroomServer?
 class Registrator(conf: HamaConfiguration) extends LocalService 
                                               with RemoteService {
 
@@ -48,8 +49,17 @@ class Registrator(conf: HamaConfiguration) extends LocalService
   }
 
   override def afterLinked(proxy: ActorRef) { 
-    proxy ! new GroomServerSpec(groomServerName, groomHostName, port, 3)
+    val maxTasks = conf.getInt("bsp.tasks.maximum", 3)
+    // register
+    proxy ! new GroomServerSpec(groomServerName, 
+                                groomHostName, 
+                                port, 
+                                maxTasks)
   }
 
-  override def receive = isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse unknown
+  override def offline(target: ActorRef) {
+    lookup("groomManager", groomManagerPath)
+  }
+
+  override def receive = isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 }

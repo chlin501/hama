@@ -47,4 +47,17 @@ trait Service extends Agent {
    * Initialize either groom's or master's subservices.
    */
   override def preStart = initializeServices 
+
+  /**
+   * Notify the target service is offline.
+   */
+  protected def offline(target: ActorRef) { }
+
+  /**
+   * when target service is offline.
+   */
+  protected def superviseeIsTerminated: Receive = {
+    case Terminated(target) => offline(target)
+  }
+
 }
