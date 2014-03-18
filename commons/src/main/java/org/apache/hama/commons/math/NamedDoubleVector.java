@@ -202,8 +202,8 @@ public final class NamedDoubleVector implements DoubleVector {
   }
 
   @Override
-  public Iterator<DoubleVectorElement> iterateNonZero() {
-    return vector.iterateNonZero();
+  public Iterator<DoubleVectorElement> iterateNonDefault() {
+    return vector.iterateNonDefault();
   }
 
   @Override
@@ -228,7 +228,7 @@ public final class NamedDoubleVector implements DoubleVector {
   
   @Override
   public String toString() {
-    return String.format("%s: %s", name, vector.toArray());
+    return String.format("%s: %s", name, vector.toString());
   }
 
 }

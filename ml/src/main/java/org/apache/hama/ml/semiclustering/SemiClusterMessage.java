@@ -153,8 +153,7 @@ public class SemiClusterMessage implements
     return semiClusterContainThis;
   }
 
-  public void setSemiClusterContainThis(
-      List<SemiClusterDetails> semiClusterContainThis,
+  public void setClusters(Set<SemiClusterDetails> clusters,
       int graphJobVertexMaxClusterCount) {
     int clusterCountToBeRemoved = 0;
     NavigableSet<SemiClusterDetails> setSort = new TreeSet<SemiClusterDetails>(
@@ -167,7 +166,7 @@ public class SemiClusterMessage implements
           }
         });
     setSort.addAll(this.semiClusterContainThis);
-    setSort.addAll(semiClusterContainThis);
+    setSort.addAll(clusters);
     clusterCountToBeRemoved = setSort.size() - graphJobVertexMaxClusterCount;
     Iterator<SemiClusterDetails> itr = setSort.descendingIterator();
     while (clusterCountToBeRemoved > 0) {
@@ -176,7 +175,6 @@ public class SemiClusterMessage implements
       clusterCountToBeRemoved--;
     }
     this.semiClusterContainThis = setSort;
-
   }
 
   public int compareTo(SemiClusterMessage m) {

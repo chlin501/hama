@@ -4,6 +4,20 @@ Release 0.7.0 (unreleased changes)
 
   NEW FEATURES
 
+  BUG FIXES
+  
+   HAMA-889: NonDefaultIterator of DenseDoubleVector never reaches the end (Yexi Jiang)
+   HAMA-888: Add more test cases for DenseDoubleVector (Yexi Jiang)
+   HAMA-885: Semi-Clustering is not producing expected output (Renil J via edwardyoon)
+
+  IMPROVEMENTS
+
+   HAMA-568: Add faster synchronized collections for message queues (edwardyoon)
+
+Release 0.6.4 - Mar 5, 2014
+
+  NEW FEATURES
+
    HAMA-864: Fix/improve DoubleVector and DenseDoubleVector (Yexi Jiang)
    HAMA-842: Add persistent queue option to JobConf (edwardyoon)
    HAMA-839: Support NullWritable in Hama Pipes (Martin Illecker)    
@@ -30,6 +44,8 @@ Release 0.7.0 (unreleased changes)
 
   IMPROVEMENTS
 
+   HAMA-880: Check whether input records are in order by vertex ID (edwardyoon)
+   HAMA-879: Errors for messages with wrong destination should be more clear (Anastasis Andronidis via edwardyoon)
    HAMA-873: Display counters of job on master's web page (Saisai Shao via edwardyoon)
    HAMA-870: Runtime message compression in Bundle (edwardyoon)
    HAMA-869: Add Cloudera repository in maven pom file (Saisai Shao via edwardyoon)
