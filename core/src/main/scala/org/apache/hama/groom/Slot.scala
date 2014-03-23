@@ -23,6 +23,5 @@ import org.apache.hama.bsp.v2.Task
  * A slot holds relation from its id sequence to a specific 
  * {@link org.apache.hama.bsp.v2.Task}.
  */
-// TODO: master need id 
-final private[groom] case class Slot(id: Int, task: Task, master: String)
+case class Slot(seq: Int, task: Task, master: String)
 

@@ -17,7 +17,9 @@
  */
 package org.apache.hama.groom.monitor
 
+import akka.actor._
 import org.apache.hama._
+import org.apache.hama.groom._
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.master._
@@ -28,16 +30,32 @@ import org.apache.hama.master._
  * - slots occupied by which job relation.
  * - slot master relation. (future)
  */
-final class GroomReporter(conf: HamaConfiguration) extends LocalService {
+final class GroomReporter(conf: HamaConfiguration) extends LocalService 
+                                                   with RemoteService {
+  var tracker: ActorRef = _
+
+  val groomTasksTrackerInfo =
+    ProxyInfo("groomTasksTracker",
+              conf.get("bsp.master.actor-system.name", "MasterSystem"),
+              conf.get("bsp.master.address", "127.0.0.1"),
+              conf.getInt("bsp.master.port", 40000),
+              "bspmaster/monitor/groomTasksTracker")
+
+  val groomTasksTrackerPath = groomTasksTrackerInfo.path
 
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "groomReporter"
 
+  override def initializeServices {
+    lookup("groomTasksTracker", groomTasksTrackerPath)
+  }
+
+  override def afterLinked(proxy: ActorRef) = tracker = proxy
+
   override def receive = {
     isServiceReady orElse
-    /*({case UpdateGroomStat(stat) => { 
-     xxx 
-    }}: Receive) orElse*/ unknown
+    ({case stat: GroomStat => tracker ! stat
+    }: Receive) orElse unknown
   } 
 }

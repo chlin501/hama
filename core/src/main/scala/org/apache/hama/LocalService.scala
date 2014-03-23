@@ -152,9 +152,10 @@ trait LocalService extends Service {
     case ServerIsUp => {
       val master = configuration.get("bsp.master.name", "bspmaster")
       val groom = configuration.get("bsp.groom.name", "groomServer")
-      if(master.equals(sender.path.name) || groom.equals(sender.path.name)) 
+      if(master.equals(sender.path.name) || groom.equals(sender.path.name)) {
+        LOG.debug("Mediator is {}.", sender.path.name)
         mediator = sender
-      else 
+      } else 
         LOG.warning(sender.path.name+" shouldn't send ServerIsUp message!")
     }
   }

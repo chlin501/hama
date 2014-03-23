@@ -50,7 +50,7 @@ class Registrator(conf: HamaConfiguration) extends LocalService
 
   override def afterLinked(proxy: ActorRef) { 
     val maxTasks = conf.getInt("bsp.tasks.maximum", 3)
-    // register
+    // register to master/GroomManager
     proxy ! new GroomServerSpec(groomServerName, 
                                 groomHostName, 
                                 port, 

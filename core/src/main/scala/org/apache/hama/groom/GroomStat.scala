@@ -15,28 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master
+package org.apache.hama
 
-import akka.actor._
-import org.apache.hama._
-import org.apache.hama.master.monitor._
+import org.apache.hama.groom._
 
-class Monitor(conf: HamaConfiguration) extends LocalService {
-
-  override def configuration: HamaConfiguration = conf
-
-  override def name: String = "monitor"
-
-  override def initializeServices {
-    create("jobTasksTracker", classOf[JobTasksTracker])
-  }
-
-  // TODO: subclass monitor so that groom/monitor can share code.
-  def loadPlugin: Receive = {  
-    case Load => cacheService(sender) 
-  }
-
-  override def receive = {
-    areSubServicesReady orElse serverIsUp orElse loadPlugin orElse unknown
-  } 
-}
+case class GroomStat(groomName: String, slots: Set[Slot])
