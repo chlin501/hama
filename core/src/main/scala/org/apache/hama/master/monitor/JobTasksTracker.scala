@@ -24,7 +24,7 @@ import org.apache.hama.master._
 
 final class JobTasksTracker(conf: HamaConfiguration) extends LocalService {
 
-  var tasksMapping = Map.empty[BSPJobID, Task]
+  var tasksStat = Map.empty[BSPJobID, Set[Task]]
 
   override def configuration: HamaConfiguration = conf
 
@@ -32,11 +32,13 @@ final class JobTasksTracker(conf: HamaConfiguration) extends LocalService {
 
   override def receive = {
     isServiceReady orElse
-    ({case Report(newTask) => { 
+    ({case newTask: Task => {  // report
       val bspJobId = newTask.getId.getJobID
-      tasksMapping.get(bspJobId) match {
-        case Some(oldTask) => tasksMapping ++= Map(bspJobId -> newTask)
-        case None =>  tasksMapping ++= Map(bspJobId -> newTask)
+      LOG.info("Report task with BSPJobID {}.", bspJobId)
+      tasksStat.find(p=> p._1.equals(bspJobId)) match {
+        case Some((id, oldTasks)) => 
+          tasksStat ++= Map(bspJobId -> (Set(newTask)++oldTasks))
+        case None => tasksStat ++= Map(bspJobId -> Set(newTask))
       }
     }}: Receive) orElse unknown
   } 

@@ -31,9 +31,11 @@ class Monitor(conf: HamaConfiguration) extends LocalService {
     create("jobTasksTracker", classOf[JobTasksTracker])
   }
 
-  // TODO: subclass monitor so that groom/monitor can share code.
   def loadPlugin: Receive = {  
-    case Load => cacheService(sender) 
+    case Load => {
+      LOG.debug("Receiveing {} plugin.", sender.path.name)
+      cacheService(sender) 
+    }
   }
 
   override def receive = {

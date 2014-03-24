@@ -24,7 +24,7 @@ import org.apache.hama.master._
 
 final class GroomTasksTracker(conf: HamaConfiguration) extends LocalService {
 
-  var groomTasksMapping = Map.empty[String, Set[Slot]]
+  var groomTasksStat = Map.empty[String, Set[Slot]]
 
   override def configuration: HamaConfiguration = conf
 
@@ -33,9 +33,12 @@ final class GroomTasksTracker(conf: HamaConfiguration) extends LocalService {
   override def receive = {
     isServiceReady orElse
     ({case stat: GroomStat => { 
-      // update 
+      groomTasksStat.find(p=> p._1.equals(stat.groomName)) match {
+        case Some((key, value)) =>  
+          groomTasksStat ++= Map(stat.groomName -> stat.slots)
+        case None => 
+          groomTasksStat ++= Map(stat.groomName -> stat.slots)
+      }
     }}: Receive) orElse unknown
   } 
-
-
 }

@@ -47,16 +47,10 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
     create("sched", classOf[Scheduler]) 
   }
 
-  def masterId: String =
-    new SimpleDateFormat("yyyyMMddHHmm").format(new Date())
+  //def masterId: String =
+    //new SimpleDateFormat("yyyyMMddHHmm").format(new Date())
  
   override def receive = {
-    case GetMasterId => {
-      //sender ! Id(masterId)
-    }
-    //case GetNewJobID => {
-      //sender ! new BSPJobId(masterId, id)
-    //}
     ({case Request(service, message) => { 
       services.find(p => service.equals(p.path.name)) match {
         case Some(found) => found forward message 

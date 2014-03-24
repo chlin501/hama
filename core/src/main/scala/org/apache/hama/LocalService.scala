@@ -118,11 +118,16 @@ trait LocalService extends Service {
    * actor reference.
    */
   protected def isServiceReady: Receive = {
-    case IsServiceReady =>  sender ! Load
+    case IsServiceReady =>  {
+      LOG.debug("{} is asking for loading {}.", sender.path.name, name)
+      sender ! Load
+    }
   }
 
   protected def areSubServicesReady: Receive = {
     case IsServiceReady => {
+      LOG.debug("Expected {} services, and {} are loaded.", 
+               servicesCount, services.size)
       if(servicesReady) 
         sender ! Load 
       else 
