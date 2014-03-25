@@ -17,4 +17,4 @@
  */
 package org.apache.hama
 
-case object GetMasterId
+case class MasterId(id: Option[String])

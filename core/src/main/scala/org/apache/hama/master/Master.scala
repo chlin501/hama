@@ -46,11 +46,12 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
     create("monitor", classOf[Monitor]) 
     create("sched", classOf[Scheduler]) 
   }
-
-  //def masterId: String =
-    //new SimpleDateFormat("yyyyMMddHHmm").format(new Date())
  
   override def receive = {
+    case MasterId(value) => {
+      val id = value.getOrElse(null)
+      LOG.info("Obtained MasterId is {}", id)
+    }
     ({case Request(service, message) => { 
       services.find(p => service.equals(p.path.name)) match {
         case Some(found) => found forward message 

@@ -17,24 +17,66 @@
  */
 package org.apache.hama.groom
 
+import org.apache.hama.bsp.v2._
 import org.apache.hama._
+import org.apache.hama.master._
+import org.apache.hama.master.Directive._
+import org.apache.hama.master.Directive.Action._
 
 class TaskManager(conf: HamaConfiguration) extends LocalService {
 
   val maxTasks = conf.getInt("bsp.tasks.maximum", 3) 
-
+  val bspmaster = configuration.get("bsp.master.name", "bspmaster")
   /**
    * The max size of slots can't exceed configured maxTasks.
    */
-  private[this] var slots = Set.empty[Slot]
+  private var slots = Set.empty[Slot]
 
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "taskManager"
 
-  override def initializeServices {
-    
+  private def initializeSlots {
+    for(seq <- 1 to maxTasks) {
+      slots ++= Set(Slot(seq, None, bspmaster))
+    }
   }
 
-  override def receive = isServiceReady orElse serverIsUp orElse unknown
+  override def initializeServices {
+    initializeSlots     
+  }
+
+  override def receive = {
+    ({case directive: Directive => { 
+       val action: Action = directive.action  
+       val master: String = directive.master  
+       val timestamp: Long = directive.timestamp  
+       LOG.info("{} action from {} at {}", action, master, timestamp) 
+       matchThenExecute(action, master, timestamp)
+    }}: Receive) orElse isServiceReady orElse serverIsUp orElse unknown
+  }
+
+  private def matchThenExecute(action: Action, master: String, 
+                               timestamp: Long) {
+    action.value match {
+      case 1 => {
+        // create a new task
+        val task = createTask
+        // arrange and store the task to a slot
+        // fork a new process by actor
+        // launch task on new process
+        // send stat to plugin
+      }
+      case 2 => 
+      case 3 =>
+      case 4 =>
+      case _ => LOG.warning("Unknown action value "+action)
+    }
+  }
+
+  def createTask(): Task = {
+    new Task.Builder().//setId().
+                       //setStartTime().
+                       build
+  } 
 }

@@ -23,5 +23,5 @@ import org.apache.hama.bsp.v2.Task
  * A slot holds relation from its id sequence to a specific 
  * {@link org.apache.hama.bsp.v2.Task}.
  */
-case class Slot(seq: Int, task: Task, master: String)
+case class Slot(seq: Int, task: Option[Task], master: String)
 
