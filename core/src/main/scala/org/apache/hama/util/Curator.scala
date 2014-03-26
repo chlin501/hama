@@ -15,9 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master
+package org.apache.hama.util
 
 import akka.routing._
+import java.nio._
 import java.text._
 import java.util._
 import org.apache.curator.framework._
@@ -36,6 +37,8 @@ class Curator(conf: HamaConfiguration) extends LocalService {
  
   val masterPath = 
     "/bsp/masters/" + conf.get("bsp.master.name", "bspmaster") + "/id"
+  val seqPath = 
+    "/bsp/masters/" + conf.get("bsp.master.name", "bspmaster") + "/seq"
 
   override def configuration: HamaConfiguration = conf
 
@@ -50,7 +53,6 @@ class Curator(conf: HamaConfiguration) extends LocalService {
   }
 
   override def initializeServices {
-    //val connectString = QuorumPeer.getZKQuorumServersString(conf)
     val connectString = 
       conf.get("hama.zookeeper.property.connectString", "localhost:2181") 
     val sessionTimeout = conf.getInt(Constants.ZOOKEEPER_SESSION_TIMEOUT, 
@@ -67,12 +69,36 @@ class Curator(conf: HamaConfiguration) extends LocalService {
     LOG.info("CuratorFramework is started!")
   }
 
+  private def nextSequence: Option[Int] = {
+    curatorFramework.checkExists.forPath(seqPath) match {
+      case stat: Stat => {
+        val seq = getValue[Int](seqPath, classOf[Int]).getOrElse(-1)
+        if(-1 == seq) None else Some((seq+1))
+      }
+      case _ => {
+        createPath(masterPath, createZnode)
+        LOG.info("Not found job seq at {}, creating a new one {}.", 
+                 seqPath, 1)
+        createValue(seqPath, toBytes(1))
+        Some(1)
+      }
+    }
+  }
+
+  private def toInt(data: Array[Byte]): Int = ByteBuffer.wrap(data).getInt
+
+  private def toBytes(data: Int): Array[Byte] = {
+    val buf = ByteBuffer.allocate(4)
+    buf.putInt(data)
+    buf.array()
+  }
+
   private def createMasterId: String =
     new SimpleDateFormat("yyyyMMddHHmm").format(new Date())
 
   private def findMasterId: Option[String] = {
     curatorFramework.checkExists.forPath(masterPath) match {
-      case stat: Stat => getValue(masterPath) 
+      case stat: Stat => getValue[String](masterPath, classOf[String])
       case _ => {
         createPath(masterPath, createZnode)
         val masterId = createMasterId
@@ -84,12 +110,21 @@ class Curator(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  private def getValue(fullPath: String): Option[String] = {
+  // TODO: use manifest?
+  private def getValue[T](fullPath: String, cls: Class[_]): Option[T] = {
+    val ClassOfString = classOf[String]; val ClassOfInt = classOf[Int]
+    val ClassOfFloat = classOf[Float]; val ClassOfDouble = classOf[Double]
     curatorFramework.getData.forPath(fullPath) match {
       case data: Array[Byte] => {
-        val value = new String(data)
-        LOG.info("Create value {} at {}.", value, fullPath)
-        Some(value) 
+        val value = cls match  {
+          case ClassOfString => new String(data)
+          case ClassOfInt => toInt(data)
+          case ClassOfFloat => None
+          case ClassOfDouble => None
+          case _ => None 
+        }
+        LOG.info("Value {} found at {}.", value, fullPath)
+        Some(value.asInstanceOf[T]) 
       }
       case _ => None 
     }
@@ -121,6 +156,9 @@ class Curator(conf: HamaConfiguration) extends LocalService {
     isServiceReady orElse serverIsUp orElse
     ({case GetMasterId => {
       sender ! MasterId(findMasterId)
+    }}: Receive) orElse
+    ({case GetJobSeq => {
+      sender ! JobSeq(nextSequence.getOrElse(-1))
     }}: Receive) orElse
     //case Create(path, value) => {
       // write to zk

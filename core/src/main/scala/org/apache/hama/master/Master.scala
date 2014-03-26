@@ -22,6 +22,7 @@ import akka.actor.SupervisorStrategy._
 import java.text._
 import java.util._
 import org.apache.hama._
+import org.apache.hama.util._
 import scala.concurrent.duration._
 
 final private[hama] case class Id(value: String)
@@ -43,11 +44,11 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
     }
 
   override def initializeServices {
+    create("curator", classOf[Curator]).withCondition("curator")
     create("receptionist", classOf[Receptionist]) 
     create("groomManager", classOf[GroomManager]) 
     create("monitor", classOf[Monitor]) 
     create("sched", classOf[Scheduler]) 
-    create("curator", classOf[Curator]).withCondition("curator")
   }
 
   override def afterLoaded(service: ActorRef) {

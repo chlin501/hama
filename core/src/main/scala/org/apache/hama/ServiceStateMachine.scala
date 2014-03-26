@@ -137,9 +137,9 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
   whenUnhandled {
     case Event(WhichState, s @ Cache(subServices)) => {
       var tmp: State = stay using s // FSM State
-      if(Normal.equals(stateName) && !isNotifiedInNormal) {
+      if(Normal.equals(stateName) && !isNotifiedInNormal && isConditionEmpty) { 
         broadcast(Normal)
-        if(isConditionEmpty) notify(Normal)(Ready(name)) 
+        notify(Normal)(Ready(name)) 
         isNotifiedInNormal = true
       } else if(Stopped.equals(stateName) && !isNotifiedInStopped) {
         LOG.debug("StateName [{}] should be Stopped.", stateName)
