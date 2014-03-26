@@ -26,7 +26,9 @@ import scala.concurrent.duration._
  */
 trait LocalService extends Service {
 
-  var mediator: ActorRef = _
+  protected var mediator: ActorRef = _
+
+  protected[hama] var condition = Set.empty[String]
 
   /**
    * A fixed count of local services expected to be available.
@@ -52,7 +54,8 @@ trait LocalService extends Service {
    * @param service is the name of the service actor.
    * @param target denotes the class name of that actor.
    */
-  protected def create[A <: Actor](service: String, target: Class[A]) {
+  protected[hama] def create[A <: Actor](service: String, target: Class[A]): 
+      LocalService = {
     val actor = context.actorOf(Props(target, configuration), service)
     import context.dispatcher
     val cancellable = 
@@ -61,7 +64,20 @@ trait LocalService extends Service {
     servicesLookup ++= Map(service -> cancellable)
     LOG.debug("Services to be created: {}", servicesLookup.keys.mkString(", "))
     servicesCount += 1
+    this
   }
+
+  protected[hama] def withCondition(name: String): LocalService = {
+    condition ++= Set(name)
+    this
+  }
+
+  protected[hama] def releaseCondition(name: String): LocalService = {
+    condition -= name 
+    this
+  }
+
+  protected def isConditionEmpty(): Boolean =  condition.isEmpty
 
   protected def find(service: String, path: String, 
                      delay: FiniteDuration = 3.seconds): Cancellable = {
@@ -119,7 +135,7 @@ trait LocalService extends Service {
    */
   protected def isServiceReady: Receive = {
     case IsServiceReady =>  {
-      LOG.debug("{} is asking for loading {}.", sender.path.name, name)
+      LOG.info("{} is asking for loading {}.", sender.path.name, name)
       sender ! Load
     }
   }

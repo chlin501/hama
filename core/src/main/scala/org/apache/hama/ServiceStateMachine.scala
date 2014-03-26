@@ -66,6 +66,8 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
     stateChecker = check(WhichState)
   }
 
+  protected def afterLoaded(service: ActorRef) { }
+
   startWith(StartUp, Cache(Set.empty[ActorRef]))
 
   /**
@@ -79,6 +81,7 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
       LOG.debug("Current services available: {}", services.mkString(", "))
       context.watch(sender) // watch sub service
       cancelServiceLookup(sender.path.name, sender)
+      afterLoaded(sender)
       val cache = s.copy(currentServices)
       if(servicesCount == currentServices.size) {
         goto(Normal) using cache
@@ -136,7 +139,7 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
       var tmp: State = stay using s // FSM State
       if(Normal.equals(stateName) && !isNotifiedInNormal) {
         broadcast(Normal)
-        notify(Normal)(Ready(name))
+        if(isConditionEmpty) notify(Normal)(Ready(name)) 
         isNotifiedInNormal = true
       } else if(Stopped.equals(stateName) && !isNotifiedInStopped) {
         LOG.debug("StateName [{}] should be Stopped.", stateName)
@@ -158,6 +161,9 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
     }
   }
 
+  /**
+   * Broadcast to sub services that master receives all loaded messages.
+   */
   protected def broadcast(state: ServiceState) {
     if(Normal.equals(state)) services.foreach(service => service ! ServerIsUp)
   }

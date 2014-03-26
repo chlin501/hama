@@ -50,14 +50,21 @@ class Curator(conf: HamaConfiguration) extends LocalService {
   }
 
   override def initializeServices {
-    val connectString = QuorumPeer.getZKQuorumServersString(conf)
+    //val connectString = QuorumPeer.getZKQuorumServersString(conf)
+    val connectString = 
+      conf.get("hama.zookeeper.property.connectString", "localhost:2181") 
     val sessionTimeout = conf.getInt(Constants.ZOOKEEPER_SESSION_TIMEOUT, 
                                      3*60*1000)
     val retriesN = conf.getInt("bsp.zookeeper.client.retry_n_times", 10)
     val sleepBetweenRetries = 
       conf.getInt("bsp.zookeeper.client.sleep_between_delay", 1000)
+    LOG.info("Properties for ZooKeeper connection -> connectString: {},"+
+             "sessionTimeout: {}, retriesN: {}, sleepBetweenRetires: {}.", 
+             connectString, sessionTimeout, retriesN, sleepBetweenRetries)
     curatorFramework = createCurator(connectString, sessionTimeout, 
                                      retriesN, sleepBetweenRetries)
+    curatorFramework.start
+    LOG.info("CuratorFramework is started!")
   }
 
   private def createMasterId: String =
@@ -65,20 +72,31 @@ class Curator(conf: HamaConfiguration) extends LocalService {
 
   private def findMasterId: Option[String] = {
     curatorFramework.checkExists.forPath(masterPath) match {
-      case stat: Stat => createValue(masterPath) 
+      case stat: Stat => getValue(masterPath) 
       case _ => {
-        LOG.info("Not found master id at {}.", masterPath)
         createPath(masterPath, createZnode)
-        createValue(masterPath)
+        val masterId = createMasterId
+        LOG.info("Not found master id at {}, creating a new one {}.", 
+                 masterPath, masterId)
+        createValue(masterPath, masterId.getBytes)
+        Some(masterId)
       }
     }
   }
 
-  private def createValue(fullPath: String): Option[String] = {
+  private def getValue(fullPath: String): Option[String] = {
     curatorFramework.getData.forPath(fullPath) match {
-      case data: Array[Byte] => Some(new String(data)) 
+      case data: Array[Byte] => {
+        val value = new String(data)
+        LOG.info("Create value {} at {}.", value, fullPath)
+        Some(value) 
+      }
       case _ => None 
     }
+  }
+
+  private def createValue(fullPath: String, data: Array[Byte]) {
+    curatorFramework.setData.forPath(fullPath, data)
   }
 
   /**
@@ -103,7 +121,7 @@ class Curator(conf: HamaConfiguration) extends LocalService {
     isServiceReady orElse serverIsUp orElse
     ({case GetMasterId => {
       sender ! MasterId(findMasterId)
-    }}: Receive)
+    }}: Receive) orElse
     //case Create(path, value) => {
       // write to zk
     //}

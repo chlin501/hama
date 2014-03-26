@@ -28,6 +28,8 @@ final private[hama] case class Id(value: String)
 
 class Master(conf: HamaConfiguration) extends ServiceStateMachine {
 
+  private var identifier: String = _
+
   override def configuration: HamaConfiguration = conf
 
   override def name: String = 
@@ -45,13 +47,31 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
     create("groomManager", classOf[GroomManager]) 
     create("monitor", classOf[Monitor]) 
     create("sched", classOf[Scheduler]) 
+    create("curator", classOf[Curator]).withCondition("curator")
+  }
+
+  override def afterLoaded(service: ActorRef) {
+    val serviceName = service.path.name
+    serviceName match {
+      case "receptionist" => 
+      case "groomManager" => 
+      case "monitor" => 
+      case "sched" => 
+      case "curator" => service ! GetMasterId 
+      case _ => LOG.warning("Unknown service ", serviceName)
+    }
   }
  
-  override def receive = {
+  def masterId: Receive = {
     case MasterId(value) => {
       val id = value.getOrElse(null)
       LOG.info("Obtained MasterId is {}", id)
-    }
+      if(null != id) identifier = id 
+      releaseCondition("curator")
+    } 
+  }
+
+  override def receive = {
     ({case Request(service, message) => { 
       services.find(p => service.equals(p.path.name)) match {
         case Some(found) => found forward message 
@@ -59,7 +79,7 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
           LOG.warning("Can't forward message because {} not found! Services"+ 
                       " available: {}.", service, services.mkString(", "))
       }
-    }}:Receive) orElse serviceStateListenerManagement orElse super.receive orElse unknown 
+    }}:Receive) orElse serviceStateListenerManagement orElse masterId orElse super.receive orElse unknown 
   }
   
 }
