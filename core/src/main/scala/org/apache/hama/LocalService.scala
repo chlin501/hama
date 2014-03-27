@@ -28,7 +28,10 @@ trait LocalService extends Service {
 
   protected var mediator: ActorRef = _
 
-  protected[hama] var condition = Set.empty[String]
+  /**
+   * A variable indicates whether to notify subservices.
+   */
+  protected[hama] var conditions = Set.empty[String]
 
   /**
    * A fixed count of local services expected to be available.
@@ -67,17 +70,25 @@ trait LocalService extends Service {
     this
   }
 
+  /**
+   * Add a condition so {@link ServiceStateMachine} knows the entire process
+   * is not yet ready. 
+   */
   protected[hama] def withCondition(name: String): LocalService = {
-    condition ++= Set(name)
+    conditions ++= Set(name)
     this
   }
 
+  /**
+   * Release the held condition. When the conditions set is empty, it denotes
+   * the gate for particular setting is removed.
+   */
   protected[hama] def releaseCondition(name: String): LocalService = {
-    condition -= name 
+    conditions -= name 
     this
   }
 
-  protected def isConditionEmpty(): Boolean =  condition.isEmpty
+  protected def isConditionEmpty(): Boolean =  conditions.isEmpty
 
   protected def find(service: String, path: String, 
                      delay: FiniteDuration = 3.seconds): Cancellable = {

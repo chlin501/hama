@@ -33,13 +33,17 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "receptionist"
+ 
+  def submitJob: Receive = {
+    case Submit(job: Job) => {
+      LOG.info("Received job {} submitted from the client.",job.getName) 
+      waitQueue = waitQueue.enqueue(job)
+      mediator ! Request("sched", JobSubmission)  
+    }
+  }
 
-  override def receive = {
-    isServiceReady orElse serverIsUp orElse
-    //case JobDispatchAck(job) => { 
-      // remove the corresponded job from the wait queue.
-    //}
-    ({case Take => {
+  def take: Receive = {
+    case Take => {
       var result: Option[Job] = None
       if(0 < waitQueue.size) {
         val (head, rest) = waitQueue.dequeue
@@ -49,11 +53,14 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
                  head.getName, waitQueue.size)
       } 
       sender ! TakeResult(result)
-    }}: Receive) orElse
-    ({case Submit(job: Job) => {
-      LOG.info("Received job {} submitted from the client.",job.getName) 
-      waitQueue = waitQueue.enqueue(job)
-      mediator ! Request("sched", JobSubmission) 
-    }}: Receive) orElse unknown
+    }
+  }
+
+  override def receive = {
+    isServiceReady orElse serverIsUp orElse
+    //case JobDispatchAck(job) => { 
+      // remove the corresponded job from the wait queue.
+    //}
+    take orElse submitJob orElse unknown
   } 
 }

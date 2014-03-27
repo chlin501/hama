@@ -17,15 +17,19 @@
  */
 package org.apache.hama.monitor;
 
+import java.io.IOException;
+import java.io.DataInput;
+import java.io.DataOutput;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import org.apache.hadoop.io.Writable;
 
 /**
  * Represents a record containing multiple metrics.
  */
-public final class MetricsRecord {
+public final class MetricsRecord implements Writable {
 
   private final String name, description;
   private final List<Metric<?>> metrics = new CopyOnWriteArrayList<Metric<?>>();
@@ -70,5 +74,13 @@ public final class MetricsRecord {
 
   public final List<Metric<?>> metrics() {
     return Collections.unmodifiableList(metrics);
+  }
+
+  @Override
+  public void write(DataOutput out) throws IOException {
+  }
+       
+  @Override
+  public void readFields(DataInput in) throws IOException {
   }
 }

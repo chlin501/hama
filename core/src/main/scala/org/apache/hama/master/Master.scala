@@ -57,7 +57,7 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
       case "receptionist" => 
       case "groomManager" => 
       case "monitor" => 
-      case "sched" => 
+      case "sched" =>  
       case "curator" => service ! GetMasterId 
       case _ => LOG.warning("Unknown service ", serviceName)
     }
@@ -72,15 +72,17 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
     } 
   }
 
-  override def receive = {
-    ({case Request(service, message) => { 
+  def forward: Receive = {
+    case Request(service, message) => { 
       services.find(p => service.equals(p.path.name)) match {
         case Some(found) => found forward message 
         case None => 
           LOG.warning("Can't forward message because {} not found! Services"+ 
                       " available: {}.", service, services.mkString(", "))
       }
-    }}:Receive) orElse serviceStateListenerManagement orElse masterId orElse super.receive orElse unknown 
+    }
   }
+
+  override def receive = forward orElse serviceStateListenerManagement orElse masterId orElse super.receive orElse unknown 
   
 }

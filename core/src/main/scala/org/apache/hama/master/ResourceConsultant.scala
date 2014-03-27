@@ -18,28 +18,18 @@
 package org.apache.hama.master
 
 import akka.actor._
+import akka.routing._
 import org.apache.hama._
-import org.apache.hama.master.monitor._
+import scala.concurrent.duration._
 
-class Monitor(conf: HamaConfiguration) extends LocalService {
+class ResourceConsultant(conf: HamaConfiguration) extends LocalService {
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "monitor"
+  override def name: String = "resourceConsultant"
 
-  override def initializeServices {
-    create("jobTasksTracker", classOf[JobTasksTracker])
-  }
-
-  def loadPlugin: Receive = {  
-    case Load => {
-      LOG.debug("Receiveing {} plugin.", sender.path.name)
-      cacheService(sender) 
-    }
-  }
-
-  override def receive = {
-    areSubServicesReady orElse serverIsUp orElse loadPlugin orElse unknown
-  } 
+  override def initializeServices { }
+ 
+  override def receive = isServiceReady orElse serverIsUp orElse unknown
 
 }
