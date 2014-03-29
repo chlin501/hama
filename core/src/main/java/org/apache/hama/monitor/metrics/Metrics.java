@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom.monitor;
+package org.apache.hama.monitor.metrics;
 
 public enum Metrics {
   MemNonHeapUsedM("Non-heap memory used in MB"),

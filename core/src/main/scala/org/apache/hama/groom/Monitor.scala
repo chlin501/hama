@@ -28,6 +28,8 @@ class Monitor(conf: HamaConfiguration) extends LocalService {
 
   override def initializeServices {
     create("tasksReporter", classOf[TasksReporter])
+    create("groomReporter", classOf[GroomReporter])
+    create("sysMetricsReporter", classOf[SysMetricsReporter])
   }
 
   def loadPlugin: Receive = {

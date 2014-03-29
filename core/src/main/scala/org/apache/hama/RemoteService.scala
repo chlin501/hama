@@ -69,13 +69,14 @@ trait RemoteService extends Service {
 
   private def refreshProxy(target: String, path: String, 
                            timeout: FiniteDuration = 5.seconds) {
-    LOG.debug("Lookup proxy {} at {}.", target, path)
+    LOG.debug("Lookup proxy {} at {}", target, path)
     context.system.actorSelection(path) ! Identify(target)
     import context.dispatcher
     val cancellable =
       context.system.scheduler.scheduleOnce(timeout, self, 
                                             Timeout(target, path))
     proxiesLookup ++= Map(target -> cancellable)
+    LOG.debug("Proxies to be lookup? {}", proxiesLookup.mkString(", "))
   }
 
   /**

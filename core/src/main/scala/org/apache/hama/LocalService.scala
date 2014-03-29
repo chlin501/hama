@@ -146,7 +146,7 @@ trait LocalService extends Service {
    */
   protected def isServiceReady: Receive = {
     case IsServiceReady =>  {
-      LOG.info("{} is asking for loading {}.", sender.path.name, name)
+      LOG.debug("{} is asking for loading {}.", sender.path.name, name)
       sender ! Load
     }
   }

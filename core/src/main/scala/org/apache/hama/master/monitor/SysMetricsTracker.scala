@@ -15,33 +15,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master
+package org.apache.hama.master.monitor
 
-import akka.actor._
 import org.apache.hama._
-import org.apache.hama.master.monitor._
+import org.apache.hama.master._
+import org.apache.hama.monitor.metrics._
 
-class Monitor(conf: HamaConfiguration) extends LocalService {
+class SysMetricsTracker(conf: HamaConfiguration) extends LocalService {
+
+  type GroomName = String
+
+  var sysMetricsStat = Set.empty[MetricsRecord]
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "monitor"
-
-  override def initializeServices {
-    create("jobTasksTracker", classOf[JobTasksTracker])
-    create("groomTasksTracker", classOf[GroomTasksTracker])
-    create("sysMetricsTracker", classOf[SysMetricsTracker])
-  }
-
-  def loadPlugin: Receive = {  
-    case Load => {
-      LOG.debug("Receiveing {} plugin.", sender.path.name)
-      cacheService(sender) 
+  override def name: String = "sysMetricsTracker"
+ 
+  def metricsRecord: Receive = {
+    case stat: MetricsRecord => {
+      LOG.info("{} sends stat {}", stat.getGroomName, stat)
+      sysMetricsStat ++= Set(stat)
     }
   }
 
-  override def receive = {
-    areSubServicesReady orElse serverIsUp orElse loadPlugin orElse unknown
-  } 
-
+  override def receive = isServiceReady orElse metricsRecord orElse unknown
 }

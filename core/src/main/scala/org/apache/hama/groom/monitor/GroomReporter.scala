@@ -56,6 +56,6 @@ final class GroomReporter(conf: HamaConfiguration) extends LocalService
   override def receive = {
     isServiceReady orElse
     ({case stat: GroomStat => tracker ! stat
-    }: Receive) orElse unknown
+    }: Receive) orElse isProxyReady orElse timeout orElse unknown
   } 
 }
