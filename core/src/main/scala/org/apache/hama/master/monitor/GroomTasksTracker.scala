@@ -41,28 +41,41 @@ final class GroomTasksTracker(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-/*
+  //TODO: need additional fields marking the slots is booked by a 
+  //      specific jobId, and the way to unbooked the slot
   def findSlotsAvailable: Receive = {
     case res: Resource => {
       val nextDealer = res.next
-      LOG.info("Ask monitor ({}) passing resource.", nextDealer)
-      var avail = res.available
-      avail.foreach(groom => {
-        groomTasksStat.get(groom.name) match {
-          case Some(slots) => {
-            slots.task match {
-              case Some(occupied) => 
-              case None => {
-                 groom.freeSlots Set(slots.seq) 
-              }
-            }
-          }
-          case None => avail -= groom.name
-        }
-      })
+      LOG.info("Next dealer is {}", nextDealer)
+      val preferredNumBSPTasks = res.job.getNumBSPTasks
+      var slotsAllocated = 0 
+      var avail = Set.empty[GroomAvailable]
+      // note: it may happen that not enough availabe slots in filling
+      //       preferredNumBSPTasks after allocation.
+      res.available.takeWhile( groom => {
+        val filteredSet =
+          groomTasksStat.getOrElse(groom.name, Set()).filter( slot => {
+            LOG.debug("GroomAvailable.name: {} slot: {}", groom.name, slot)
+            None.equals(slot.task)
+          }).takeWhile( slot => {
+            slotsAllocated += 1
+            slotsAllocated < (preferredNumBSPTasks+1)
+          }).map { v =>  v.seq }
+        LOG.debug("GroomAvailable.name: {} filterdSet: {}",
+                  groom.name, filteredSet)
+        if(filteredSet.size > 0)
+          avail ++= Set(GroomAvailable(groom.name, groom.maxTasks, 
+                                       filteredSet.toArray))
+
+        slotsAllocated < (preferredNumBSPTasks+1)
+      })  
+      if(preferredNumBSPTasks != (slotsAllocated-1)) {
+        LOG.debug("{} is configured with {}, but only {} slots allocated.", 
+                  res.job.getId, preferredNumBSPTasks, (slotsAllocated-1))
+      }
+        
     }
   }
-*/
 
   override def receive = {
     isServiceReady orElse updateGroomStat /*orElse findSlotsAvailabe*/ orElse unknown

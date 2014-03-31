@@ -106,7 +106,8 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
     case res: Resource => {
       val nextDealer = res.next
       LOG.info("Request will be forward to {} ", nextDealer)
-      mediator ! Request(nextDealer , Resource(res.job, res.routes, findAlive))
+      mediator ! Request(nextDealer, 
+                         Resource(res.job, res.routes, findAlive))
     }
   }
 
