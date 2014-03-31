@@ -53,9 +53,13 @@ final class GroomReporter(conf: HamaConfiguration) extends LocalService
 
   override def afterLinked(proxy: ActorRef) = tracker = proxy
 
-  override def receive = {
-    isServiceReady orElse
-    ({case stat: GroomStat => tracker ! stat
-    }: Receive) orElse isProxyReady orElse timeout orElse unknown
-  } 
+  def report: Receive = {
+    case stat: GroomStat => { 
+      LOG.info("Report groom server {} to {}", stat.groomName, 
+               tracker.path.name)
+      tracker ! stat
+    }
+  }
+
+  override def receive = isServiceReady orElse report orElse isProxyReady orElse timeout orElse unknown
 }

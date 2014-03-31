@@ -40,8 +40,21 @@ class Monitor(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = {
-    areSubServicesReady orElse serverIsUp orElse loadPlugin orElse unknown
-  } 
+  def findResource: Receive = {
+    case res: Resource => {
+      val nextDealer = res.next
+      LOG.info("Pass resource to {}", nextDealer)
+      val resource = Resource(res.job, res.routes, res.available) 
+      services.find(p => p.path.name.equals(nextDealer)) match {
+        case Some(found) => found forward resource
+        case None =>
+          LOG.warning("Can't forward resource because {} not found! "+
+                      " Service available: {}.", nextDealer, 
+                      services.mkString(", "))
+      }
+    } 
+  }
+
+  override def receive = areSubServicesReady orElse serverIsUp orElse loadPlugin orElse findResource orElse unknown
 
 }

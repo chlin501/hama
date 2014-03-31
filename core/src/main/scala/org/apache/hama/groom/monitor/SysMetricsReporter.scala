@@ -79,7 +79,7 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
   override def afterLinked(proxy: ActorRef) = {
     tracker = proxy
     LOG.debug("Sending metrics stat to {}", tracker)
-    import context// cancel when actor stopped
+    import context.dispatcher // cancel when actor stopped
     cancellable = 
       context.system.scheduler.schedule(0.seconds, 5.seconds, tracker, 
                                         sampling)

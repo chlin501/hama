@@ -46,22 +46,24 @@ class TaskManager(conf: HamaConfiguration) extends LocalService {
     initializeSlots     
   }
 
-  override def receive = {
-    ({case directive: Directive => { 
+  def receiveDirective: Receive = {
+    case directive: Directive => { 
        val action: Action = directive.action  
        val master: String = directive.master  
        val timestamp: Long = directive.timestamp  
        LOG.info("{} action from {} at {}", action, master, timestamp) 
        matchThenExecute(action, master, timestamp)
-    }}: Receive) orElse isServiceReady orElse serverIsUp orElse unknown
+    }
   }
+
+  override def receive = receiveDirective orElse isServiceReady orElse serverIsUp orElse unknown
 
   private def matchThenExecute(action: Action, master: String, 
                                timestamp: Long) {
     action.value match {
       case 1 => {
         // create a new task
-        val task = createTask
+        //val task = createTask // TODO: check task is created at groom or master?
         // arrange and store the task to a slot
         // fork a new process by actor
         // launch task on new process
@@ -74,9 +76,11 @@ class TaskManager(conf: HamaConfiguration) extends LocalService {
     }
   }
 
+/*
   def createTask(): Task = {
     new Task.Builder().//setId().
                        //setStartTime().
                        build
   } 
+*/
 }

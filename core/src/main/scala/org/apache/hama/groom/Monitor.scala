@@ -33,7 +33,10 @@ class Monitor(conf: HamaConfiguration) extends LocalService {
   }
 
   def loadPlugin: Receive = {
-    case Load => cacheService(sender)
+    case Load => {
+      LOG.debug("Receiveing {} plugin.", sender.path.name)
+      cacheService(sender)
+    }
   }
 
   def receive = areSubServicesReady orElse serverIsUp orElse loadPlugin orElse unknown

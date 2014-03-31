@@ -15,29 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master.monitor
+package org.apache.hama.master
 
-import org.apache.hama._
-import org.apache.hama.master._
-import org.apache.hama.monitor.metrics._
+import org.apache.hama.bsp.v2.Job
 
-class SysMetricsTracker(conf: HamaConfiguration) extends LocalService {
+case class CheckResource(job: Job)
 
-  type GroomName = String
-
-  var sysMetricsStat = Set.empty[MetricsRecord]
-
-  override def configuration: HamaConfiguration = conf
-
-  override def name: String = "sysMetricsTracker"
- 
-  def metricsRecord: Receive = {
-    case stat: MetricsRecord => {
-      sysMetricsStat ++= Set(stat)
-      LOG.debug("{} reports stat {}. Now there are {} records.", 
-                stat.getGroomName, stat, sysMetricsStat.size)
-    }
-  }
-
-  override def receive = isServiceReady orElse metricsRecord orElse unknown
-}

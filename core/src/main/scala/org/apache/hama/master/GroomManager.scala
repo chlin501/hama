@@ -88,13 +88,36 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
     // 2. if spec is with refresh hardware, reset crashed count to 0
   }
 
-  override def receive = {
-    isServiceReady orElse serverIsUp orElse
-    ({case groomSpec: GroomServerSpec => { // register
+  private def findAlive(): Set[GroomAvailable] = {
+    var avail = Set.empty[GroomAvailable]
+    grooms.foreach( groom => {
+      avail ++= Set(GroomAvailable(groom.spec.getName, 
+                                   groom.spec.getMaxTasks, 
+                                   Array.empty[Int]))
+    }) 
+    avail
+  }
+
+  /**
+   * 1. Find alive Grooms.
+   * 2. Send to next dealer ie groom slot tracker
+   */
+  def findGroomsAvailable: Receive = {
+    case res: Resource => {
+      val nextDealer = res.next
+      LOG.info("Request will be forward to {} ", nextDealer)
+      mediator ! Request(nextDealer , Resource(res.job, res.routes, findAlive))
+    }
+  }
+
+  def register: Receive = {
+    case groomSpec: GroomServerSpec => { 
       LOG.info("{} requests to register {}.", 
                sender.path.name, groomSpec.getName) 
       checkIfRejoin(sender, groomSpec)
       context.watch(sender) // watch remote
-     }}: Receive) orElse superviseeIsTerminated orElse unknown
+    }
   }
+
+  override def receive = isServiceReady orElse serverIsUp orElse register orElse findGroomsAvailable orElse superviseeIsTerminated orElse unknown
 }

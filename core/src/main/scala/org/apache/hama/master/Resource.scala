@@ -15,29 +15,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master.monitor
+package org.apache.hama.master
 
-import org.apache.hama._
-import org.apache.hama.master._
-import org.apache.hama.monitor.metrics._
+import org.apache.hama.bsp.v2.Job
 
-class SysMetricsTracker(conf: HamaConfiguration) extends LocalService {
+final case class Resource(job: Job, delears: Seq[String], 
+                          var available: Set[GroomAvailable]) {
 
-  type GroomName = String
+  var routing: Seq[String] = delears 
 
-  var sysMetricsStat = Set.empty[MetricsRecord]
-
-  override def configuration: HamaConfiguration = conf
-
-  override def name: String = "sysMetricsTracker"
- 
-  def metricsRecord: Receive = {
-    case stat: MetricsRecord => {
-      sysMetricsStat ++= Set(stat)
-      LOG.debug("{} reports stat {}. Now there are {} records.", 
-                stat.getGroomName, stat, sysMetricsStat.size)
-    }
+  def next(): String = {
+    val (first, rest) = routing.splitAt(1)
+    routing = rest
+    first.head
   }
 
-  override def receive = isServiceReady orElse metricsRecord orElse unknown
+  def routes(): Seq[String] = routing
+
+  def add(avail: GroomAvailable) {
+    available ++= Set(avail) 
+  }
+
+  def remove(avail: GroomAvailable) {
+    available -= avail
+  }
 }

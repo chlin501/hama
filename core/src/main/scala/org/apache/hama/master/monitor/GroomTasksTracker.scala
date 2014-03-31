@@ -30,15 +30,41 @@ final class GroomTasksTracker(conf: HamaConfiguration) extends LocalService {
 
   override def name: String = "groomTasksTracker"
 
-  override def receive = {
-    isServiceReady orElse
-    ({case stat: GroomStat => { 
+  def updateGroomStat: Receive = {
+    case stat: GroomStat => { 
       groomTasksStat.find(p=> p._1.equals(stat.groomName)) match {
         case Some((key, value)) =>  
           groomTasksStat ++= Map(stat.groomName -> stat.slots)
         case None => 
           groomTasksStat ++= Map(stat.groomName -> stat.slots)
       }
-    }}: Receive) orElse unknown
+    }
+  }
+
+/*
+  def findSlotsAvailable: Receive = {
+    case res: Resource => {
+      val nextDealer = res.next
+      LOG.info("Ask monitor ({}) passing resource.", nextDealer)
+      var avail = res.available
+      avail.foreach(groom => {
+        groomTasksStat.get(groom.name) match {
+          case Some(slots) => {
+            slots.task match {
+              case Some(occupied) => 
+              case None => {
+                 groom.freeSlots Set(slots.seq) 
+              }
+            }
+          }
+          case None => avail -= groom.name
+        }
+      })
+    }
+  }
+*/
+
+  override def receive = {
+    isServiceReady orElse updateGroomStat /*orElse findSlotsAvailabe*/ orElse unknown
   } 
 }
