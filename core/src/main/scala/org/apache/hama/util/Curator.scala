@@ -37,8 +37,13 @@ class Curator(conf: HamaConfiguration) extends LocalService {
  
   val masterPath = 
     "/bsp/masters/" + conf.get("bsp.master.name", "bspmaster") + "/id"
+
   val seqPath = 
     "/bsp/masters/" + conf.get("bsp.master.name", "bspmaster") + "/seq"
+
+  val totalTaskCapacityPath = 
+    "/bsp/masters/" + conf.get("bsp.master.name", "bspmaster") + "/tasks" +
+    "/capacity"
 
   override def configuration: HamaConfiguration = conf
 
@@ -86,12 +91,27 @@ class Curator(conf: HamaConfiguration) extends LocalService {
   }
 
   private def toInt(data: Array[Byte]): Int = ByteBuffer.wrap(data).getInt
+ 
+  private def toFloat(data: Array[Byte]): Float = 
+    ByteBuffer.wrap(data).getFloat
 
-  private def toBytes(data: Int): Array[Byte] = {
-    val buf = ByteBuffer.allocate(4)
-    buf.putInt(data)
-    buf.array()
-  }
+  private def toLong(data: Array[Byte]): Double = 
+    ByteBuffer.wrap(data).getLong
+
+  private def toDouble(data: Array[Byte]): Double = 
+    ByteBuffer.wrap(data).getDouble
+
+  private def toBytes(data: Int): Array[Byte] = 
+    ByteBuffer.allocate(4).putInt(data).array()
+
+  private def toBytes(data: Float): Array[Byte] = 
+    ByteBuffer.allocate(4).putFloat(data).array()
+
+  private def toBytes(data: Long): Array[Byte] = 
+    ByteBuffer.allocate(8).putLong(data).array()
+
+  private def toBytes(data: Double): Array[Byte] = 
+    ByteBuffer.allocate(8).putDouble(data).array()
 
   private def createMasterId: String =
     new SimpleDateFormat("yyyyMMddHHmm").format(new Date())
@@ -113,14 +133,16 @@ class Curator(conf: HamaConfiguration) extends LocalService {
   // TODO: use manifest?
   private def getValue[T](fullPath: String, cls: Class[_]): Option[T] = {
     val ClassOfString = classOf[String]; val ClassOfInt = classOf[Int]
-    val ClassOfFloat = classOf[Float]; val ClassOfDouble = classOf[Double]
+    val ClassOfFloat = classOf[Float]; val ClassOfLong = classOf[Long]
+    val ClassOfDouble = classOf[Double]
     curatorFramework.getData.forPath(fullPath) match {
       case data: Array[Byte] => {
         val value = cls match  {
           case ClassOfString => new String(data)
           case ClassOfInt => toInt(data)
-          case ClassOfFloat => None
-          case ClassOfDouble => None
+          case ClassOfFloat => toFloat(data)
+          case ClassOfLong => toLong(data)
+          case ClassOfDouble => toDouble(data)
           case _ => None 
         }
         LOG.info("Value {} found at {}.", value, fullPath)
@@ -152,19 +174,42 @@ class Curator(conf: HamaConfiguration) extends LocalService {
 
   private def createZnode(path: String) = curatorFramework.create.forPath(path)
 
-  override def receive = {
-    isServiceReady orElse serverIsUp orElse
-    ({case GetMasterId => {
+  def getMasterId: Receive = {
+    case GetMasterId => {
       sender ! MasterId(findMasterId)
-    }}: Receive) orElse
-    ({case GetJobSeq => {
+    }
+  }
+
+  def getJobSeq: Receive = {
+    case GetJobSeq => {
       sender ! JobSeq(nextSequence.getOrElse(-1))
-    }}: Receive) orElse
-    //case Create(path, value) => {
-      // write to zk
-    //}
-    /*({case GetNewJobId(job: Job) => {
-      LOG.info("Received job {} submitted from the client.",job.getName) 
-    }}: Receive) orElse*/ unknown
-  } 
+    }
+  }
+
+  def totalTaskCapacity: Receive = {
+    case TotalTaskCapacity(maxTasks) => {
+      updateTotalTaskCapacity(maxTasks) 
+    }
+  }
+ 
+  private def updateTotalTaskCapacity(maxTasks: Int)  = {
+    curatorFramework.checkExists.forPath(totalTaskCapacityPath) match {
+      case stat: Stat => {
+        val v = getValue[Int](totalTaskCapacityPath, 
+                              classOf[Int]).getOrElse(-1)
+        if(-1 == v) 
+          throw new RuntimeException("TotalTaskCapacity at "+
+                                     totalTaskCapacityPath+" shouldn't be -1.") 
+        createValue(totalTaskCapacityPath, toBytes(maxTasks+v))
+      }
+      case _ => {
+        createPath(totalTaskCapacityPath, createZnode)
+        LOG.info("Not found totalTaskCapacity at {}, creating a new one {}.", 
+                 totalTaskCapacityPath, 0)
+        createValue(totalTaskCapacityPath, toBytes(maxTasks))
+      }
+    }
+  }
+
+  override def receive = isServiceReady orElse serverIsUp orElse getMasterId orElse getJobSeq orElse totalTaskCapacity orElse unknown
 }

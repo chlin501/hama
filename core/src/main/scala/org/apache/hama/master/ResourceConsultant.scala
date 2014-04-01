@@ -22,6 +22,7 @@ import akka.routing._
 import org.apache.hama._
 import scala.concurrent.duration._
 
+// TODO: this may not needed because groom will ask for tasks assign.
 class ResourceConsultant(conf: HamaConfiguration) extends LocalService {
 
   override def configuration: HamaConfiguration = conf
@@ -29,20 +30,6 @@ class ResourceConsultant(conf: HamaConfiguration) extends LocalService {
   override def name: String = "resourceConsultant"
 
   override def initializeServices { }
-
-  def checkResource: Receive = {
-    case CheckResource(job) => {
-      val resource = Resource(job, 
-                              Seq("monitor", "groomTasksTracker", 
-                                  "monitor", "sysMetricsTracker"),
-                              Set.empty[GroomAvailable])
-      mediator ! Request("groomManager", resource) 
-      // find groom alive and its spec // GroomManager
-      // find free slots in grooms // GroomTracker
-      // find lowest sys stats // SysMetricsTracker 
-      // Resource(job, Groom with free slots)
-    }
-  } 
  
   override def receive = isServiceReady orElse serverIsUp orElse unknown
 

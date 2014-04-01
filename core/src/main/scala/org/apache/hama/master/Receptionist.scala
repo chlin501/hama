@@ -19,7 +19,9 @@ package org.apache.hama.master
 
 import akka.routing._
 import org.apache.hama._
+import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Job
+import org.apache.hama.bsp.v2.TaskTable
 import org.apache.hama.master._
 import scala.collection.immutable.Queue
 
@@ -29,14 +31,25 @@ import scala.collection.immutable.Queue
 class Receptionist(conf: HamaConfiguration) extends LocalService {
 
   private[this] var waitQueue = Queue[Job]()
-
+ 
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "receptionist"
- 
+
+  def initJob(jobId: BSPJobID, xml: String): Job = {
+    val table = new TaskTable(jobId, conf)
+    new Job.Builder().setId(jobId).
+                      setConf(conf).
+                      setJobXml(xml).
+                      setTaskTable(table).
+                      build()
+  }
+
   def submitJob: Receive = {
-    case Submit(job: Job) => {
-      LOG.info("Received job {} submitted from the client.",job.getName) 
+    case Submit(jobId: BSPJobID, xml: String) => {
+      LOG.info("Received job {} submitted from the client {}",
+               jobId, sender.path.name) 
+      val job = initJob(jobId, xml)
       waitQueue = waitQueue.enqueue(job)
       mediator ! Request("sched", JobSubmission)  
     }
@@ -56,11 +69,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = {
-    isServiceReady orElse serverIsUp orElse
-    //case JobDispatchAck(job) => { 
-      // remove the corresponded job from the wait queue.
-    //}
-    take orElse submitJob orElse unknown
-  } 
+  
+
+  override def receive = isServiceReady orElse serverIsUp orElse take orElse submitJob orElse unknown
 }

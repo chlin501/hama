@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.master
+/*
 
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
@@ -43,3 +44,4 @@ class TestGroomAvailable extends FunSpec with ShouldMatchers {
     }
   } 
 }
+*/

@@ -17,6 +17,6 @@
  */
 package org.apache.hama.master
 
-import org.apache.hama.bsp.v2.Job
+import org.apache.hama.bsp.BSPJobID
 
-case class Submit(job: Job)
+case class Submit(jobId: BSPJobID, xml: String)

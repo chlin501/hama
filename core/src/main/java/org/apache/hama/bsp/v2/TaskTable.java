@@ -28,6 +28,7 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
 
 import org.apache.hama.bsp.BSPJobID;
+import org.apache.hama.HamaConfiguration;
 
 public final class TaskTable implements Writable {
 
@@ -46,6 +47,11 @@ public final class TaskTable implements Writable {
   private ArrayWritable[] tasks;
 
   TaskTable() {} // for Writable
+
+  public TaskTable(final BSPJobID jobId, final HamaConfiguration conf) {
+    this(jobId, conf.getInt("bsp.peers.num", 1), 
+         conf.getInt("bsp.job.task.retry_n_times", 1)); 
+  }
 
   /**
    * Initialize a 2d task array with numBSPTasks rows, and a task in column.
@@ -73,6 +79,7 @@ public final class TaskTable implements Writable {
     if(0 >= this.maxTaskAttempts) 
       throw new IllegalArgumentException("maxTaskAttempts is not valid.");
 
+    // init tasks
     this.tasks = new ArrayWritable[numBSPTasks];
     for(int row = 0; row < numBSPTasks; row++) {
       this.tasks[row] = new ArrayWritable(Task.class);

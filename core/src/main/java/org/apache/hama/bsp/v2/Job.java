@@ -91,6 +91,7 @@ public final class Job implements Writable {
   /* 2d task array. size ~= numBSPTasks x maxTaskAttempts. */
   private TaskTable taskTable;
 
+  // TODO: refactr? 
   public static enum State {
     PREP(1), RUNNING(2), SUCCEEDED(3), FAILED(4), CANCELLED(5);
     int s;
@@ -126,11 +127,6 @@ public final class Job implements Writable {
       return name;
     }
   }
-
-
-  // TODO: need APIs to build Job and Task together with related information
-  //       provided. So that a client does not need to write lots of code
-  //       in order to just create a job.
   
   public static final class Builder {
 
@@ -297,15 +293,26 @@ public final class Job implements Writable {
     if(null == this.id) 
       throw new IllegalArgumentException("BSPJobID is not provided.");
     this.name = (null == name)? new Text(): new Text(name);
+    this.conf = (null == conf)? new HamaConfiguration(): conf;
     this.user = (null == user)? new Text(): new Text(user);
     this.xml = (null == xml)? new Text(): new Text(xml);
     this.localJobFile = 
       (null == localJobFile)? new Text(): new Text(localJobFile);
     this.localJarFile = 
       (null == localJarFile)? new Text(): new Text(localJarFile);
-    this.numBSPTasks = new IntWritable(numBSPTasks);
+    if(numBSPTasks > 0) {
+      this.numBSPTasks = new IntWritable(numBSPTasks);
+    } else {
+      this.numBSPTasks = new IntWritable(conf.getInt("bsp.peers.num", 1));
+    }
     this.master = (null == master)? new Text(): new Text(master);
-    this.maxTaskAttempts = new IntWritable(maxTaskAttempts);
+    if(maxTaskAttempts > 0) {
+      this.maxTaskAttempts = new IntWritable(maxTaskAttempts);
+    } else {
+      this.maxTaskAttempts = new IntWritable(
+        conf.getInt("bsp.job.task.retry_n_times", 3)
+      );
+    }
     this.inputPath = (null == inputPath)? new Text(): new Text(inputPath);
     this.state = state;
     this.progress = new LongWritable(progress);
@@ -314,7 +321,6 @@ public final class Job implements Writable {
     this.startTime = new LongWritable(startTime);
     this.finishTime = new LongWritable(finishTime);
     this.superstepCount = new LongWritable(superstepCount);
-    this.conf = (null == conf)? new HamaConfiguration(): conf;
     this.taskTable = taskTable;
     if(null == this.taskTable)
       throw new IllegalArgumentException("TaskTable is not presented.");

@@ -1,6 +1,5 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
+ * Licensed to the Apache Software Foundation (ASF) under one * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
  * regarding copyright ownership.  The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
@@ -20,6 +19,7 @@ package org.apache.hama.master
 import akka.actor._
 import akka.routing._
 import org.apache.hama._
+import org.apache.hama.groom._
 import scala.concurrent.duration._
 
 class Scheduler(conf: HamaConfiguration) extends LocalService {
@@ -67,8 +67,9 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
     }
   }
 */
- 
-  override def receive = {
+
+
+/*
     //case TakeResult(job) => {
       // retrieve slots info with corresponded job from job_resource
       // send commands to command dispatcher
@@ -90,16 +91,31 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
     //case ResurouceAvailabe(jobName, resource) => {
       // cache job with free slots information e.g job_resource
       // queue ! Take
-    //}
-    isServiceReady orElse serverIsUp orElse
-    ({case RescheduleTasks(spec) => {
-       LOG.info("Failed GroomServer having GroomServerSpec "+spec)
-    }}: Receive) orElse 
-    ({case JobSubmission => {
-      // 1. async check with resource consultant if free slots available 
-      //    provided with job info.
-      // 2. resourceConsultant ! jobName 
-    }}: Receive) orElse /*isQueueReady orElse*/ unknown
+    //} 
+*/
+
+  def requestTask: Receive = {
+    case RequestTask => {
+      // check if a job need positive assign a task
+      // if no, 
+      //   assign a task to that groom/ slot
+      // else 
+      //   omit request
+    }
   }
+
+  def reschedTasks: Receive = {
+    case RescheduleTasks(spec) => {
+       LOG.info("Failed GroomServer having GroomServerSpec "+spec)
+    }
+  }
+
+  def jobSubmission: Receive = {
+    case JobSubmission => {
+// xxxx
+    }
+  }
+
+  override def receive = isServiceReady orElse serverIsUp orElse reschedTasks orElse jobSubmission orElse unknown
 
 }

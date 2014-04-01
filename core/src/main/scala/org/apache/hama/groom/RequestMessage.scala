@@ -15,23 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master
+package org.apache.hama.groom
 
-import org.apache.hama.groom.Slot
-
-/**
- * An object indicates available GroomServer with its spec, including
- * - name: GroomServer name
- * - maxTasks
- */
-final case class GroomAvailable(name: String, maxTasks: Int, 
-                                var freeSlots: Array[Int]) {
-
-  /**
-   * 0 denotes freeSlots is not yet initialized.
-   */
-  if(0 != freeSlots.size && maxTasks < freeSlots.size) 
-    throw new RuntimeException("Violate specification because maxTasks ("+
-                               maxTasks+ ") < freeSlot size ("+freeSlots.size+
-                               ")")
-}
+sealed trait RequestMessage
+case object TaskRequest extends RequestMessage
+case object RequestTask extends RequestMessage

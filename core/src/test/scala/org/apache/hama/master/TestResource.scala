@@ -17,6 +17,7 @@
  */
 package org.apache.hama.master
 
+/*
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
 import org.junit.runner.RunWith
@@ -48,3 +49,4 @@ class TestResource extends FunSpec with ShouldMatchers {
     n
   }
 }
+*/

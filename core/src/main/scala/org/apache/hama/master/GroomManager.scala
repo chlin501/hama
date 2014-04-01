@@ -24,7 +24,9 @@ import org.apache.hama.bsp.v2.GroomServerSpec
 import org.apache.hama.master._
 import scala.concurrent.duration._
 
-private[master] case class Groom(groom: ActorRef, spec: GroomServerSpec) 
+private[master] final case class Groom(groom: ActorRef, spec: GroomServerSpec) 
+
+final case class TotalTaskCapacity(maxTasks: Int)
 
 /**
  * A service that manages a set of {@link org.apache.hama.groom.GroomServer}s.
@@ -87,28 +89,12 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
     // 1. specific stat info recording groom crash info.
     // 2. if spec is with refresh hardware, reset crashed count to 0
   }
-
-  private def findAlive(): Set[GroomAvailable] = {
-    var avail = Set.empty[GroomAvailable]
-    grooms.foreach( groom => {
-      avail ++= Set(GroomAvailable(groom.spec.getName, 
-                                   groom.spec.getMaxTasks, 
-                                   Array.empty[Int]))
-    }) 
-    avail
-  }
-
+  
   /**
-   * 1. Find alive Grooms.
-   * 2. Send to next dealer ie groom slot tracker
+   * Evaluate cluster capacity.
    */
-  def findGroomsAvailable: Receive = {
-    case res: Resource => {
-      val nextDealer = res.next
-      LOG.info("Request will be forward to {} ", nextDealer)
-      mediator ! Request(nextDealer, 
-                         Resource(res.job, res.routes, findAlive))
-    }
+  def evaluate(spec: GroomServerSpec) {
+    mediator ! Request("curator", TotalTaskCapacity(spec.getMaxTasks))
   }
 
   def register: Receive = {
@@ -116,9 +102,10 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
       LOG.info("{} requests to register {}.", 
                sender.path.name, groomSpec.getName) 
       checkIfRejoin(sender, groomSpec)
+      evaluate(groomSpec)
       context.watch(sender) // watch remote
     }
   }
 
-  override def receive = isServiceReady orElse serverIsUp orElse register orElse findGroomsAvailable orElse superviseeIsTerminated orElse unknown
+  override def receive = isServiceReady orElse serverIsUp orElse register orElse superviseeIsTerminated orElse unknown
 }

@@ -56,7 +56,7 @@ public class Directive implements Writable {
   }
 
   public Directive(){ 
-    this(Launch, "bspmaster");
+    this(Launch, "bspmaster"); // default to launch 
   }
   
   public Directive(final Action action, final String master) { 
