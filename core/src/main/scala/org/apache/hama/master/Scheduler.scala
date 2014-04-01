@@ -59,13 +59,18 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
     //} 
 */
 
-  // TODO: check if a job's task needs to be assigned to a reserved groom.
+  /**
+   * GroomServer request for assigning a task.
+   * TODO: check if a job's tasks need to be assigned to a reserved 
+   *       GroomServer. if yes, skip the this request, go with assignTask 
+   *       instead
+   */
   def requestTask: Receive = {
     case RequestTask => {
       val (job, rest) = taskAssignQueue.dequeue
       unassignedTask(job) match {
         case Some(task) => {
-          LOG.info("Assign a task to {}", sender.path.name)
+          LOG.info("Assign the task {} to {}", task.getId, sender.path.name)
           task.changeToAssigned
           sender ! new Directive(Launch, task,  
                                  conf.get("bsp.master.name", "bspmaster"))  
@@ -95,8 +100,16 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
     }
   }
 
+  /**
+   * Positive assign tasks.
+   */ 
+  def assignTask() { }
+
   def takeResult: Receive = {
-    case TakeResult(job) => taskAssignQueue = taskAssignQueue.enqueue(job)
+    case TakeResult(job) => { 
+      taskAssignQueue = taskAssignQueue.enqueue(job)
+      assignTask
+    }
   }
 
   override def receive = isServiceReady orElse serverIsUp orElse reschedTasks orElse jobSubmission orElse unknown
