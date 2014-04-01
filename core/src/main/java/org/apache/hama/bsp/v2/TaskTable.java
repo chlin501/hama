@@ -116,6 +116,26 @@ public final class TaskTable implements Writable {
     return this.jobId;
   }
 
+  /**
+   * The row (numBSPTasks) of this task table.
+   * @return int 
+   */
+  public int rowLength() {
+    return getNumBSPTasks();
+  }
+
+  public int getNumBSPTasks() {
+    return this.numBSPTasks;
+  }
+
+  public int columnLength() {
+    return getMaxTaskAttempts();
+  }
+
+  public int getMaxTaskAttempts() {
+    return this.maxTaskAttempts;
+  }
+
   /** 
    * Obtain a task array that may contain restart attempt for a particular row.
    * @param row is the i-th position in the task table.
@@ -146,13 +166,17 @@ public final class TaskTable implements Writable {
     return taskAttemptArray.length;
   }
 
+  /**
+   * Obtain a specific Task from TaskTable.
+   * @param row is the numBSPTasks
+   * @param column is the maxTaskAttempts.
+   */
   public Task get(final int row, final int column) {
     if(!isValidPosition(row, column)) return null;
     final Task[] taskAttemptArray= get(row);
     if(null == taskAttemptArray) return null;
     return taskAttemptArray[column];
   }
-
 
   /** 
    * Resize the column length for a particular row in this task table.
@@ -217,6 +241,21 @@ public final class TaskTable implements Writable {
       tmpTasks[idx] = taskAttemptArray[idx];
     }
     this.set(row, tmpTasks); 
+  }
+
+  /**
+   * Find the next task unassigned to Groom.
+   * @return Task that is not yet assigned to a GroomServer; null if all tasks
+   *              are already assigned to GroomServers.
+   */
+  public Task nextUnassignedTask() {
+    for(int idx = 0; idx < rowLength(); idx++) {
+      final Task task = get(idx, 0);
+      if(null == task) 
+        throw new RuntimeException("The first task at row: "+idx+" not found!");
+      if(!task.isAssigned()) return task;
+    }
+    return null;
   }
 
   @Override

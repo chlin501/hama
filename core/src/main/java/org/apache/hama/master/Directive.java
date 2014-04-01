@@ -25,6 +25,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.Text;
+import org.apache.hama.bsp.v2.Task;
 import static org.apache.hama.master.Directive.*;
 import static org.apache.hama.master.Directive.Action.*;
 
@@ -47,6 +48,8 @@ public class Directive implements Writable {
 
   protected Action action;
 
+  protected Task task;
+
   public static enum Action {
     Launch(1), Kill(2), Stop(3), Resume(4);
 
@@ -55,18 +58,22 @@ public class Directive implements Writable {
     public int value() { return this.t; }
   }
 
-  public Directive(){ 
-    this(Launch, "bspmaster"); // default to launch 
-  }
+  public Directive(){ }
   
-  public Directive(final Action action, final String master) { 
+  public Directive(final Action action, final Task task, final String master) {
     this.timestamp = System.currentTimeMillis();
+
     this.master = master;
     if(null == this.master)
       throw new IllegalArgumentException("Master is not assigned.");
+
     this.action = action;
     if(null == this.action)
-      throw new IllegalArgumentException("No action provided.");
+      throw new IllegalArgumentException("No action is provided.");
+
+    this.task = task;
+    if(null == this.task)
+      throw new IllegalArgumentException("No task is provided.");
   }
 
   public long timestamp() {

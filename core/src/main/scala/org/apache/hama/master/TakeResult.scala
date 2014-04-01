@@ -19,4 +19,4 @@ package org.apache.hama.master
 
 import org.apache.hama.bsp.v2.Job
 
-private[master] case class TakeResult(result: Option[Job]) 
+private[master] case class TakeResult(job: Job) 

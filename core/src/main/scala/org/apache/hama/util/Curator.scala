@@ -187,9 +187,7 @@ class Curator(conf: HamaConfiguration) extends LocalService {
   }
 
   def totalTaskCapacity: Receive = {
-    case TotalTaskCapacity(maxTasks) => {
-      updateTotalTaskCapacity(maxTasks) 
-    }
+    case TotalTaskCapacity(maxTasks) => updateTotalTaskCapacity(maxTasks) 
   }
  
   private def updateTotalTaskCapacity(maxTasks: Int)  = {
@@ -212,4 +210,5 @@ class Curator(conf: HamaConfiguration) extends LocalService {
   }
 
   override def receive = isServiceReady orElse serverIsUp orElse getMasterId orElse getJobSeq orElse totalTaskCapacity orElse unknown
+
 }

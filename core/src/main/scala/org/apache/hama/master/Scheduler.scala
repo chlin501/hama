@@ -20,31 +20,20 @@ import akka.actor._
 import akka.routing._
 import org.apache.hama._
 import org.apache.hama.groom._
+import org.apache.hama.bsp.v2.Job
+import org.apache.hama.bsp.v2.Task
+import org.apache.hama.master.Directive.Action._
 import scala.concurrent.duration._
+import scala.collection.immutable.Queue
 
 class Scheduler(conf: HamaConfiguration) extends LocalService {
 
-  val queuePath = "/user/bspmaster/receptionist"
-  var cancelQueueWhenReady: Cancellable = _
-  var queue: ActorRef = _
-  // var job_resource = Map.empty[String, Resource]
+  private var taskAssignQueue = Queue[Job]()
+  private var processingQueue = Queue[Job]()
 
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "sched"
-
-/*
-  private def subscribe(path: String): Cancellable = {
-    context.system.actorSelection(path) ! Identify(path)
-    import context.dispatcher
-    val cancellable = 
-      context.system.scheduler.scheduleOnce(3.seconds, self, Timeout(target, path))
-    cancellable
-  } 
-*/
-
-  //private def find = {
-  //}
 
   override def initializeServices { 
     //cancelQueueWhenReady = subscribe(queuePath)
@@ -53,30 +42,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
   }
 
 /*
-  private def isQueueReady: Receive = {
-    case ActorIdentity(`queuePath`, Some(receptionist)) => {
-      queue = receptionist
-      //queue ! Listen(self)
-      cancelQueueWhenReady.cancel 
-    }
-    case ActorIdentity(`queuePath`, None) => { 
-      LOG.info("Queue at {} not yet available.", queuePath) 
-    }
-    case Timeout(path) => {
-      cancelQueueWhenReady = subscribe(path)
-    }
-  }
-*/
-
-
-/*
-    //case TakeResult(job) => {
-      // retrieve slots info with corresponded job from job_resource
-      // send commands to command dispatcher
-      // command dispatcher ! (job, resource) 
-      // command dispatcher ensures command will be successfully dispatched
-      // e.g. resend 3 times if any failure e.g. i/o 
-    //}
     //case CommandStatus(jobName, status) => {
       // if(fail) 
       //   ?? Stop or Escalate ??
@@ -94,14 +59,28 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
     //} 
 */
 
+  // TODO: check if a job's task needs to be assigned to a reserved groom.
   def requestTask: Receive = {
     case RequestTask => {
-      // check if a job need positive assign a task
-      // if no, 
-      //   assign a task to that groom/ slot
-      // else 
-      //   omit request
+      val (job, rest) = taskAssignQueue.dequeue
+      unassignedTask(job) match {
+        case Some(task) => {
+          LOG.info("Assign a task to {}", sender.path.name)
+          task.changeToAssigned
+          sender ! new Directive(Launch, task,  
+                                 conf.get("bsp.master.name", "bspmaster"))  
+        }
+        case None => {
+          taskAssignQueue = rest
+          processingQueue.enqueue(job)
+        }
+      }
     }
+  }
+
+  def unassignedTask(job: Job): Option[Task] = {
+    val task = job.nextUnassignedTask;
+    if(null != task) Some(task) else None
   }
 
   def reschedTasks: Receive = {
@@ -112,8 +91,12 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
 
   def jobSubmission: Receive = {
     case JobSubmission => {
-// xxxx
+      mediator ! Request("receptionist", Take)
     }
+  }
+
+  def takeResult: Receive = {
+    case TakeResult(job) => taskAssignQueue = taskAssignQueue.enqueue(job)
   }
 
   override def receive = isServiceReady orElse serverIsUp orElse reschedTasks orElse jobSubmission orElse unknown

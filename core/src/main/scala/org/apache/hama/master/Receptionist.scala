@@ -36,15 +36,16 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
 
   override def name: String = "receptionist"
 
-  def initJob(jobId: BSPJobID, xml: String): Job = {
-    val table = new TaskTable(jobId, conf)
+  def initJob(jobId: BSPJobID, xml: String): Job = 
     new Job.Builder().setId(jobId).
                       setConf(conf).
                       setJobXml(xml).
-                      setTaskTable(table).
+                      setTaskTable(new TaskTable(jobId, conf)).
                       build()
-  }
 
+  /**
+   * BSPJobClient call submitJob(jobId, jobFile)
+   */
   def submitJob: Receive = {
     case Submit(jobId: BSPJobID, xml: String) => {
       LOG.info("Received job {} submitted from the client {}",
@@ -57,19 +58,16 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
 
   def take: Receive = {
     case Take => {
-      var result: Option[Job] = None
       if(0 < waitQueue.size) {
-        val (head, rest) = waitQueue.dequeue
-        //waitQueue = rest // won't remove the job in queue, wait for sched ack
-        result = Some(head)
+        val (job, rest) = waitQueue.dequeue
+        waitQueue = rest 
         LOG.info("New job {}, with {} jobs left in queue.", 
-                 head.getName, waitQueue.size)
+                 job.getName, waitQueue.size)
+        sender ! TakeResult(job)
       } 
-      sender ! TakeResult(result)
     }
   }
 
-  
-
   override def receive = isServiceReady orElse serverIsUp orElse take orElse submitJob orElse unknown
+
 }

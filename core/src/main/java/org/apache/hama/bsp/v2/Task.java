@@ -41,12 +41,17 @@ public final class Task implements Writable {
   final Log LOG = LogFactory.getLog(Task.class);
 
   private TaskAttemptID id;
-  private LongWritable startTime;
-  private LongWritable finishTime;
-  private IntWritable partition;
-  private State state;
+  private LongWritable startTime = new LongWritable(0);
+  private LongWritable finishTime = new LongWritable(0);
+  private IntWritable partition = new IntWritable(1);
+  private State state = State.WAITING;
   private Phase phase = Phase.SETUP;
-  private BooleanWritable completed;
+  private BooleanWritable completed = new BooleanWritable(false);
+ 
+  /**
+   * A sidenote when a task is assigned to a GroomServer slot.
+   */
+  private BooleanWritable isAssigned = new BooleanWritable(false);
 
   /**
    * Describe in which phase a task is in terms of supersteps.
@@ -71,12 +76,13 @@ public final class Task implements Writable {
   public static final class Builder {
 
     private TaskAttemptID id;
-    private long startTime;
-    private long finishTime;
-    private int partition;
-    private State state;
+    private long startTime = 0;
+    private long finishTime = 0;
+    private int partition = 1;
+    private State state = State.WAITING;
     private Phase phase = Phase.SETUP;
-    private boolean completed;
+    private boolean completed = false;
+    private boolean isAssigned = false;
 
     public Builder setId(final TaskAttemptID id) {
       this.id = id;
@@ -113,6 +119,11 @@ public final class Task implements Writable {
       return this;
     }
 
+    public Builder setIsAssigned(final Boolean isAssigned) {
+      this.isAssigned = isAssigned;
+      return this;
+    }
+
     public Task build() {
       return new Task(id, 
                       startTime, 
@@ -120,7 +131,8 @@ public final class Task implements Writable {
                       partition, 
                       state, 
                       phase,
-                      completed);
+                      completed, 
+                      isAssigned);
     }
   }
 
@@ -132,7 +144,8 @@ public final class Task implements Writable {
               final int partition, 
               final State state, 
               final Phase phase, 
-              final boolean completed) {
+              final boolean completed, 
+              final boolean isAssigned) {
     this.id = id;
     if(null == this.id) 
       throw new IllegalArgumentException("TaskAttemptID not provided.");
@@ -146,6 +159,7 @@ public final class Task implements Writable {
     if(null == this.phase)
       throw new NullPointerException("Task's Phase is missing!");
     this.completed = new BooleanWritable(completed);
+    this.isAssigned = new BooleanWritable(isAssigned);
   }
 
   public TaskAttemptID getId() {
@@ -176,6 +190,14 @@ public final class Task implements Writable {
     return this.completed.get();
   }
 
+  public boolean isAssigned() {
+    return this.isAssigned.get();
+  }
+
+  public void changeToAssigned() {
+    this.isAssigned.set(true);
+  }
+
   @Override
   public void write(DataOutput out) throws IOException {
     this.id.write(out);
@@ -185,6 +207,7 @@ public final class Task implements Writable {
     WritableUtils.writeEnum(out, state);
     WritableUtils.writeEnum(out, phase);
     this.completed.write(out);
+    this.isAssigned.write(out);
   }
 
   @Override
@@ -201,6 +224,8 @@ public final class Task implements Writable {
     this.phase = WritableUtils.readEnum(in, Phase.class);
     this.completed = new BooleanWritable();
     this.completed.readFields(in);
+    this.isAssigned = new BooleanWritable();
+    this.isAssigned.readFields(in);
   }
 
 }

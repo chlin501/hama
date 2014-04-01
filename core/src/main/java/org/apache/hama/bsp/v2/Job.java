@@ -53,40 +53,40 @@ public final class Job implements Writable {
   private Text localJarFile;
 
   /* The number of bsp tasks. */
-  private IntWritable numBSPTasks;
+  private IntWritable numBSPTasks = new IntWritable(1);
 
   /* The master server to which this job belongs. */
-  private Text master;
+  private Text master = new Text("bspmaster");
 
   /* Max times a task can retry. */
-  private IntWritable maxTaskAttempts;
+  private IntWritable maxTaskAttempts = new IntWritable(3);
 
   /* Input dir where split files are stored. */
   private Text inputPath;
 
   /* Denote current job state. */
-  private State state;
+  private State state = State.PREP;
 
   /* % of bsp(). */
-  private LongWritable progress;
+  private LongWritable progress = new LongWritable(0);
 
   /* % of setup(). */
-  private LongWritable setupProgress;
+  private LongWritable setupProgress = new LongWritable(0);
 
   /* % of cleanup(). */
-  private LongWritable cleanupProgress;
+  private LongWritable cleanupProgress = new LongWritable(0);
 
   /* Start time for this job. */
-  private LongWritable startTime;
+  private LongWritable startTime = new LongWritable(System.currentTimeMillis());
 
   /* Finish time for this job. */
-  private LongWritable finishTime;
+  private LongWritable finishTime = new LongWritable(0);
 
   /* The i-th superstep. */
-  private LongWritable superstepCount; 
+  private LongWritable superstepCount = new LongWritable(0); 
 
   /* Specific setting for this job. */
-  private HamaConfiguration conf;
+  private HamaConfiguration conf = new HamaConfiguration();
 
   /* 2d task array. size ~= numBSPTasks x maxTaskAttempts. */
   private TaskTable taskTable;
@@ -400,6 +400,10 @@ public final class Job implements Writable {
 
   public TaskTable getTasks() {
     return this.taskTable;
+  }
+
+  public Task nextUnassignedTask() {
+    return this.taskTable.nextUnassignedTask();
   }
 
   @Override
