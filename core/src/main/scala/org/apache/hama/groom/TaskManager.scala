@@ -92,7 +92,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   def requestMessage: Receive = {
     case TaskRequest => {
-      if(hasTaskInQueue && hasFreeSlots) {
+      if(!hasTaskInQueue && hasFreeSlots) {
         LOG.info("Request {} for assigning new tasks ...", schedPath)
         request(sched, RequestTask) 
       }
@@ -104,16 +104,16 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
        val action: Action = directive.action  
        val master: String = directive.master  
        val timestamp: Long = directive.timestamp  
-       //val task: Task = directive.task //xxx
+       val task: Task = directive.task  // move task to action
        LOG.info("{} action from {} at {}", action, master, timestamp) 
-       matchThenExecute(action, master, timestamp)
+       matchThenExecute(action, master, timestamp, task)
     }
   }
 
   override def receive = requestMessage orElse receiveDirective orElse isServiceReady orElse serverIsUp orElse unknown
 
   private def matchThenExecute(action: Action, master: String, 
-                               timestamp: Long) {
+                               timestamp: Long, task: Task) {
     action.value match {
       case 1 => {
         // arrange and store the task to a slot

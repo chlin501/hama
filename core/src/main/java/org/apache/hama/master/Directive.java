@@ -88,6 +88,10 @@ public class Directive implements Writable {
     return this.action;
   }
 
+  public Task task() {
+    return this.task;
+  }
+
   @Override
   public void write(DataOutput out) throws IOException {
     out.writeLong(timestamp());
