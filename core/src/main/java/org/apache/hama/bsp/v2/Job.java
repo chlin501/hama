@@ -22,6 +22,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
@@ -91,6 +92,9 @@ public final class Job implements Writable {
   /* 2d task array. size ~= numBSPTasks x maxTaskAttempts. */
   private TaskTable taskTable;
 
+  /* A list of GroomServers to which tasks will be scheduled. */
+  private ArrayWritable targets = new ArrayWritable(new String[]{});
+
   // TODO: refactr? 
   public static enum State {
     PREP(1), RUNNING(2), SUCCEEDED(3), FAILED(4), CANCELLED(5);
@@ -144,11 +148,12 @@ public final class Job implements Writable {
     private long progress;
     private long setupProgress;
     private long cleanupProgress;
-    private long startTime;
+    private long startTime = System.currentTimeMillis();
     private long finishTime;
     private long superstepCount; 
-    private HamaConfiguration conf;
+    private HamaConfiguration conf = new HamaConfiguration();
     private TaskTable taskTable;
+    private String[] targets = new String[]{};
 
     public Builder setId(final BSPJobID id) {
       this.id = id;
@@ -245,6 +250,11 @@ public final class Job implements Writable {
       return this;
     }
 
+    public Builder setTargets(final String[] targets) {
+      this.targets = targets;
+      return this;
+    }
+
     public Job build() {
       return new Job(id, 
                      name, 
@@ -264,7 +274,8 @@ public final class Job implements Writable {
                      finishTime,
                      superstepCount,
                      conf,
-                     taskTable);
+                     taskTable, 
+                     targets);
     }
   }
 
@@ -288,7 +299,8 @@ public final class Job implements Writable {
              final long finishTime,
              final long superstepCount,
              final HamaConfiguration conf,
-             final TaskTable taskTable) {
+             final TaskTable taskTable, 
+             final String[] targets) {
     this.id = id;
     if(null == this.id) 
       throw new IllegalArgumentException("BSPJobID is not provided.");
@@ -324,6 +336,10 @@ public final class Job implements Writable {
     this.taskTable = taskTable;
     if(null == this.taskTable)
       throw new IllegalArgumentException("TaskTable is not presented.");
+
+    if(null != targets && 0 < targets.length) {
+      this.targets = new ArrayWritable(targets);
+    }
   }
 
   public BSPJobID getId() {
@@ -402,8 +418,19 @@ public final class Job implements Writable {
     return this.taskTable;
   }
 
+  /**
+   * This function is mainly used by Scheduler for checking next available 
+   * task. 
+   */
   public Task nextUnassignedTask() {
     return this.taskTable.nextUnassignedTask();
+  }
+
+  /**
+   * Return an array of GroomServers name.
+   */
+  public String[] getTargets() {
+    return this.targets.toStrings();
   }
 
   @Override
@@ -427,6 +454,7 @@ public final class Job implements Writable {
     superstepCount.write(out);
     conf.write(out);
     taskTable.write(out);
+    targets.write(out);
   }
 
   @Override
@@ -469,6 +497,7 @@ public final class Job implements Writable {
     this.taskTable = 
       new TaskTable(this.id, getNumBSPTasks(), getMaxTaskAttempts());
     this.taskTable.readFields(in);
+    this.targets.readFields(in);
   }
 }
 
