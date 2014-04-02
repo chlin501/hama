@@ -28,90 +28,132 @@ import scala.collection.immutable.Queue
 
 class Scheduler(conf: HamaConfiguration) extends LocalService {
 
+  type TaskAssignQueue = Queue[Job]
+  type ProcessingQueue = Queue[Job]
+
+  /**
+   * A queue that holds jobs with tasks left unassigning to GroomServers.
+   */
   private var taskAssignQueue = Queue[Job]()
+
+  /**
+   * A queue that holds jobs having all tasks assigned to GroomServers.
+   */
   private var processingQueue = Queue[Job]()
 
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "sched"
 
-  override def initializeServices { 
-    //cancelQueueWhenReady = subscribe(queuePath)
-    // command dispatcher
-    // resouce consultant
-  }
-
-/*
-    //case CommandStatus(jobName, status) => {
-      // if(fail) 
-      //   ?? Stop or Escalate ??
-      // else
-      //   ack to receptionist for removing corresponded job
-    //}
-    // resource consultant won't reply until resource avail
-    // so resource consultant itself will wait if it finds not 
-    // enough resource. 
-    // then once a job finishes (ie resource is freed from grooms by listening
-    // to jobTasksTracker), associate wait job with resource and reply to sched
-    //case ResurouceAvailabe(jobName, resource) => {
-      // cache job with free slots information e.g job_resource
-      // queue ! Take
-    //} 
-*/
-
   /**
    * GroomServer request for assigning a task.
-   * TODO: check if a job's tasks need to be assigned to a reserved 
-   *       GroomServer. if yes, skip the this request, go with assignTask 
-   *       instead
    */
   def requestTask: Receive = {
+    // TODO: check if a job's tasks need to be assigned to a reserved 
+    //       GroomServer. if yes, skip this request, go with assignTask()
+    //       instead
     case RequestTask => {
-      val (job, rest) = taskAssignQueue.dequeue
-      unassignedTask(job) match {
-        case Some(task) => {
-          LOG.info("Assign the task {} to {}", task.getId, sender.path.name)
-          task.changeToAssigned
-          sender ! new Directive(Launch, task,  
-                                 conf.get("bsp.master.name", "bspmaster"))  
-        }
-        case None => {
-          taskAssignQueue = rest
-          processingQueue.enqueue(job)
-        }
+      val (from, to) = assign(taskAssignQueue, processingQueue, dispatch) 
+      taskAssignQueue = from
+      processingQueue = to
+    }
+  }
+
+  /**
+   * Assign a task to a particular GroomServer by delegating that task to 
+   * dispatch function, which normally uses actor ! message.
+   * 
+   * @param fromQueue denotes taskAssignQueue.
+   * @param toQueue denotes processingQueue.
+   */
+  def assign(fromQueue: TaskAssignQueue, toQueue: ProcessingQueue, 
+             dispatch: (ActorRef, Task) => Unit): 
+      (TaskAssignQueue, ProcessingQueue) = {
+    // TODO: move to a Trait.
+    val (job, rest) = fromQueue.dequeue
+
+    var _fromQueue = Queue[Job](); var _toQueue = Queue[Job]()
+    unassignedTask(job) match {
+      case Some(task) => {
+        LOG.info("Assign the task {} to {}", task.getId, sender.path.name)
+        task.changeToAssigned
+        dispatch(sender, task)
+      }
+      case None => {
+        _fromQueue = rest
+        _toQueue.enqueue(job)
       }
     }
+    (_fromQueue, _toQueue)
+  }
+
+  private def dispatch(from: ActorRef, task: Task) {
+    from ! new Directive(Launch, task,  
+                           conf.get("bsp.master.name", "bspmaster"))  
   }
 
   def unassignedTask(job: Job): Option[Task] = {
     val task = job.nextUnassignedTask;
     if(null != task) Some(task) else None
   }
-
+  
+ /**
+  * Rescheduling tasks when a GroomServer goes offline.
+  */
   def reschedTasks: Receive = {
     case RescheduleTasks(spec) => {
        LOG.info("Failed GroomServer having GroomServerSpec "+spec)
-    }
-  }
-
-  def jobSubmission: Receive = {
-    case JobSubmission => {
-      mediator ! Request("receptionist", Take)
+       // TODO:  not yet implemented
     }
   }
 
   /**
-   * Positive assign tasks.
-   */ 
-  def assignTask() { }
+   * Once receiving job submission notification, Scheduler will request pulling 
+   * a job from Receptionist.waitQueue for scheduling job's tasks.
+   * The request result will be replied with Dispense message.
+   */
+  def jobSubmission: Receive = {
+    case JobSubmission => mediator ! Request("receptionist", Take)
+  }
 
-  def takeResult: Receive = {
-    case TakeResult(job) => { 
-      taskAssignQueue = taskAssignQueue.enqueue(job)
-      assignTask
+  /**
+   * Positive schedule tasks.
+   * Actual function that schedules tasks to GroomServers.
+   */ 
+  def schedule(job: Job, from: TaskAssignQueue, to: ProcessingQueue):
+      (TaskAssignQueue, ProcessingQueue) = { 
+    // TODO: not yet implemented.
+    (from, to)
+  }
+
+  /**
+   * Move a job to a specific queue pending for further processing, either
+   * passive or positive.
+   */
+  def dispense: Receive = {
+    case Dispense(job) => { 
+/*
+      val (from, to) = preSchedule(job, taskAssignQueue, processingQueue)
+      val (_from, _to) = schedule(job, from, to)
+      postSchedule(job, _from, _to)
+*/
     }
   }
 
-  override def receive = isServiceReady orElse serverIsUp orElse reschedTasks orElse jobSubmission orElse unknown
+  def postSchedule(job: Job, from: TaskAssignQueue, to: ProcessingQueue) {
+    taskAssignQueue = from 
+    processingQueue = to
+  }
+
+  /**
+   * The function that would schedule tasks to particular GroomServers.
+   */
+  def preSchedule(job: Job, from: TaskAssignQueue, to: ProcessingQueue): 
+      (TaskAssignQueue, ProcessingQueue) = {
+    val _from = from.enqueue(job)
+    (_from, to)
+  }
+
+  override def receive = isServiceReady orElse serverIsUp orElse reschedTasks orElse jobSubmission orElse dispense orElse requestTask orElse unknown
 
 }

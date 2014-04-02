@@ -56,15 +56,18 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     }
   }
 
+  /**
+   * Dispense a job to Scheduler.
+   */
   def take: Receive = {
     case Take => {
       if(0 < waitQueue.size) {
         val (job, rest) = waitQueue.dequeue
         waitQueue = rest 
-        LOG.info("New job {}, with {} jobs left in queue.", 
+        LOG.info("Dispense a job {}. Now {} jobs left in wait queue.", 
                  job.getName, waitQueue.size)
-        sender ! TakeResult(job)
-      } 
+        sender ! Dispense(job)
+      } else LOG.warning("{} jobs in wait queue", waitQueue.size)
     }
   }
 
