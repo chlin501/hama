@@ -60,11 +60,12 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     for(seq <- 1 to maxTasks) {
       slots ++= Set(Slot(seq, None, bspmaster))
     }
+    LOG.info("{} GroomServer slots are initialied.", maxTasks)
   }
 
   override def initializeServices {
     initializeSlots     
-    lookup("scheduler", schedPath)
+    lookup("sched", schedPath)
   }
 
   def hasTaskInQueue: Boolean = queue.size > 0
@@ -110,7 +111,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     }
   }
 
-  override def receive = requestMessage orElse receiveDirective orElse isServiceReady orElse serverIsUp orElse unknown
+  override def receive = requestMessage orElse receiveDirective orElse isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse unknown
 
   private def matchThenExecute(action: Action, master: String, 
                                timestamp: Long, task: Task) {

@@ -92,17 +92,17 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
   
   /**
    * Evaluate cluster capacity.
-   */
   def evaluate(spec: GroomServerSpec) {
     mediator ! Request("curator", TotalTaskCapacity(spec.getMaxTasks))
   }
+   */
 
   def register: Receive = {
     case groomSpec: GroomServerSpec => { 
       LOG.info("{} requests to register {}.", 
                sender.path.name, groomSpec.getName) 
       checkIfRejoin(sender, groomSpec)
-      evaluate(groomSpec)
+      //evaluate(groomSpec) TODO: mediator is not yet ready. need scheduler
       context.watch(sender) // watch remote
     }
   }
