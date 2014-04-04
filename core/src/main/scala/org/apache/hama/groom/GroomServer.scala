@@ -23,15 +23,6 @@ import akka.actor.SupervisorStrategy._
 import org.apache.hama._
 import scala.concurrent.duration._
 
-/**
- * Client calls SubscribeState(state, self) // where selfs is client's actor ref.
- * And then the cleint defines 
- *   def systemsIsReady: Receive = {
- *     case Ready(name) => {
- *       // name system is ready
- *     }
- *   }
- */
 final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
 
   override val supervisorStrategy =
@@ -40,7 +31,6 @@ final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
       case _: IllegalArgumentException => Stop
       case _: Exception                => Escalate
     }
-
 
   override def configuration: HamaConfiguration = conf
 

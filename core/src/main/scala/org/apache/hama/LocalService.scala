@@ -140,6 +140,8 @@ trait LocalService extends Service {
 
   protected def servicesReady: Boolean = (servicesCount == services.size)
 
+  protected def afterMediatorUp = {}
+
   /**
    * Default mechanism in loading services by sending service name and its
    * actor reference.
@@ -187,6 +189,7 @@ trait LocalService extends Service {
       if(master.equals(sender.path.name) || groom.equals(sender.path.name)) {
         LOG.debug("Mediator is {}.", sender.path.name)
         mediator = sender
+        afterMediatorUp
       } else 
         LOG.warning(sender.path.name+" shouldn't send ServerIsUp message!")
     }

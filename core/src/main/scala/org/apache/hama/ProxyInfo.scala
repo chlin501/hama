@@ -17,6 +17,7 @@
  */
 package org.apache.hama
 
+/*
 case class ProxyInfo(actorName: String,
                      system: String, 
                      host: String,
@@ -25,3 +26,4 @@ case class ProxyInfo(actorName: String,
 
   val path: String = "akka.tcp://"+system+"@"+host+":"+port+"/user/"+actorPath
 }
+*/

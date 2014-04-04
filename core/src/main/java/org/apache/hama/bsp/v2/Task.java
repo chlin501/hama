@@ -27,6 +27,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
 
@@ -47,11 +48,42 @@ public final class Task implements Writable {
   private State state = State.WAITING;
   private Phase phase = Phase.SETUP;
   private BooleanWritable completed = new BooleanWritable(false);
+  private Marker marker = new Marker(false, ""); 
  
-  /**
-   * A sidenote when a task is assigned to a GroomServer slot.
-   */
-  private BooleanWritable isAssigned = new BooleanWritable(false);
+  public final static class Marker implements Writable {
+    private BooleanWritable assigned = new BooleanWritable(false);
+    private Text groomServerName = new Text();
+   
+    public Marker(final boolean assigned, String groomName) {
+      this.assigned = new BooleanWritable(assigned); 
+      if(null == groomName)
+        this.groomServerName = new Text();
+      else 
+        this.groomServerName = new Text(groomName);
+    }
+
+    public boolean isAssigned() {
+      return assigned.get();
+    }
+
+    public String getAssignedTarget() {
+      return this.groomServerName.toString();
+    }
+
+    @Override
+    public void write(DataOutput out) throws IOException {
+      this.assigned.write(out);
+      Text.writeString(out, this.groomServerName.toString());
+    }
+
+    @Override
+    public void readFields(DataInput in) throws IOException {
+      this.assigned = new BooleanWritable(false);
+      this.assigned.readFields(in);
+      this.groomServerName = new Text();
+      this.groomServerName = new Text(Text.readString(in));
+    }
+  }
 
   /**
    * Describe in which phase a task is in terms of supersteps.
@@ -82,7 +114,7 @@ public final class Task implements Writable {
     private State state = State.WAITING;
     private Phase phase = Phase.SETUP;
     private boolean completed = false;
-    private boolean isAssigned = false;
+    private Marker marker = new Marker(false, ""); 
 
     public Builder setId(final TaskAttemptID id) {
       this.id = id;
@@ -119,8 +151,8 @@ public final class Task implements Writable {
       return this;
     }
 
-    public Builder setIsAssigned(final Boolean isAssigned) {
-      this.isAssigned = isAssigned;
+    public Builder setMarker(final boolean assigned, final String groom) {
+      this.marker = new Marker(assigned, groom);
       return this;
     }
 
@@ -132,7 +164,7 @@ public final class Task implements Writable {
                       state, 
                       phase,
                       completed, 
-                      isAssigned);
+                      marker);
     }
   }
 
@@ -145,7 +177,7 @@ public final class Task implements Writable {
               final State state, 
               final Phase phase, 
               final boolean completed, 
-              final boolean isAssigned) {
+              final Marker marker) {
     this.id = id;
     if(null == this.id) 
       throw new IllegalArgumentException("TaskAttemptID not provided.");
@@ -159,7 +191,7 @@ public final class Task implements Writable {
     if(null == this.phase)
       throw new NullPointerException("Task's Phase is missing!");
     this.completed = new BooleanWritable(completed);
-    this.isAssigned = new BooleanWritable(isAssigned);
+    this.marker = marker;
   }
 
   public TaskAttemptID getId() {
@@ -191,11 +223,19 @@ public final class Task implements Writable {
   }
 
   public boolean isAssigned() {
-    return this.isAssigned.get();
+    return this.marker.isAssigned();
   }
 
-  public void changeToAssigned() {
-    this.isAssigned.set(true);
+  public String getAssignedTarget() {
+    return this.marker.getAssignedTarget();
+  } 
+
+  public void markAsAssigned() {
+    this.marker = new Marker(true, "");
+  }
+
+  public void markWithTarget(final String name) {
+    this.marker = new Marker(true, name);
   }
 
   @Override
@@ -207,7 +247,7 @@ public final class Task implements Writable {
     WritableUtils.writeEnum(out, state);
     WritableUtils.writeEnum(out, phase);
     this.completed.write(out);
-    this.isAssigned.write(out);
+    this.marker.write(out);
   }
 
   @Override
@@ -224,8 +264,8 @@ public final class Task implements Writable {
     this.phase = WritableUtils.readEnum(in, Phase.class);
     this.completed = new BooleanWritable();
     this.completed.readFields(in);
-    this.isAssigned = new BooleanWritable();
-    this.isAssigned.readFields(in);
+    this.marker = new Marker(false, "");
+    this.marker.readFields(in);
   }
 
 }

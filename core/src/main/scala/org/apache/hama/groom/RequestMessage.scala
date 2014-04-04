@@ -19,4 +19,4 @@ package org.apache.hama.groom
 
 sealed trait RequestMessage
 case object TaskRequest extends RequestMessage
-case object RequestTask extends RequestMessage
+case class RequestTask(groomServerName: String) extends RequestMessage

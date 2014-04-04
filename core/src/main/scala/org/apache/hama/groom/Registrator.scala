@@ -25,22 +25,18 @@ import org.apache.hama.bsp.v2.GroomServerSpec
 class Registrator(conf: HamaConfiguration) extends LocalService 
                                               with RemoteService {
 
-  val groomManagerInfo =
-    ProxyInfo("groomManager",
-              conf.get("bsp.master.actor-system.name", "MasterSystem"),
-              conf.get("bsp.master.address", "127.0.0.1"),
-              conf.getInt("bsp.master.port", 40000),
-              "bspmaster/groomManager")
+  val groomManagerInfo = 
+    new ProxyInfo.Builder().withConfiguration(conf).
+                            withActorName("groomManager").
+                            appendRootPath("bspmaster").
+                            appendChildPath("groomManager").
+                            buildProxyAtMaster
 
-  val groomManagerPath = groomManagerInfo.path
-
-  private val host = conf.get("bsp.groom.hostname", "0.0.0.0")
-
-  /* We don't use rpc, so remove bsp.gorom.rpc.port */
-  private val port = conf.getInt("bsp.groom.port", 50000)
-
-  val groomServerName = "groom_"+host+"_"+port
-  val groomHostName = host
+  val groomManagerPath = groomManagerInfo.getPath
+  val groomServerName = "groom_"+ groomManagerInfo.getHost +"_"+ 
+                        groomManagerInfo.getPort
+  val groomHostName = groomManagerInfo.getHost
+  val groomPort = groomManagerInfo.getPort
 
   override def configuration: HamaConfiguration = conf
 
@@ -55,7 +51,7 @@ class Registrator(conf: HamaConfiguration) extends LocalService
     // register to master/GroomManager
     proxy ! new GroomServerSpec(groomServerName, 
                                 groomHostName, 
-                                port, 
+                                groomPort, 
                                 maxTasks)
   }
 
@@ -64,4 +60,5 @@ class Registrator(conf: HamaConfiguration) extends LocalService
   }
 
   override def receive = isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+
 }

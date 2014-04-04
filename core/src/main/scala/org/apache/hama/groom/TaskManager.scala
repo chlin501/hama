@@ -31,18 +31,19 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
                                            with RemoteService {
 
   val schedInfo =
-    ProxyInfo("sched",
-              conf.get("bsp.master.actor-system.name", "MasterSystem"),
-              conf.get("bsp.master.address", "127.0.0.1"),
-              conf.getInt("bsp.master.port", 40000),
-              "bspmaster/sched")
+    new ProxyInfo.Builder().withConfiguration(conf).
+                            withActorName("sched").
+                            appendRootPath("bspmaster").
+                            appendChildPath("sched").
+                            buildProxyAtMaster
 
-  val schedPath = schedInfo.path
+  val schedPath = schedInfo.getPath
+  val groomServerName = "groom_"+schedInfo.getHost+"_"+schedInfo.getPort
 
   var sched: ActorRef = _
   var cancellable: Cancellable = _
 
-  val maxTasks = conf.getInt("bsp.tasks.maximum", 3) 
+  val maxTasks = configuration.getInt("bsp.tasks.maximum", 3) 
   val bspmaster = configuration.get("bsp.master.name", "bspmaster")
 
   /**
@@ -79,6 +80,9 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     !occupied
   }
 
+  /**
+   * Periodically send message to an actor an actor.
+   */
   def request(target: ActorRef, message: RequestMessage) {
     import context.dispatcher
     cancellable = 
@@ -91,11 +95,16 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     request(self, TaskRequest)
   }
 
+  /**
+   * Check if slots available and any unprocessed task in queue.
+   */
   def requestMessage: Receive = {
     case TaskRequest => {
-      if(!hasTaskInQueue && hasFreeSlots) {
+      if(!hasTaskInQueue && hasFreeSlots) { // TODO: chk sys load,  memory, etc.
         LOG.info("Request {} for assigning new tasks ...", schedPath)
-        request(sched, RequestTask) 
+        request(sched, RequestTask(groomServerName)) 
+      } else {
+        // TODO: process task in queue first.
       }
     }
   }

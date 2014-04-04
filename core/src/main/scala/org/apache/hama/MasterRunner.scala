@@ -28,6 +28,7 @@ import scala.concurrent.duration._
  */
 object MasterConfig {
 
+  // TODO: read from HamaConfiguration 
   def toConfig(): Config = 
     ConfigFactory.parseString("""
       master {

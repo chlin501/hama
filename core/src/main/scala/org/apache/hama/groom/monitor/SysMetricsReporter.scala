@@ -45,20 +45,15 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
   private var cancellable: Cancellable = _
 
   val sysMetricsTrackerInfo =
-    ProxyInfo("sysMetricsTracker",
-              conf.get("bsp.master.actor-system.name", "MasterSystem"),
-              conf.get("bsp.master.address", "127.0.0.1"),
-              conf.getInt("bsp.master.port", 40000),
-              "bspmaster/monitor/sysMetricsTracker")
-
-  val sysMetricsTrackerPath = sysMetricsTrackerInfo.path
-
-  private val host = conf.get("bsp.groom.hostname", "0.0.0.0")
-
-  /* We don't use rpc, so remove bsp.gorom.rpc.port */
-  private val port = conf.getInt("bsp.groom.port", 50000)
-
-  private val groomServerName = "groom_"+host+"_"+port
+    new ProxyInfo.Builder().withConfiguration(conf). 
+                            withActorName("sysMetricsTracker").
+                            appendRootPath("bspmaster").
+                            appendChildPath("monitor").
+                            appendChildPath("sysMetricsTracker").
+                            buildProxyAtMaster
+  val sysMetricsTrackerPath = sysMetricsTrackerInfo.getPath
+  private val groomServerName = "groom_"+sysMetricsTrackerInfo.getHost +"_"+
+                                sysMetricsTrackerInfo.getPort
 
   private val memoryMXBean: MemoryMXBean = 
     ManagementFactory.getMemoryMXBean

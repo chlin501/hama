@@ -22,11 +22,13 @@ import org.apache.hama._
 import org.apache.hama.groom._
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.bsp.v2.GroomServerSpec
 import org.apache.hama.master.Directive.Action._
 import scala.concurrent.duration._
 import scala.collection.immutable.Queue
 
-class Scheduler(conf: HamaConfiguration) extends LocalService {
+class Scheduler(conf: HamaConfiguration) extends LocalService 
+                                         with RemoteService {
 
   type TaskAssignQueue = Queue[Job]
   type ProcessingQueue = Queue[Job]
@@ -52,8 +54,9 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
     // TODO: check if a job's tasks need to be assigned to a reserved 
     //       GroomServer. if yes, skip this request, go with assignTask()
     //       instead
-    case RequestTask => {
-      val (from, to) = assign(taskAssignQueue, processingQueue, dispatch) 
+    case RequestTask(groomServerName) => {
+      val (from, to) = 
+        assign(groomServerName, taskAssignQueue, sender, dispatch) 
       taskAssignQueue = from
       processingQueue = to
     }
@@ -62,22 +65,18 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
   /**
    * Assign a task to a particular GroomServer by delegating that task to 
    * dispatch function, which normally uses actor ! message.
-   * 
-   * @param fromQueue denotes taskAssignQueue.
-   * @param toQueue denotes processingQueue.
    */
-  def assign(fromQueue: TaskAssignQueue, toQueue: ProcessingQueue, 
+  // TODO: move to a Trait.
+  def assign(source: String, from: TaskAssignQueue, actor: ActorRef, 
              dispatch: (ActorRef, Task) => Unit): 
       (TaskAssignQueue, ProcessingQueue) = {
-    // TODO: move to a Trait.
-    val (job, rest) = fromQueue.dequeue
-
+    val (job, rest) = from.dequeue
     var _fromQueue = Queue[Job](); var _toQueue = Queue[Job]()
     unassignedTask(job) match {
       case Some(task) => {
-        LOG.info("Assign the task {} to {}", task.getId, sender.path.name)
-        task.changeToAssigned
-        dispatch(sender, task)
+        LOG.info("Assign the task {} to {}", task.getId, source)
+        task.markWithTarget(source)
+        dispatch(actor, task)
       }
       case None => {
         _fromQueue = rest
@@ -120,10 +119,8 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
    * Positive schedule tasks.
    * Actual function that schedules tasks to GroomServers.
    */ 
-  def schedule(job: Job, from: TaskAssignQueue, to: ProcessingQueue):
-      (TaskAssignQueue, ProcessingQueue) = { 
-    // TODO: not yet implemented.
-    (from, to)
+  def schedule(job: Job) {
+    // TODO: 
   }
 
   /**
@@ -132,6 +129,13 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
    */
   def dispense: Receive = {
     case Dispense(job) => { 
+      if(null != job.getTargets && 0 < job.getTargets.length) { // active
+        // schedule tasks to specifid target grooms 
+        // enqueu to task assigned queue if some need passively assign 
+        // or move to processing queue if all 
+        schedule(job)  
+      }
+      taskAssignQueue = taskAssignQueue.enqueue(job)
 /*
       val (from, to) = preSchedule(job, taskAssignQueue, processingQueue)
       val (_from, _to) = schedule(job, from, to)
@@ -140,20 +144,22 @@ class Scheduler(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  def postSchedule(job: Job, from: TaskAssignQueue, to: ProcessingQueue) {
-    taskAssignQueue = from 
-    processingQueue = to
+  def lookupTaskManager(spec: GroomServerSpec) {
+    val system = "GroomSystem"//spec.getSystem
+    val host = spec.getHost
+    val port = spec.getPort
+    val groomServer = "groomServer"
+    val path = "akka.tcp://"+system+"@"+host+":"+port+"/user/"+ groomServer +
+               "/taskManager"
+    lookup(spec.getName, path)
   }
 
-  /**
-   * The function that would schedule tasks to particular GroomServers.
-   */
-  def preSchedule(job: Job, from: TaskAssignQueue, to: ProcessingQueue): 
-      (TaskAssignQueue, ProcessingQueue) = {
-    val _from = from.enqueue(job)
-    (_from, to)
+  def locate: Receive = {
+    case Locate(spec) => {
+      lookupTaskManager(spec)
+    }
   }
 
-  override def receive = isServiceReady orElse serverIsUp orElse reschedTasks orElse jobSubmission orElse dispense orElse requestTask orElse unknown
+  override def receive = locate orElse isServiceReady orElse serverIsUp orElse reschedTasks orElse jobSubmission orElse dispense orElse requestTask orElse isProxyReady orElse timeout orElse unknown
 
 }

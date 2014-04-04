@@ -32,13 +32,13 @@ final class TasksReporter(conf: HamaConfiguration) extends LocalService
   var tracker: ActorRef = _
 
   val jobTasksTrackerInfo =
-    ProxyInfo("jobTasksTracker",
-              conf.get("bsp.master.actor-system.name", "MasterSystem"),
-              conf.get("bsp.master.address", "127.0.0.1"),
-              conf.getInt("bsp.master.port", 40000),
-              "bspmaster/monitor/jobTasksTracker")
-
-  val jobTasksTrackerPath = jobTasksTrackerInfo.path
+    new ProxyInfo.Builder().withConfiguration(conf).
+                            withActorName("jobTasksTracker").
+                            appendRootPath("bspmaster").
+                            appendChildPath("monitor").
+                            appendChildPath("jobTaskstracker").
+                            buildProxyAtMaster
+  val jobTasksTrackerPath = jobTasksTrackerInfo.getPath
 
   override def configuration: HamaConfiguration = conf
 

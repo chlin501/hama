@@ -35,23 +35,27 @@ import org.apache.hama.bsp.BSPJobID;
  */
 public final class Job implements Writable {
 
+  private long _current = System.currentTimeMillis();
+
   /* Id for this job. */
   private BSPJobID id;
 
   /* name of this job. */
-  private Text name;
+  private Text name = new Text();
 
   /* The user that owns this job. */
-  private Text user;
+  private Text user = new Text();
 
   /* This is the job file or job.xml. */
-  private Text xml; 
+  private Text xml = new Text(); 
 
   /* job.xml stored in local fs. */
-  private Text localJobFile;
+  private Text localJobFile = new Text();
 
   /* The jar file stored in local fs. */
-  private Text localJarFile;
+  private Text localJarFile = new Text();
+
+  private IntWritable lastCheckpoint = new IntWritable(0);
 
   /* The number of bsp tasks. */
   private IntWritable numBSPTasks = new IntWritable(1);
@@ -63,7 +67,7 @@ public final class Job implements Writable {
   private IntWritable maxTaskAttempts = new IntWritable(3);
 
   /* Input dir where split files are stored. */
-  private Text inputPath;
+  private Text inputPath = new Text();
 
   /* Denote current job state. */
   private State state = State.PREP;
@@ -78,7 +82,7 @@ public final class Job implements Writable {
   private LongWritable cleanupProgress = new LongWritable(0);
 
   /* Start time for this job. */
-  private LongWritable startTime = new LongWritable(System.currentTimeMillis());
+  private LongWritable startTime = new LongWritable(_current);
 
   /* Finish time for this job. */
   private LongWritable finishTime = new LongWritable(0);
@@ -135,22 +139,23 @@ public final class Job implements Writable {
   public static final class Builder {
 
     private BSPJobID id;
-    private String name;
-    private String user;
-    private String xml; 
-    private String localJobFile;
-    private String localJarFile;
-    private int numBSPTasks;
-    private String master;
-    private int maxTaskAttempts;
-    private String inputPath;
+    private String name = "";
+    private String user = "";
+    private String xml = ""; 
+    private String localJobFile = "";
+    private String localJarFile = "";
+    private int numBSPTasks = 1;
+    private int lastCheckpoint;
+    private String master = "";
+    private int maxTaskAttempts = 3;
+    private String inputPath = "";
     private State state;
     private long progress;
     private long setupProgress;
     private long cleanupProgress;
     private long startTime = System.currentTimeMillis();
     private long finishTime;
-    private long superstepCount; 
+    private long superstepCount;  
     private HamaConfiguration conf = new HamaConfiguration();
     private TaskTable taskTable;
     private String[] targets = new String[]{};
@@ -182,6 +187,11 @@ public final class Job implements Writable {
 
     public Builder setLocalJarFile(final String localJarFile) {
       this.localJarFile = localJarFile;
+      return this;
+    }
+
+    public Builder setLastCheckpoint(final int lastCheckpoint) {
+      this.lastCheckpoint = lastCheckpoint;
       return this;
     }
 
@@ -262,6 +272,7 @@ public final class Job implements Writable {
                      xml, 
                      localJobFile, 
                      localJarFile, 
+                     lastCheckpoint, 
                      numBSPTasks, 
                      master, 
                      maxTaskAttempts,
@@ -287,6 +298,7 @@ public final class Job implements Writable {
              final String xml, 
              final String localJobFile,
              final String localJarFile,
+             final int lastCheckpoint,
              final int numBSPTasks,
              final String master,
              final int maxTaskAttempts,
@@ -312,13 +324,21 @@ public final class Job implements Writable {
       (null == localJobFile)? new Text(): new Text(localJobFile);
     this.localJarFile = 
       (null == localJarFile)? new Text(): new Text(localJarFile);
-    if(numBSPTasks > 0) {
+
+    if(0 < lastCheckpoint) {
+      this.lastCheckpoint = new IntWritable(lastCheckpoint);
+    } else {
+      this.lastCheckpoint = new IntWritable(0);
+    }
+
+    if(0 < numBSPTasks) {
       this.numBSPTasks = new IntWritable(numBSPTasks);
     } else {
       this.numBSPTasks = new IntWritable(conf.getInt("bsp.peers.num", 1));
     }
+
     this.master = (null == master)? new Text(): new Text(master);
-    if(maxTaskAttempts > 0) {
+    if(0 < maxTaskAttempts) {
       this.maxTaskAttempts = new IntWritable(maxTaskAttempts);
     } else {
       this.maxTaskAttempts = new IntWritable(
@@ -340,6 +360,11 @@ public final class Job implements Writable {
     if(null != targets && 0 < targets.length) {
       this.targets = new ArrayWritable(targets);
     }
+    // verify targets length and numBSPTasks size
+    final String[] tmp = this.targets.toStrings();
+    if(numBSPTasks < tmp.length) 
+      throw new RuntimeException(tmp.length +" targets is large than "+
+                                 numBSPTasks +" total tasks." );
   }
 
   public BSPJobID getId() {
@@ -364,6 +389,10 @@ public final class Job implements Writable {
 
   public String getLocalJarFile() {
     return this.localJarFile.toString();
+  }
+
+  public int getLastCheckpoint() {
+    return this.lastCheckpoint.get();
   }
 
   public int getNumBSPTasks() {
@@ -428,6 +457,8 @@ public final class Job implements Writable {
 
   /**
    * Return an array of GroomServers name.
+   * If it's array size is 0, indicating all tasks are passive assigning to 
+   * GroomServers.
    */
   public String[] getTargets() {
     return this.targets.toStrings();
@@ -441,6 +472,7 @@ public final class Job implements Writable {
     xml.write(out); 
     localJobFile.write(out);
     localJarFile.write(out);
+    lastCheckpoint.write(out);
     numBSPTasks.write(out);
     master.write(out);
     maxTaskAttempts.write(out);
@@ -471,11 +503,13 @@ public final class Job implements Writable {
     this.localJobFile.readFields(in);
     this.localJarFile = new Text();
     this.localJarFile.readFields(in);
-    this.numBSPTasks = new IntWritable();
+    this.lastCheckpoint = new IntWritable(0);
+    this.lastCheckpoint.readFields(in);
+    this.numBSPTasks = new IntWritable(1);
     this.numBSPTasks.readFields(in);
     this.master = new Text();
     this.master.readFields(in);
-    this.maxTaskAttempts = new IntWritable();
+    this.maxTaskAttempts = new IntWritable(3);
     this.maxTaskAttempts.readFields(in);
     this.inputPath = new Text();
     this.inputPath.readFields(in);

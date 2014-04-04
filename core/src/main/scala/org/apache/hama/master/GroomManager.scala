@@ -18,15 +18,17 @@
 package org.apache.hama.master
 
 import akka.actor._
-
 import org.apache.hama._
 import org.apache.hama.bsp.v2.GroomServerSpec
 import org.apache.hama.master._
 import scala.concurrent.duration._
+import scala.collection.immutable.Queue
 
 private[master] final case class Groom(groom: ActorRef, spec: GroomServerSpec) 
+private[master] final case object Dequeue
 
 final case class TotalTaskCapacity(maxTasks: Int)
+final case class Locate(spec: GroomServerSpec)
 
 /**
  * A service that manages a set of {@link org.apache.hama.groom.GroomServer}s.
@@ -37,11 +39,15 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
   type GroomHostName = String
   type CrashCount = Int
 
+  private var specQueue = Queue[GroomServerSpec]()
+  private var specQueueWatcher: Cancellable = _
+
   /**
    * Store the GroomServerSpec information so that decision can be made during
    * evaluation process.
    */
-  private[this] var grooms = Set.empty[Groom] // TODO: move state out of master
+  // TODO: move state out of master
+  private[this] var grooms = Set.empty[Groom] 
 
   /**
    * Identical GroomServer host name logically represents the same GroomServer, 
@@ -76,7 +82,10 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
   }
 
   def rescheduleTasks(spec: GroomServerSpec) {
-    mediator ! Request("sched", RescheduleTasks(spec))
+    if(null != mediator) 
+      mediator ! Request("sched", RescheduleTasks(spec))
+    else 
+      LOG.warning("Master is not ready so rescheduling is not possible!")
   }
 
   override def offline(groom: ActorRef) {
@@ -90,22 +99,48 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
     // 2. if spec is with refresh hardware, reset crashed count to 0
   }
   
-  /**
-   * Evaluate cluster capacity.
-  def evaluate(spec: GroomServerSpec) {
-    mediator ! Request("curator", TotalTaskCapacity(spec.getMaxTasks))
+  override def afterMediatorUp {
+    import context.dispatcher
+    specQueueWatcher = 
+      context.system.scheduler.schedule(0.seconds, 5.seconds, self, 
+                                        Dequeue)
   }
-   */
 
   def register: Receive = {
     case groomSpec: GroomServerSpec => { 
       LOG.info("{} requests to register {}.", 
                sender.path.name, groomSpec.getName) 
       checkIfRejoin(sender, groomSpec)
-      //evaluate(groomSpec) TODO: mediator is not yet ready. need scheduler
+      specQueue = specQueue.enqueue(groomSpec)
       context.watch(sender) // watch remote
     }
   }
 
+  /**
+   * Evaluate cluster capacity.
+   */
+  def evaluate(spec: GroomServerSpec) {
+    mediator ! Request("curator", TotalTaskCapacity(spec.getMaxTasks))
+  }
+
+  /**
+   * Link remote TaskManager for scheduling tasks.
+   */
+  def locate(spec: GroomServerSpec)  {
+    mediator ! Request("sched", Locate(spec))
+  }
+
+  def dequeue: Receive = {
+    case Dequeue => {
+      while(!specQueue.isEmpty) {
+        val (spec, rest) = specQueue.dequeue
+        evaluate(spec)
+        locate(spec)
+        specQueue = rest
+      }
+    } 
+  }
+
   override def receive = isServiceReady orElse serverIsUp orElse register orElse superviseeIsTerminated orElse unknown
+
 }

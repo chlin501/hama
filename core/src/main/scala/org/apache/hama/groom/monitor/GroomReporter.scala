@@ -35,13 +35,14 @@ final class GroomReporter(conf: HamaConfiguration) extends LocalService
   var tracker: ActorRef = _
 
   val groomTasksTrackerInfo =
-    ProxyInfo("groomTasksTracker",
-              conf.get("bsp.master.actor-system.name", "MasterSystem"),
-              conf.get("bsp.master.address", "127.0.0.1"),
-              conf.getInt("bsp.master.port", 40000),
-              "bspmaster/monitor/groomTasksTracker")
+    new ProxyInfo.Builder().withConfiguration(conf).
+                            withActorName("groomTasksTracker").
+                            appendRootPath("bspmaster").
+                            appendChildPath("monitor").
+                            appendChildPath("groomTasksTracker").
+                            buildProxyAtMaster
 
-  val groomTasksTrackerPath = groomTasksTrackerInfo.path
+  val groomTasksTrackerPath = groomTasksTrackerInfo.getPath
 
   override def configuration: HamaConfiguration = conf
 
