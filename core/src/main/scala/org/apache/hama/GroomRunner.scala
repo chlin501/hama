@@ -28,7 +28,6 @@ object GroomConfig {
     ConfigFactory.parseString("""
       groom {
         akka {
-          remote.netty.tcp.port = 50000
           actor {
             provider = "akka.remote.RemoteActorRefProvider"
             serializers {
@@ -44,6 +43,7 @@ object GroomConfig {
           remote {
             netty.tcp {
               hostname = "127.0.0.1" # read from HamaConfiguration
+              port = 50000
             }
           }
         }

@@ -34,12 +34,12 @@ public class SystemInfo implements Writable {
   public SystemInfo(final String actorSystemName,
                    final String host,
                    final int port) {
-    if(null != actorSystemName)
+    if(null == actorSystemName)
       throw new IllegalArgumentException("Actor system name not provided.");
 
     this.actorSystemName = new Text(actorSystemName); 
 
-    if(null != host)
+    if(null == host)
       throw new IllegalArgumentException("Target host is not provided.");
 
     this.host = new Text(host);

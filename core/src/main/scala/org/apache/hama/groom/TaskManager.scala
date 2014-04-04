@@ -66,7 +66,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   override def initializeServices {
     initializeSlots     
-    lookup("sched", schedPath)
+    //lookup("sched", schedPath)
   }
 
   def hasTaskInQueue: Boolean = queue.size > 0

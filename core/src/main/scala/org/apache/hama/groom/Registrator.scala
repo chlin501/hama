@@ -56,7 +56,8 @@ class Registrator(conf: HamaConfiguration) extends LocalService
   }
 
   override def offline(target: ActorRef) {
-    lookup("groomManager", groomManagerPath)
+    LOG.info("xxxxxxxxxxxxxx groomManager offline !!!!!!! ")
+    //lookup("groomManager", groomManagerPath)
   }
 
   override def receive = isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown

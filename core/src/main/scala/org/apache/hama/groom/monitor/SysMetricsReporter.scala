@@ -89,7 +89,7 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
     record
   }
 
-  override def receive = isServiceReady orElse isProxyReady orElse timeout orElse unknown
+  override def receive = isServiceReady orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 
   private def memory(record: MetricsRecord ) {
     val memNonHeap: MemoryUsage = memoryMXBean.getNonHeapMemoryUsage

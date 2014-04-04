@@ -28,7 +28,7 @@ import org.apache.hama.bsp.TaskID;
 
 public class TestIDCreator extends TestCase {
 
-  final Log LOG = LogFactory.getLog(TestTask.class);
+  final Log LOG = LogFactory.getLog(TestIDCreator.class);
 
   public void testBuilder() throws Exception {
     final BSPJobID jobId = IDCreator.newBSPJobID()

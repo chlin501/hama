@@ -172,7 +172,10 @@ class Curator(conf: HamaConfiguration) extends LocalService {
     })
   }
 
-  private def createZnode(path: String) = curatorFramework.create.forPath(path)
+  TODO: bug! Node exists. Need to check if path exists first e.g. /bsp
+  private def createZnode(path: String) = {
+    curatorFramework.create.forPath(path) 
+  }
 
   def getMasterId: Receive = {
     case GetMasterId => {

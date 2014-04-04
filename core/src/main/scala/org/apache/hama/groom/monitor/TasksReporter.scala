@@ -36,7 +36,7 @@ final class TasksReporter(conf: HamaConfiguration) extends LocalService
                             withActorName("jobTasksTracker").
                             appendRootPath("bspmaster").
                             appendChildPath("monitor").
-                            appendChildPath("jobTaskstracker").
+                            appendChildPath("jobTasksTracker").
                             buildProxyAtMaster
   val jobTasksTrackerPath = jobTasksTrackerInfo.getPath
 

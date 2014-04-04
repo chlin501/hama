@@ -21,11 +21,16 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
+
 public final class ProxyInfo extends SystemInfo implements Writable {
+
+  public static final Log LOG = LogFactory.getLog(ProxyInfo.class);
 
   private Text actorName = new Text();
   private Text actorPath = new Text();
@@ -77,6 +82,9 @@ public final class ProxyInfo extends SystemInfo implements Writable {
     public Builder appendChildPath(final String child) {
       if(0 >= this.actorPath.length()) 
         throw new RuntimeException("Root actor path is missing!");
+      if(null == child || child.startsWith("/"))
+        throw new IllegalArgumentException("Child actor path can't be null "+
+                                           "start with '/'");
       this.actorPath.append("/"+child);
       return this;
     }
@@ -99,6 +107,7 @@ public final class ProxyInfo extends SystemInfo implements Writable {
       final String hostV = this.conf.get("bsp.master.address", "127.0.0.1");
       final int portV = this.conf.getInt("bsp.master.port", 40000);
       final String fullPath = this.actorPath.toString();
+      LOG.debug("Proxy is at "+hostV+":"+portV+" with actor path "+fullPath);
       assertPath(fullPath);
       return new ProxyInfo(this.actorName, sysName, hostV, portV, fullPath);
     }
@@ -111,6 +120,7 @@ public final class ProxyInfo extends SystemInfo implements Writable {
       final String hostV = this.conf.get("bsp.groom.address", "127.0.0.1");
       final int portV = this.conf.getInt("bsp.groom.port", 50000);
       final String fullPath = this.actorPath.toString();
+      LOG.debug("Proxy is at "+hostV+":"+portV+" with actor path "+fullPath);
       assertPath(fullPath);
       return new ProxyInfo(this.actorName, sysName, hostV, portV, fullPath); 
     }
@@ -131,6 +141,8 @@ public final class ProxyInfo extends SystemInfo implements Writable {
 
     if(null == actorPath) 
       throw new IllegalArgumentException("Actor path not provided.");
+
+    this.actorPath = new Text(actorPath);
   }
 
   public String getActorName() {

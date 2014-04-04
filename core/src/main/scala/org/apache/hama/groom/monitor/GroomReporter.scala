@@ -62,5 +62,5 @@ final class GroomReporter(conf: HamaConfiguration) extends LocalService
     }
   }
 
-  override def receive = isServiceReady orElse report orElse isProxyReady orElse timeout orElse unknown
+  override def receive = isServiceReady orElse report orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 }
