@@ -144,7 +144,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     }
   }
 
-/*
   def lookupTaskManager(spec: GroomServerSpec) {
     val system = "GroomSystem"//spec.getSystem
     val host = spec.getHost
@@ -160,8 +159,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
       lookupTaskManager(spec)
     }
   }
-*/
 
-  override def receive = /*locate orElse*/ isServiceReady orElse serverIsUp orElse reschedTasks orElse jobSubmission orElse dispense orElse requestTask orElse isProxyReady orElse timeout orElse unknown
+  override def receive = locate orElse isServiceReady orElse serverIsUp orElse reschedTasks orElse jobSubmission orElse dispense orElse requestTask orElse isProxyReady orElse timeout orElse unknown
 
 }

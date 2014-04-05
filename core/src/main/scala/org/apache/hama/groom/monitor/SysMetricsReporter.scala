@@ -52,8 +52,10 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
                             appendChildPath("sysMetricsTracker").
                             buildProxyAtMaster
   val sysMetricsTrackerPath = sysMetricsTrackerInfo.getPath
-  private val groomServerName = "groom_"+sysMetricsTrackerInfo.getHost +"_"+
-                                sysMetricsTrackerInfo.getPort
+
+  val groomserverHost = conf.get("bsp.groom.address", "127.0.0.1")
+  val groomServerPort = conf.getInt("bsp.groom.port", 50000)
+  val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
 
   private val memoryMXBean: MemoryMXBean = 
     ManagementFactory.getMemoryMXBean

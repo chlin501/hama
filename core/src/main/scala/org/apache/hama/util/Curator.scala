@@ -172,9 +172,20 @@ class Curator(conf: HamaConfiguration) extends LocalService {
     })
   }
 
-  TODO: bug! Node exists. Need to check if path exists first e.g. /bsp
   private def createZnode(path: String) = {
-    curatorFramework.create.forPath(path) 
+    if(path.startsWith("/")) {
+      val nodes = path.split("/").drop(1)
+      var p = "" 
+      nodes.foreach( node => {
+        p += "/"+node
+        LOG.info("Path to be checked then created -> {} ", p)
+        curatorFramework.checkExists.forPath(p) match {
+          case stat: Stat => 
+          case _ => curatorFramework.create.forPath(p) 
+        }
+      })
+    } else throw new IllegalArgumentException("Path "+path+" is not started "+
+                                               "from root '/'")
   }
 
   def getMasterId: Receive = {

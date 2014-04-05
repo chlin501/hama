@@ -21,7 +21,6 @@ import akka.actor._
 import org.apache.hama._
 import org.apache.hama.bsp.v2.GroomServerSpec
 
-// TODO: merge to GroomServer?
 class Registrator(conf: HamaConfiguration) extends LocalService 
                                               with RemoteService {
 
@@ -33,10 +32,11 @@ class Registrator(conf: HamaConfiguration) extends LocalService
                             buildProxyAtMaster
 
   val groomManagerPath = groomManagerInfo.getPath
-  val groomServerName = "groom_"+ groomManagerInfo.getHost +"_"+ 
-                        groomManagerInfo.getPort
-  val groomHostName = groomManagerInfo.getHost
-  val groomPort = groomManagerInfo.getPort
+
+  val groomserverHost = conf.get("bsp.groom.address", "127.0.0.1")
+  val groomServerPort = conf.getInt("bsp.groom.port", 50000)
+  val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
+  val maxTasks = conf.getInt("bsp.tasks.maximum", 3)
 
   override def configuration: HamaConfiguration = conf
 
@@ -45,19 +45,16 @@ class Registrator(conf: HamaConfiguration) extends LocalService
   override def initializeServices {
     lookup("groomManager", groomManagerPath)
   }
-
+  
   override def afterLinked(proxy: ActorRef) { 
-    val maxTasks = conf.getInt("bsp.tasks.maximum", 3)
-    // register to master/GroomManager
     proxy ! new GroomServerSpec(groomServerName, 
-                                groomHostName, 
-                                groomPort, 
+                                groomServerHost, 
+                                groomServerPort, 
                                 maxTasks)
   }
 
   override def offline(target: ActorRef) {
-    LOG.info("xxxxxxxxxxxxxx groomManager offline !!!!!!! ")
-    //lookup("groomManager", groomManagerPath)
+    lookup("groomManager", groomManagerPath)
   }
 
   override def receive = isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown

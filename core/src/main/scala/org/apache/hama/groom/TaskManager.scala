@@ -61,12 +61,12 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     for(seq <- 1 to maxTasks) {
       slots ++= Set(Slot(seq, None, bspmaster))
     }
-    LOG.info("{} GroomServer slots are initialied.", maxTasks)
+    LOG.debug("{} GroomServer slots are initialied.", maxTasks)
   }
 
   override def initializeServices {
     initializeSlots     
-    //lookup("sched", schedPath)
+    lookup("sched", schedPath)
   }
 
   def hasTaskInQueue: Boolean = queue.size > 0
