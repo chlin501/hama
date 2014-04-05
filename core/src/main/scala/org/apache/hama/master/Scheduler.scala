@@ -33,6 +33,12 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
   type TaskAssignQueue = Queue[Job]
   type ProcessingQueue = Queue[Job]
 
+  val taskManagerInfo = new ProxyInfo.Builder().withConfiguration(conf).
+                                                withActorName("taskManager").
+                                                appendRootPath("groomServer").
+                                                appendChildPath("taskManager").
+                                                buildProxyAtGroom
+
   /**
    * A queue that holds jobs with tasks left unassigning to GroomServers.
    */
@@ -145,13 +151,8 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
   }
 
   def lookupTaskManager(spec: GroomServerSpec) {
-    val system = "GroomSystem"//spec.getSystem
-    val host = spec.getHost
-    val port = spec.getPort
-    val groomServer = "groomServer"
-    val path = "akka.tcp://"+system+"@"+host+":"+port+"/user/"+ groomServer +
-               "/taskManager"
-    lookup(spec.getName, path)
+    LOG.info("Lookup {} at {}", spec.getName, taskManagerInfo.getPath)
+    lookup(spec.getName, taskManagerInfo.getPath)
   }
 
   def locate: Receive = {

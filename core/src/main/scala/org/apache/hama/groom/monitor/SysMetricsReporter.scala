@@ -53,7 +53,7 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
                             buildProxyAtMaster
   val sysMetricsTrackerPath = sysMetricsTrackerInfo.getPath
 
-  val groomserverHost = conf.get("bsp.groom.address", "127.0.0.1")
+  val groomServerHost = conf.get("bsp.groom.address", "127.0.0.1")
   val groomServerPort = conf.getInt("bsp.groom.port", 50000)
   val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
 

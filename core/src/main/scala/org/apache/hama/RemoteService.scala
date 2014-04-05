@@ -110,7 +110,7 @@ trait RemoteService extends Service {
     case ActorIdentity(target, Some(remote)) => {
       LOG.info("Proxy {} is ready.", target)
       context.watch(remote) // TODO: watch proxy instead?
-      val proxy = link(remote.path.name, remote)
+      val proxy = link(target.asInstanceOf[String], remote)// remote.path.name 
       afterLinked(remote) // TODO: need to switch using proxy
     }
     case ActorIdentity(target, None) => 

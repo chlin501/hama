@@ -33,7 +33,7 @@ class Registrator(conf: HamaConfiguration) extends LocalService
 
   val groomManagerPath = groomManagerInfo.getPath
 
-  val groomserverHost = conf.get("bsp.groom.address", "127.0.0.1")
+  val groomServerHost = conf.get("bsp.groom.address", "127.0.0.1")
   val groomServerPort = conf.getInt("bsp.groom.port", 50000)
   val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
   val maxTasks = conf.getInt("bsp.tasks.maximum", 3)
