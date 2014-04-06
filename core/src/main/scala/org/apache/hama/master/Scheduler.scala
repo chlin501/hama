@@ -57,9 +57,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    * GroomServer request for assigning a task.
    */
   def requestTask: Receive = {
-    // TODO: check if a job's tasks need to be assigned to a reserved 
-    //       GroomServer. if yes, skip this request, go with assignTask()
-    //       instead
     case RequestTask(groomServerName) => {
       val (from, to) = 
         assign(groomServerName, taskAssignQueue, sender, dispatch) 
@@ -73,23 +70,14 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    * dispatch function, which normally uses actor ! message.
    */
   // TODO: move to a Trait.
-  def assign(source: String, from: TaskAssignQueue, actor: ActorRef, 
-             dispatch: (ActorRef, Task) => Unit): 
+  def assign(fromGroom: String, fromQueue: TaskAssignQueue, 
+             fromActor: ActorRef, d: (ActorRef, Task) => Unit): 
       (TaskAssignQueue, ProcessingQueue) = {
-    val (job, rest) = from.dequeue
-    var _fromQueue = Queue[Job](); var _toQueue = Queue[Job]()
-    unassignedTask(job) match {
-      case Some(task) => {
-        LOG.info("Assign the task {} to {}", task.getId, source)
-        task.markWithTarget(source)
-        dispatch(actor, task)
-      }
-      case None => {
-        _fromQueue = rest
-        _toQueue.enqueue(job)
-      }
-    }
-    (_fromQueue, _toQueue)
+    val (job, rest) = fromQueue.dequeue
+    var from = Queue[Job]()
+    val to = bookThenDispatch(job, fromActor, fromGroom, d) 
+    if(!to.isEmpty) from = rest
+    (from, to)
   }
 
   private def dispatch(from: ActorRef, task: Task) {
@@ -97,6 +85,9 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
                            conf.get("bsp.master.name", "bspmaster"))  
   }
 
+  /**
+   * Dispense next unassigned task. None indiecates all tasks are assigned.
+   */
   def unassignedTask(job: Job): Option[Task] = {
     val task = job.nextUnassignedTask;
     if(null != task) Some(task) else None
@@ -121,12 +112,44 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     case JobSubmission => mediator ! Request("receptionist", Take)
   }
 
+  def bookThenDispatch(job: Job, targetActor: ActorRef,  
+                       targetGroomServer: String, 
+                       d: (ActorRef, Task) => Unit): ProcessingQueue = {
+    var to = Queue[Job]()
+    unassignedTask(job) match {
+      case Some(task) => {
+        task.markWithTarget(targetGroomServer) 
+        d(targetActor, task)
+      }
+      case None => { 
+        to.enqueue(job) 
+      }
+    }
+    to
+  }
+
   /**
    * Positive schedule tasks.
-   * Actual function that schedules tasks to GroomServers.
+   * Actual function that acitively schedules tasks to GroomServers.
    */ 
-  def schedule(job: Job) {
-    // TODO: 
+  def schedule(fromQueue: TaskAssignQueue): 
+      (TaskAssignQueue, ProcessingQueue) = { 
+    val (job, rest) = fromQueue.dequeue
+    val groomServers = job.getTargets  
+    var from = Queue[Job](); var to = Queue[Job]()
+    groomServers.foreach( groomName => {
+      LOG.info("Retrieve GroomServer taskManager {}", groomName)
+      proxies.find(p => p.path.name.equals(groomName)) match {
+        case Some(taskManagerActor) => {
+          to = bookThenDispatch(job, taskManagerActor, groomName, dispatch)
+        }
+        case None => 
+          LOG.warning("Can't schedule tasks for taskManager {} not found.", 
+                      groomName)
+      }
+    })
+    if(!to.isEmpty) from = rest 
+    (from, to)
   }
 
   /**
@@ -135,18 +158,12 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    */
   def dispense: Receive = {
     case Dispense(job) => { 
-      if(null != job.getTargets && 0 < job.getTargets.length) { // active
-        // schedule tasks to specifid target grooms 
-        // enqueu to task assigned queue if some need passively assign 
-        // or move to processing queue if all 
-        schedule(job)  
-      }
       taskAssignQueue = taskAssignQueue.enqueue(job)
-/*
-      val (from, to) = preSchedule(job, taskAssignQueue, processingQueue)
-      val (_from, _to) = schedule(job, from, to)
-      postSchedule(job, _from, _to)
-*/
+      if(null != job.getTargets && 0 < job.getTargets.length) { // active
+        val (from, to) = schedule(taskAssignQueue)  
+        taskAssignQueue = from
+        processingQueue = to
+      }
     }
   }
 
