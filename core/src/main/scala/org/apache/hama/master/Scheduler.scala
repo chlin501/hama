@@ -42,12 +42,12 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
   /**
    * A queue that holds jobs with tasks left unassigning to GroomServers.
    */
-  private var taskAssignQueue = Queue[Job]()
+  protected var taskAssignQueue = Queue[Job]()
 
   /**
    * A queue that holds jobs having all tasks assigned to GroomServers.
    */
-  private var processingQueue = Queue[Job]()
+  protected var processingQueue = Queue[Job]()
 
   override def configuration: HamaConfiguration = conf
 
@@ -121,10 +121,10 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
         task.markWithTarget(targetGroomServer) 
         d(targetActor, task)
       }
-      case None => { 
-        to.enqueue(job) 
-      }
+      case None => 
     }
+    LOG.debug("Are all tasks assigned? {}", job.areAllTasksAssigned)
+    if(job.areAllTasksAssigned) to = to.enqueue(job)
     to
   }
 
@@ -138,9 +138,10 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     val groomServers = job.getTargets  
     var from = Queue[Job](); var to = Queue[Job]()
     groomServers.foreach( groomName => {
-      LOG.info("Retrieve GroomServer's taskManager {}", groomName)
+      LOG.debug("Check if proxies object contains {}", groomName)
       proxies.find(p => p.path.name.equals(groomName)) match {
         case Some(taskManagerActor) => {
+          LOG.info("GroomServer's taskManager {} found!", groomName)
           to = bookThenDispatch(job, taskManagerActor, groomName, dispatch)
         }
         case None => 
@@ -149,6 +150,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
       }
     })
     if(!to.isEmpty) from = rest 
+    LOG.info("from queue: {} to queue: {}", from, to)
     (from, to)
   }
 

@@ -23,21 +23,22 @@ import akka.testkit._
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
 import org.apache.hama._
+import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2._
 import org.apache.hama.bsp.v2.IDCreator._
 import org.junit.runner.RunWith
 import org.scalatest._
 import org.scalatest.junit.JUnitRunner
 
+case class JobData(fromQueueSize: Int, toQueueSize: Int, jobId: BSPJobID)
+case object GetJobData
 case object GetTarget
 case object AddProxy
 case object ProxyAdded
 
 class MockTaskManager extends Actor {
-  val LOG = Logging(context.system, this)
-
-  def receive = {
-    case _ => LOG.error("Unknown message for {}!", this.getClass.getSimpleName)
+  override def receive = {
+    case _ =>  
   }
 }
 
@@ -53,22 +54,17 @@ class MockSched(conf: HamaConfiguration, ref: ActorRef)
              task.getAssignedTarget, from.path.name)
     this.task = task
   }
-
-  override def lookupTaskManager(spec: GroomServerSpec) {
-    LOG.info("lookup taskManager with GroomServerSpec {}", spec.getName)
-  }
   
   def addMockProxy: Receive = {
     case AddProxy => {
       LOG.info("Who is the sender? {}", ref.path.name)
-      LOG.info("Before lookup MockTaskManager, proxies size  {}", 
+      LOG.info("Before looking up MockTaskManager, proxies size  {}", 
                proxies.size)
       proxies ++= 
         Set(context.system.actorOf(Props(classOf[MockTaskManager]), "groom1"))
       if(1 != proxies.size)
         throw new RuntimeException("Proxy size should be 1!");
       LOG.info("Proxies size now is {}!", proxies.size)
-      LOG.info("Replying with ProxyAdded message!")
       ref ! ProxyAdded
     }
   }
@@ -78,8 +74,20 @@ class MockSched(conf: HamaConfiguration, ref: ActorRef)
       ref ! task.getAssignedTarget
     }
   }
+
+  def getJobData: Receive = {
+    case GetJobData => {
+      val fromQueueSize = taskAssignQueue.size
+      val toQueueSize = processingQueue.size
+      val (job, rest) = processingQueue.dequeue
+      LOG.info("TaskAssignQueue size: {}, ProcessingQueue has size {}, "+
+               " and the job id is {}", 
+               fromQueueSize, toQueueSize, job.getId)
+      ref ! JobData(fromQueueSize, toQueueSize, job.getId)
+    }
+  }
   
-  override def receive = addMockProxy orElse getTask orElse super.receive
+  override def receive = getJobData orElse addMockProxy orElse getTask orElse super.receive
 }
 
 @RunWith(classOf[JUnitRunner])
@@ -112,5 +120,7 @@ class TestScheduler extends TestKit(ActorSystem("TestScheduler"))
       sched ! Dispense(createJob)
       sched ! GetTarget
       prob.expectMsg("groom1")
+      sched ! GetJobData
+      prob.expectMsg(JobData(0, 1, createJob.getId))
   }
 }

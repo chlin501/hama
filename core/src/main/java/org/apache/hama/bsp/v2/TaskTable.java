@@ -258,6 +258,17 @@ public final class TaskTable implements Writable {
     return null;
   }
 
+  public boolean areAllTasksAssigned() {
+    int count = 0;
+    for(int idx = 0; idx < rowLength(); idx++) {
+      final Task task = get(idx, 0);
+      if(null == task) 
+        throw new RuntimeException("The task at row: "+idx+" not found!");
+      if(task.isAssigned()) count++;
+    }
+    if(rowLength() == count) return true; else return false;
+  }
+
   @Override
   public void write(DataOutput out) throws IOException {
     this.jobId.write(out);

@@ -500,6 +500,10 @@ public final class Job implements Writable {
     return this.targets.toStrings();
   }
 
+  public boolean areAllTasksAssigned() {
+    return this.taskTable.areAllTasksAssigned();
+  }
+
   @Override
   public void write(DataOutput out) throws IOException {
     id.write(out);
