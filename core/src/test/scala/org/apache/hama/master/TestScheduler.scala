@@ -18,32 +18,99 @@
 package org.apache.hama.master
 
 import akka.actor._
+import akka.event._
 import akka.testkit._
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
+import org.apache.hama._
+import org.apache.hama.bsp.v2._
+import org.apache.hama.bsp.v2.IDCreator._
+import org.junit.runner.RunWith
 import org.scalatest._
+import org.scalatest.junit.JUnitRunner
 
-class TestScheduler(system: ActorSystem) extends TestKit(system) 
-                                         with ImplicitSender 
-                                         with WordSpecLike with Matchers 
-                                         with BeforeAndAfterAll {
+case object GetTarget
+case object AddProxy
+case object ProxyAdded
 
-  val LOG = LogFactory.getLog(classOf[TestScheduler])
+class MockTaskManager extends Actor {
+  val LOG = Logging(context.system, this)
 
-  def this() = this(ActorSystem("TestScheduler"))
+  def receive = {
+    case _ => LOG.error("Unknown message for {}!", this.getClass.getSimpleName)
+  }
+}
 
-  override def afterAll {
-    TestKit.shutdownActorSystem(system)
+class MockSched(conf: HamaConfiguration, ref: ActorRef) 
+    extends Scheduler(conf) {
+
+  override val LOG = Logging(context.system, this)
+
+  var task: Task = _
+
+  override def dispatch(from: ActorRef, task: Task) {
+    LOG.info("Task ({}) will be dispatch to {}", 
+             task.getAssignedTarget, from.path.name)
+    this.task = task
   }
 
-  "A Scheduler" must {
-    "assign task" in {
-      LOG.info("Testing Scheduler's assignTask function ...")
-      // TODO: not yet finished
-      //val sched = system.actorOf(Props[Scheduler])
-      //echo ! "hello world"
-      //expectMsg("hello world")
+  override def lookupTaskManager(spec: GroomServerSpec) {
+    LOG.info("lookup taskManager with GroomServerSpec {}", spec.getName)
+  }
+  
+  def addMockProxy: Receive = {
+    case AddProxy => {
+      LOG.info("Who is the sender? {}", ref.path.name)
+      LOG.info("Before lookup MockTaskManager, proxies size  {}", 
+               proxies.size)
+      proxies ++= 
+        Set(context.system.actorOf(Props(classOf[MockTaskManager]), "groom1"))
+      if(1 != proxies.size)
+        throw new RuntimeException("Proxy size should be 1!");
+      LOG.info("Proxies size now is {}!", proxies.size)
+      LOG.info("Replying with ProxyAdded message!")
+      ref ! ProxyAdded
     }
   }
  
+  def getTask: Receive = {
+    case GetTarget => {
+      ref ! task.getAssignedTarget
+    }
+  }
+  
+  override def receive = addMockProxy orElse getTask orElse super.receive
+}
+
+@RunWith(classOf[JUnitRunner])
+class TestScheduler extends TestKit(ActorSystem("TestScheduler")) 
+                                    with FunSpecLike 
+                                    with ShouldMatchers 
+                                    with BeforeAndAfterAll {
+
+  val LOG = LogFactory.getLog(classOf[TestScheduler])
+
+  override protected def afterAll {
+    system.shutdown
+  }
+
+  def createJob(): Job = {
+    val jobId = IDCreator.newBSPJobID.withId("test").withId(7).build
+    new Job.Builder().setId(jobId).
+                      setName("test-scheduler").
+                      withTarget("groom1").
+                      withTaskTable.
+                      build
+  }
+
+  it("test scheduler") {
+      val prob = TestProbe()
+      val conf = new HamaConfiguration
+      val sched = system.actorOf(Props(classOf[MockSched], conf, prob.ref))
+      sched ! AddProxy
+      prob.expectMsg(ProxyAdded)
+      sched ! Dispense(createJob)
+      sched ! GetTarget
+      prob.expectMsg("groom1")
+  }
 }

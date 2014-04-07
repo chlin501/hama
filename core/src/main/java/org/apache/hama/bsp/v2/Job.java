@@ -256,12 +256,48 @@ public final class Job implements Writable {
     }
 
     public Builder setTaskTable(final TaskTable taskTable) {
+      if(null == this.taskTable)
+        throw new IllegalArgumentException("TaskTable is missing."); 
+      if(0 >= this.taskTable.rowLength())
+        throw new IllegalArgumentException("Invalid TableTable numBSPTasks "+
+                                           this.taskTable.rowLength());
+      if(0 >= this.taskTable.columnLength())
+        throw new IllegalArgumentException("Invalid TableTable maxTaskAttempts"+
+                                           this.taskTable.columnLength());
+
       this.taskTable = taskTable;
+      return this;
+    }
+
+    public Builder withTaskTable() {
+      if(null == this.id)
+        throw new IllegalStateException("BSPJobID is missing when creating "+
+                                        "TaskTable.");
+      if(0 >= numBSPTasks)
+        throw new IllegalStateException("numBSPTasks is missing for creating "+
+                                         "TaskTable.");
+      if(0 >= maxTaskAttempts)
+        throw new IllegalStateException("maxTaskAttempts is missing when "+
+                                        "creating TaskTable.");
+      this.taskTable = new TaskTable(this.id, numBSPTasks, maxTaskAttempts);
       return this;
     }
 
     public Builder setTargets(final String[] targets) {
       this.targets = targets;
+      return this;
+    }
+     
+    /**
+     * This will create a temp array.
+     */
+    public Builder withTarget(final String groomServerName) {
+      if(null == groomServerName || "".equals(groomServerName))
+        throw new IllegalArgumentException("Provided groomServerName invalid.");
+      final String[] ary = new String[this.targets.length+1];
+      System.arraycopy(this.targets, 0, ary, 0, this.targets.length);
+      ary[ary.length-1] = groomServerName;
+      this.targets = ary;
       return this;
     }
 
@@ -363,8 +399,8 @@ public final class Job implements Writable {
     // verify targets length and numBSPTasks size
     final String[] tmp = this.targets.toStrings();
     if(numBSPTasks < tmp.length) 
-      throw new RuntimeException(tmp.length +" targets is large than "+
-                                 numBSPTasks +" total tasks." );
+      throw new RuntimeException("Target value "+tmp.length +" is larger "+
+                                 "than "+numBSPTasks +" total tasks allowed.");
   }
 
   public BSPJobID getId() {

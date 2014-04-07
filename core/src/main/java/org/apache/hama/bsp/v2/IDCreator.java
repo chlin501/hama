@@ -27,19 +27,19 @@ public final class IDCreator {
     private String jtIdentifier; 
     private int id; 
 
-    public BSPJobIDBuilder with(final String jtIdentifier) {
+    public BSPJobIDBuilder withId(final String jtIdentifier) {
       this.jtIdentifier = jtIdentifier;
       return this;
     }
     
-    public BSPJobIDBuilder with(final int id) {
+    public BSPJobIDBuilder withId(final int id) {
       this.id = id;
       return this;
     }
 
     public TaskIDBuilder getTaskIDBuilder() {
       final TaskIDBuilder taskIdBuilder = new TaskIDBuilder();
-      taskIdBuilder.with(build());
+      taskIdBuilder.withId(build());
       return taskIdBuilder;
     }
     
@@ -52,12 +52,12 @@ public final class IDCreator {
     private BSPJobID jobId; 
     private int id; 
 
-    public TaskIDBuilder with(final BSPJobID jobId) {
+    public TaskIDBuilder withId(final BSPJobID jobId) {
       this.jobId = jobId;
       return this;
     }
 
-    public TaskIDBuilder with(final int id) {
+    public TaskIDBuilder withId(final int id) {
       this.id = id;
       return this;
     }
@@ -65,7 +65,7 @@ public final class IDCreator {
     public TaskAttemptIDBuilder getTaskAttemptIDBuilder() {
       final TaskAttemptIDBuilder taskAttemptIdBuilder = 
         new TaskAttemptIDBuilder();
-      taskAttemptIdBuilder.with(build());
+      taskAttemptIdBuilder.withId(build());
       return taskAttemptIdBuilder;
     }
 
@@ -78,12 +78,12 @@ public final class IDCreator {
     private TaskID taskId; 
     private int id;  
 
-    public TaskAttemptIDBuilder with(final TaskID taskId) {
+    public TaskAttemptIDBuilder withId(final TaskID taskId) {
       this.taskId = taskId;
       return this;
     }
 
-    public TaskAttemptIDBuilder with(final int id) {
+    public TaskAttemptIDBuilder withId(final int id) {
       this.id = id;
       return this;
     }

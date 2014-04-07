@@ -80,7 +80,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     (from, to)
   }
 
-  private def dispatch(from: ActorRef, task: Task) {
+  protected def dispatch(from: ActorRef, task: Task) {
     from ! new Directive(Launch, task,  
                            conf.get("bsp.master.name", "bspmaster"))  
   }
@@ -138,7 +138,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     val groomServers = job.getTargets  
     var from = Queue[Job](); var to = Queue[Job]()
     groomServers.foreach( groomName => {
-      LOG.info("Retrieve GroomServer taskManager {}", groomName)
+      LOG.info("Retrieve GroomServer's taskManager {}", groomName)
       proxies.find(p => p.path.name.equals(groomName)) match {
         case Some(taskManagerActor) => {
           to = bookThenDispatch(job, taskManagerActor, groomName, dispatch)

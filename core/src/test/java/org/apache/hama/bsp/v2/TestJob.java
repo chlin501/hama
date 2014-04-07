@@ -58,7 +58,7 @@ public class TestJob extends TestCase {
   }
 */
   BSPJobID createJobId() throws Exception {
-    return IDCreator.newBSPJobID().with("test").with(7).build();
+    return IDCreator.newBSPJobID().withId("test").withId(7).build();
   }
 
   byte[] serialize(final Job job) throws Exception {
@@ -92,8 +92,6 @@ public class TestJob extends TestCase {
     final long finishTime = -1;
     final Job.State state = Job.State.RUNNING;
     final HamaConfiguration conf = new HamaConfiguration();
-    final TaskTable table = new TaskTable(jobId, numBSPTasks, maxTaskAttempts);
-
     final Job job = new Job.Builder().setId(jobId)
                                      .setName("test-job-serilaization")
                                      .setUser("jeremy")
@@ -112,7 +110,7 @@ public class TestJob extends TestCase {
                                      .setFinishTime(finishTime)
                                      .setSuperstepCount(1947L)
                                      .setConf(conf)
-                                     .setTaskTable(table).build();
+                                     .withTaskTable().build();
     final byte[] bytes = serialize(job);
     assertNotNull("Job byte array can't be null.", bytes);
     final Job forVerification = deserialize(bytes);

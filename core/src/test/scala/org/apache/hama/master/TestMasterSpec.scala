@@ -75,5 +75,3 @@ class TestMasterSpec extends TestKit(ActorSystem("TestMasterSpec",
     }
   }
 }
-
-

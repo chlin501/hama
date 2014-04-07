@@ -32,8 +32,8 @@ public class TestIDCreator extends TestCase {
 
   public void testBuilder() throws Exception {
     final BSPJobID jobId = IDCreator.newBSPJobID()
-                                    .with("jtIdentifer")
-                                    .with(1)
+                                    .withId("jtIdentifer")
+                                    .withId(1)
                                     .build();
     assertEquals("BSPJobID jtIdentifer should equal.", 
                  jobId.getJtIdentifier(), "jtIdentifer"); 
@@ -41,34 +41,35 @@ public class TestIDCreator extends TestCase {
                  jobId.getId(), 1); 
 
     final TaskID taskId = IDCreator.newBSPJobID()
-                                   .with("jtIdentifer")
-                                   .with(1)
+                                   .withId("jtIdentifer")
+                                   .withId(1)
                                    .getTaskIDBuilder()
-                                   .with(2)
+                                   .withId(2)
                                    .build();
     assertEquals("TaskID's BSPJob should equal.", 
                  jobId.toString(), taskId.getJobID().toString()); 
     assertEquals("TaskID's id should equal.", 2, taskId.getId()); 
 
     final TaskAttemptID attemptId = IDCreator.newBSPJobID()
-                                             .with("jtIdentifer")
-                                             .with(1)
+                                             .withId("jtIdentifer")
+                                             .withId(1)
                                              .getTaskIDBuilder()
-                                             .with(2)
+                                             .withId(2)
                                              .getTaskAttemptIDBuilder()
-                                             .with(3)
+                                             .withId(3)
                                              .build();
     assertEquals("TaskAttemptID's TaskID should equal.", 
                  taskId.toString(), attemptId.getTaskID().toString()); 
     assertEquals("TaskAttemptID's id should equal.", 3, attemptId.getId()); 
 
-    final TaskID taskId1 = IDCreator.newTaskID().with(jobId).with(7).build();
+    final TaskID taskId1 = 
+      IDCreator.newTaskID().withId(jobId).withId(7).build();
     assertEquals("TaskID's BSPJobID should equal.", 
                  jobId.toString(), taskId.getJobID().toString()); 
     assertEquals("TaskID's id should equal.", 7, taskId1.getId());
 
     final TaskAttemptID attemptId1 = 
-      IDCreator.newTaskAttemptID().with(taskId1).with(11).build();
+      IDCreator.newTaskAttemptID().withId(taskId1).withId(11).build();
     assertEquals("TaskAttemptID's TaskID should equal.", 
                  taskId1.toString(), attemptId1.getTaskID().toString()); 
     assertEquals("TaskAttemptID's id should equal.", 11, attemptId1.getId());

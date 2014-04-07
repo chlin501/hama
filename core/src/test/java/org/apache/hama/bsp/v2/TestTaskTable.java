@@ -90,7 +90,7 @@ public class TestTaskTable extends TestCase {
   }
 
   BSPJobID createBSPJobId() throws Exception {
-    return IDCreator.newBSPJobID().with("test").with(1).build();
+    return IDCreator.newBSPJobID().withId("test").withId(1).build();
   }
 
   public void testSerialization() throws Exception {
@@ -122,9 +122,11 @@ public class TestTaskTable extends TestCase {
     //   0 [(1,1)]
     //   1 [(2,1), (2,2)]  
     //   2 [(3,1)]
-    final TaskAttemptID attemptId = IDCreator.newTaskID().with(jobId).with(2)
-                                             .getTaskAttemptIDBuilder().with(2)
-                                             .build();
+    final TaskAttemptID attemptId = IDCreator.newTaskID().withId(jobId).
+                                              withId(2).
+                                              getTaskAttemptIDBuilder().
+                                              withId(2).
+                                              build();
     final Task task = new Task.Builder()
                               .setId(attemptId) 
                               .setPhase(Task.Phase.COMPUTE)

@@ -40,12 +40,12 @@ public class TestTask extends TestCase {
 
   Task createTask(final int id) throws Exception {
     final TaskAttemptID attemptId = IDCreator.newBSPJobID()
-                                             .with("test")
-                                             .with(id)
+                                             .withId("test")
+                                             .withId(id)
                                              .getTaskIDBuilder()
-                                             .with(id)
+                                             .withId(id)
                                              .getTaskAttemptIDBuilder()
-                                             .with(id)
+                                             .withId(id)
                                              .build();
     final long startTime = System.currentTimeMillis();
     final long finishTime = startTime + 1000*10;

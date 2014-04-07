@@ -85,10 +85,10 @@ public final class TaskTable implements Writable {
       this.tasks[row] = new ArrayWritable(Task.class);
       set(row, new Task[] {
         new Task.Builder().setId(IDCreator.newTaskID()
-                                          .with(getJobId())
-                                          .with((row+1)) // TaskID's id
+                                          .withId(getJobId())
+                                          .withId((row+1)) // TaskID's id
                                           .getTaskAttemptIDBuilder()
-                                          .with(1) // TaskAttemptID's id
+                                          .withId(1) // TaskAttemptID's id
                                           .build())
                           .setPhase(Task.Phase.SETUP)
                           .setState(Task.State.WAITING) 
@@ -127,7 +127,7 @@ public final class TaskTable implements Writable {
   public int getNumBSPTasks() {
     return this.numBSPTasks;
   }
-
+  
   public int columnLength() {
     return getMaxTaskAttempts();
   }
