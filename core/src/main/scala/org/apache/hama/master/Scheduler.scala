@@ -61,8 +61,8 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     case RequestTask(groomServerName) => {
       val (from, to) = 
         assign(groomServerName, taskAssignQueue, sender, dispatch) 
-      taskAssignQueue = from
-      processingQueue = to
+      this.taskAssignQueue = from
+      this.processingQueue = processingQueue.enqueue(to.dequeue._1)
     }
   }
 
@@ -78,12 +78,14 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     var from = Queue[Job]()
     val to = bookThenDispatch(job, fromActor, fromGroom, d) 
     if(!to.isEmpty) from = rest
+    LOG.info("from queue: {}, to queue: {}", from, to)
     (from, to)
   }
 
+  //TODO: should allow Action other than Launch
   protected def dispatch(from: ActorRef, task: Task) {
     from ! new Directive(Launch, task,  
-                           conf.get("bsp.master.name", "bspmaster"))  
+                         conf.get("bsp.master.name", "bspmaster"))  
   }
 
   /**
@@ -151,21 +153,24 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
       }
     })
     if(!to.isEmpty) from = rest 
-    LOG.info("from queue: {} to queue: {}", from, to)
+    LOG.debug("from queue: {} to queue: {}", from, to)
     (from, to)
   }
 
   /**
    * Move a job to a specific queue pending for further processing, either
    * passive or positive.
+   *
+   * If a job contains particular target GroomServer, schedule tasks to those
+   * GroomServers.
    */
   def dispense: Receive = {
     case Dispense(job) => { 
-      taskAssignQueue = taskAssignQueue.enqueue(job)
+      this.taskAssignQueue = this.taskAssignQueue.enqueue(job)
       if(null != job.getTargets && 0 < job.getTargets.length) { // active
         val (from, to) = schedule(taskAssignQueue)  
-        taskAssignQueue = from
-        processingQueue = to
+        this.taskAssignQueue = from
+        this.processingQueue = processingQueue.enqueue(to.dequeue._1)
       }
     }
   }
