@@ -59,10 +59,12 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    */
   def requestTask: Receive = {
     case RequestTask(groomServerName) => {
+      LOG.info("RequestTask from {}", groomServerName)
       val (from, to) = 
         assign(groomServerName, taskAssignQueue, sender, dispatch) 
       this.taskAssignQueue = from
-      this.processingQueue = processingQueue.enqueue(to.dequeue._1)
+      if(!to.isEmpty) 
+        this.processingQueue = processingQueue.enqueue(to.dequeue._1)
     }
   }
 
@@ -74,12 +76,16 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
   def assign(fromGroom: String, fromQueue: TaskAssignQueue, 
              fromActor: ActorRef, d: (ActorRef, Task) => Unit): 
       (TaskAssignQueue, ProcessingQueue) = {
-    val (job, rest) = fromQueue.dequeue
-    var from = Queue[Job]()
-    val to = bookThenDispatch(job, fromActor, fromGroom, d) 
-    if(!to.isEmpty) from = rest
-    LOG.info("from queue: {}, to queue: {}", from, to)
-    (from, to)
+    if(!fromQueue.isEmpty) {
+      val (job, rest) = fromQueue.dequeue 
+      var from = Queue[Job]()
+      val to = bookThenDispatch(job, fromActor, fromGroom, d) 
+      if(!to.isEmpty) from = rest
+      LOG.info("from queue: {}, to queue: {}", from, to)
+      (from, to)
+    } else {
+      (Queue[Job](), Queue[Job]())
+    }
   }
 
   //TODO: should allow Action other than Launch

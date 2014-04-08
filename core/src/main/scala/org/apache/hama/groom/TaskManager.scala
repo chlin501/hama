@@ -38,7 +38,10 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
                             buildProxyAtMaster
 
   val schedPath = schedInfo.getPath
-  val groomServerName = "groom_"+schedInfo.getHost+"_"+schedInfo.getPort
+
+  val groomServerHost = conf.get("bsp.groom.address", "127.0.0.1")
+  val groomServerPort = conf.getInt("bsp.groom.port", 50000)
+  val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
 
   var sched: ActorRef = _
   var cancellable: Cancellable = _
@@ -57,7 +60,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   override def name: String = "taskManager"
 
-  private def initializeSlots {
+  protected def initializeSlots {
     for(seq <- 1 to maxTasks) {
       slots ++= Set(Slot(seq, None, bspmaster))
     }
@@ -72,18 +75,21 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   def hasTaskInQueue: Boolean = queue.size > 0
 
   def hasFreeSlots(): Boolean = {
-    var occupied = true
+    var isFree = true
+    var flag = true
     slots.takeWhile(slot => {
-      occupied = None.equals(slot.task)
-      occupied
+      isFree = None.equals(slot.task)
+      isFree
     }) 
-    !occupied
+    if(isFree) flag = true else flag = false
+    flag
   }
 
   /**
    * Periodically send message to an actor an actor.
    */
   def request(target: ActorRef, message: RequestMessage) {
+    LOG.debug("Request message {} to target: {}", message, target)
     import context.dispatcher
     cancellable = 
       context.system.scheduler.schedule(0.seconds, 5.seconds, target,
@@ -100,8 +106,11 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    */
   def requestMessage: Receive = {
     case TaskRequest => {
-      if(!hasTaskInQueue && hasFreeSlots) { // TODO: chk sys load,  memory, etc.
-        LOG.info("Request {} for assigning new tasks ...", schedPath)
+      LOG.debug("In TaskRequest, sched: {}, hasTaskInQueue: {}"+
+               ", hasFreeSlots: {}", sched, hasTaskInQueue, hasFreeSlots)
+      if(!hasTaskInQueue && hasFreeSlots) { 
+        // TODO: also check sys load,  memory, etc.
+        LOG.debug("Request {} for assigning new tasks ...", schedPath)
         request(sched, RequestTask(groomServerName)) 
       } else {
         // TODO: process task in queue first.
