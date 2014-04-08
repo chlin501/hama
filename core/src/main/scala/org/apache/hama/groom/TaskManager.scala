@@ -103,6 +103,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   /**
    * Check if slots available and any unprocessed task in queue.
+   * If slots are free, request scheduler to dispatch tasks accordingly.
+   * Otherwise deal with task in queue first.
    */
   def requestMessage: Receive = {
     case TaskRequest => {
@@ -118,13 +120,17 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     }
   }
 
+  /**
+   * Receive Directive from Scheduler.
+   */
   def receiveDirective: Receive = {
     case directive: Directive => { 
        val action: Action = directive.action  
        val master: String = directive.master  
        val timestamp: Long = directive.timestamp  
-       val task: Task = directive.task  // move task to action
-       LOG.info("{} action from {} at {}", action, master, timestamp) 
+       val task: Task = directive.task  
+       LOG.info("Action {} sent from {} for {} at {}", 
+                action, master, task, timestamp) 
        matchThenExecute(action, master, timestamp, task)
     }
   }

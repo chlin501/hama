@@ -83,6 +83,12 @@ public final class Task implements Writable {
       this.groomServerName = new Text();
       this.groomServerName = new Text(Text.readString(in));
     }
+
+    @Override
+    public String toString() {
+      return "task is assigned: "+assigned.toString()+" task is assigned to: "+
+             groomServerName.toString();
+    }
   }
 
   /**
@@ -168,7 +174,7 @@ public final class Task implements Writable {
     }
   }
 
-  Task() {} // for Writable
+  public Task() {} // for Writable
 
   public Task(final TaskAttemptID id, 
               final long startTime, 
@@ -268,5 +274,13 @@ public final class Task implements Writable {
     this.marker.readFields(in);
   }
 
+  @Override
+  public String toString() {
+    return "TaskId: "+id.toString()+" startTime: "+startTime.toString()+
+           " finishTime: "+finishTime.toString()+" partition: "+
+           partition.toString()+" state: "+state.toString()+" phase: "+
+           phase.toString()+" completed: "+completed.toString()+" marker:"+
+           marker.toString();
+  }
 }
 

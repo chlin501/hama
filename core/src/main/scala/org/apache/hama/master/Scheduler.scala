@@ -81,14 +81,18 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
       var from = Queue[Job]()
       val to = bookThenDispatch(job, fromActor, fromGroom, d) 
       if(!to.isEmpty) from = rest
-      LOG.info("from queue: {}, to queue: {}", from, to)
+      LOG.debug("from queue: {}, to queue: {}", from, to)
       (from, to)
     } else {
       (Queue[Job](), Queue[Job]())
     }
   }
 
-  //TODO: should allow Action other than Launch
+  /**
+   * Dispatch a Task to a GroomServer.
+   * @param from is the GroomServer task manager.
+   * @param task is the task to be executed.
+   */
   protected def dispatch(from: ActorRef, task: Task) {
     from ! new Directive(Launch, task,  
                          conf.get("bsp.master.name", "bspmaster"))  
@@ -108,7 +112,9 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
   def reschedTasks: Receive = {
     case RescheduleTasks(spec) => {
        LOG.info("Failed GroomServer having GroomServerSpec "+spec)
-       // TODO:  not yet implemented
+       // TODO: 1. check if job.getTargets is empty or not.
+       //       2. if targets has values, call schedule(); otherwise 
+       //          put into assign task queue, waiting for groom request.
     }
   }
 
@@ -139,7 +145,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
 
   /**
    * Positive schedule tasks.
-   * Actual function that acitively schedules tasks to GroomServers.
+   * Actual function that exhaustively schedules tasks to target GroomServers.
    */ 
   def schedule(fromQueue: TaskAssignQueue): 
       (TaskAssignQueue, ProcessingQueue) = { 
@@ -150,7 +156,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
       LOG.debug("Check if proxies object contains {}", groomName)
       proxies.find(p => p.path.name.equals(groomName)) match {
         case Some(taskManagerActor) => {
-          LOG.info("GroomServer's taskManager {} found!", groomName)
+          LOG.debug("GroomServer's taskManager {} found!", groomName)
           to = bookThenDispatch(job, taskManagerActor, groomName, dispatch)
         }
         case None => 

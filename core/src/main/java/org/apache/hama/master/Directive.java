@@ -97,6 +97,7 @@ public class Directive implements Writable {
     out.writeLong(timestamp());
     Text.writeString(out, master());
     out.writeInt(action().value());
+    this.task.write(out);
   }
 
   @Override
@@ -115,5 +116,13 @@ public class Directive implements Writable {
     } else {
       LOG.error("Unknown action value: "+t);
     }
+    this.task = new Task();
+    this.task.readFields(in);
+  }
+
+  @Override 
+  public String toString() {
+    return "Directive action: "+action.toString()+" master: "+master +
+           " timestamp: "+timestamp+" task: "+task.toString();
   }
 }
