@@ -40,9 +40,13 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
   // move to trait 
   def fileSystem: FileSystem = FileSystem.get(conf)
 
+  def localFs: FileSystem = FileSystem.getLocal(conf)
+
   def createLocalData(jobId: BSPJobID): (String, String) = {
     val localDir = conf.get("bsp.local.dir", "/tmp/local")
     val subDir = conf.get("bsp.local.dir.sub_dir", "bspmaster")
+    if(!localFs.exists(new Path(localDir, subDir))) 
+      fileSystem.mkdirs(new Path(localDir, subDir))
     val localJobFile = "%s/%s/%s.xml".format(localDir, subDir, jobId)
     val localJarFile = "%s/%s/%s.jar".format(localDir, subDir, jobId)
     (localJobFile, localJarFile)
