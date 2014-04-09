@@ -253,8 +253,23 @@ public final class Job implements Writable {
       return this;
     }
 
+    /**
+     * This function will also
+     * - setNumBSPTask 
+     * - setMaxTaskAttempts
+     * - setUser
+     * - setName
+     * from HamaConfiguration file. So if conf file doesn't contain related
+     * info provided for those set methods. Information will be overriden.
+     */
     public Builder setConf(final HamaConfiguration conf) {
       this.conf = conf;
+      if(null == this.conf) 
+        throw new IllegalArgumentException("Configuration provided is null.");
+      setNumBSPTasks(this.conf.getInt("bsp.peers.num", 1));
+      setMaxTaskAttempts(this.conf.getInt("bsp.tasks.max.attempts", 3));
+      setUser(this.conf.get("user.name", System.getProperty("user.name")));
+      setName(this.conf.get("bsp.job.name", ""));
       return this;
     }
 

@@ -79,14 +79,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
 
   def jobSplitFile: String = conf.get("bsp.job.split.file")
 
-  def numBSPTasks: Int = conf.getInt("bsp.peers.num", 1)
-
-  def maxTaskAttempts: Int = conf.getInt("bsp.tasks.max.attempts", 3)
-
-  def userName: String = conf.get("user.name", System.getProperty("user.name"))
-
-  def jobName: String = conf.get("bsp.job.name", "default-job-name")
-  
   def jarFile: Option[String] = conf.get("bsp.jar") match { 
     case null => None
     case jar@_ => Some(jar)
@@ -104,11 +96,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     val jobSplit = jobSplitFile
     copyJarFile(jobId, jarFile, localJarFile)
     new Job.Builder().setId(jobId).
-                      setName(jobName). // obtain from conf
-                      setUser(userName). // obtain from conf
                       setConf(conf).
-                      setNumBSPTasks(numBSPTasks). // obtain from conf
-                      setMaxTaskAttempts(maxTaskAttempts). // obtain from conf
                       setLocalJobFile(localJobFile).
                       setLocalJarFile(localJarFile).
                       withTaskTable.

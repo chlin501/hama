@@ -42,7 +42,7 @@ import org.apache.hama.bsp.Counters;
 public class TestJob extends TestCase {
 
   final Log LOG = LogFactory.getLog(TestJob.class);
-  final int numBSPTasks = 3;
+  final int numBSPTasks = 1024;
   final int maxTaskAttempts = 4;
 
 /*
@@ -93,6 +93,7 @@ public class TestJob extends TestCase {
     final Job.State state = Job.State.RUNNING;
     final HamaConfiguration conf = new HamaConfiguration();
     final Job job = new Job.Builder().setId(jobId)
+                                     .setConf(conf)
                                      .setName("test-job-serilaization")
                                      .setUser("jeremy")
                                      //.setJobXml("hdfs:///path/to/job.xml")
@@ -109,7 +110,6 @@ public class TestJob extends TestCase {
                                      .setStartTime(startTime)
                                      .setFinishTime(finishTime)
                                      .setSuperstepCount(1947L)
-                                     .setConf(conf)
                                      .withTaskTable().build();
     final byte[] bytes = serialize(job);
     assertNotNull("Job byte array can't be null.", bytes);
