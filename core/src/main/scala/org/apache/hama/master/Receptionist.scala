@@ -22,6 +22,8 @@ import org.apache.hama._
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.master._
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.fs.Path
 import scala.collection.immutable.Queue
 
 /**
@@ -35,12 +37,83 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
 
   override def name: String = "receptionist"
 
-  def initJob(jobId: BSPJobID, xml: String): Job = 
+  // move to trait 
+  def fileSystem: FileSystem = FileSystem.get(conf)
+
+  def createLocalData(jobId: BSPJobID): (String, String) = {
+    val localDir = conf.get("bsp.local.dir", "/tmp/local")
+    val subDir = conf.get("bsp.local.dir.sub_dir", "bspmaster")
+    val localJobFile = "%s/%s/%s.xml".format(localDir, subDir, jobId)
+    val localJarFile = "%s/%s/%s.jar".format(localDir, subDir, jobId)
+    (localJobFile, localJarFile)
+  }
+
+  def sysDir: String = conf.get("bsp.system.dir", "/tmp/hadoop/bsp/system")
+
+  def systemDir: String = fileSystem.makeQualified(new Path(sysDir)).toString
+
+  def fs(jobId: BSPJobID): FileSystem = {
+    val jobDir = new Path(new Path(sysDir), jobId.toString)
+    jobDir.getFileSystem(conf) 
+  }
+
+  /**
+   * Copy the job.xml from a specified path, jobFile, to local, localJobFile.
+   * @param jobId denotes the BSPJobID
+   * @param jobFile denotes the job.xml submitted from the client.
+   * @param localJobFile is the detination to which the job file to be copied.
+   */
+  def copyJobFile(jobId: BSPJobID, jobFile: String, localJobFile: String) =
+    fs(jobId).copyToLocalFile(new Path(jobFile), new Path(localJobFile))
+
+  def copyJarFile(jobId: BSPJobID, jarFile: Option[String], 
+                  localJarFile: String) = jarFile match {
+    case None => 
+    case Some(jar) => 
+      fs(jobId).copyToLocalFile(new Path(jar), new Path(localJarFile)) 
+  }
+
+  def addToConfiguration(localJobFile: String) {
+    conf.addResource(new Path(localJobFile))
+  }
+
+  def jobSplitFile: String = conf.get("bsp.job.split.file")
+
+  def numBSPTasks: Int = conf.getInt("bsp.peers.num", 1)
+
+  def maxTaskAttempts: Int = conf.getInt("bsp.tasks.max.attempts", 3)
+
+  def userName: String = conf.get("user.name", System.getProperty("user.name"))
+
+  def jobName: String = conf.get("bsp.job.name", "default-job-name")
+  
+  def jarFile: Option[String] = conf.get("bsp.jar") match { 
+    case null => None
+    case jar@_ => Some(jar)
+  }
+
+  /**
+   * Perform necessary steps to initialize a Job.
+   * @param jobId is a unique BSPJobID  
+   * @param jobFile is submitted from a client.
+   */
+  def initJob(jobId: BSPJobID, jobFile: String): Job = {
+    val (localJobFile, localJarFile) = createLocalData(jobId)
+    copyJobFile(jobId, jobFile, localJobFile)
+    addToConfiguration(localJobFile)
+    val jobSplit = jobSplitFile
+    copyJarFile(jobId, jarFile, localJarFile)
     new Job.Builder().setId(jobId).
+                      setName(jobName). // obtain from conf
+                      setUser(userName). // obtain from conf
                       setConf(conf).
-                      setJobXml(xml).
+                      setNumBSPTasks(numBSPTasks). // obtain from conf
+                      setMaxTaskAttempts(maxTaskAttempts). // obtain from conf
+                      setLocalJobFile(localJobFile).
+                      setLocalJarFile(localJarFile).
                       withTaskTable.
                       build
+  }
 
   /**
    * BSPJobClient call submitJob(jobId, jobFile)

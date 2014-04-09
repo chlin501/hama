@@ -46,8 +46,9 @@ public final class Job implements Writable {
   /* The user that owns this job. */
   private Text user = new Text();
 
-  /* This is the job file or job.xml. */
+  /* This is the job file or job.xml. 
   private Text xml = new Text(); 
+   */
 
   /* job.xml stored in local fs. */
   private Text localJobFile = new Text();
@@ -141,7 +142,7 @@ public final class Job implements Writable {
     private BSPJobID id;
     private String name = "";
     private String user = "";
-    private String xml = ""; 
+    //private String xml = ""; 
     private String localJobFile = "";
     private String localJarFile = "";
     private int numBSPTasks = 1;
@@ -175,10 +176,12 @@ public final class Job implements Writable {
       return this;
     }
 
+/*
     public Builder setJobXml(final String xml) { 
       this.xml = xml;
       return this;
     }
+*/
 
     public Builder setLocalJobFile(final String localJobFile) {
       this.localJobFile = localJobFile;
@@ -305,7 +308,7 @@ public final class Job implements Writable {
       return new Job(id, 
                      name, 
                      user, 
-                     xml, 
+                     //xml, 
                      localJobFile, 
                      localJarFile, 
                      lastCheckpoint, 
@@ -331,7 +334,7 @@ public final class Job implements Writable {
   public Job(final BSPJobID id,
              final String name,
              final String user,
-             final String xml, 
+             //final String xml, 
              final String localJobFile,
              final String localJarFile,
              final int lastCheckpoint,
@@ -355,7 +358,7 @@ public final class Job implements Writable {
     this.name = (null == name)? new Text(): new Text(name);
     this.conf = (null == conf)? new HamaConfiguration(): conf;
     this.user = (null == user)? new Text(): new Text(user);
-    this.xml = (null == xml)? new Text(): new Text(xml);
+    //this.xml = (null == xml)? new Text(): new Text(xml);
     this.localJobFile = 
       (null == localJobFile)? new Text(): new Text(localJobFile);
     this.localJarFile = 
@@ -415,9 +418,11 @@ public final class Job implements Writable {
     return this.user.toString();
   }
 
+/*
   public String getJobXml() {
     return this.xml.toString();
   }
+*/
 
   public String getLocalJobFile() {
     return this.localJobFile.toString();
@@ -509,7 +514,7 @@ public final class Job implements Writable {
     id.write(out);
     name.write(out);
     user.write(out);
-    xml.write(out); 
+    //xml.write(out); 
     localJobFile.write(out);
     localJarFile.write(out);
     lastCheckpoint.write(out);
@@ -537,8 +542,8 @@ public final class Job implements Writable {
     this.name.readFields(in);
     this.user = new Text();
     this.user.readFields(in);
-    this.xml = new Text();
-    this.xml.readFields(in); 
+    //this.xml = new Text();
+    //this.xml.readFields(in); 
     this.localJobFile = new Text();
     this.localJobFile.readFields(in);
     this.localJarFile = new Text();
