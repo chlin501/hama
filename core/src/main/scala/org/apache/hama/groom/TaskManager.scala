@@ -141,7 +141,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
                                timestamp: Long, task: Task) {
     action.value match {
       case 1 => {
-        // arrange and store the task to a slot
+        // a. arrange and store the task to a slot
         // fork a new process by actor
         // launch task on new process
         // send stat to plugin

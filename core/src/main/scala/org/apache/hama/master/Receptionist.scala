@@ -21,7 +21,6 @@ import akka.routing._
 import org.apache.hama._
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Job
-import org.apache.hama.bsp.v2.TaskTable
 import org.apache.hama.master._
 import scala.collection.immutable.Queue
 
@@ -40,8 +39,8 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     new Job.Builder().setId(jobId).
                       setConf(conf).
                       setJobXml(xml).
-                      setTaskTable(new TaskTable(jobId, conf)).
-                      build()
+                      withTaskTable.
+                      build
 
   /**
    * BSPJobClient call submitJob(jobId, jobFile)
@@ -61,7 +60,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    */
   def take: Receive = {
     case Take => {
-      if(0 < waitQueue.size) {
+      if(!waitQueue.isEmpty) {
         val (job, rest) = waitQueue.dequeue
         waitQueue = rest 
         LOG.info("Dispense a job {}. Now {} jobs left in wait queue.", 
