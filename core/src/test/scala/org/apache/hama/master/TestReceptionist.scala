@@ -65,7 +65,8 @@ class MockReceptionist(conf: HamaConfiguration,
     val jar = jarFile.getOrElse(jobId.toString+".jar")
     LOG.info("Override copyJarFile jobId: {}, jarFile: {}, localJarFile: {}", 
              jobId, jar, localJarFile)
-    // do notthing first
+    // do nothing first
+    // jar file may need to runtime compile, zip, then copy can be done!
     //FileUtils.copyFile(new File(jar), new File(localJarFile))
   }
 
@@ -78,9 +79,8 @@ class MockReceptionist(conf: HamaConfiguration,
       if(waitQueue.isEmpty) 
         throw new NullPointerException("Job is not enqueued for waitQueue is "+
                                        "empty!");
-      LOG.info("waitQueue content: {}", waitQueue)
       val job = waitQueue.dequeue._1
-      //LOG.info("job content: {}", job)
+      LOG.info("job content: {}", job)
       ref ! JobData1(job.getId, job.getLocalJarFile, job.getLocalJobFile)
     }
   }
@@ -157,9 +157,11 @@ class TestReceptionist extends TestKit(ActorSystem("TestReceptionist"))
     val jobFile = createJobFile
     LOG.info("Submit job id "+jobId.toString+" job.xml: "+jobFile)
     receptionist ! Submit(jobId, jobFile)
-    LOG.info("Wait for 5 secs.")
     receptionist ! GetJob
-    //Thread.sleep(5*1000)
-    prob.expectMsg(JobData1(jobId, "/tmp/local/bspmaster/job_test_receptionist_1533.jar", "/tmp/local/bspmaster/job_test_receptionist_1533.xml"))
+    prob.expectMsg(
+      JobData1(jobId, 
+               "/tmp/local/bspmaster/job_test_receptionist_1533.jar", 
+               "/tmp/local/bspmaster/job_test_receptionist_1533.xml")
+    )
   }
 }

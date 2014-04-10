@@ -322,7 +322,7 @@ public final class TaskTable implements Writable {
           sb.append(((Task)retryTasks[0]).getId()+" ");
         }
       }
-      return "TaskTable: "+sb.toString();
-    } else return "TaskTable: <empty tasks>";
+      return sb.toString();
+    } else return "<empty tasks>";
   }
 }
