@@ -311,4 +311,18 @@ public final class TaskTable implements Writable {
       }
     }
   }
+
+  @Override
+  public String toString() {
+    if(null != this.tasks) {
+      final StringBuilder sb = new StringBuilder();
+      for(final ArrayWritable taskArray: this.tasks) {
+        final Writable[] retryTasks = taskArray.get();
+        if(null != retryTasks && 0 < retryTasks.length) {
+          sb.append(((Task)retryTasks[0]).getId()+" ");
+        }
+      }
+      return "TaskTable: "+sb.toString();
+    } else return "TaskTable: <empty tasks>";
+  }
 }

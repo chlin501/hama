@@ -31,7 +31,7 @@ import scala.collection.immutable.Queue
  */
 class Receptionist(conf: HamaConfiguration) extends LocalService {
 
-  private[this] var waitQueue = Queue[Job]()
+  protected var waitQueue = Queue[Job]()
  
   override def configuration: HamaConfiguration = conf
 
@@ -67,14 +67,18 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    * @param jobFile denotes the job.xml submitted from the client.
    * @param localJobFile is the detination to which the job file to be copied.
    */
-  def copyJobFile(jobId: BSPJobID, jobFile: String, localJobFile: String) =
+  def copyJobFile(jobId: BSPJobID, jobFile: String, localJobFile: String) = {
+    LOG.info("Copy job file from {} to {}", jobFile, localJobFile)
     fs(jobId).copyToLocalFile(new Path(jobFile), new Path(localJobFile))
+  }
 
   def copyJarFile(jobId: BSPJobID, jarFile: Option[String], 
                   localJarFile: String) = jarFile match {
     case None => 
-    case Some(jar) => 
+    case Some(jar) => {
+      LOG.info("Copy jar file from {} to {}", jar, localJarFile)
       fs(jobId).copyToLocalFile(new Path(jar), new Path(localJarFile)) 
+    }
   }
 
   def addToConfiguration(localJobFile: String) {
@@ -95,10 +99,12 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    */
   def initJob(jobId: BSPJobID, jobFile: String): Job = {
     val (localJobFile, localJarFile) = createLocalData(jobId)
+    LOG.info("localJobFile: {}, localJarFile: {}", localJobFile, localJarFile)
     copyJobFile(jobId, jobFile, localJobFile)
     addToConfiguration(localJobFile)
-    val jobSplit = jobSplitFile
+    val jobSplit = jobSplitFile // TODO: move to Job.Builder
     copyJarFile(jobId, jarFile, localJarFile)
+    LOG.info("Create a job with id {}", jobId)
     new Job.Builder().setId(jobId).
                       setConf(conf).
                       setLocalJobFile(localJobFile).
@@ -106,6 +112,8 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
                       withTaskTable.
                       build
   }
+
+  def notifyJobSubmission = mediator ! Request("sched", JobSubmission)  
 
   /**
    * BSPJobClient call submitJob(jobId, jobFile)
@@ -116,7 +124,8 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
                jobId, sender.path.name) 
       val job = initJob(jobId, xml)
       waitQueue = waitQueue.enqueue(job)
-      mediator ! Request("sched", JobSubmission)  
+      LOG.info("Inside waitQueue: {}", waitQueue)
+      notifyJobSubmission
     }
   }
 

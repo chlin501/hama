@@ -20,6 +20,8 @@ package org.apache.hama.bsp.v2;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.ArrayWritable;
@@ -34,6 +36,8 @@ import org.apache.hama.bsp.BSPJobID;
  * Read only informaion for a job.
  */
 public final class Job implements Writable {
+
+  public static final Log LOG = LogFactory.getLog(Job.class);
 
   private long _current = System.currentTimeMillis();
 
@@ -150,7 +154,7 @@ public final class Job implements Writable {
     private String master = "";
     private int maxTaskAttempts = 3;
     private String inputPath = "";
-    private State state;
+    private State state = State.PREP;
     private long progress;
     private long setupProgress;
     private long cleanupProgress;
@@ -401,6 +405,8 @@ public final class Job implements Writable {
     }
     this.inputPath = (null == inputPath)? new Text(): new Text(inputPath);
     this.state = state;
+    if(null == this.state)
+      throw new IllegalArgumentException("No initial State is assigned.");
     this.progress = new LongWritable(progress);
     this.setupProgress = new LongWritable(setupProgress);
     this.cleanupProgress = new LongWritable(cleanupProgress);
@@ -592,6 +598,38 @@ public final class Job implements Writable {
       new TaskTable(this.id, getNumBSPTasks(), getMaxTaskAttempts());
     this.taskTable.readFields(in);
     this.targets.readFields(in);
+  }
+
+  @Override 
+  public String toString() {
+    return "Job id: "+ id.toString()+ 
+           " name: "+name.toString()+
+           " user: "+ user.toString()+
+           " localJobFile: "+localJobFile.toString()+
+           " localJarFile: "+localJarFile.toString()+
+           " lastCheckpoint: " +lastCheckpoint.toString()+
+           " numBSPTasks: "+ numBSPTasks.toString()+
+           " master: "+master.toString()+
+           " maxTaskAttempts: "+maxTaskAttempts.toString()+
+           " inputPath: "+inputPath.toString()+
+           " state: "+ state.toString()+
+           " progress: "+progress.toString()+
+           " setupProgress: "+setupProgress.toString()+
+           " cleanupProgress: "+cleanupProgress.toString()+
+           " startTime: "+ startTime.toString()+
+           " finishTime: "+finishTime.toString()+
+           " superstepCount: " +superstepCount.toString()+
+           " conf: "+conf.toString()+
+           " taskTable: "+taskTable.toString()+
+           " targets: "+targetsToString();  
+  }
+
+  private String targetsToString() {
+    final StringBuilder sb = new StringBuilder();
+    for(final String target: targets.toStrings()) {
+      sb.append(target+" ");
+    }
+    return sb.toString();
   }
 }
 
