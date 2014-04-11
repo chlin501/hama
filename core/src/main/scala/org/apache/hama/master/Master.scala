@@ -22,7 +22,8 @@ import akka.actor.SupervisorStrategy._
 import java.text._
 import java.util._
 import org.apache.hama._
-import org.apache.hama.util._
+import org.apache.hama.fs.Storage
+import org.apache.hama.util.Curator
 import scala.concurrent.duration._
 
 final private[hama] case class Id(value: String)
@@ -40,11 +41,12 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
       case _: NullPointerException     => Restart
       case _: IllegalArgumentException => Stop
-      case _: Exception                => Escalate
+      case _: Exception                => Restart
     }
 
   override def initializeServices {
     create("curator", classOf[Curator]).withCondition("curator")
+    create("storage", classOf[Storage]) 
     create("receptionist", classOf[Receptionist]) 
     create("groomManager", classOf[GroomManager]) 
     create("monitor", classOf[Monitor]) 
@@ -59,7 +61,8 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
       case "monitor" => 
       case "sched" =>  
       case "curator" => service ! GetMasterId 
-      case _ => LOG.warning("Unknown service ", serviceName)
+      case "storage" => 
+      case _ => LOG.warning("Unknown service {} ", serviceName)
     }
   }
  

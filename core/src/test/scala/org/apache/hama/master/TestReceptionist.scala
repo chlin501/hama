@@ -27,7 +27,6 @@ import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.Path
-import org.apache.hadoop.fs.permission._
 import org.apache.hama._
 import org.apache.hama.fs._
 import org.apache.hama.groom._
@@ -38,54 +37,39 @@ import org.junit.runner.RunWith
 import org.scalatest._
 import org.scalatest.junit.JUnitRunner
 
-case object GetJob
+case class GetJob(ref: ActorRef)
 case class JobData1(jobId: BSPJobID, localJarFile: String, localJobFile: String)
 
-class MockReceptionist(conf: HamaConfiguration, 
-                       ref: ActorRef) extends Receptionist(conf) {
+class MockMaster(conf: HamaConfiguration) extends Master(conf) {
+
+  override def initializeServices {
+    create("storage", classOf[MockStorage])
+    create("receptionist", classOf[MockReceptionist])
+  }
+  
+}
+
+class MockReceptionist(conf: HamaConfiguration) extends Receptionist(conf) {
 
   override val LOG = Logging(context.system, this)
-
-  val fs = new MockFileSystem(conf)
-
-  override def fileSystem: FileSystem = fs
-  override def localFs: FileSystem = fs
-
-  // unit test only
-  override def copyJobFile(jobId: BSPJobID, jobFile: String, 
-                           localJobFile: String) = {
-    LOG.info("Override copyJobFile jobId: {}, jobFile: {}, localJobFile: {}", 
-             jobId, jobFile, localJobFile)
-    FileUtils.copyFile(new File(jobFile), new File(localJobFile))
-  }
-
-  // unit test only
-  override def copyJarFile(jobId: BSPJobID, jarFile: Option[String],
-                           localJarFile: String) {
-    val jar = jarFile.getOrElse(jobId.toString+".jar")
-    LOG.info("Override copyJarFile jobId: {}, jarFile: {}, localJarFile: {}", 
-             jobId, jar, localJarFile)
-    // do nothing first
-    // jar file may need to runtime compile, zip, then copy can be done!
-    //FileUtils.copyFile(new File(jar), new File(localJarFile))
-  }
 
   override def notifyJobSubmission {
     LOG.info("Request sched to pull job from waitQueue.")
   }
 
   def getJob: Receive = {
-    case GetJob => {
+    case GetJob(ref) => {
       if(waitQueue.isEmpty) 
         throw new NullPointerException("Job is not enqueued for waitQueue is "+
                                        "empty!");
       val job = waitQueue.dequeue._1
-      LOG.info("job content: {}", job)
+      LOG.info("GetJob: {}", job)
       ref ! JobData1(job.getId, job.getLocalJarFile, job.getLocalJobFile)
     }
   }
   
   override def receive = getJob orElse super.receive
+
 }
 
 @RunWith(classOf[JUnitRunner])
@@ -97,8 +81,6 @@ class TestReceptionist extends TestKit(ActorSystem("TestReceptionist"))
   val LOG = LogFactory.getLog(classOf[TestReceptionist])
   val prob = TestProbe()
   val conf = new HamaConfiguration
-  val JOB_FILE_PERMISSION = 
-    FsPermission.createImmutable(0644.asInstanceOf[Short])
   val fs = new MockFileSystem(conf)
   var receptionist: ActorRef = _
   val random = new Random()
@@ -150,14 +132,14 @@ class TestReceptionist extends TestKit(ActorSystem("TestReceptionist"))
 
   it("test submit job to receptionist") {
     LOG.info("Test submit job to Receptionist")
-    val receptionist = system.actorOf(Props(classOf[MockReceptionist], 
-                                            conf, 
-                                            prob.ref))
+    val master = system.actorOf(Props(classOf[MockMaster], conf), "bspmaster")
     val jobId = createJobId
     val jobFile = createJobFile
     LOG.info("Submit job id "+jobId.toString+" job.xml: "+jobFile)
-    receptionist ! Submit(jobId, jobFile)
-    receptionist ! GetJob
+    master ! Request("receptionist", Submit(jobId, jobFile))
+    LOG.info("Wait 5 secs ...")
+    Thread.sleep(5*1000)
+    master ! Request("receptionist", GetJob(prob.ref))
     prob.expectMsg(
       JobData1(jobId, 
                "/tmp/local/bspmaster/job_test_receptionist_1533.jar", 

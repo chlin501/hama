@@ -17,118 +17,82 @@
  */
 package org.apache.hama.master
 
-import akka.routing._
+import akka.actor._
 import org.apache.hama._
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Job
+import org.apache.hama.fs.InitializeJob
 import org.apache.hama.master._
-import org.apache.hadoop.fs.FileSystem
-import org.apache.hadoop.fs.Path
 import scala.collection.immutable.Queue
+import scala.concurrent.duration._
+
+final case object RequestInitJob
 
 /**
  * Receive job submission from clients and put the job to the wait queue.
  */
 class Receptionist(conf: HamaConfiguration) extends LocalService {
 
+  type JobFile = String
+
   protected var waitQueue = Queue[Job]()
+
+  /**
+   * Job is stored before being completely initialized.
+   */
+  protected var storageQueue = Queue[(BSPJobID, JobFile)]()
  
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "receptionist"
 
-  // move to trait 
-  def fileSystem: FileSystem = FileSystem.get(conf)
-
-  def localFs: FileSystem = FileSystem.getLocal(conf)
-
-  def createLocalData(jobId: BSPJobID): (String, String) = {
-    val localDir = conf.get("bsp.local.dir", "/tmp/local")
-    val subDir = conf.get("bsp.local.dir.sub_dir", "bspmaster")
-    if(!localFs.exists(new Path(localDir, subDir))) 
-      fileSystem.mkdirs(new Path(localDir, subDir))
-    val localJobFile = "%s/%s/%s.xml".format(localDir, subDir, jobId)
-    val localJarFile = "%s/%s/%s.jar".format(localDir, subDir, jobId)
-    (localJobFile, localJarFile)
-  }
-
-  def sysDir: String = conf.get("bsp.system.dir", "/tmp/hadoop/bsp/system")
-
-  def systemDir: String = fileSystem.makeQualified(new Path(sysDir)).toString
-
-  def fs(jobId: BSPJobID): FileSystem = {
-    val jobDir = new Path(new Path(sysDir), jobId.toString)
-    jobDir.getFileSystem(conf) 
-  }
-
-  /**
-   * Copy the job.xml from a specified path, jobFile, to local, localJobFile.
-   * @param jobId denotes the BSPJobID
-   * @param jobFile denotes the job.xml submitted from the client.
-   * @param localJobFile is the detination to which the job file to be copied.
-   */
-  def copyJobFile(jobId: BSPJobID, jobFile: String, localJobFile: String) = {
-    LOG.info("Copy job file from {} to {}", jobFile, localJobFile)
-    fs(jobId).copyToLocalFile(new Path(jobFile), new Path(localJobFile))
-  }
-
-  def copyJarFile(jobId: BSPJobID, jarFile: Option[String], 
-                  localJarFile: String) = jarFile match {
-    case None => 
-    case Some(jar) => {
-      LOG.info("Copy jar file from {} to {}", jar, localJarFile)
-      fs(jobId).copyToLocalFile(new Path(jar), new Path(localJarFile)) 
-    }
-  }
-
-  def addToConfiguration(localJobFile: String) {
-    conf.addResource(new Path(localJobFile))
-  }
-
-  def jobSplitFile: String = conf.get("bsp.job.split.file")
-
-  def jarFile: Option[String] = conf.get("bsp.jar") match { 
-    case null => None
-    case jar@_ => Some(jar)
-  }
-
-  /**
-   * Perform necessary steps to initialize a Job.
-   * @param jobId is a unique BSPJobID  
-   * @param jobFile is submitted from a client.
-   */
-  def initJob(jobId: BSPJobID, jobFile: String): Job = {
-    val (localJobFile, localJarFile) = createLocalData(jobId)
-    LOG.info("localJobFile: {}, localJarFile: {}", localJobFile, localJarFile)
-    copyJobFile(jobId, jobFile, localJobFile)
-    addToConfiguration(localJobFile)
-    val jobSplit = jobSplitFile // TODO: move to Job.Builder
-    copyJarFile(jobId, jarFile, localJarFile)
-    LOG.info("Create a job with id {}", jobId)
-    new Job.Builder().setId(jobId).
-                      setConf(conf).
-                      setLocalJobFile(localJobFile).
-                      setLocalJarFile(localJarFile).
-                      withTaskTable.
-                      build
-  }
-
   def notifyJobSubmission = mediator ! Request("sched", JobSubmission)  
+
+  override def afterMediatorUp {
+    LOG.info("Mediator is up! Request to ask init job ...")
+    request(self, RequestInitJob)
+  }
+
+  def request(to: ActorRef, message: Any) {
+    import context.dispatcher
+    context.system.scheduler.schedule(0.seconds, 2.seconds, to, message)
+  }
+
+  def askForInit(jobId: BSPJobID, jobFile: String) { 
+    mediator ! Request("storage", InitializeJob(jobId, jobFile))
+  }
 
   /**
    * BSPJobClient call submitJob(jobId, jobFile)
    */
   def submitJob: Receive = {
-    case Submit(jobId: BSPJobID, xml: String) => {
+    case Submit(jobId: BSPJobID, jobFile: String) => {
       LOG.info("Received job {} submitted from the client {}",
                jobId, sender.path.name) 
-      val job = initJob(jobId, xml)
-      waitQueue = waitQueue.enqueue(job)
-      LOG.info("Inside waitQueue: {}", waitQueue)
-      notifyJobSubmission
+      storageQueue = storageQueue.enqueue((jobId, jobFile))
     }
   }
 
+  def requestInitJob: Receive = {
+    case RequestInitJob => {
+      if(!storageQueue.isEmpty) {
+        val (tuple, rest) = storageQueue.dequeue
+        askForInit(tuple._1, tuple._2) 
+      } else LOG.info("Receptionist's storageQueue is empty!")
+    }
+  }
+
+  /**
+   * After a job is initialized, enqueue that job to waitQueue and notify
+   * the scheduler.
+   */
+  def enqueue: Receive = {
+    case Enqueue(job) => {
+      waitQueue = waitQueue.enqueue(job)
+      LOG.debug("Inside waitQueue: {}", waitQueue)
+      notifyJobSubmission
+    }
+  }
   /**
    * Dispense a job to Scheduler.
    */
@@ -144,6 +108,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = isServiceReady orElse serverIsUp orElse take orElse submitJob orElse unknown
+  override def receive = enqueue orElse requestInitJob orElse isServiceReady orElse serverIsUp orElse take orElse submitJob orElse unknown
 
 }
