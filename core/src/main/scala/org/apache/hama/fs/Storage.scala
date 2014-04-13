@@ -93,9 +93,9 @@ class Storage(conf: HamaConfiguration) extends LocalService {
 
   def createSplits: Option[Array[BSPJobClient.RawSplit]] = {
     val jobSplit = jobSplitFile 
-    val splitCreated = jobSplit match {
+    val splitsCreated = jobSplit match {
       case Some(path) => {
-        val fs = new Path(systemDir).getFileSystem(conf)
+        val fs = new Path(systemDir).getFileSystem(configuration)
         val splitFile = fs.open(new Path(path))
         var splits: Array[BSPJobClient.RawSplit] = null
         try {
@@ -107,7 +107,8 @@ class Storage(conf: HamaConfiguration) extends LocalService {
       }
       case None => None
     }
-    splitCreated
+    LOG.info("Split created {}", splitsCreated)
+    splitsCreated
   }
 
   /**
@@ -122,9 +123,9 @@ class Storage(conf: HamaConfiguration) extends LocalService {
     addToConfiguration(localJobFile)
     copyJarFile(jobId, jarFile, localJarFile)
     val splits = createSplits
-    LOG.info("Create a job with id {}", jobId)
+    LOG.info("Job with id {} is created!", jobId)
     new Job.Builder().setId(jobId).
-                      setConf(conf).
+                      setConf(configuration).
                       setLocalJobFile(localJobFile).
                       setLocalJarFile(localJarFile).
                       withTaskTable(splits.getOrElse(null)).

@@ -310,8 +310,6 @@ public final class Job implements Writable {
 
     public Builder withTaskTable(final BSPJobClient.RawSplit[] splits) {
       assertParameters();
-      if(null == splits)
-        throw new IllegalArgumentException("RawSplit files not provided.");
       this.taskTable = new TaskTable(this.id, 
                                      numBSPTasks, 
                                      maxTaskAttempts,
