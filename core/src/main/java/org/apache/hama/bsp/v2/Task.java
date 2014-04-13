@@ -31,6 +31,8 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
 
+import org.apache.hama.bsp.BSPJobClient;
+import org.apache.hama.bsp.BSPJobClient.RawSplit;
 import org.apache.hama.bsp.TaskAttemptID;
 
 /**
@@ -41,14 +43,36 @@ public final class Task implements Writable {
   
   final Log LOG = LogFactory.getLog(Task.class);
 
+  /* The unique id for this task, including BSPJobID. */
   private TaskAttemptID id;
+
+  /* Time this task begins. */
   private LongWritable startTime = new LongWritable(0);
+
+  /* Time this task finishes. */  
   private LongWritable finishTime = new LongWritable(0);
+
+  /* The partition of this task. */
   private IntWritable partition = new IntWritable(1);
+
+  /* The input data for this task. */
+  private BSPJobClient.RawSplit split;
+
+  /* The state of this task. */
   private State state = State.WAITING;
+
+  /* The phase at which this task is. */
   private Phase phase = Phase.SETUP;
+
+  /* Denote if this task is completed. */
   private BooleanWritable completed = new BooleanWritable(false);
+
+  /** 
+   * Denote if this task is assigned and to which GroomServer this task 
+   * belongs. 
+   */
   private Marker marker = new Marker(false, ""); 
+
  
   public final static class Marker implements Writable {
     private BooleanWritable assigned = new BooleanWritable(false);
@@ -117,6 +141,7 @@ public final class Task implements Writable {
     private long startTime = 0;
     private long finishTime = 0;
     private int partition = 1;
+    private BSPJobClient.RawSplit split = null;
     private State state = State.WAITING;
     private Phase phase = Phase.SETUP;
     private boolean completed = false;
@@ -139,6 +164,11 @@ public final class Task implements Writable {
 
     public Builder setPartition(final int partition) {
       this.partition = partition;
+      return this;
+    }
+
+    public Builder setSplit(final BSPJobClient.RawSplit split) {
+      this.split = split;
       return this;
     }
 
@@ -167,6 +197,7 @@ public final class Task implements Writable {
                       startTime, 
                       finishTime, 
                       partition, 
+                      split, 
                       state, 
                       phase,
                       completed, 
@@ -180,6 +211,7 @@ public final class Task implements Writable {
               final long startTime, 
               final long finishTime, 
               final int partition, 
+              final BSPJobClient.RawSplit split, 
               final State state, 
               final Phase phase, 
               final boolean completed, 
@@ -190,6 +222,9 @@ public final class Task implements Writable {
     this.startTime = new LongWritable(startTime);
     this.finishTime = new LongWritable(finishTime);
     this.partition = new IntWritable(partition);
+    this.split = split;
+    if(null == this.split) 
+      LOG.warn("Split for "+this.id.toString()+" is null.");
     this.state = state;
     if(null == this.state)
       throw new NullPointerException("Task's State is missing!");
@@ -214,6 +249,10 @@ public final class Task implements Writable {
 
   public int getPartition() {
     return this.partition.get();
+  }
+
+  public BSPJobClient.RawSplit getSplit() {
+    return this.split;
   }
 
   public State getState() {
@@ -250,6 +289,12 @@ public final class Task implements Writable {
     this.startTime.write(out);
     this.finishTime.write(out);
     this.partition.write(out);
+    if(null != this.split) {
+      out.writeBoolean(true);
+      this.split.write(out);
+    } else {
+      out.writeBoolean(false);
+    }
     WritableUtils.writeEnum(out, state);
     WritableUtils.writeEnum(out, phase);
     this.completed.write(out);
@@ -266,6 +311,11 @@ public final class Task implements Writable {
     this.finishTime.readFields(in);
     this.partition = new IntWritable();
     this.partition.readFields(in);
+    if(in.readBoolean()) {
+      this.split.readFields(in);
+    } else {
+      this.split = null;
+    } 
     this.state = WritableUtils.readEnum(in, State.class);
     this.phase = WritableUtils.readEnum(in, Phase.class);
     this.completed = new BooleanWritable();

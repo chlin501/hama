@@ -45,7 +45,10 @@ public class TestTaskTable extends TestCase {
    */
   TaskTable createTaskTable(final BSPJobID jobId, final int numBSPTasks, 
                             final int maxTaskAttempts) throws Exception {
-    final TaskTable table = new TaskTable(jobId, numBSPTasks, maxTaskAttempts);
+    final TaskTable table = new TaskTable(jobId, 
+                                          numBSPTasks, 
+                                          maxTaskAttempts, 
+                                          null);
     // assert init
     for(int row = 0; row < numBSPTasks; row++) {
       final Task[] taskArray = table.get(row);
@@ -79,8 +82,7 @@ public class TestTaskTable extends TestCase {
   TaskTable deserialize(byte[] bytes) throws Exception {
     final ByteArrayInputStream bin = new ByteArrayInputStream(bytes);
     final DataInputStream in = new DataInputStream(bin);
-    final TaskTable table = 
-      new TaskTable(createBSPJobId(), numBSPTasks, maxTaskAttempts);
+    final TaskTable table = new TaskTable();
     try { 
       table.readFields(in);
     } finally {

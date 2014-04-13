@@ -63,7 +63,8 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
   }
 
   /**
-   * BSPJobClient call submitJob(jobId, jobFile)
+   * BSPJobClient call submitJob(jobId, jobFile), where jobFile submitted is
+   * the actual job.xml content.
    */
   def submitJob: Receive = {
     case Submit(jobId: BSPJobID, jobFile: String) => {
@@ -73,6 +74,9 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     }
   }
 
+  /**
+   * Ask Storage actor for initializing a job.
+   */
   def requestInitJob: Receive = {
     case RequestInitJob => {
       if(!storageQueue.isEmpty) {

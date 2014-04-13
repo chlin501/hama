@@ -592,7 +592,7 @@ public class BSPJobClient extends Configured implements Tool {
    * @return the complete list of splits
    * @throws IOException
    */
-  static RawSplit[] readSplitFile(DataInput in) throws IOException {
+  public final static RawSplit[] readSplitFile(DataInput in) throws IOException {
     byte[] header = new byte[SPLIT_FILE_HEADER.length];
     in.readFully(header);
     if (!Arrays.equals(SPLIT_FILE_HEADER, header)) {

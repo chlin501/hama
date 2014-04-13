@@ -20,6 +20,8 @@ package org.apache.hama.fs
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.Path
+import org.apache.hama.bsp.BSPJobClient
+import org.apache.hama.bsp.BSPJobClient.RawSplit
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.HamaConfiguration
@@ -78,11 +80,34 @@ class Storage(conf: HamaConfiguration) extends LocalService {
   def addToConfiguration(localJobFile: String) = 
     configuration.addResource(new Path(localJobFile))
 
-  def jobSplitFile: String = configuration.get("bsp.job.split.file")
+  def jobSplitFile: Option[String] = 
+    configuration.get("bsp.job.split.file") match {
+    case null => None
+    case path: String => Some(path)
+  }
 
   def jarFile: Option[String] = configuration.get("bsp.jar") match {
     case null => None
     case jar@_ => Some(jar)
+  }
+
+  def createSplits: Option[Array[BSPJobClient.RawSplit]] = {
+    val jobSplit = jobSplitFile 
+    val splitCreated = jobSplit match {
+      case Some(path) => {
+        val fs = new Path(systemDir).getFileSystem(conf)
+        val splitFile = fs.open(new Path(path))
+        var splits: Array[BSPJobClient.RawSplit] = null
+        try {
+          splits = BSPJobClient.readSplitFile(splitFile);
+        } finally {
+          splitFile.close();
+        }
+        Some(splits)
+      }
+      case None => None
+    }
+    splitCreated
   }
 
   /**
@@ -95,14 +120,14 @@ class Storage(conf: HamaConfiguration) extends LocalService {
     LOG.info("localJobFile: {}, localJarFile: {}", localJobFile, localJarFile)
     copyJobFile(jobId, jobFile, localJobFile)
     addToConfiguration(localJobFile)
-    val jobSplit = jobSplitFile // TODO: move to Job.Builder
     copyJarFile(jobId, jarFile, localJarFile)
+    val splits = createSplits
     LOG.info("Create a job with id {}", jobId)
     new Job.Builder().setId(jobId).
                       setConf(conf).
                       setLocalJobFile(localJobFile).
                       setLocalJarFile(localJarFile).
-                      withTaskTable.
+                      withTaskTable(splits.getOrElse(null)).
                       build
   }
 

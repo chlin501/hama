@@ -27,6 +27,8 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
 
+import org.apache.hama.bsp.BSPJobClient;
+import org.apache.hama.bsp.BSPJobClient.RawSplit;
 import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.HamaConfiguration;
 
@@ -50,7 +52,7 @@ public final class TaskTable implements Writable {
 
   public TaskTable(final BSPJobID jobId, final HamaConfiguration conf) {
     this(jobId, conf.getInt("bsp.peers.num", 1), 
-         conf.getInt("bsp.job.task.retry_n_times", 1)); 
+         conf.getInt("bsp.job.task.retry_n_times", 1), null); 
   }
 
   /**
@@ -61,9 +63,12 @@ public final class TaskTable implements Writable {
    * @param numBSPTasks specifies the row or the number of tasks this table can
    *                    have.
    * @param maxTaskAttempts denotes the max retry that a task can have.
+   * @param splits denotes the data splits to be consumed by each task.
    */ 
-  public TaskTable(final BSPJobID jobId, final int numBSPTasks, 
-                   final int maxTaskAttempts) {
+  public TaskTable(final BSPJobID jobId, 
+                   final int numBSPTasks, 
+                   final int maxTaskAttempts, 
+                   final BSPJobClient.RawSplit[] splits) {
     this.jobId = jobId;
     if(null == this.jobId)
       throw new IllegalArgumentException("TaskTable's BSPJobID is missing!");
@@ -79,10 +84,22 @@ public final class TaskTable implements Writable {
     if(0 >= this.maxTaskAttempts) 
       throw new IllegalArgumentException("maxTaskAttempts is not valid.");
 
+    final BSPJobClient.RawSplit[] rawSplits = splits;
+    // we can't assert numBSPTasks value against splits length because
+    // there may not have splits provided (meaning null == splits)!
+    // and each task is assigned with null split. 
+    if(null != rawSplits && 0 < rawSplits.length) {
+      this.numBSPTasks = rawSplits.length;
+      LOG.info("Adjusting numBSPTasks to "+numBSPTasks);
+    } 
+
     // init tasks
     this.tasks = new ArrayWritable[numBSPTasks];
     for(int row = 0; row < numBSPTasks; row++) {
       this.tasks[row] = new ArrayWritable(Task.class);
+      final BSPJobClient.RawSplit split = (null != rawSplits && 
+                                           0 < rawSplits.length)?
+                                           rawSplits[row]:null;
       set(row, new Task[] {
         new Task.Builder().setId(IDCreator.newTaskID()
                                           .withId(getJobId())
@@ -92,6 +109,8 @@ public final class TaskTable implements Writable {
                                           .build())
                           .setPhase(Task.Phase.SETUP)
                           .setState(Task.State.WAITING) 
+                          .setPartition((row+1))
+                          .setSplit(split)
                           .build()
       }); 
     }
@@ -180,8 +199,8 @@ public final class TaskTable implements Writable {
 
   /** 
    * Resize the column length for a particular row in this task table.
-   * Previous task array information will be retained.
-  public void resize(final int row, final int size) {
+   * Previous task array information such as should be retained/ copied.
+  public void resizeTo(final int rowAt, final int size) {
     if(!isValidColumn(size)) return;
     final Task[] taskAttemptArray = get(row); 
     if(null == taskAttemptArray) return;
