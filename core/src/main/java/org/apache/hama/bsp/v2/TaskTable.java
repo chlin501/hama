@@ -39,11 +39,11 @@ public final class TaskTable implements Writable {
   /* Indicate to which job id this task table belongs. */
   private BSPJobID jobId; 
 
-  /* Hard bound check for task restart. */
-  private int maxTaskAttempts;
+  /* Hard bound check for task restart; default to 3. */
+  private int maxTaskAttempts = 3;
 
-  /* The number of tasks allowed for a job. */
-  private int numBSPTasks;
+  /* The number of tasks allowed for a job; default to 1. */
+  private int numBSPTasks = 1;
 
   /* An array of tasks, reprenting the task table. */
   private ArrayWritable[] tasks;
@@ -52,13 +52,18 @@ public final class TaskTable implements Writable {
 
   public TaskTable(final BSPJobID jobId, final HamaConfiguration conf) {
     this(jobId, conf.getInt("bsp.peers.num", 1), 
-         conf.getInt("bsp.job.task.retry_n_times", 1), null); 
+         conf.getInt("bsp.job.task.retry_n_times", 3), null); 
   }
 
   /**
    * Initialize a 2d task array with numBSPTasks rows, and a task in column.
+   *
+   * Retried Task will not be created at the initialization stage in reducing
+   * object created. 
+   *
    * When a task fails, that task may attempt to re-execute several times, with 
-   * max retry up to maxTaskAttempts.  
+   * max retry up to <b>maxTaskAttempts</b>.  
+   *
    * @pram BSPJobID indicates to which job this table belongs.
    * @param numBSPTasks specifies the row or the number of tasks this table can
    *                    have.
@@ -91,7 +96,7 @@ public final class TaskTable implements Writable {
     if(null != rawSplits && 0 < rawSplits.length) {
       this.numBSPTasks = rawSplits.length;
       LOG.info("Adjusting numBSPTasks to "+numBSPTasks);
-    } 
+    }  
 
     // init tasks
     this.tasks = new ArrayWritable[numBSPTasks];
@@ -312,9 +317,6 @@ public final class TaskTable implements Writable {
     this.jobId = new BSPJobID();
     this.jobId.readFields(in);
     final int row = in.readInt();
-    if(this.numBSPTasks != row) 
-      throw new IllegalStateException("NumBSPTasks "+numBSPTasks+" and row "+
-                                      row+" not match.");
     this.tasks = new ArrayWritable[row];
     for (int rowIdx = 0; rowIdx < tasks.length; rowIdx++) {
       final int columnLength = in.readInt();
