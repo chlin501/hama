@@ -22,7 +22,9 @@ import akka.event._
 import scala.concurrent.duration._
 
 /**
- * A service that provides functions in looking up local services.
+ * A service that provides functions in creating local services. 
+ * Local services communication relies on mediator, either master or groom
+ * server.
  */
 trait LocalService extends Service {
 
@@ -91,30 +93,6 @@ trait LocalService extends Service {
   protected def isConditionEmpty(): Boolean =  conditions.isEmpty
 
   /**
-   * Find a particular service actor thourgh its name.
-  protected def find(service: String, path: String, 
-                     delay: FiniteDuration = 3.seconds): Cancellable = {
-    context.system.actorSelection(path) ! Identify(service)
-    import context.dispatcher
-    context.system.scheduler.schedule(0.seconds, delay, self, 
-                                        Timeout(service, path))
-  }
-   */
-
-  /**
-   * After local service replies, the reaction of this actor.
-   * @param service is a local service such as Scheduler.
-  protected def whenFound(service: ActorRef) { }
-   */
-
-  /**
-   * Timeout when finding specific service.
-   * @param service to be found.
-   * @param path of the service in ActorSystem.
-  protected def localTimeout(service: String, path: String) { }
-   */
-
-  /**
    * Cache service to Service#services map.
    */
   protected def cacheService(service: ActorRef) {
@@ -167,28 +145,6 @@ trait LocalService extends Service {
                  servicesCount, services.size)
     }
   }
-
-  /**
-   * Local find a particular service actor.
-  protected def localServiceReply: Receive = {
-    case ActorIdentity(target, Some(service)) => {
-      LOG.info("Local service {} is found.", target)
-      whenFound(service)
-    }
-    case ActorIdentity(target, None) =>
-      LOG.warning("Proxy {} is not yet available!", target)
-  }
-   */
-
-  /**
-   *
-  protected def localTimeout: Receive = {
-    case Timeout(proxy, path) => {
-      LOG.debug("Timeout when finding local service {} ", proxy)
-      localTimeout(proxy, path)
-    }
-  }
-   */
 
   // TODO: with bspmater var moves to another sub trait?
   protected def serverIsUp: Receive = {

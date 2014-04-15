@@ -91,7 +91,7 @@ class Storage(conf: HamaConfiguration) extends LocalService {
     case jar@_ => Some(jar)
   }
 
-  def createSplits: Option[Array[BSPJobClient.RawSplit]] = {
+  def createSplits(jobId: BSPJobID): Option[Array[BSPJobClient.RawSplit]] = {
     val jobSplit = jobSplitFile 
     val splitsCreated = jobSplit match {
       case Some(path) => {
@@ -107,7 +107,7 @@ class Storage(conf: HamaConfiguration) extends LocalService {
       }
       case None => None
     }
-    LOG.info("Split created {}", splitsCreated)
+    LOG.debug("Split created for {} is {}", jobId, splitsCreated)
     splitsCreated
   }
 
@@ -122,7 +122,7 @@ class Storage(conf: HamaConfiguration) extends LocalService {
     copyJobFile(jobId, jobFile, localJobFile)
     addToConfiguration(localJobFile)
     copyJarFile(jobId, jarFile, localJarFile)
-    val splits = createSplits
+    val splits = createSplits(jobId)
     LOG.info("Job with id {} is created!", jobId)
     new Job.Builder().setId(jobId).
                       setConf(configuration).
@@ -138,7 +138,7 @@ class Storage(conf: HamaConfiguration) extends LocalService {
   def initJob: Receive = {
     case InitializeJob(jobId, xml) => {
       val job = initJob(jobId, xml)
-      LOG.info("Initialized job: {}", job)
+      LOG.info("Initialized job: {} for jobId: {}", job, jobId)
       sender ! Enqueue(job)
     }
   }

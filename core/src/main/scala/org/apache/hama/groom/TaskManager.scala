@@ -27,6 +27,8 @@ import org.apache.hama.master.Directive.Action._
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
 
+final case object ChildIsActive
+
 class TaskManager(conf: HamaConfiguration) extends LocalService 
                                            with RemoteService {
 
@@ -62,7 +64,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   protected def initializeSlots {
     for(seq <- 1 to maxTasks) {
-      slots ++= Set(Slot(seq, None, bspmaster))
+      slots ++= Set(Slot(seq, None, bspmaster, None))
     }
     LOG.debug("{} GroomServer slots are initialied.", maxTasks)
   }
@@ -135,16 +137,41 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     }
   }
 
+  def childIsActive: Receive = {
+    case ChildIsActive => {
+      // start assign a task
+    }
+  }
+
   override def receive = requestMessage orElse receiveDirective orElse isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse unknown
+
+  def pickUp: Option[Slot] = {
+    var free: Slot = null
+    var flag = true
+    slots.takeWhile( slot => {
+      val isEmpty = None.equals(slot.task)
+      if(isEmpty) {
+        free = slot
+        flag = false
+      } else {
+        if(null != free) flag = false
+      }
+      flag
+    })
+    if(null == free) None else Some(free)
+  }
 
   private def matchThenExecute(action: Action, master: String, 
                                timestamp: Long, task: Task) {
     action.value match {
       case 1 => {
-        // a. arrange and store the task to a slot
-        // fork a new process by actor
-        // launch task on new process
-        // send stat to plugin
+        // a. pick up a free slot. 
+        val slot = pickUp
+        //configuration.setInt("bsp.task.child.seq", )
+        // b. fork a new process 
+        // c. launch task on the new process
+        // d. store the task to a slot
+        // e. periodically update stat to plugin
       }
       case 2 => 
       case 3 =>
@@ -154,4 +181,50 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   }
 
 
+}
+
+final case object RequestAssign
+
+class BSPChild(conf: HamaConfiguration) extends LocalService 
+                                                    with RemoteService {
+
+  /* Task assigned from TaskManager for computation. */
+  var task: Task = _
+
+  /* GroomServer TaskManager proxy. */
+  var taskManager: ActorRef = _
+  
+  /* TaskManager cancellable object. */
+  var cancelTaskManager: Cancellable = _
+
+  /* Sequence denote which slots is occipued. */
+  var seq: Int = configuration.getInt("bsp.task.child.seq", -1)
+
+  val taskManagerInfo = 
+    new ProxyInfo.Builder().withConfiguration(configuration).
+                            withActorName("taskManager").
+                            appendRootPath("bspmaster").
+                            appendChildPath("taskManager").
+                            buildProxyAtMaster
+
+  val taskManagerPath = taskManagerInfo.getPath
+
+  override def configuration: HamaConfiguration = conf
+  override def name = "bspChild"
+ 
+  override def initializeServices {
+    lookup("taskManager", taskManagerPath) 
+  }
+
+  override def afterLinked(proxy: ActorRef) = {
+    taskManager = proxy
+    cancelTaskManager = request(taskManager, RequestAssign)
+  }
+
+  def request(target: ActorRef, message: Any): Cancellable = {
+    import context.dispatcher
+    context.system.scheduler.schedule(0.seconds, 2.seconds, target, message)
+  }
+
+  override def receive = isProxyReady orElse timeout orElse unknown
 }
