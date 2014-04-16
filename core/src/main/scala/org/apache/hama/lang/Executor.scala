@@ -28,7 +28,7 @@ import org.apache.hama.util.RunJar
 import org.apache.hama.HamaConfiguration
 import scala.sys.process._
 
-final case class Fork(jobId: String, jobFile: String, jar: String, 
+final case class Fork(jobId: String, jobFile: String, jarPath: String, 
                       taskAttemptId: String)
 
 class Executor(conf: HamaConfiguration) extends Actor {
@@ -38,12 +38,16 @@ class Executor(conf: HamaConfiguration) extends Actor {
   type PID = Int
 
   val pathSeperator = System.getProperty("path.separator")
+  val javaHome = System.getProperty("java.home")
 
-  def workingDir(jobFile: String): File = {
-    val workDir = new File(new File(jobFile).getParent(), "work")
+  def logPath: String = System.getProperty("hama.log.dir")
+  def javacp: String = System.getProperty("java.class.path")
+
+  def workingDir(jobFilePath: String): File = {
+    val workDir = new File(new File(jobFilePath).getParent(), "work")
     val isCreated = workDir.mkdirs
     if (isCreated) 
-      LOG.debug("Working directory is created at {}", workDir)
+      LOG.info("Working directory is created at {}", workDir)
     workDir
   }
 
@@ -59,30 +63,42 @@ class Executor(conf: HamaConfiguration) extends Actor {
     logDir
   }
 
+  def unjar(jarPath: String, workDir: File) {
+    try {
+      RunJar.unJar(new File(jarPath), workDir)
+    } catch {
+      case ioe: IOException => LOG.error("Fail unjar to {}", workDir.toString)
+    }
+  }
+
+  def libsPath(workDir: File): String = {
+    val builder = new StringBuilder()
+    val libs = new File(workDir, "lib").listFiles
+    if (null != libs) {
+      libs.foreach(lib => {
+        builder.append(pathSeperator)
+        builder.append(lib)
+      })
+    }
+    builder.toString
+  }
+
   /**
    * @param javaClasspath denotes the classpath from 
    *                      System.getProperty("java.class.path")
-   * @param jar is the file containing bsp job.
+   * @param jarPath is the file containing bsp job.
    * @param workDir denotes the working directory.
    */
-  def classpath(javaClasspath: String, jar: String, workDir: File): String = {
+  def classpath(javaClasspath: String, jarPath: String, workDir: File): 
+      String = {
     val classPath = new StringBuilder()
-    classPath.append(javaClasspath)
-    classPath.append(pathSeperator)
-    if(null != jar && !"".equals(jar)) {
-      try {
-        RunJar.unJar(new File(jar), workDir)
-      } catch {
-        case ioe: IOException => 
-          LOG.error("Fail unjar to {}", workDir.toString)
-      }
-      val libs = new File(workDir, "lib").listFiles
-      if (null != libs) {
-        libs.foreach(lib => {
-          classPath.append(pathSeperator)
-          classPath.append(lib)
-        })
-      }
+    if(null != javaClasspath && !javaClasspath.isEmpty) {
+      classPath.append(javaClasspath)
+      classPath.append(pathSeperator)
+    }
+    if(null != jarPath && !jarPath.isEmpty) {
+      unjar(jarPath, workDir)
+      classPath.append(libsPath(workDir))
       classPath.append(pathSeperator)
       classPath.append(new File(workDir, "classes"))
       classPath.append(pathSeperator)
@@ -91,23 +107,34 @@ class Executor(conf: HamaConfiguration) extends Actor {
     classPath.toString
   }
 
+  // TODO: from conf
   def taskAddress: String = {
    "127.0.0.1"
   }
 
+  // TODO: from conf 
   def taskPort: String = {
     "50001"
   }
 
-  // System.getProperty("java.home")
+  // Bug: it seems using conf.get the stack lost track
+  //      following execution e.g. LOG.info after conf.get disappers 
+  def defaultOpts: String = conf.get("bsp.child.java.opts", "-Xmx200m")
+
   private def jvmArgs(javaHome: String, taskAttemptId: String, 
                       classpath: String, child: Class[_]): Seq[String] = {
     val java = new File(new File(javaHome, "bin"), "java").toString
-    val javaOpts = conf.get("bsp.child.java.opts", "-Xmx200m").
-                        replace("@taskid@", taskAttemptId).split(" ")
+    LOG.debug("Arg java: {}", java)
+    val opts = defaultOpts
+    LOG.debug("Arg opts: {}", opts)
+    val replacedOpts = opts.replace("@taskid@", taskAttemptId)
+    LOG.debug("Arg replacedOpts: {}", replacedOpts)
+    val javaOpts = replacedOpts.split(" ")
+    LOG.debug("Arg javaOpts: {}", javaOpts)
     //if(!classOf[BSPPeerChild].equals(child)) 
       //throw new RuntimeException("Class {} not match to BSPPeerChild.", child)
     val bspClassName = child.getName 
+    LOG.debug("Arg bspClasName: {}", bspClassName)
     //val groomHostName = conf.get("bsp.groom.address", "127.0.0.1")
     //need superstep from which to restart  
     //val superstep = 
@@ -129,44 +156,51 @@ class Executor(conf: HamaConfiguration) extends Actor {
   }
 */
 
-  def fork(jobId: String, jobFile: String, jar: String, 
+  /**
+   * @param jarPath is the path obtained from conf.get("bsp.jar").
+   */
+  def fork(jobId: String, jobFilePath: String, jarPath: String, 
            taskAttemptId: String) {
-    val workDir = workingDir(jobFile)
-    val logPath = System.getProperty("hama.log.dir")
-    LOG.debug("logPath pointed to "+logPath)
+    val workDir = workingDir(jobFilePath)
     val logDir = loggingDir(logPath, jobId)
-    val javacp = System.getProperty("java.class.path")
-    LOG.debug("java classpath "+javacp)
-    val cp = classpath(javacp, jar, workDir)
-    val javaHome = System.getProperty("java.home")
+    LOG.info("jobId {} logDir is {}", jobId, logDir)
+    val cp = classpath(javacp, jarPath, workDir)
+    LOG.info("jobId {} classpath: {}", jobId, cp)
     val cmd = jvmArgs(javaHome, taskAttemptId, cp, classOf[BSPChild])
-    createProcess(cmd, workDir)
+    LOG.info("jobId {} cmd: {}", jobId, cmd)
+    createProcess(cmd, workDir, logDir)
   }
 
-  def createProcess(cmd: Seq[String], workDir: File) {
-    val logger = ProcessLogger(line => logStdOut(line),  
-                               line => logStdErr(line)) 
+  /**
+   * @param logDir is the directory for a running task with particular forked  
+   *               process.
+   */
+  def createProcess(cmd: Seq[String], workDir: File, logDir: File) {
+    if(!logDir.exists) logDir.mkdirs
+    val logger = ProcessLogger(line => logStdOut(logDir, line),  
+                               line => logStdErr(logDir, line)) 
     Process(cmd, workDir) ! logger
   }
 
-  // TODO: log to different files. e.g. task_id.log and task_id.err
   /**
    * Write std err to error log 
    */
-  def logStdErr(line: String) {
+  def logStdErr(logDir: File, line: String) {
+    // TODO: write to ${logDir.getPath}/std.err 
     LOG.error(line)
   }
 
   /**
    * Write std out to log.
    */
-  def logStdOut(line: String) {
+  def logStdOut(logDir: File, line: String) {
+    // TODO: write ${logDir.getPath}/std.log
     LOG.info(line)
   }
 
   def forkProcess: Receive = {
-    case Fork(jobId, jobFile, jar, taskAttemptId) => {
-      fork(jobId, jobFile, jar, taskAttemptId) 
+    case Fork(jobId, jobFilePath, jarPath, taskAttemptId) => {
+      fork(jobId, jobFilePath, jarPath, taskAttemptId) 
     }
   } 
 
