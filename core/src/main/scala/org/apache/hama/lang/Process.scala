@@ -17,18 +17,23 @@
  */
 package org.apache.hama.lang 
 
-
 import akka.actor._
 import akka.event._
 import java.io.File
 import java.io.IOException
 import java.lang.management._
+import org.apache.commons.logging.Log
+import org.apache.commons.logging.LogFactory
 import org.apache.hama.util.RunJar
 import org.apache.hama.HamaConfiguration
+import scala.sys.process._
+
+final case class Fork(jobId: String, jobFile: String, jar: String, 
+                      conf: HamaConfiguration, taskAttemptId: String)
 
 class Process extends Actor {
-
-  val LOG = Logging(context.system, this) 
+ 
+  val LOG = Logging(context.system, this)
 
   type PID = Int
 
@@ -47,7 +52,7 @@ class Process extends Actor {
    * @param logPath is the System.getProperty("hama.log.dir")
    * @param jobId 
    */
-  def logDir(logPath: String, jobId: String): File = {
+  def loggingDir(logPath: String, jobId: String): File = {
     val logDir = new File(logPath + File.separator + "tasklogs" + 
                           File.separator + jobId)
     if (!logDir.exists) logDir.mkdirs
@@ -105,13 +110,15 @@ class Process extends Actor {
       //throw new RuntimeException("Class {} not match to BSPPeerChild.", child)
     val bspClassName = child.getName 
     //val groomHostName = conf.get("bsp.groom.address", "127.0.0.1")
-    //val superstep = need superstep from which to restart  
+    //need superstep from which to restart  
+    //val superstep = 
     val command = Seq(java) ++ javaOpts.toSeq ++ Seq(bspClassName) ++ 
                   Seq(taskAddress) ++ Seq(taskPort) ++ Seq(taskAttemptId)
     LOG.debug("jvm args: {}", command)
     command
   }
 
+/* In forked actor. send pid back to task manager
   private def pid: PID = {
     val str = ManagementFactory.getRuntimeMXBean.getName
     val ary = str.split("@")
@@ -121,12 +128,44 @@ class Process extends Actor {
       throw new IllegalStateException("Pid value can't be larger than 65535.")
     ret 
   }
+*/
 
-  def fork(cmd: Seq[String]): PID = {
-    pid 
+  def fork(jobId: String, jobFile: String, jar: String, 
+           conf: HamaConfiguration, taskAttemptId: String) {
+    val workDir = workingDir(jobFile)
+    val logPath = System.getProperty("hama.log.dir")
+    LOG.debug("logPath pointed to "+logPath)
+    val logDir = loggingDir(logPath, jobId)
+    val javacp = System.getProperty("java.class.path")
+    LOG.debug("java classpath "+javacp)
+    val cp = classpath(javacp, jar, workDir)
+    val javaHome = System.getProperty("java.home")
+    val cmd = jvmArgs(conf, javaHome, taskAttemptId, cp, classOf[BSPChild])
+    //val pio = new ProcessIO(_ => (),
+                            //stdout => scala.io.Source.fromInputStream(stdout).
+                                      //getLines.foreach(LOG.info),
+                            //_ => ())
+    // TODO: log to different files. e.g. task_id.log and task_id.err
+    val logger = ProcessLogger(line => LOG.info(line), line => LOG.error(line))
+    Process(cmd, workDir) ! logger
   }
 
-  def receive = {
-    case msg@_=> LOG.warning("Unknown message {} for pid {}", msg, pid)
+  def forkProcess: Receive = {
+    case Fork(jobId, jobFile, jar, conf, taskAttemptId) => {
+      fork(jobId, jobFile, jar, conf, taskAttemptId) 
+    }
   } 
+
+  def unknown: Receive = {
+    case msg@_=> LOG.warning("Unknown message {} for Process", msg)
+  }
+
+  def receive = forkProcess orElse unknown
+     
+}
+
+class BSPChild { 
+  def main(args: Array[String]) {
+
+  }
 }
