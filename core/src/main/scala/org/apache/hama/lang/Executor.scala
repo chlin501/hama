@@ -29,9 +29,9 @@ import org.apache.hama.HamaConfiguration
 import scala.sys.process._
 
 final case class Fork(jobId: String, jobFile: String, jar: String, 
-                      conf: HamaConfiguration, taskAttemptId: String)
+                      taskAttemptId: String)
 
-class Process extends Actor {
+class Executor(conf: HamaConfiguration) extends Actor {
  
   val LOG = Logging(context.system, this)
 
@@ -100,9 +100,8 @@ class Process extends Actor {
   }
 
   // System.getProperty("java.home")
-  private def jvmArgs(conf: HamaConfiguration, javaHome: String, 
-                      taskAttemptId: String, classpath: String, 
-                      child: Class[_]): Seq[String] = {
+  private def jvmArgs(javaHome: String, taskAttemptId: String, 
+                      classpath: String, child: Class[_]): Seq[String] = {
     val java = new File(new File(javaHome, "bin"), "java").toString
     val javaOpts = conf.get("bsp.child.java.opts", "-Xmx200m").
                         replace("@taskid@", taskAttemptId).split(" ")
@@ -131,7 +130,7 @@ class Process extends Actor {
 */
 
   def fork(jobId: String, jobFile: String, jar: String, 
-           conf: HamaConfiguration, taskAttemptId: String) {
+           taskAttemptId: String) {
     val workDir = workingDir(jobFile)
     val logPath = System.getProperty("hama.log.dir")
     LOG.debug("logPath pointed to "+logPath)
@@ -140,31 +139,51 @@ class Process extends Actor {
     LOG.debug("java classpath "+javacp)
     val cp = classpath(javacp, jar, workDir)
     val javaHome = System.getProperty("java.home")
-    val cmd = jvmArgs(conf, javaHome, taskAttemptId, cp, classOf[BSPChild])
-    //val pio = new ProcessIO(_ => (),
-                            //stdout => scala.io.Source.fromInputStream(stdout).
-                                      //getLines.foreach(LOG.info),
-                            //_ => ())
-    // TODO: log to different files. e.g. task_id.log and task_id.err
-    val logger = ProcessLogger(line => LOG.info(line), line => LOG.error(line))
+    val cmd = jvmArgs(javaHome, taskAttemptId, cp, classOf[BSPChild])
+    createProcess(cmd, workDir)
+  }
+
+  def createProcess(cmd: Seq[String], workDir: File) {
+    val logger = ProcessLogger(line => logStdOut(line),  
+                               line => logStdErr(line)) 
     Process(cmd, workDir) ! logger
   }
 
+  // TODO: log to different files. e.g. task_id.log and task_id.err
+  /**
+   * Write std err to error log 
+   */
+  def logStdErr(line: String) {
+    LOG.error(line)
+  }
+
+  /**
+   * Write std out to log.
+   */
+  def logStdOut(line: String) {
+    LOG.info(line)
+  }
+
   def forkProcess: Receive = {
-    case Fork(jobId, jobFile, jar, conf, taskAttemptId) => {
-      fork(jobId, jobFile, jar, conf, taskAttemptId) 
+    case Fork(jobId, jobFile, jar, taskAttemptId) => {
+      fork(jobId, jobFile, jar, taskAttemptId) 
     }
   } 
 
   def unknown: Receive = {
-    case msg@_=> LOG.warning("Unknown message {} for Process", msg)
+    case msg@_=> LOG.warning("Unknown message {} for Executor", msg)
   }
 
   def receive = forkProcess orElse unknown
      
 }
 
+object BSPChild {
+}
+
 class BSPChild { 
+ 
+  @throws(classOf[Throwable])
   def main(args: Array[String]) {
 
   }
