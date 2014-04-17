@@ -26,12 +26,11 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.RemoteService
 import org.apache.hama.bsp.TaskAttemptID
 
-final case class Args(host: String, port: Int, taskAttemptId: TaskAttemptID, 
-                      superstep: Int, childSystemName: String, config: Config)
+final case class Args(port: Int, instanceCount: Int, config: Config)
 
 object BSPPeerChild {
 
-  def toConfig(host: String, port: Int): Config = {
+  def toConfig(port: Int): Config = {
     ConfigFactory.parseString(s"""
       peer {
         akka {
@@ -49,7 +48,7 @@ object BSPPeerChild {
           }
           remote {
             netty.tcp {
-              hostname = "$host" 
+              hostname = "127.0.0.1" 
               port = $port 
             }
           }
@@ -62,20 +61,19 @@ object BSPPeerChild {
     if(null == args || 0 == args.length)
       throw new IllegalArgumentException("No arguments supplied when "+
                                          "BSPPeerChild is forked.")
-    val host = args(0)
-    val port = args(1).toInt
-    val taskAttemptId = TaskAttemptID.forName(args(2))
-    val superstep = args(3).toInt
-    val config = toConfig(host, port) 
-    val childSystemName = args(4)
-    Args(host, port, taskAttemptId, superstep, childSystemName, config)
+    val port = args(0).toInt
+    val instanceCount = args(1).toInt
+    val config = toConfig(port) 
+    Args(port, instanceCount, config)
   }
 
   @throws(classOf[Throwable])
   def main(args: Array[String]) {
     val defaultConf = new HamaConfiguration()
     val arguments = toArgs(args)
-    val system = ActorSystem(arguments.childSystemName, arguments.config)
+    val system = ActorSystem("BSPPeerSystem%s".format(arguments.instanceCount), 
+                             arguments.config)
+    defaultConf.setInt("bsp.child.instance.count", arguments.instanceCount)
     system.actorOf(Props(classOf[BSPPeerChild], defaultConf), "bspPeerChild")
   }
 }
@@ -85,7 +83,8 @@ class BSPPeerChild(conf: HamaConfiguration) extends LocalService
 
    override def configuration: HamaConfiguration = conf
 
-   override def name: String = self.path.name
+   override def name: String = 
+     "bspPeerChild%s".format(conf.getInt("bsp.child.instance.count", 1))
 
    override def receive = unknown
 }

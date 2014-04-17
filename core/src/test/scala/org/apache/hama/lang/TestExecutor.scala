@@ -210,14 +210,11 @@ class TestExecutor extends TestKit(ActorSystem("TestExecutor"))
     LOG.info("BSPJobId: "+jobId+" jobFilePath: "+jobFilePath+
              " jarPath: "+jarPath +" taskAttemptId: "+taskAttemptId+
              " childSystemName: BSPPeerSystem"+insCount)
-    executor ! Fork(jobId.toString, jobFilePath, jarPath, 
-                    taskAttemptId.toString, superstep, insCount)
+    executor ! Fork(jobId.toString, jobFilePath, jarPath, insCount)
     executor ! GetProcessParam
     
     val cmd = System.getProperty("java.home")+"/bin/java,-Xmx200m,"+
-              className+",127.0.0.1,50001,"+
-              "attempt_test_fork_process_1234_000003_2,"+superstep+","+
-              "BSPPeerSystem"+insCount
+              className+",50001,"+insCount
     val workDir = "/tmp/hama/work"
     val logDir = "/tmp/hama/logs/tasklogs/job_test_fork_process_1234"
     prob.expectMsg(ProcessParam(cmd, workDir, logDir))

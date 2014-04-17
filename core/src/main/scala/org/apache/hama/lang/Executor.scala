@@ -32,7 +32,6 @@ import org.apache.hama.HamaConfiguration
 import scala.sys.process._
 
 final case class Fork(jobId: String, jobFile: String, jarPath: String, 
-                      taskAttemptId: String, superstep: Int, 
                       instanceCount: Int)
 
 class Executor(conf: HamaConfiguration) extends Actor {
@@ -145,24 +144,17 @@ class Executor(conf: HamaConfiguration) extends Actor {
   //      following execution e.g. LOG.info after conf.get disappers 
   def defaultOpts: String = conf.get("bsp.child.java.opts", "-Xmx200m")
 
-  private def jvmArgs(javaHome: String, taskAttemptId: String, superstep: Int,
-                      classpath: String, child: Class[_], instanceCount: Int): 
+  private def jvmArgs(javaHome: String, classpath: String, 
+                      child: Class[_], instanceCount: Int): 
       Seq[String] = {
     val java = new File(new File(javaHome, "bin"), "java").toString
     LOG.debug("Arg java: {}", java)
-    val opts = defaultOpts
+    val opts = defaultOpts.split(" ")
     LOG.debug("Arg opts: {}", opts)
-    val replacedOpts = opts.replace("@taskid@", taskAttemptId)
-    LOG.debug("Arg replacedOpts: {}", replacedOpts)
-    val javaOpts = replacedOpts.split(" ")
-    LOG.debug("Arg javaOpts: {}", javaOpts)
     val bspClassName = child.getName 
     LOG.debug("Arg bspClasName: {}", bspClassName)
-    val childSystemName = conf.get("bsp.child.actor-system.name", 
-                                   "BSPPeerSystem%s".format(instanceCount))
-    val command = Seq(java) ++ javaOpts.toSeq ++ Seq(bspClassName) ++ 
-                  Seq(taskAddress) ++ Seq(taskPort) ++ Seq(taskAttemptId) ++
-                  Seq(superstep.toString) ++ Seq(childSystemName)
+    val command = Seq(java) ++ opts.toSeq ++ Seq(bspClassName) ++ 
+                  Seq(taskPort) ++ Seq(instanceCount.toString)
     LOG.debug("jvm args: {}", command)
     command
   }
@@ -183,14 +175,13 @@ class Executor(conf: HamaConfiguration) extends Actor {
    * @param jarPath is the path obtained from conf.get("bsp.jar").
    */
   def fork(jobId: String, jobFilePath: String, jarPath: String, 
-           taskAttemptId: String, superstep: Int, instanceCount: Int) {
+           instanceCount: Int) {
     val workDir = workingDir(jobFilePath)
     val logDir = loggingDir(logPath, jobId)
     LOG.info("jobId {} logDir is {}", jobId, logDir)
     val cp = classpath(javacp, jarPath, workDir)
     LOG.info("jobId {} classpath: {}", jobId, cp)
-    val cmd = jvmArgs(javaHome, taskAttemptId, superstep, cp,
-                      classOf[BSPPeerChild], instanceCount)
+    val cmd = jvmArgs(javaHome, cp, classOf[BSPPeerChild], instanceCount)
     LOG.info("jobId {} cmd: {}", jobId, cmd)
     createProcess(cmd, workDir, logDir)
   }
@@ -223,10 +214,8 @@ class Executor(conf: HamaConfiguration) extends Actor {
   }
 
   def forkProcess: Receive = {
-    case Fork(jobId, jobFilePath, jarPath, taskAttemptId, superstep, 
-              instanceCount) => {
-      fork(jobId, jobFilePath, jarPath, taskAttemptId, superstep, 
-           instanceCount) 
+    case Fork(jobId, jobFilePath, jarPath, instanceCount) => {
+      fork(jobId, jobFilePath, jarPath, instanceCount) 
     }
   } 
 
