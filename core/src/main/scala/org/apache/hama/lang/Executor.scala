@@ -24,12 +24,14 @@ import java.io.IOException
 import java.lang.management._
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
+import org.apache.commons.lang.math.NumberUtils
 import org.apache.hama.util.RunJar
+import org.apache.hama.util.BSPNetUtils
 import org.apache.hama.HamaConfiguration
 import scala.sys.process._
 
 final case class Fork(jobId: String, jobFile: String, jarPath: String, 
-                      taskAttemptId: String)
+                      taskAttemptId: String, superstep: Int)
 
 class Executor(conf: HamaConfiguration) extends Actor {
  
@@ -107,21 +109,33 @@ class Executor(conf: HamaConfiguration) extends Actor {
     classPath.toString
   }
 
-  // TODO: from conf
-  def taskAddress: String = {
-   "127.0.0.1"
-  }
+  def taskAddress: String = conf.get("bsp.child.address", "127.0.0.1")
 
-  // TODO: from conf 
   def taskPort: String = {
-    "50001"
+    var port = "50001" 
+    val ports = conf.getStrings("bsp.child.port", "50001")
+    if(1 != ports.length) {
+      var cont = true
+      ports.takeWhile( p => {
+        if(NumberUtils.isDigits(p)) {
+          if(BSPNetUtils.available(p.toInt)) {
+            port = p
+            cont = false
+          }
+        } 
+        cont
+      })
+    } else {
+      port = ports(0)
+    }
+    port
   }
 
   // Bug: it seems using conf.get the stack lost track
   //      following execution e.g. LOG.info after conf.get disappers 
   def defaultOpts: String = conf.get("bsp.child.java.opts", "-Xmx200m")
 
-  private def jvmArgs(javaHome: String, taskAttemptId: String, 
+  private def jvmArgs(javaHome: String, taskAttemptId: String, superstep: Int,
                       classpath: String, child: Class[_]): Seq[String] = {
     val java = new File(new File(javaHome, "bin"), "java").toString
     LOG.debug("Arg java: {}", java)
@@ -136,10 +150,9 @@ class Executor(conf: HamaConfiguration) extends Actor {
     val bspClassName = child.getName 
     LOG.debug("Arg bspClasName: {}", bspClassName)
     //val groomHostName = conf.get("bsp.groom.address", "127.0.0.1")
-    //need superstep from which to restart  
-    //val superstep = 
     val command = Seq(java) ++ javaOpts.toSeq ++ Seq(bspClassName) ++ 
-                  Seq(taskAddress) ++ Seq(taskPort) ++ Seq(taskAttemptId)
+                  Seq(taskAddress) ++ Seq(taskPort) ++ Seq(taskAttemptId) ++
+                  Seq(superstep.toString)
     LOG.debug("jvm args: {}", command)
     command
   }
@@ -160,13 +173,14 @@ class Executor(conf: HamaConfiguration) extends Actor {
    * @param jarPath is the path obtained from conf.get("bsp.jar").
    */
   def fork(jobId: String, jobFilePath: String, jarPath: String, 
-           taskAttemptId: String) {
+           taskAttemptId: String, superstep: Int) {
     val workDir = workingDir(jobFilePath)
     val logDir = loggingDir(logPath, jobId)
     LOG.info("jobId {} logDir is {}", jobId, logDir)
     val cp = classpath(javacp, jarPath, workDir)
     LOG.info("jobId {} classpath: {}", jobId, cp)
-    val cmd = jvmArgs(javaHome, taskAttemptId, cp, classOf[BSPChild])
+    val cmd = jvmArgs(javaHome, taskAttemptId, superstep, cp,
+                      classOf[BSPChild])
     LOG.info("jobId {} cmd: {}", jobId, cmd)
     createProcess(cmd, workDir, logDir)
   }
@@ -199,8 +213,8 @@ class Executor(conf: HamaConfiguration) extends Actor {
   }
 
   def forkProcess: Receive = {
-    case Fork(jobId, jobFilePath, jarPath, taskAttemptId) => {
-      fork(jobId, jobFilePath, jarPath, taskAttemptId) 
+    case Fork(jobId, jobFilePath, jarPath, taskAttemptId, superstep) => {
+      fork(jobId, jobFilePath, jarPath, taskAttemptId, superstep) 
     }
   } 
 

@@ -204,17 +204,19 @@ class TestExecutor extends TestKit(ActorSystem("TestExecutor"))
     val jobFilePath = createJobFile.getPath
     val jarPath = createJarPath 
     val taskAttemptId = createTaskAttemptId(jobId)
+    val superstep = 7
     LOG.info("BSPJobId: "+jobId+" jobFilePath: "+jobFilePath+
              " jarPath: "+jarPath +" taskAttemptId: "+taskAttemptId)
     executor ! Fork(jobId.toString, jobFilePath, jarPath, 
-                    taskAttemptId.toString)
+                    taskAttemptId.toString, superstep)
     executor ! GetProcessParam
-    val cmd = "/home/neo/jdk1.6.0_25/jre/bin/java,-Xmx200m,"+
-                  "org.apache.hama.lang.BSPChild,127.0.0.1,50001,"+
-                  "attempt_test_fork_process_1234_000003_2"
+    
+    val cmd = System.getProperty("java.home")+"/"+
+              "bin/java,-Xmx200m,"+
+              "org.apache.hama.lang.BSPChild,127.0.0.1,50001,"+
+              "attempt_test_fork_process_1234_000003_2,"+superstep
     val workDir = "/tmp/hama/work"
     val logDir = "/tmp/hama/logs/tasklogs/job_test_fork_process_1234"
     prob.expectMsg(ProcessParam(cmd, workDir, logDir))
-
   }
 }

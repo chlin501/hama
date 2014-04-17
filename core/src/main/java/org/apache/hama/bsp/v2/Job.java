@@ -52,16 +52,13 @@ public final class Job implements Writable {
   /* The user that owns this job. */
   private Text user = new Text();
 
-  /* This is the job file or job.xml. 
-  private Text xml = new Text(); 
-   */
-
   /* job.xml path stored in local fs. */
   private Text localJobFile = new Text();
 
   /* The jar file path stored in local fs. */
   private Text localJarFile = new Text();
 
+  /* The lastest superstep was successfully snapshotted. */
   private IntWritable lastCheckpoint = new IntWritable(0);
 
   /* The number of bsp tasks. */
@@ -94,7 +91,7 @@ public final class Job implements Writable {
   /* Finish time for this job. */
   private LongWritable finishTime = new LongWritable(0);
 
-  /* The i-th superstep. */
+  /* The i-th superstep that is running right now. */
   private LongWritable superstepCount = new LongWritable(0); 
 
   /* Specific setting for this job. */
