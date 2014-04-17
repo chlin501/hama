@@ -25,6 +25,7 @@ import java.lang.management._
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
 import org.apache.commons.lang.math.NumberUtils
+import org.apache.hama.groom.BSPPeerChild
 import org.apache.hama.util.RunJar
 import org.apache.hama.util.BSPNetUtils
 import org.apache.hama.HamaConfiguration
@@ -69,7 +70,8 @@ class Executor(conf: HamaConfiguration) extends Actor {
     try {
       RunJar.unJar(new File(jarPath), workDir)
     } catch {
-      case ioe: IOException => LOG.error("Fail unjar to {}", workDir.toString)
+      case ioe: IOException => 
+        LOG.error("Fail unjar to directory {}", workDir.toString)
     }
   }
 
@@ -180,7 +182,7 @@ class Executor(conf: HamaConfiguration) extends Actor {
     val cp = classpath(javacp, jarPath, workDir)
     LOG.info("jobId {} classpath: {}", jobId, cp)
     val cmd = jvmArgs(javaHome, taskAttemptId, superstep, cp,
-                      classOf[BSPChild])
+                      classOf[BSPPeerChild])
     LOG.info("jobId {} cmd: {}", jobId, cmd)
     createProcess(cmd, workDir, logDir)
   }
@@ -224,15 +226,4 @@ class Executor(conf: HamaConfiguration) extends Actor {
 
   def receive = forkProcess orElse unknown
      
-}
-
-object BSPChild {
-}
-
-class BSPChild { 
- 
-  @throws(classOf[Throwable])
-  def main(args: Array[String]) {
-
-  }
 }
