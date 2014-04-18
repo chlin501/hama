@@ -67,6 +67,7 @@ trait LogAssistant {
         val end = t match { 
           case Stdout => "log"
           case Stderr => "err"
+          case Console =>
         }
         val taskLogFile = new File(logDir, taskAttemptId+"."+end)
         var writer: BufferedWriter  = null

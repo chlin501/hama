@@ -17,10 +17,14 @@
  */
 package org.apache.hama
 
-import akka.actor._
-import akka.event._
+import akka.actor.ActorRef
+import akka.actor.ActorIdentity
+import akka.actor.Cancellable
+import akka.actor.Identify
+import akka.actor.Props
 import akka.contrib.pattern.ReliableProxy
-import scala.concurrent.duration._
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.DurationInt
 
 /**
  * A service that provides remote methods such as proxy lookup.

@@ -21,4 +21,4 @@ package org.apache.hama
  * Notify when the system is in Normal state.
  * @param systemName of the server.
  */
-case class Ready(systemName: String)
+final case class Ready(systemName: String)

@@ -15,6 +15,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama
+package org.apache.hama.master
 
-case object GetMasterId
+final case object GetMasterId

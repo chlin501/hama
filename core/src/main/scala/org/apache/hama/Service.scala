@@ -17,11 +17,8 @@
  */
 package org.apache.hama
 
-import akka.actor._
-import akka.event._
-import akka.contrib.pattern.ReliableProxy
-import org.apache.hama._
-import scala.concurrent.duration._
+import akka.actor.ActorRef
+import akka.actor.Terminated
 
 /**
  * A service may hold a collection of local services
@@ -39,17 +36,13 @@ trait Service extends Agent {
   protected def configuration: HamaConfiguration
 
   /**
-   * Methods to be executed when shutting down.   
-  protected def shutdown 
-   */
-
-  /**
    * Initialize either groom's or master's subservices.
    */
   override def preStart = initializeServices 
 
   /**
    * Notify the target service is offline.
+   * @param target that may be offline.  
    */
   protected def offline(target: ActorRef) { }
 

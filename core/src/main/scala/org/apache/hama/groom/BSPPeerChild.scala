@@ -19,14 +19,21 @@ package org.apache.hama.groom
 
 import akka.actor.ActorSystem
 import akka.actor.Props
+import akka.actor.ActorRef
+import akka.actor.Cancellable
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import org.apache.hama.LocalService
-import org.apache.hama.HamaConfiguration
-import org.apache.hama.RemoteService
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.bsp.v2.Task
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.ProxyInfo
+import org.apache.hama.RemoteService
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.DurationInt
 
 final case class Args(port: Int, instanceCount: Int, config: Config)
+final case object Setup
 
 object BSPPeerChild {
 
@@ -74,17 +81,52 @@ object BSPPeerChild {
     val system = ActorSystem("BSPPeerSystem%s".format(arguments.instanceCount), 
                              arguments.config)
     defaultConf.setInt("bsp.child.instance.count", arguments.instanceCount)
-    system.actorOf(Props(classOf[BSPPeerChild], defaultConf), "bspPeerChild")
+    system.actorOf(Props(classOf[BSPPeerChild], defaultConf), 
+                   "bspPeerChild%s".format(arguments.instanceCount))
   }
 }
 
+/**
+ * Launched BSP actor via forked process.
+ */
 class BSPPeerChild(conf: HamaConfiguration) extends LocalService 
                                             with RemoteService {
+
+   val taskManagerInfo = 
+     new ProxyInfo.Builder().withConfiguration(conf).
+                             withActorName("taskManager").
+                             appendRootPath("groomServer"). // TODO: from conf
+                             appendChildPath("taskManager").
+                             buildProxyAtGroom
+   val taskManagerPath = taskManagerInfo.getPath
+   var taskManager: ActorRef = _
+   var cancellable: Cancellable = _
 
    override def configuration: HamaConfiguration = conf
 
    override def name: String = 
      "bspPeerChild%s".format(conf.getInt("bsp.child.instance.count", 1))
 
-   override def receive = unknown
+   def request(target: ActorRef, message: Any): Cancellable = {
+     import context.dispatcher
+     context.system.scheduler.schedule(0.seconds, 2.seconds, target, message)
+   }
+ 
+   override def initializeServices {
+     lookup("taskManager", taskManagerPath)
+   }
+
+   override def afterLinked(proxy: ActorRef) {
+     taskManager = proxy
+     taskManager ! Setup
+   }
+
+   def processTask: Receive = {
+     case task: Task => {
+       LOG.info("Start processing task {}", task.getId)
+     }
+   }
+
+   override def receive = processTask orElse isProxyReady orElse timeout orElse unknown
 }
+

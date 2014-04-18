@@ -17,9 +17,12 @@
  */
 package org.apache.hama
 
-import akka.actor._
-import akka.event._
-import scala.concurrent.duration._
+import akka.actor.Actor
+import akka.actor.ActorRef
+import akka.actor.Props
+import akka.actor.Cancellable
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.DurationInt
 
 /**
  * A service that provides functions in creating local services. 

@@ -17,11 +17,14 @@
  */
 package org.apache.hama.master
 
-import akka.actor._
-import org.apache.hama._
+import akka.actor.ActorRef
+import akka.actor.Cancellable
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.Request
 import org.apache.hama.bsp.v2.GroomServerSpec
-import org.apache.hama.master._
-import scala.concurrent.duration._
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 import scala.collection.immutable.Queue
 
 private[master] final case class Groom(groom: ActorRef, spec: GroomServerSpec) 

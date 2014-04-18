@@ -17,14 +17,19 @@
  */
 package org.apache.hama.master
 
-import akka.actor._
-import akka.actor.SupervisorStrategy._
+import akka.actor.ActorRef
+import akka.actor.OneForOneStrategy
+import akka.actor.SupervisorStrategy.Restart
+import akka.actor.SupervisorStrategy.Stop
 import java.text._
 import java.util._
-import org.apache.hama._
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.Request
+import org.apache.hama.ServiceStateMachine
 import org.apache.hama.fs.Storage
 import org.apache.hama.util.Curator
-import scala.concurrent.duration._
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 
 final private[hama] case class Id(value: String)
 

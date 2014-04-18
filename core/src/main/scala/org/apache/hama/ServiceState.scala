@@ -22,24 +22,24 @@ sealed trait ServiceState
 /**
  * The system in the stage where services are starting up.
  */
-private[hama] case object StartUp extends ServiceState 
+private[hama] final case object StartUp extends ServiceState 
 
 /**
  * The system services are ready.
  */
-private[hama] case object Normal extends ServiceState
+private[hama] final case object Normal extends ServiceState
 
 /**
  * The system services are shutting down.
  */
-private[hama] case object CleanUp extends ServiceState
+private[hama] final case object CleanUp extends ServiceState
 
 /**
  * The system is stopped.
  */
-private[hama] case object Stopped extends ServiceState
+private[hama] final case object Stopped extends ServiceState
 
 /**
  * The system is failed.
  */
-private[hama] case object Failed extends ServiceState
+private[hama] final case object Failed extends ServiceState

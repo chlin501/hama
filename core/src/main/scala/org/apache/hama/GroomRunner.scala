@@ -17,11 +17,14 @@
  */
 package org.apache.hama
 
-import akka.actor._
-import akka.event._
-import com.typesafe.config._
-import org.apache.hama.groom._
-import scala.concurrent.duration._
+import akka.actor.Actor
+import akka.actor.ActorRef
+import akka.actor.ActorSystem
+import akka.actor.Props
+import akka.event.Logging
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
+import org.apache.hama.groom.GroomServer
 
 object GroomConfig {
   def toConfig(): Config =

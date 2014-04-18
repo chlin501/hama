@@ -17,4 +17,4 @@
  */
 package org.apache.hama
 
-case class Request(service: String, message: Any)
+final case class Request(service: String, message: Any)

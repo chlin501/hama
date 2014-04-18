@@ -15,16 +15,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama
 
-import akka.actor._
+import akka.actor.Actor
+import akka.actor.ActorRef
 
 sealed trait EventMessage
 case class SubscribeEvent(event: Event, ref: ActorRef) extends EventMessage
 case class UnsubscribeEvent(event: Event, ref: ActorRef) extends EventMessage
 
 sealed trait Event
-case object Ready extends Event
+case object ServiceReady extends Event
 
 trait ServiceEventListener { self: Actor => 
   protected var mapping = Map.empty[Event, Set[ActorRef]]

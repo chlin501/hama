@@ -17,23 +17,20 @@
  */
 package org.apache.hama
 
-import akka.actor._
-
 /**
  * Load a particular service with name and its actor reference to services 
  * cache.
  * This happens when the service in the StartUp state.
  */
-private[hama] case class Load
+final case class Load
 
 /**
  * Unload a service, denoted by name, out of services cache.
  * This happens when the service in the CleanUp state.
  */
-private[hama] case class Unload
+final case class Unload
 
 /**
  * Shutdown the entire server.
  */
-private[hama] case object Shutdown
-
+final case object Shutdown

@@ -22,4 +22,4 @@ package org.apache.hama
  * @param name is the name of the proxy
  * @param path is the path pointed to the target proxy.
  */
-case class Timeout(name: String, path: String)
+final case class Timeout(name: String, path: String)

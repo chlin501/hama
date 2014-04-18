@@ -17,9 +17,12 @@
  */
 package org.apache.hama.master
 
-import akka.actor._
-import org.apache.hama._
-import org.apache.hama.master.monitor._
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.Load
+import org.apache.hama.LocalService
+import org.apache.hama.master.monitor.JobTasksTracker
+import org.apache.hama.master.monitor.GroomTasksTracker
+import org.apache.hama.master.monitor.SysMetricsTracker
 
 class Monitor(conf: HamaConfiguration) extends LocalService {
 

@@ -17,9 +17,11 @@
  */
 package org.apache.hama
 
-import akka.actor._
-import akka.event._
-import scala.concurrent.duration._
+import akka.actor.ActorRef
+import akka.actor.FSM
+import akka.actor.Cancellable
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.DurationInt
 
 sealed trait StateMessage
 case class SubscribeState(state: ServiceState, ref: ActorRef) 

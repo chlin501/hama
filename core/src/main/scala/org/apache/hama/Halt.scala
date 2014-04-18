@@ -20,4 +20,4 @@ package org.apache.hama
 /**
  * Notify when the servicde is in Stopped state.
  */
-case class Halt(systemName: String)
+final case class Halt(systemName: String)

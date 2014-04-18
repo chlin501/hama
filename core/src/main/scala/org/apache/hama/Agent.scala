@@ -17,9 +17,8 @@
  */
 package org.apache.hama
 
-import akka.actor._
-import akka.event._
-import scala.concurrent.duration._
+import akka.actor.Actor
+import akka.event.Logging
 
 trait Agent extends Actor {
   

@@ -19,4 +19,4 @@ package org.apache.hama.master
 
 import org.apache.hama.bsp.v2.Job
 
-case class Enqueue(job: Job)
+final case class Enqueue(job: Job)

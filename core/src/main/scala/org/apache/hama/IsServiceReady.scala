@@ -20,4 +20,4 @@ package org.apache.hama
 /**
  * Client checks if the server is ready for service.
  */
-case object IsServiceReady
+final case object IsServiceReady
