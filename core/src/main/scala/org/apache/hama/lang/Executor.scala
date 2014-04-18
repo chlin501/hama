@@ -19,20 +19,94 @@ package org.apache.hama.lang
 
 import akka.actor._
 import akka.event._
+import java.io.BufferedReader
+import java.io.BufferedWriter
 import java.io.File
+import java.io.FileWriter
+import java.io.InputStream
+import java.io.InputStreamReader
 import java.io.IOException
 import java.lang.management._
+import java.lang.ProcessBuilder
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
 import org.apache.commons.lang.math.NumberUtils
+import org.apache.hadoop.io.IOUtils
 import org.apache.hama.groom.BSPPeerChild
 import org.apache.hama.util.RunJar
 import org.apache.hama.util.BSPNetUtils
 import org.apache.hama.HamaConfiguration
+import scala.collection.JavaConversions._
 import scala.sys.process._
 
 final case class Fork(jobId: String, jobFile: String, jarPath: String, 
-                      instanceCount: Int)
+                      taskAttemptId: String, instanceCount: Int, 
+                      conf: HamaConfiguration)
+sealed trait LogMessage
+final case class StdOutMsg(input: InputStream) extends LogMessage
+final case class StdErrMsg(error: InputStream) extends LogMessage
+
+sealed trait LogType
+final case object Stdout extends LogType
+final case object Stderr extends LogType
+final case object Console extends LogType
+
+trait LogAssistant {
+
+  def logStream(input: InputStream, logType: LogType, logDir: File, 
+                taskAttemptId: String, conf: HamaConfiguration) {
+    logType match { 
+      case Console => try {
+        IOUtils.copyBytes(input, System.out, conf)
+      } catch {
+        case ioe: IOException => throw ioe
+      }
+      // STDOUT file can be found under LOG_DIR/task_attempt_id.log
+      // ERROR file can be found under LOG_DIR/task_attempt_id.err
+      case t@ _ => {
+        val end = t match { 
+          case Stdout => "log"
+          case Stderr => "err"
+        }
+        val taskLogFile = new File(logDir, taskAttemptId+"."+end)
+        var writer: BufferedWriter  = null
+        try {
+          writer = new BufferedWriter(new FileWriter(taskLogFile))
+          val in = new BufferedReader(new InputStreamReader(input))
+          var line: String = null
+          while(null != (line = in.readLine)) {
+            writer.write(line)
+            writer.newLine
+          }
+        } catch {
+          case ioe: IOException => throw ioe
+        }
+      }
+    }
+  }
+}
+
+class StdOut(logDir: File, taskAttemptId: String, conf: HamaConfiguration) 
+    extends Actor with LogAssistant {
+
+  val LOG = Logging(context.system, this)
+
+  def receive = {
+    case StdOutMsg(input) => 
+      logStream(input, Stdout, logDir, taskAttemptId, conf) 
+    case msg@_ => LOG.warning("Unknown StdOut message {}", msg)
+  } 
+}
+
+class StdErr(logDir: File, taskAttemptId: String, conf: HamaConfiguration) 
+    extends Actor with LogAssistant {
+  val LOG = Logging(context.system, this)
+  def receive = {
+    case StdErrMsg(error) => 
+      logStream(error, Stderr, logDir, taskAttemptId, conf) 
+    case msg@_ => LOG.warning("Unknown StdOut message {}", msg)
+  } 
+}
 
 class Executor(conf: HamaConfiguration) extends Actor {
  
@@ -144,8 +218,8 @@ class Executor(conf: HamaConfiguration) extends Actor {
   //      following execution e.g. LOG.info after conf.get disappers 
   def defaultOpts: String = conf.get("bsp.child.java.opts", "-Xmx200m")
 
-  private def jvmArgs(javaHome: String, classpath: String, 
-                      child: Class[_], instanceCount: Int): 
+  private def jvmArgs(javaHome: String, classpath: String, child: Class[_], 
+                      instanceCount: Int): 
       Seq[String] = {
     val java = new File(new File(javaHome, "bin"), "java").toString
     LOG.debug("Arg java: {}", java)
@@ -175,7 +249,8 @@ class Executor(conf: HamaConfiguration) extends Actor {
    * @param jarPath is the path obtained from conf.get("bsp.jar").
    */
   def fork(jobId: String, jobFilePath: String, jarPath: String, 
-           instanceCount: Int) {
+           taskAttemptId: String, instanceCount: Int, 
+           conf: HamaConfiguration) {
     val workDir = workingDir(jobFilePath)
     val logDir = loggingDir(logPath, jobId)
     LOG.info("jobId {} logDir is {}", jobId, logDir)
@@ -183,40 +258,42 @@ class Executor(conf: HamaConfiguration) extends Actor {
     LOG.info("jobId {} classpath: {}", jobId, cp)
     val cmd = jvmArgs(javaHome, cp, classOf[BSPPeerChild], instanceCount)
     LOG.info("jobId {} cmd: {}", jobId, cmd)
-    createProcess(cmd, workDir, logDir)
+    createProcess(cmd, workDir, logDir, taskAttemptId, conf)
   }
 
   /**
    * @param logDir is the directory for a running task with particular forked  
    *               process.
    */
-  def createProcess(cmd: Seq[String], workDir: File, logDir: File) {
+  def createProcess(cmd: Seq[String], workDir: File, logDir: File, 
+                    taskAttemptId: String, conf: HamaConfiguration) {
     if(!logDir.exists) logDir.mkdirs
-    val logger = ProcessLogger(line => logStdOut(logDir, line),  
-                               line => logStdErr(logDir, line)) 
-    Process(cmd, workDir) ! logger
-  }
+    val builder = new ProcessBuilder(asJavaList(cmd))
+    builder.directory(workDir)
+    try {
+      val process = builder.start
 
-  /**
-   * Write std err to error log 
-   */
-  def logStdErr(logDir: File, line: String) {
-    // TODO: write to ${logDir.getPath}/std.err 
-    LOG.error(line)
-  }
+      val out = context.actorOf(Props(classOf[StdOut], logDir, 
+                                                       taskAttemptId, 
+                                                       conf)) 
+      out ! StdOutMsg(process.getInputStream)
 
-  /**
-   * Write std out to log.
-   */
-  def logStdOut(logDir: File, line: String) {
-    // TODO: write ${logDir.getPath}/std.log
-    LOG.info(line)
+      val err = context.actorOf(Props(classOf[StdErr], logDir, 
+                                                       taskAttemptId, 
+                                                       conf)) 
+      err ! StdErrMsg(process.getErrorStream)
+
+    } catch {
+      case ioe: IOException => 
+        LOG.error("Fail launching BSPPeerChild process {}", ioe)
+    }
+
   }
 
   def forkProcess: Receive = {
-    case Fork(jobId, jobFilePath, jarPath, instanceCount) => {
-      fork(jobId, jobFilePath, jarPath, instanceCount) 
-    }
+    case Fork(jobId, jobFilePath, jarPath, taskAttemptId, instanceCount, 
+              conf) => 
+      fork(jobId, jobFilePath, jarPath, taskAttemptId, instanceCount, conf) 
   } 
 
   def unknown: Receive = {
@@ -226,3 +303,4 @@ class Executor(conf: HamaConfiguration) extends Actor {
   def receive = forkProcess orElse unknown
      
 }
+

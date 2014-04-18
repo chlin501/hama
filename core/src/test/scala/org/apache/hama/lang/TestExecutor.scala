@@ -58,7 +58,8 @@ class MockExecutor(conf: HamaConfiguration, ref: ActorRef)
   override def libsPath(workDir: File): String = 
     "/tmp/hama/job/work/libs/a:/tmp/hama/job/work/libs/c:/tmp/hama/job/work/libs/b"
 
-  override def createProcess(cmd: Seq[String], workDir: File, logDir: File) {
+  override def createProcess(cmd: Seq[String], workDir: File, logDir: File,
+                             taskAttemptId: String, conf: HamaConfiguration) {
     command = cmd
     LOG.info("command: {}", command)
     workingDirectory = workDir
@@ -210,7 +211,8 @@ class TestExecutor extends TestKit(ActorSystem("TestExecutor"))
     LOG.info("BSPJobId: "+jobId+" jobFilePath: "+jobFilePath+
              " jarPath: "+jarPath +" taskAttemptId: "+taskAttemptId+
              " childSystemName: BSPPeerSystem"+insCount)
-    executor ! Fork(jobId.toString, jobFilePath, jarPath, insCount)
+    executor ! Fork(jobId.toString, jobFilePath, jarPath, 
+                    taskAttemptId.toString, insCount, conf)
     executor ! GetProcessParam
     
     val cmd = System.getProperty("java.home")+"/bin/java,-Xmx200m,"+
