@@ -19,4 +19,4 @@ package org.apache.hama.master
 
 import org.apache.hama.bsp.BSPJobID
 
-case class Submit(jobId: BSPJobID, xml: String)
+final case class Submit(jobId: BSPJobID, xml: String)

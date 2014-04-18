@@ -17,15 +17,17 @@
  */
 package org.apache.hama.master
 
-import akka.actor._
-import akka.routing._
-import org.apache.hama._
-import org.apache.hama.groom._
+import akka.actor.ActorRef
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.ProxyInfo
+import org.apache.hama.RemoteService
+import org.apache.hama.Request
+import org.apache.hama.groom.RequestTask
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.v2.GroomServerSpec
 import org.apache.hama.master.Directive.Action._
-import scala.concurrent.duration._
 import scala.collection.immutable.Queue
 
 class Scheduler(conf: HamaConfiguration) extends LocalService 

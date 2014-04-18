@@ -17,14 +17,16 @@
  */
 package org.apache.hama.master
 
-import akka.actor._
-import org.apache.hama._
+import akka.actor.ActorRef
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.fs.InitializeJob
-import org.apache.hama.master._
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.Request
 import scala.collection.immutable.Queue
-import scala.concurrent.duration._
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 
 final case object RequestInitJob
 

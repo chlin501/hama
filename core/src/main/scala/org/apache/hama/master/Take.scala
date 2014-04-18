@@ -17,4 +17,4 @@
  */
 package org.apache.hama.master
 
-private[master] case object Take
+private[master] final case object Take
