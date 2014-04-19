@@ -17,10 +17,10 @@
  */
 package org.apache.hama.master.monitor
 
-import org.apache.hama._
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.master._
 
 final class JobTasksTracker(conf: HamaConfiguration) extends LocalService {
 
@@ -30,9 +30,8 @@ final class JobTasksTracker(conf: HamaConfiguration) extends LocalService {
 
   override def name: String = "jobTasksTracker"
 
-  override def receive = {
-    isServiceReady orElse
-    ({case newTask: Task => {  // report
+  def reportTask: Receive = {
+    case newTask: Task => {  // report
       val bspJobId = newTask.getId.getJobID
       LOG.info("Report task with BSPJobID {}.", bspJobId)
       tasksStat.find(p=> p._1.equals(bspJobId)) match {
@@ -40,8 +39,9 @@ final class JobTasksTracker(conf: HamaConfiguration) extends LocalService {
           tasksStat ++= Map(bspJobId -> (Set(newTask)++oldTasks))
         case None => tasksStat ++= Map(bspJobId -> Set(newTask))
       }
-    }}: Receive) orElse unknown
-  } 
+    }
+  }
 
+  override def receive = isServiceReady orElse reportTask orElse unknown
 
 }

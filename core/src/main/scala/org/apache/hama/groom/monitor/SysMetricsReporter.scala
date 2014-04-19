@@ -17,7 +17,8 @@
  */
 package org.apache.hama.groom.monitor
 
-import akka.actor._
+import akka.actor.ActorRef
+import akka.actor.Cancellable
 import java.lang.management.GarbageCollectorMXBean
 import java.lang.management.ManagementFactory
 import java.lang.management.MemoryMXBean
@@ -25,15 +26,18 @@ import java.lang.management.MemoryUsage
 import java.lang.management.ThreadInfo
 import java.lang.management.ThreadMXBean
 import java.lang.Thread.State._
-import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
-import org.apache.hama._
-import org.apache.hama.groom._
-import org.apache.hama.master.monitor._
-import org.apache.hama.monitor.metrics._
+import org.apache.hadoop.io.IntWritable
+import org.apache.hadoop.io.LongWritable
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.ProxyInfo
+import org.apache.hama.RemoteService
+import org.apache.hama.monitor.metrics.Metric
+import org.apache.hama.monitor.metrics.MetricsRecord
 import org.apache.hama.monitor.metrics.Metrics._
-import scala.concurrent.duration._
-import scala.util.control._
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
+import scala.util.control.Breaks
 
 
 /**
@@ -63,7 +67,7 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
     ManagementFactory.getGarbageCollectorMXBeans
   private val threadMXBean: ThreadMXBean = 
     ManagementFactory.getThreadMXBean
-  private val M: Long = 1024*1024;
+  private val M: Long = 1024*1024
 
   override def configuration: HamaConfiguration = conf
 
@@ -149,7 +153,7 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
     var threadsTerminated = 0
     val threadIds: Array[Long] = threadMXBean.getAllThreadIds
 
-    val loop = new Breaks;
+    val loop = new Breaks
     loop.breakable {
       threadMXBean.getThreadInfo(threadIds, 0).foreach ( threadInfo => {
         if (threadInfo != null) {

@@ -17,11 +17,14 @@
  */
 package org.apache.hama.groom
 
-import akka.actor._
-import akka.routing._
-import akka.actor.SupervisorStrategy._
-import org.apache.hama._
-import scala.concurrent.duration._
+import akka.actor.OneForOneStrategy
+import akka.actor.SupervisorStrategy.Escalate
+import akka.actor.SupervisorStrategy.Restart
+import akka.actor.SupervisorStrategy.Stop
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.ServiceStateMachine
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 
 final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
 

@@ -17,15 +17,15 @@
  */
 package org.apache.hama.master.monitor
 
-import org.apache.hama._
-import org.apache.hama.master._
-import org.apache.hama.monitor.metrics._
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.monitor.metrics.MetricsRecord
 
 class SysMetricsTracker(conf: HamaConfiguration) extends LocalService {
 
   type GroomName = String
 
-  var sysMetricsStat = Set.empty[MetricsRecord]
+  private var sysMetricsStat = Set.empty[MetricsRecord]
 
   override def configuration: HamaConfiguration = conf
 

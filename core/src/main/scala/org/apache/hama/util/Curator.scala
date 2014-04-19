@@ -17,19 +17,18 @@
  */
 package org.apache.hama.util
 
-import akka.routing._
-import java.nio._
-import java.text._
-import java.util._
-import org.apache.curator.framework._
-import org.apache.curator.retry._
-import org.apache.hama._
+import java.nio.ByteBuffer
+import java.text.SimpleDateFormat
+import java.util.Date
+import org.apache.curator.framework.CuratorFramework
+import org.apache.curator.framework.CuratorFrameworkFactory
+import org.apache.curator.retry.RetryNTimes
+import org.apache.hama.LocalService
+import org.apache.hama.HamaConfiguration
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.master._
-import org.apache.hama.zookeeper._
-import org.apache.zookeeper.data._
+import org.apache.zookeeper.data.Stat
 import scala.collection.immutable.Queue
-import scala.collection.JavaConversions._
 
 class Curator(conf: HamaConfiguration) extends LocalService {
 
@@ -60,7 +59,7 @@ class Curator(conf: HamaConfiguration) extends LocalService {
   override def initializeServices {
     val connectString = 
       conf.get("hama.zookeeper.property.connectString", "localhost:2181") 
-    val sessionTimeout = conf.getInt(Constants.ZOOKEEPER_SESSION_TIMEOUT, 
+    val sessionTimeout = conf.getInt("hama.zookeeper.session.timeout", 
                                      3*60*1000)
     val retriesN = conf.getInt("bsp.zookeeper.client.retry_n_times", 10)
     val sleepBetweenRetries = 

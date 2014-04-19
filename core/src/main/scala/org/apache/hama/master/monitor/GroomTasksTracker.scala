@@ -17,10 +17,11 @@
  */
 package org.apache.hama.master.monitor
 
-import org.apache.hama._
-import org.apache.hama.groom._
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.groom.Slot
+import org.apache.hama.groom.GroomStat
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.master._
 
 final class GroomTasksTracker(conf: HamaConfiguration) extends LocalService {
 
