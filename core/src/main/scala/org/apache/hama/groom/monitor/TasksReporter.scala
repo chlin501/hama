@@ -17,11 +17,13 @@
  */
 package org.apache.hama.groom.monitor
 
-import akka.actor._
-import org.apache.hama._
+import akka.actor.ActorRef
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.ProxyInfo
+import org.apache.hama.RemoteService
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.master._
 
 /**
  * Report tasks status to JobTasksReporter.
