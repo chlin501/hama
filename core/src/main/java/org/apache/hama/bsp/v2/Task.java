@@ -56,7 +56,9 @@ public final class Task implements Writable {
   private IntWritable partition = new IntWritable(1);
 
   /* The input data for this task. */
-  private BSPJobClient.RawSplit split;
+  private BSPJobClient.RawSplit split; // TODO: neutral split interface in the future.
+
+  private IntWritable currentSuperstep = new IntWritable(1);
 
   /* The state of this task. */
   private State state = State.WAITING;
@@ -72,7 +74,6 @@ public final class Task implements Writable {
    * belongs. 
    */
   private Marker marker = new Marker(false, ""); 
-
  
   public final static class Marker implements Writable {
     private BooleanWritable assigned = new BooleanWritable(false);
@@ -142,6 +143,7 @@ public final class Task implements Writable {
     private long finishTime = 0;
     private int partition = 1;
     private BSPJobClient.RawSplit split = null;
+    private int currentSuperstep = 1;
     private State state = State.WAITING;
     private Phase phase = Phase.SETUP;
     private boolean completed = false;
@@ -172,6 +174,14 @@ public final class Task implements Writable {
       return this;
     }
 
+    public Builder setCurrentSuperstep(final int currentSuperstep) {
+      if(0 >= currentSuperstep)
+        throw new IllegalArgumentException("Invalid superstep "+
+                                           currentSuperstep+"value!");
+      this.currentSuperstep = currentSuperstep;
+      return this;
+    }
+
     public Builder setState(final State state) {
       this.state = state;
       return this;
@@ -198,6 +208,7 @@ public final class Task implements Writable {
                       finishTime, 
                       partition, 
                       split, 
+                      currentSuperstep,
                       state, 
                       phase,
                       completed, 
@@ -212,6 +223,7 @@ public final class Task implements Writable {
               final long finishTime, 
               final int partition, 
               final BSPJobClient.RawSplit split, 
+              final int currentSuperstep,
               final State state, 
               final Phase phase, 
               final boolean completed, 
@@ -225,6 +237,10 @@ public final class Task implements Writable {
     this.split = split;
     if(null == this.split) 
       LOG.warn("Split for "+this.id.toString()+" is null.");
+    if(0 >= currentSuperstep)
+      throw new IllegalArgumentException("Invalid superstep "+currentSuperstep+
+                                         " value!");
+    this.currentSuperstep = new IntWritable(currentSuperstep);
     this.state = state;
     if(null == this.state)
       throw new NullPointerException("Task's State is missing!");
@@ -243,8 +259,22 @@ public final class Task implements Writable {
     return this.startTime.get();
   }
 
+  /**
+   * Set this task's start time to System.currentTimeMillis().
+   */
+  public void markTaskStarted() {
+    this.startTime = new LongWritable(System.currentTimeMillis());
+  } 
+
   public long getFinishTime() {
     return this.finishTime.get();
+  }
+
+  /**
+   * Set this task's finish time to System.currentTimeMillis().
+   */
+  public void markTaskFinished() {
+    this.finishTime = new LongWritable(System.currentTimeMillis());
   }
 
   public int getPartition() {
@@ -255,12 +285,36 @@ public final class Task implements Writable {
     return this.split;
   }
 
+  public int getCurrentSuperstep() {
+    return this.currentSuperstep.get();
+  }
+  
+  /**
+   * Increment the current superstep via 1.
+   */
+  public void increatmentSuperspte() {
+    this.currentSuperstep = new IntWritable((getCurrentSuperstep()+1));
+  }
+
   public State getState() {
     return this.state;
   }
 
+  /**
+   * Transfer the task to the next state.
+   */
+  public void nextState() {
+//TODO:
+    throw new UnsupportedOperationException();
+  }
+
   public Phase getPhase() {
     return this.phase;
+  }
+
+  public void nextPhase() {
+//TODO:
+    throw new UnsupportedOperationException();
   }
 
   public boolean isCompleted() {
@@ -295,6 +349,7 @@ public final class Task implements Writable {
     } else {
       out.writeBoolean(false);
     }
+    this.currentSuperstep.write(out);
     WritableUtils.writeEnum(out, state);
     WritableUtils.writeEnum(out, phase);
     this.completed.write(out);
@@ -305,17 +360,19 @@ public final class Task implements Writable {
   public void readFields(DataInput in) throws IOException {
     this.id = new TaskAttemptID();
     this.id.readFields(in);
-    this.startTime = new LongWritable();
+    this.startTime = new LongWritable(0);
     this.startTime.readFields(in);
-    this.finishTime = new LongWritable();
+    this.finishTime = new LongWritable(0);
     this.finishTime.readFields(in);
-    this.partition = new IntWritable();
+    this.partition = new IntWritable(1);
     this.partition.readFields(in);
     if(in.readBoolean()) {
       this.split.readFields(in);
     } else {
       this.split = null;
     } 
+    this.currentSuperstep = new IntWritable(1);
+    this.currentSuperstep.readFields(in);
     this.state = WritableUtils.readEnum(in, State.class);
     this.phase = WritableUtils.readEnum(in, Phase.class);
     this.completed = new BooleanWritable();

@@ -135,7 +135,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     var to = Queue[Job]()
     unassignedTask(job) match {
       case Some(task) => {
-        task.markWithTarget(targetGroomServer) 
+        task.markWithTarget(targetGroomServer) // TODO: distinguish schedule from assign?
         d(targetActor, task)
       }
       case None => 
