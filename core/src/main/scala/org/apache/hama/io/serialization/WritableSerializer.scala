@@ -17,21 +17,17 @@
  */
 package org.apache.hama.io.serialization
 
-import akka.actor._
-import akka.serialization._
-
-import org.apache.hama.io.serialization.WritableSerializer.CurrentSystem
-
+import akka.actor.ExtendedActorSystem
+import akka.serialization.Serializer
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.util.concurrent.Callable
-
 import org.apache.hadoop.io.Writable
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
-
+import org.apache.hama.io.serialization.WritableSerializer.CurrentSystem
 import scala.util.DynamicVariable
 
 object WritableSerializer {
@@ -40,10 +36,9 @@ object WritableSerializer {
  
   final class CurrentSystem extends DynamicVariable[ExtendedActorSystem](null) {
 
-    def withValue[S](value: ExtendedActorSystem, callable: Callable[S]): S = super.withValue[S](value)(callable.call)
+    def withValue[S](value: ExtendedActorSystem, callable: Callable[S]): S = 
+      super.withValue[S](value)(callable.call)
   }
-
-  
 }
 
 class WritableSerializer(val system: ExtendedActorSystem) extends Serializer {
@@ -87,21 +82,16 @@ class WritableSerializer(val system: ExtendedActorSystem) extends Serializer {
             writable.readFields(in)
           }
         } catch {
-          case cnfe: ClassNotFoundException => {
+          case cnfe: ClassNotFoundException => 
             LOG.error("Can't find class "+clz.getName, cnfe)
-          }
-          case ie: InstantiationException => {
+          case ie: InstantiationException => 
             LOG.error("Can't initialize "+clz.getName, ie)
-          }
-          case iae: IllegalAccessException => {
+          case iae: IllegalAccessException => 
             LOG.error("Illegal access "+clz.getName, iae)
-          }
-          case re: RuntimeException => {
+          case re: RuntimeException => 
             LOG.error("Runtime error for "+clz.getName, re) 
-          }
-          case e: Exception => {
+          case e: Exception => 
             LOG.error("Unknown exception for "+clz.getName, e)
-          }
         } finally {
           in.close
         }
