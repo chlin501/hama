@@ -45,18 +45,6 @@ public class TestJob extends TestCase {
   final int numBSPTasks = 1024;
   final int maxTaskAttempts = 4;
 
-/*
-  TaskStatus buildTaskStatus(final int id) {
-    final BSPJobID jobId = new BSPJobID("test", id);
-    final TaskID taskId = new TaskID(jobId, id);
-    final TaskAttemptID attemptId = new TaskAttemptID(taskId, id);
-    final TaskStatus.State state = TaskStatus.State.RUNNING;
-    final TaskStatus status =
-      new TaskStatus(jobId, attemptId, 0, state, state.toString(),
-                     null, TaskStatus.Phase.STARTING, new Counters());
-    return status;
-  }
-*/
   BSPJobID createJobId() throws Exception {
     return IDCreator.newBSPJobID().withId("test").withId(7).build();
   }
@@ -110,7 +98,8 @@ public class TestJob extends TestCase {
                                      .setStartTime(startTime)
                                      .setFinishTime(finishTime)
                                      .setSuperstepCount(1947L)
-                                     .withTaskTable().build();
+                                     .withTaskTable()
+                                     .build();
     final byte[] bytes = serialize(job);
     assertNotNull("Job byte array can't be null.", bytes);
     final Job forVerification = deserialize(bytes);
@@ -185,6 +174,14 @@ public class TestJob extends TestCase {
     LOG.info("SuperstepCount is "+forVerification.getSuperstepCount());
     assertEquals("SuperstepCount should be equal.", 1947L,
                  forVerification.getSuperstepCount()); 
+
+    final TaskTable taskTable = forVerification.getTasks();
+    assertNotNull("TaskTable shouldn't be null.", taskTable);
+    final Task task = taskTable.get(0, 0);
+    assertNotNull("Task shouldn't be null.", task);
+    LOG.info("TotalBSPTasks is "+task.getTotalBSPTasks());
+    assertEquals("TotalBSPTasks should be equal to numBSPTasks", 
+                 task.getTotalBSPTasks(), numBSPTasks);
 
   }
 }

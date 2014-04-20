@@ -112,10 +112,9 @@ public final class TaskTable implements Writable {
                                           .getTaskAttemptIDBuilder()
                                           .withId(1) // TaskAttemptID's id
                                           .build())
-                          .setPhase(Task.Phase.SETUP)
-                          .setState(Task.State.WAITING) 
                           .setPartition((row+1))
                           .setSplit(split)
+                          .setTotalBSPTasks(this.numBSPTasks)
                           .build()
       }); 
     }

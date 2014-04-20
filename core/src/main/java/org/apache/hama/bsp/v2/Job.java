@@ -47,16 +47,16 @@ public final class Job implements Writable {
   private BSPJobID id;
 
   /* name of this job. */
-  private Text name = new Text();
+  private Text name = new Text("");
 
   /* The user that owns this job. */
-  private Text user = new Text();
+  private Text user = new Text("");
 
   /* job.xml path stored in local fs. */
-  private Text localJobFile = new Text();
+  private Text localJobFile = new Text("");
 
   /* The jar file path stored in local fs. */
-  private Text localJarFile = new Text();
+  private Text localJarFile = new Text("");
 
   /* The lastest superstep was successfully snapshotted. */
   private IntWritable lastCheckpoint = new IntWritable(0);
@@ -71,7 +71,10 @@ public final class Job implements Writable {
   private IntWritable maxTaskAttempts = new IntWritable(3);
 
   /* Input dir where split files are stored. */
-  private Text inputPath = new Text();
+  private Text inputPath = new Text("");
+
+  /* Output dir where final data to be stored. */
+  private Text outputPath = new Text("");
 
   /* Denote current job state. */
   private State state = State.PREP;
@@ -153,6 +156,7 @@ public final class Job implements Writable {
     private String master = "";
     private int maxTaskAttempts = 3;
     private String inputPath = "";
+    private String outputPath = "";
     private State state = State.PREP;
     private long progress;
     private long setupProgress;
@@ -211,6 +215,11 @@ public final class Job implements Writable {
 
     public Builder setInputPath(final String inputPath) {
       this.inputPath = inputPath;
+      return this;
+    }
+
+    public Builder setOutputPath(final String outputPath) {
+      this.outputPath = outputPath;
       return this;
     }
 
@@ -307,11 +316,15 @@ public final class Job implements Writable {
 
     public Builder withTaskTable(final BSPJobClient.RawSplit[] splits) {
       assertParameters();
-      this.taskTable = new TaskTable(this.id, 
-                                     numBSPTasks, 
-                                     maxTaskAttempts,
-                                     splits);  
-      return this;
+      if(null == splits) {
+        return withTaskTable();
+      } else {
+        this.taskTable = new TaskTable(this.id, 
+                                       numBSPTasks, 
+                                       maxTaskAttempts,
+                                       splits);  
+        return this;
+      }
     }
 
     public Builder setTargets(final String[] targets) {
@@ -343,6 +356,7 @@ public final class Job implements Writable {
                      master, 
                      maxTaskAttempts,
                      inputPath,
+                     outputPath,
                      state,
                      progress,
                      setupProgress,
@@ -368,6 +382,7 @@ public final class Job implements Writable {
              final String master,
              final int maxTaskAttempts,
              final String inputPath,
+             final String outputPath,
              final State state,
              final long progress,
              final long setupProgress,
@@ -409,7 +424,8 @@ public final class Job implements Writable {
         conf.getInt("bsp.job.task.retry_n_times", 3)
       );
     }
-    this.inputPath = (null == inputPath)? new Text(): new Text(inputPath);
+    this.inputPath = (null == inputPath)? new Text(""): new Text(inputPath);
+    this.outputPath = (null == outputPath)? new Text(""): new Text(outputPath);
     this.state = state;
     if(null == this.state)
       throw new IllegalArgumentException("No initial State is assigned.");
@@ -423,11 +439,17 @@ public final class Job implements Writable {
     if(null == this.taskTable)
       throw new IllegalArgumentException("TaskTable is not presented.");
 
+    // align numBSPTasks to #splits
+    final int actualNumBSPTasks = this.taskTable.getNumBSPTasks();
+    this.numBSPTasks = new IntWritable(actualNumBSPTasks); 
+    conf.setInt("bsp.peers.num", actualNumBSPTasks);
+
     if(null != targets && 0 < targets.length) {
       this.targets = new ArrayWritable(targets);
     }
     // verify targets length and numBSPTasks size
     final String[] tmp = this.targets.toStrings();
+
     if(numBSPTasks < tmp.length) 
       throw new RuntimeException("Target value "+tmp.length +" is larger "+
                                  "than "+numBSPTasks +" total tasks allowed.");
@@ -471,6 +493,10 @@ public final class Job implements Writable {
 
   public String getInputPath() {
     return this.inputPath.toString();
+  }
+
+  public String getOutputPath() {
+    return this.outputPath.toString();
   }
 
   public State getState() {
@@ -542,6 +568,7 @@ public final class Job implements Writable {
     master.write(out);
     maxTaskAttempts.write(out);
     inputPath.write(out);
+    outputPath.write(out);
     WritableUtils.writeEnum(out, state);
     progress.write(out);
     setupProgress.write(out);
@@ -579,8 +606,10 @@ public final class Job implements Writable {
     this.master.readFields(in);
     this.maxTaskAttempts = new IntWritable(3);
     this.maxTaskAttempts.readFields(in);
-    this.inputPath = new Text();
+    this.inputPath = new Text("");
     this.inputPath.readFields(in);
+    this.outputPath = new Text("");
+    this.outputPath.readFields(in);
     this.state = WritableUtils.readEnum(in, State.class);
     this.progress = new LongWritable();
     this.progress.readFields(in);
@@ -618,6 +647,7 @@ public final class Job implements Writable {
            " master: "+master.toString()+
            " maxTaskAttempts: "+maxTaskAttempts.toString()+
            " inputPath: "+inputPath.toString()+
+           " outputPath: "+outputPath.toString()+
            " state: "+ state.toString()+
            " progress: "+progress.toString()+
            " setupProgress: "+setupProgress.toString()+

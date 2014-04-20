@@ -25,6 +25,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import org.apache.hadoop.io.BooleanWritable;
+import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
@@ -74,6 +75,13 @@ public final class Task implements Writable {
    * belongs. 
    */
   private Marker marker = new Marker(false, ""); 
+
+  /**
+   * Denote the total tasks a job would have. This value won't hanged once a
+   * job finishes initialization. Default value is aligned to 
+   * <b>bsp.peer.num</b>, which is 1.
+   */
+  private IntWritable totalBSPTasks = new IntWritable(1);
  
   public final static class Marker implements Writable {
     private BooleanWritable assigned = new BooleanWritable(false);
@@ -148,6 +156,7 @@ public final class Task implements Writable {
     private Phase phase = Phase.SETUP;
     private boolean completed = false;
     private Marker marker = new Marker(false, ""); 
+    private int totalBSPTasks = 1;
 
     public Builder setId(final TaskAttemptID id) {
       this.id = id;
@@ -202,6 +211,11 @@ public final class Task implements Writable {
       return this;
     }
 
+    public Builder setTotalBSPTasks(final int totalBSPTasks) {
+      this.totalBSPTasks = totalBSPTasks;
+      return this;
+    }
+
     public Task build() {
       return new Task(id, 
                       startTime, 
@@ -212,7 +226,8 @@ public final class Task implements Writable {
                       state, 
                       phase,
                       completed, 
-                      marker);
+                      marker,
+                      totalBSPTasks);
     }
   }
 
@@ -227,7 +242,8 @@ public final class Task implements Writable {
               final State state, 
               final Phase phase, 
               final boolean completed, 
-              final Marker marker) {
+              final Marker marker,
+              final int totalBSPTasks) {
     this.id = id;
     if(null == this.id) 
       throw new IllegalArgumentException("TaskAttemptID not provided.");
@@ -235,7 +251,7 @@ public final class Task implements Writable {
     this.finishTime = new LongWritable(finishTime);
     this.partition = new IntWritable(partition);
     this.split = split;
-    if(null == this.split) 
+    if(null == this.split)  // it's reasonable that a split is null
       LOG.warn("Split for "+this.id.toString()+" is null.");
     if(0 >= currentSuperstep)
       throw new IllegalArgumentException("Invalid superstep "+currentSuperstep+
@@ -249,6 +265,9 @@ public final class Task implements Writable {
       throw new NullPointerException("Task's Phase is missing!");
     this.completed = new BooleanWritable(completed);
     this.marker = marker;
+    if(0 >= totalBSPTasks)
+      throw new IllegalArgumentException("Invalid total bsp tasks value.");
+    this.totalBSPTasks = new IntWritable(totalBSPTasks);
   }
 
   public TaskAttemptID getId() {
@@ -337,6 +356,10 @@ public final class Task implements Writable {
     this.marker = new Marker(true, name);
   }
 
+  public int getTotalBSPTasks() {
+    return this.totalBSPTasks.get();
+  }
+
   @Override
   public void write(DataOutput out) throws IOException {
     this.id.write(out);
@@ -354,6 +377,7 @@ public final class Task implements Writable {
     WritableUtils.writeEnum(out, phase);
     this.completed.write(out);
     this.marker.write(out);
+    this.totalBSPTasks.write(out);
   }
 
   @Override
@@ -375,19 +399,21 @@ public final class Task implements Writable {
     this.currentSuperstep.readFields(in);
     this.state = WritableUtils.readEnum(in, State.class);
     this.phase = WritableUtils.readEnum(in, Phase.class);
-    this.completed = new BooleanWritable();
+    this.completed = new BooleanWritable(false);
     this.completed.readFields(in);
     this.marker = new Marker(false, "");
     this.marker.readFields(in);
+    this.totalBSPTasks = new IntWritable(1);
+    this.totalBSPTasks.readFields(in);
   }
 
   @Override
   public String toString() {
-    return "TaskId: "+id.toString()+" startTime: "+startTime.toString()+
-           " finishTime: "+finishTime.toString()+" partition: "+
-           partition.toString()+" state: "+state.toString()+" phase: "+
-           phase.toString()+" completed: "+completed.toString()+" marker:"+
-           marker.toString();
+    return "TaskId: "+id.toString()+" startTime: "+getStartTime()+
+           " finishTime: "+getFinishTime()+" partition: "+
+           getPartition()+" state: "+getState().toString()+" phase: "+
+           getPhase().toString()+" completed: "+isCompleted()+ " marker:"+ 
+           marker.toString()+" totalBSPTasks: "+getTotalBSPTasks();
   }
 }
 
