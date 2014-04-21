@@ -27,7 +27,7 @@ import org.apache.hama.master.Directive.Action._
 import scala.collection.immutable.Queue
 import scala.concurrent.duration._
 
-final case object ChildIsActive
+final case object ContainerIsActive
 
 class TaskManager(conf: HamaConfiguration) extends LocalService 
                                            with RemoteService {
@@ -137,8 +137,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     }
   }
 
-  def childIsActive: Receive = {
-    case ChildIsActive => {
+  def containerIsActive: Receive = {
+    case ContainerIsActive => {
       // start assign a task
     }
   }
@@ -183,9 +183,10 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
 }
 
+/* use groom.BSPPeerContainer instead.
 final case object RequestAssign
 
-class BSPChild(conf: HamaConfiguration) extends LocalService 
+class BSPContainer(conf: HamaConfiguration) extends LocalService 
                                                     with RemoteService {
 
   /* Task assigned from TaskManager for computation. */
@@ -210,7 +211,7 @@ class BSPChild(conf: HamaConfiguration) extends LocalService
   val taskManagerPath = taskManagerInfo.getPath
 
   override def configuration: HamaConfiguration = conf
-  override def name = "bspChild"
+  override def name = "bspContainer"
  
   override def initializeServices {
     lookup("taskManager", taskManagerPath) 
@@ -228,3 +229,4 @@ class BSPChild(conf: HamaConfiguration) extends LocalService
 
   override def receive = isProxyReady orElse timeout orElse unknown
 }
+*/

@@ -204,7 +204,7 @@ class TestExecutor extends TestKit(ActorSystem("TestExecutor"))
     val jobId = createJobId
     val jobFilePath = createJobFile.getPath
     val jarPath = createJarPath 
-    val className = classOf[BSPPeerChild].getName
+    val className = classOf[BSPPeerContainer].getName
     val taskAttemptId = createTaskAttemptId(jobId)
     val superstep = 7
     val insCount = 3

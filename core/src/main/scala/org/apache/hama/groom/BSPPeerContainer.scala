@@ -35,7 +35,7 @@ import scala.concurrent.duration.DurationInt
 final case class Args(port: Int, instanceCount: Int, config: Config)
 final case object Setup
 
-object BSPPeerChild {
+object BSPPeerContainer {
 
   def toConfig(port: Int): Config = {
     ConfigFactory.parseString(s"""
@@ -67,7 +67,7 @@ object BSPPeerChild {
   def toArgs(args: Array[String]): Args = {
     if(null == args || 0 == args.length)
       throw new IllegalArgumentException("No arguments supplied when "+
-                                         "BSPPeerChild is forked.")
+                                         "BSPPeerContainer is forked.")
     val port = args(0).toInt
     val instanceCount = args(1).toInt
     val config = toConfig(port) 
@@ -81,15 +81,15 @@ object BSPPeerChild {
     val system = ActorSystem("BSPPeerSystem%s".format(arguments.instanceCount), 
                              arguments.config)
     defaultConf.setInt("bsp.child.instance.count", arguments.instanceCount)
-    system.actorOf(Props(classOf[BSPPeerChild], defaultConf), 
-                   "bspPeerChild%s".format(arguments.instanceCount))
+    system.actorOf(Props(classOf[BSPPeerContainer], defaultConf), 
+                   "bspPeerContainer%s".format(arguments.instanceCount))
   }
 }
 
 /**
  * Launched BSP actor via forked process.
  */
-class BSPPeerChild(conf: HamaConfiguration) extends LocalService 
+class BSPPeerContainer(conf: HamaConfiguration) extends LocalService 
                                             with RemoteService {
 
    val taskManagerInfo = 
@@ -105,7 +105,7 @@ class BSPPeerChild(conf: HamaConfiguration) extends LocalService
    override def configuration: HamaConfiguration = conf
 
    override def name: String = 
-     "bspPeerChild%s".format(conf.getInt("bsp.child.instance.count", 1))
+     "bspPeerContainer%s".format(conf.getInt("bsp.child.instance.count", 1))
 
    def request(target: ActorRef, message: Any): Cancellable = {
      import context.dispatcher
@@ -129,4 +129,3 @@ class BSPPeerChild(conf: HamaConfiguration) extends LocalService
 
    override def receive = processTask orElse isProxyReady orElse timeout orElse unknown
 }
-

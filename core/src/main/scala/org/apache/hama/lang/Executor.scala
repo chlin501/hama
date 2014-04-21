@@ -32,7 +32,7 @@ import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
 import org.apache.commons.lang.math.NumberUtils
 import org.apache.hadoop.io.IOUtils
-import org.apache.hama.groom.BSPPeerChild
+import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.util.RunJar
 import org.apache.hama.util.BSPNetUtils
 import org.apache.hama.HamaConfiguration
@@ -257,7 +257,7 @@ class Executor(conf: HamaConfiguration) extends Actor {
     LOG.info("jobId {} logDir is {}", jobId, logDir)
     val cp = classpath(javacp, jarPath, workDir)
     LOG.info("jobId {} classpath: {}", jobId, cp)
-    val cmd = jvmArgs(javaHome, cp, classOf[BSPPeerChild], instanceCount)
+    val cmd = jvmArgs(javaHome, cp, classOf[BSPPeerContainer], instanceCount)
     LOG.info("jobId {} cmd: {}", jobId, cmd)
     createProcess(cmd, workDir, logDir, taskAttemptId, conf)
   }
@@ -286,7 +286,7 @@ class Executor(conf: HamaConfiguration) extends Actor {
 
     } catch {
       case ioe: IOException => 
-        LOG.error("Fail launching BSPPeerChild process {}", ioe)
+        LOG.error("Fail launching BSPPeerContainer process {}", ioe)
     }
 
   }
