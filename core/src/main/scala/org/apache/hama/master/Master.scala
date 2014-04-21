@@ -25,7 +25,6 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.Request
 import org.apache.hama.ServiceStateMachine
 import org.apache.hama.fs.Storage
-import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
@@ -48,7 +47,8 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
     }
 
   override def initializeServices {
-    create("curator", classOf[Curator]).withCondition("curator")
+    create("masterConfigurator", 
+           classOf[MasterConfigurator]).withCondition("masterConfigurator")
     create("storage", classOf[Storage]) 
     create("receptionist", classOf[Receptionist]) 
     create("groomManager", classOf[GroomManager]) 

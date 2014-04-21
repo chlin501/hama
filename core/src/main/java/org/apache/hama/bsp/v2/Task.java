@@ -80,6 +80,7 @@ public final class Task implements Writable {
    * Denote the total tasks a job would have. This value won't hanged once a
    * job finishes initialization. Default value is aligned to 
    * <b>bsp.peer.num</b>, which is 1.
+   * N.B.: This value should be read-only once initialized.
    */
   private IntWritable totalBSPTasks = new IntWritable(1);
  
@@ -356,6 +357,11 @@ public final class Task implements Writable {
     this.marker = new Marker(true, name);
   }
 
+  /**
+   * Total BSP tasks to be executed for a single job.
+   * N.B.: This value should be read only once initialized.
+   * @return int for the number of bsp tasks will be ran across the cluster.
+   */
   public int getTotalBSPTasks() {
     return this.totalBSPTasks.get();
   }
