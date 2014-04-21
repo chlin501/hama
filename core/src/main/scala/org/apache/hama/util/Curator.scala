@@ -29,15 +29,14 @@ trait Curator {
 
   var curatorFramework: CuratorFramework = _
 
-  private def createCurator(servers: String, timeout: Int, n: Int,
+  private def build(servers: String, timeout: Int, n: Int,
                     delay: Int): CuratorFramework = {
-    CuratorFrameworkFactory.builder().
-                            connectionTimeoutMs(timeout).
+    CuratorFrameworkFactory.builder.connectionTimeoutMs(timeout).
                             retryPolicy(new RetryNTimes(n, delay)).
                             connectString(servers).build
   }
 
-  def configure(conf: HamaConfiguration) { 
+  def initializeCurator(conf: HamaConfiguration) {
     val connectString =
       conf.get("hama.zookeeper.property.connectString", "localhost:2181")
     val sessionTimeout = conf.getInt("hama.zookeeper.session.timeout",
@@ -48,8 +47,8 @@ trait Curator {
     log("Properties for ZooKeeper connection -> connectString: %s,"+
         "sessionTimeout: %s, retriesN: %s, sleepBetweenRetires: %s.".
         format(connectString, sessionTimeout, retriesN, sleepBetweenRetries))
-    curatorFramework = createCurator(connectString, sessionTimeout,
-                                     retriesN, sleepBetweenRetries)
+    curatorFramework = build(connectString, sessionTimeout,
+                             retriesN, sleepBetweenRetries)
     curatorFramework.start
     log("CuratorFramework is started!")
   }
