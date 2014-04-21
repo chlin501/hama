@@ -151,6 +151,18 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    */ 
   def schedule(fromQueue: TaskAssignQueue): 
       (TaskAssignQueue, ProcessingQueue) = { 
+//TODO: - need to think if multiple tasks are schedule to the same GroomServer.
+//      This may cause deadlock for barrier sync because some tasks are stored 
+//      in GroomServer's queue while others is executing.
+//      - We need to check if all tasks are scheduled/assigned and then trigger
+//      a signal for starting the computation!
+//      - GroomServer (task manager) can't ask a task assignment if no free 
+//      slots available in preventing some tasks stored in queue and others in 
+//      executing (deadlock).
+//      - when scheduling a task, we need to check if target GroomServer's 
+//      task manager queue has free slots. If no free slots in target server,
+//      we have to periodecally(?) check and then schedule that task to the
+//      target server in preventing deadlock issue.
     val (job, rest) = fromQueue.dequeue
     val groomServers = job.getTargets  
     var from = Queue[Job](); var to = Queue[Job]()
