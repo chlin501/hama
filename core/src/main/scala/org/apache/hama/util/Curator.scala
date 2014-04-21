@@ -36,6 +36,12 @@ trait Curator {
                             connectString(servers).build
   }
 
+  /**
+   * Initialize curator instance.
+   * @param conf contains information for connecting to ZooKeeper, including
+   *             connectString, sessionTimeout, retriesN, and 
+   *             sleepBetweenRetries.
+   */
   def initializeCurator(conf: HamaConfiguration) {
     val connectString =
       conf.get("hama.zookeeper.property.connectString", "localhost:2181")
@@ -53,5 +59,9 @@ trait Curator {
     log("CuratorFramework is started!")
   }
 
+  /**
+   * Abstract method for log message.
+   * @param message to be logged.
+   */
   def log(message: String)
 }
