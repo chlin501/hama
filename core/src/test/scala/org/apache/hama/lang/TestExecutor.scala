@@ -17,10 +17,9 @@
  */
 package org.apache.hama.lang
 
-import akka.actor._
-import akka.event._
-import akka.testkit._
-import java.io._
+import akka.actor.ActorRef
+import akka.actor.ActorSystem
+import java.io.File
 import org.apache.commons.io.FileUtils
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
@@ -82,10 +81,8 @@ class MockExecutor(conf: HamaConfiguration, ref: ActorRef)
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestExecutor extends TestKit(ActorSystem("TestExecutor")) 
-                                    with FunSpecLike 
-                                    with ShouldMatchers 
-                                    with BeforeAndAfterAll {
+class TestExecutor extends TestEnv(ActorSystem("TestExecutor")) {
+
   val content: String = """
 <?xml version="3.0" encoding="UTF-8" standalone="no"?><configuration>
 <property><!--Loaded from core-default.xml--><name>fs.file.impl</name><value>org.apache.hadoop.fs.LocalFileSystem</value></property>
@@ -156,16 +153,14 @@ class TestExecutor extends TestKit(ActorSystem("TestExecutor"))
 <property><!--Loaded from core-default.xml--><name>fs.default.name</name><value>file:///</value></property>
 </configuration>
   """
-
-  val LOG = LogFactory.getLog(classOf[TestExecutor])
-  val prob = TestProbe()
-  val conf = new HamaConfiguration
   var executor: ActorRef = _
+
   val root: File = {
     val f = new File("/tmp/hama") 
     if(!f.exists) f.mkdirs
     f
   }
+
   val tmpJobFile = {
     File.createTempFile("fork_", ".xml", root)
   }
@@ -199,8 +194,10 @@ class TestExecutor extends TestKit(ActorSystem("TestExecutor"))
 
   it("test fork a process") {
     LOG.info("Test fork a process.")
-    executor = system.actorOf(Props(classOf[MockExecutor], conf, prob.ref), 
-                                  "executor")
+    executor = createWithArgs("executor", 
+                              classOf[MockExecutor], 
+                              testConfiguration, 
+                              tester)
     val jobId = createJobId
     val jobFilePath = createJobFile.getPath
     val jarPath = createJarPath 
@@ -219,6 +216,6 @@ class TestExecutor extends TestKit(ActorSystem("TestExecutor"))
               className+",50001,"+insCount
     val workDir = "/tmp/hama/work"
     val logDir = "/tmp/hama/logs/tasklogs/job_test_fork_process_1234"
-    prob.expectMsg(ProcessParam(cmd, workDir, logDir))
+    expect(ProcessParam(cmd, workDir, logDir))
   }
 }
