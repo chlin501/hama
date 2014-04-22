@@ -22,12 +22,14 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.LocalFileSystem;
 import org.apache.hama.HamaConfiguration;
 
-
 public final class MockFileSystem extends LocalFileSystem {
 
   final Log LOG = LogFactory.getLog(MockFileSystem.class);
   final HamaConfiguration conf;
 
+  /**
+   * {@link org.apache.hama.HamaConfiguration} is from {@link TestEnv}.
+   */
   public MockFileSystem(final HamaConfiguration conf) { 
     this.conf = conf;
     if(null == this.conf)

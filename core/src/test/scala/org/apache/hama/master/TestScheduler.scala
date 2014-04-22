@@ -17,25 +17,28 @@
  */
 package org.apache.hama.master
 
-import akka.actor._
-import akka.event._
-import akka.testkit._
-import org.apache.commons.logging.Log
-import org.apache.commons.logging.LogFactory
-import org.apache.hama._
+import akka.actor.ActorRef
+import akka.actor.ActorSystem
+import akka.actor.Props
+import akka.event.Logging
+import org.apache.hama.TestEnv
+import org.apache.hama.HamaConfiguration
 import org.apache.hama.groom._
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2._
 import org.apache.hama.bsp.v2.IDCreator._
 import org.junit.runner.RunWith
-import org.scalatest._
 import org.scalatest.junit.JUnitRunner
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 
-case class JobData(fromQueueSize: Int, toQueueSize: Int, jobId: BSPJobID)
-case object GetJobData
-case object GetTarget
-case object AddProxy
-case object ProxyAdded
+private final case class JobData(fromQueueSize: Int, 
+                                 toQueueSize: Int, 
+                                 jobId: BSPJobID)
+private final case object GetJobData
+private final case object GetTarget
+private final case object AddProxy
+private final case object ProxyAdded
 
 class MockTaskManager(conf: HamaConfiguration, ref: ActorRef, 
                       mockSched: ActorRef) extends TaskManager(conf) {
@@ -84,11 +87,11 @@ class MockSched(conf: HamaConfiguration, actorName: String, ref: ActorRef)
                proxies.size)
       LOG.info("TaskManager name: {}", actorName)
       proxies ++= 
-        Set(context.system.actorOf(Props(classOf[MockTaskManager], 
-                                         conf, 
-                                         ref, 
-                                         self), 
-                                   actorName))
+        Set(context.actorOf(Props(classOf[MockTaskManager], 
+                                  conf, 
+                                  ref, 
+                                  self), 
+                            actorName))
       if(1 != proxies.size)
         throw new RuntimeException("Proxy size should be 1!");
       LOG.info("Proxies size now is {}!", proxies.size)
@@ -116,19 +119,9 @@ class MockSched(conf: HamaConfiguration, actorName: String, ref: ActorRef)
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestScheduler extends TestKit(ActorSystem("TestScheduler")) 
-                                    with FunSpecLike 
-                                    with ShouldMatchers 
-                                    with BeforeAndAfterAll {
+class TestScheduler extends TestEnv(ActorSystem("TestScheduler")) {
 
-  val LOG = LogFactory.getLog(classOf[TestScheduler])
-  val prob = TestProbe()
-  val conf = new HamaConfiguration
   var sched: ActorRef = _
-
-  override protected def afterAll {
-    system.shutdown
-  }
 
   def createActiveJob(): Job = {
     val jobId = IDCreator.newBSPJobID.withId("test_active_sched").
@@ -151,26 +144,33 @@ class TestScheduler extends TestKit(ActorSystem("TestScheduler"))
 
   it("test schedule tasks") {
     LOG.info("Actively schedule tasks")
-    sched = system.actorOf(Props(classOf[MockSched], conf, "groom1", prob.ref))
+    sched = createWithArgs("activeSched", 
+                           classOf[MockSched], 
+                           conf, 
+                           "groom1", 
+                           tester)
     sched ! AddProxy
-    prob.expectMsg(ProxyAdded)
+    expect(ProxyAdded)
     sched ! Dispense(createActiveJob)
     sched ! GetTarget
-    prob.expectMsg("groom1")
+    expect("groom1")
     sched ! GetJobData
-    prob.expectMsg(JobData(0, 1, createActiveJob.getId))
+    expect(JobData(0, 1, createActiveJob.getId))
   }
 
   it("test tasks assign") {
     LOG.info("Passively schedule tasks")
-    sched = system.actorOf(Props(classOf[MockSched], conf, 
-                                 "groom_127.0.0.1_50000", prob.ref))
+    sched = createWithArgs("passiveSched", 
+                           classOf[MockSched], 
+                           testConfiguration, 
+                           "groom_127.0.0.1_50000",
+                           tester)
     LOG.info("MockSched and TestProb are created! sched: "+sched+
-             ", ref: "+prob.ref)
+             ", ref: "+tester)
     sched ! AddProxy
-    prob.expectMsg(ProxyAdded)
+    expect(ProxyAdded)
     sched ! Dispense(createPassiveJob)
-    Thread.sleep(5*1000)
-    prob.expectMsg("groom_127.0.0.1_50000")
+    sleep(5.seconds)
+    expect("groom_127.0.0.1_50000")
   }
 }

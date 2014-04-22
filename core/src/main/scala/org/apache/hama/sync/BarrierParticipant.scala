@@ -65,9 +65,13 @@ trait BarrierParticipant extends Participant with Curator {
   }
 
   /**
+   * Build the barrier instance of
+   * {@link org.apache.curator.framework.recipe.DistributedDoubleBarrier}.
+   *
    * When a task is executing at different superstep, the barrier instance 
    * will be changed because the rendezvous path can only be constructed 
    * during object instantiation.
+   *
    * @param jobId denotes which job involves in the barrier sync.
    * @param superstep indicates at which superstep this task is.
    * @param syncPath denotes the entire barier synchronization path, started
@@ -75,7 +79,7 @@ trait BarrierParticipant extends Participant with Curator {
    * @param totalTasks indicates the total tasks will involves in barrier 
    *                   synchronization.
    */
-  def create(jobId: String, superstep: Long, totalTasks: Int) {
+  def build(jobId: String, superstep: Long, totalTasks: Int) {
     validate(jobId, superstep, totalTasks)
     meetingPlace = "%s/%s/%s".format(rootPath, jobId, superstep)
     log("Initialize barrier path at %s".format(meetingPlace))
