@@ -24,11 +24,11 @@ trait Agent extends Actor {
   
   protected val LOG = Logging(context.system, this)
 
-  protected def name: String 
+  protected def name: String = self.path.name
 
   protected def unknown: Receive = {
-    case _ => {
-      LOG.warning("Unknown message {} for {}.", x$1, name)
+    case msg@_ => {
+      LOG.warning("Unknown message {} for {}.", msg, name)
     }
   }
 }

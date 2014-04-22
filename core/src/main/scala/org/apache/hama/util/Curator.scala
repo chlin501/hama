@@ -29,9 +29,9 @@ trait Curator {
 
   var curatorFramework: CuratorFramework = _
 
-  private def build(servers: String, timeout: Int, n: Int,
+  private def build(servers: String, sessionTimeout: Int, n: Int,
                     delay: Int): CuratorFramework = {
-    CuratorFrameworkFactory.builder.connectionTimeoutMs(timeout).
+    CuratorFrameworkFactory.builder.sessionTimeoutMs(sessionTimeout).
                             retryPolicy(new RetryNTimes(n, delay)).
                             connectString(servers).build
   }
@@ -50,8 +50,8 @@ trait Curator {
     val retriesN = conf.getInt("bsp.zookeeper.client.retry_n_times", 10)
     val sleepBetweenRetries =
       conf.getInt("bsp.zookeeper.client.sleep_between_delay", 1000)
-    log("Properties for ZooKeeper connection -> connectString: %s,"+
-        "sessionTimeout: %s, retriesN: %s, sleepBetweenRetires: %s.".
+    log(("Properties for ZooKeeper connection: connectString: %s,"+
+        "sessionTimeout: %s, retriesN: %s, sleepBetweenRetires: %s.").
         format(connectString, sessionTimeout, retriesN, sleepBetweenRetries))
     curatorFramework = build(connectString, sessionTimeout,
                              retriesN, sleepBetweenRetries)
