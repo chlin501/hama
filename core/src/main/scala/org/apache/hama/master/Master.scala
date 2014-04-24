@@ -21,18 +21,32 @@ import akka.actor.ActorRef
 import akka.actor.OneForOneStrategy
 import akka.actor.SupervisorStrategy.Restart
 import akka.actor.SupervisorStrategy.Stop
+import java.text.SimpleDateFormat
+import java.util.Date
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Request
 import org.apache.hama.ServiceStateMachine
 import org.apache.hama.fs.Storage
+import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
 final private[hama] case class Id(value: String)
 
-class Master(conf: HamaConfiguration) extends ServiceStateMachine {
+object Master {
+
+  val defaultMasterId = 
+    new SimpleDateFormat("yyyyMMddHHmm").format(new Date())
+}
+
+class Master(conf: HamaConfiguration) extends ServiceStateMachine 
+                                      with Curator {
+
+  import Master._
 
   private var identifier: String = _
+
+  override def log(message: String) = LOG.info(message)
 
   override def configuration: HamaConfiguration = conf
 
@@ -46,9 +60,15 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
       case _: Exception                => Restart
     }
 
+  def createMasterId: String = {
+    val masterPath = "/bsp/masters/%s/id".format(name)
+    getOrElse(masterPath, defaultMasterId)
+  }
+
   override def initializeServices {
-    //create("runtimeInformation", 
-           //classOf[RuntimeInformation]).withCondition("runtimeInformation")
+    initializeCurator(configuration)
+    identifier = createMasterId
+    LOG.info("Master identifier is {}", identifier)
     create("storage", classOf[Storage]) 
     create("receptionist", classOf[Receptionist]) 
     create("groomManager", classOf[GroomManager]) 
@@ -63,19 +83,9 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
       case "groomManager" => 
       case "monitor" => 
       case "sched" =>  
-      //case "runtimeInformation" => service ! GetMasterId 
       case "storage" => 
       case _ => LOG.warning("Unknown service {} ", serviceName)
     }
-  }
- 
-  def masterId: Receive = {
-    case MasterId(value) => {
-      val id = value.getOrElse(null)
-      LOG.info("Obtained MasterId is {}", id)
-      if(null != id) identifier = id 
-      //releaseCondition("runtimeInformation")
-    } 
   }
 
   def forward: Receive = {
@@ -89,6 +99,6 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
     }
   }
 
-  override def receive = forward orElse serviceStateListenerManagement orElse masterId orElse super.receive orElse unknown 
+  override def receive = forward orElse serviceStateListenerManagement orElse super.receive orElse unknown 
   
 }
