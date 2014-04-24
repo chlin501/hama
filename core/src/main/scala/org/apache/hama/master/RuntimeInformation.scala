@@ -27,7 +27,7 @@ import org.apache.hama.util.Conversion
 import org.apache.zookeeper.data.Stat
 import scala.collection.immutable.Queue
 
-class MasterConfigurator(conf: HamaConfiguration) extends LocalService 
+class RuntimeInformation(conf: HamaConfiguration) extends LocalService 
                                                   with Curator 
                                                   with Conversion {
  
@@ -43,7 +43,7 @@ class MasterConfigurator(conf: HamaConfiguration) extends LocalService
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "masterConfigurator"
+  override def name: String = "runtimeInformation"
 
   override def initializeServices = initializeCurator(configuration) 
 
@@ -152,6 +152,10 @@ class MasterConfigurator(conf: HamaConfiguration) extends LocalService
 
   def totalTaskCapacity: Receive = {
     case TotalTaskCapacity(maxTasks) => updateTotalTaskCapacity(maxTasks) 
+  }
+
+  def getTotalTaskCapacity: Receive = {
+    case GetTaotalTaskCapacity => sender ! maxTasks
   }
  
   private def updateTotalTaskCapacity(maxTasks: Int)  = {

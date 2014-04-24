@@ -47,8 +47,8 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
     }
 
   override def initializeServices {
-    create("masterConfigurator", 
-           classOf[MasterConfigurator]).withCondition("masterConfigurator")
+    create("runtimeInformation", 
+           classOf[RuntimeInformation]).withCondition("runtimeInformation")
     create("storage", classOf[Storage]) 
     create("receptionist", classOf[Receptionist]) 
     create("groomManager", classOf[GroomManager]) 
