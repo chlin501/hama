@@ -47,8 +47,8 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
     }
 
   override def initializeServices {
-    create("runtimeInformation", 
-           classOf[RuntimeInformation]).withCondition("runtimeInformation")
+    //create("runtimeInformation", 
+           //classOf[RuntimeInformation]).withCondition("runtimeInformation")
     create("storage", classOf[Storage]) 
     create("receptionist", classOf[Receptionist]) 
     create("groomManager", classOf[GroomManager]) 
@@ -63,7 +63,7 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
       case "groomManager" => 
       case "monitor" => 
       case "sched" =>  
-      case "curator" => service ! GetMasterId 
+      //case "runtimeInformation" => service ! GetMasterId 
       case "storage" => 
       case _ => LOG.warning("Unknown service {} ", serviceName)
     }
@@ -74,7 +74,7 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
       val id = value.getOrElse(null)
       LOG.info("Obtained MasterId is {}", id)
       if(null != id) identifier = id 
-      releaseCondition("curator")
+      //releaseCondition("runtimeInformation")
     } 
   }
 

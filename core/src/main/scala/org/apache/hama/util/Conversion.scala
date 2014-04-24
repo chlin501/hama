@@ -26,7 +26,7 @@ trait Conversion {
   protected def toFloat(data: Array[Byte]): Float =
     ByteBuffer.wrap(data).getFloat
 
-  protected def toLong(data: Array[Byte]): Double =
+  protected def toLong(data: Array[Byte]): Long =
     ByteBuffer.wrap(data).getLong
 
   protected def toDouble(data: Array[Byte]): Double =

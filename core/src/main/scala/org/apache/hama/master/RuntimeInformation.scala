@@ -153,10 +153,6 @@ class RuntimeInformation(conf: HamaConfiguration) extends LocalService
   def totalTaskCapacity: Receive = {
     case TotalTaskCapacity(maxTasks) => updateTotalTaskCapacity(maxTasks) 
   }
-
-  def getTotalTaskCapacity: Receive = {
-    case GetTaotalTaskCapacity => sender ! maxTasks
-  }
  
   private def updateTotalTaskCapacity(maxTasks: Int)  = {
     curatorFramework.checkExists.forPath(totalTaskCapacityPath) match {
