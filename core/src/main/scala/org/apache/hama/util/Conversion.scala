@@ -44,4 +44,6 @@ trait Conversion {
   protected def toBytes(data: Double): Array[Byte] =
     ByteBuffer.allocate(8).putDouble(data).array
 
+  protected def toBytes(data: String): Array[Byte] = data.getBytes
+
 }

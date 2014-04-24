@@ -132,7 +132,7 @@ trait Curator extends Conversion {
    * @param defaultValue is applied if not found.
    * @return Int if found at znode; otherwise returns defaultValue.
    */
-  def getInt(znode: String, defaultValue: Int): Int = {
+  def get(znode: String, defaultValue: Int): Int = {
     getBytes(znode) match {
       case Some(bytes) => toInt(bytes)
       case None => defaultValue
@@ -145,7 +145,7 @@ trait Curator extends Conversion {
    * @param defaultValue is applied if not found.
    * @return Float if found at znode; otherwise returns defaultValue.
    */
-  def getFloat(znode: String, defaultValue: Float): Float = {
+  def get(znode: String, defaultValue: Float): Float = {
     getBytes(znode) match {
       case Some(bytes) => toFloat(bytes)
       case None => defaultValue
@@ -158,7 +158,7 @@ trait Curator extends Conversion {
    * @param defaultValue is applied if not found.
    * @return Long if found at znode; otherwise returns defaultValue.
    */
-  def getLong(znode: String, defaultValue: Long): Long = {
+  def get(znode: String, defaultValue: Long): Long = {
     getBytes(znode) match {
       case Some(bytes) => toLong(bytes)
       case None => defaultValue
@@ -171,11 +171,101 @@ trait Curator extends Conversion {
    * @param defaultValue is applied if not found.
    * @return Double if found at znode; otherwise returns defaultValue.
    */
-  def getDouble(znode: String, defaultValue: Double): Double = {
+  def get(znode: String, defaultValue: Double): Double = {
     getBytes(znode) match {
       case Some(bytes) => toDouble(bytes)
       case None => defaultValue
     }
   }
-  
+
+  /**
+   * Get the value with the given znode path. Znode path will be created if
+   * corresponded znode is not found with initial value.
+   * @param znode denotes the destination path at which the value is stored.
+   * @param initialValue if no value found.
+   * @return String the value found at the znode path.
+   */
+  def getOrElse(znode: String, initialValue: String): String = {
+    curatorFramework.checkExists.forPath(znode) match {
+      case stat: Stat => get(znode, initialValue)
+      case _ => {
+        create(znode) 
+        set(znode, toBytes(initialValue))
+        initialValue
+      }
+    }
+  }
+
+  /**
+   * Get the value with the given znode path. Znode path will be created if
+   * corresponded znode is not found with initial value.
+   * @param znode denotes the destination path at which the value is stored.
+   * @param initialValue if no value found.
+   * @return Int is the value found at the znode path.
+   */
+  def getOrElse(znode: String, initialValue: Int): Int = {
+    curatorFramework.checkExists.forPath(znode) match {
+      case stat: Stat => get(znode, initialValue)
+      case _ => {
+        create(znode) 
+        set(znode, toBytes(initialValue))
+        initialValue
+      }
+    }
+  }
+
+  /**
+   * Get the value with the given znode path. Znode path will be created if
+   * corresponded znode is not found with initial value.
+   * @param znode denotes the destination path at which the value is stored.
+   * @param initialValue if no value found.
+   * @return Float is the value found at the znode path.
+   */
+  def getOrElse(znode: String, initialValue: Float): Float = {
+    curatorFramework.checkExists.forPath(znode) match {
+      case stat: Stat => get(znode, initialValue)
+      case _ => {
+        create(znode) 
+        set(znode, toBytes(initialValue))
+        initialValue
+      }
+    }
+  }
+
+  /**
+   * Get the value with the given znode path. Znode path will be created if
+   * corresponded znode is not found with initial value.
+   * @param znode denotes the destination path at which the value is stored.
+   * @param initialValue if no value found.
+   * @return Long is the value found at the znode path.
+   */
+  def getOrElse(znode: String, initialValue: Long): Long = {
+    curatorFramework.checkExists.forPath(znode) match {
+      case stat: Stat => get(znode, initialValue)
+      case _ => {
+        create(znode) 
+        set(znode, toBytes(initialValue))
+        initialValue
+      }
+    }
+  }
+
+  /**
+   * Get the value with the given znode path. Znode path will be created if
+   * corresponded znode is not found with initial value.
+   * @param znode denotes the destination path at which the value is stored.
+   * @param initialValue if no value found.
+   * @return Double is the value found at the znode path.
+   */
+  def getOrElse(znode: String, initialValue: Double): Double = {
+    curatorFramework.checkExists.forPath(znode) match {
+      case stat: Stat => get(znode, initialValue)
+      case _ => {
+        create(znode) 
+        set(znode, toBytes(initialValue))
+        initialValue
+      }
+    }
+  }
+
 }
