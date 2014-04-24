@@ -28,7 +28,7 @@ import org.apache.zookeeper.data.Stat
 
 trait Curator extends Conversion {
 
-  var curatorFramework: CuratorFramework = _
+  protected var curatorFramework: CuratorFramework = _
 
   private def build(servers: String, sessionTimeout: Int, n: Int,
                     delay: Int): CuratorFramework = {
@@ -93,6 +93,11 @@ trait Curator extends Conversion {
   def set(znode: String, value: Array[Byte]) = 
     curatorFramework.setData.forPath(znode, value) 
 
+  /**
+   * Get bytes from the designated znode.
+   * @param znode is the destination path where data is stored.
+   * @return Option[Array[Byte]] is the data retrieved out of znode.
+   */
   protected def getBytes(znode: String): Option[Array[Byte]] = {
     curatorFramework.getData.forPath(znode) match {
       case data: Array[Byte] => Some(data)

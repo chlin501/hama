@@ -17,6 +17,8 @@
  */
 package org.apache.hama.master
 
+/*
+
 import java.text.SimpleDateFormat
 import java.util.Date
 import org.apache.hama.LocalService
@@ -106,10 +108,8 @@ class RuntimeInformation(conf: HamaConfiguration) extends LocalService
     curatorFramework.setData.forPath(fullPath, data)
   }
 
-  /**
    * Recursive create ZooKeeper directory.
    * @param path
-   */
   private def createPath(path: String, c: (String) => Unit) {
     val nodes = path.split("/").drop(1) // drop the first empty string
     var result = "/"
@@ -176,3 +176,4 @@ class RuntimeInformation(conf: HamaConfiguration) extends LocalService
   override def receive = isServiceReady orElse serverIsUp orElse getMasterId orElse getJobSeq orElse totalTaskCapacity orElse unknown
 
 }
+*/
