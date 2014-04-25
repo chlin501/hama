@@ -27,7 +27,6 @@ import org.apache.hama.HamaConfiguration
 
 /**
  * Wraper of {@link org.apache.hadoop.fs.LocalFileSystem}.
- */
 trait TestFileSystem {
   
   protected val fs = new MockFileSystem(testConfiguration)
@@ -40,7 +39,7 @@ trait TestFileSystem {
 
   protected def log(msg: String) = { println(msg) }
 
-  /* Below are Job related functions. */
+  //* Below are Job related functions. *
 
   @throws(classOf[Exception])
   protected def createJobFile: String = {
@@ -81,3 +80,4 @@ trait TestFileSystem {
              "submit_" + Integer.toString(Math.abs(random.nextInt), 36))
   }
 }
+*/

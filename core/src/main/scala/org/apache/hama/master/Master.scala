@@ -26,7 +26,7 @@ import java.util.Date
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Request
 import org.apache.hama.ServiceStateMachine
-import org.apache.hama.fs.Storage
+//import org.apache.hama.fs.Storage
 import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -69,7 +69,7 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine
     initializeCurator(configuration)
     identifier = createMasterId
     LOG.info("Master identifier is {}", identifier)
-    create("storage", classOf[Storage]) 
+    //create("storage", classOf[Storage]) 
     create("receptionist", classOf[Receptionist]) 
     create("groomManager", classOf[GroomManager]) 
     create("monitor", classOf[Monitor]) 
@@ -83,7 +83,7 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine
       case "groomManager" => 
       case "monitor" => 
       case "sched" =>  
-      case "storage" => 
+      //case "storage" => 
       case _ => LOG.warning("Unknown service {} ", serviceName)
     }
   }

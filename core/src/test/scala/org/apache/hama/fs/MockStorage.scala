@@ -17,6 +17,7 @@
  */
 package org.apache.hama.fs
 
+/*
 import akka.actor._
 import akka.event._
 import akka.testkit._
@@ -67,3 +68,4 @@ class MockStorage(conf: HamaConfiguration) extends Storage(conf) {
   
   //override def receive = super.receive
 }
+*/

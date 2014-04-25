@@ -24,6 +24,7 @@ import org.apache.hama.fs.InitializeJob
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.Request
+import org.apache.hama.util.Curator
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration

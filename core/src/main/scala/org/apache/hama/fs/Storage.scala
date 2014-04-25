@@ -17,6 +17,7 @@
  */
 package org.apache.hama.fs
 
+/*
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.Path
@@ -33,6 +34,11 @@ class Storage(conf: HamaConfiguration) extends LocalService {
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "storage"
+
+  override def initializeService = {
+    // TODO: 1. get actual fs class (implented hama fs interface) from configuration 
+    //       2. instantiate fs object 
+  }
 
   def fileSystem: FileSystem = FileSystem.get(configuration)
 
@@ -58,12 +64,10 @@ class Storage(conf: HamaConfiguration) extends LocalService {
     jobDir.getFileSystem(configuration)
   }
 
-  /**
    * Copy the job.xml from a specified path, jobFile, to local, localJobFile.
    * @param jobId denotes the BSPJobID
    * @param jobFile denotes the job.xml submitted from the client.
    * @param localJobFile is the detination to which the job file to be copied.
-   */
   def copyJobFile(jobId: BSPJobID, jobFile: String, localJobFile: String) = {
     fs(jobId).copyToLocalFile(new Path(jobFile), new Path(localJobFile))
   }
@@ -111,11 +115,9 @@ class Storage(conf: HamaConfiguration) extends LocalService {
     splitsCreated
   }
 
-  /**
    * Perform necessary steps to initialize a Job.
    * @param jobId is a unique BSPJobID
    * @param jobFile is submitted from a client.
-   */
   def initJob(jobId: BSPJobID, jobFile: String): Job = {
     val (localJobFile, localJarFile) = createLocalData(jobId)
     LOG.info("localJobFile: {}, localJarFile: {}", localJobFile, localJarFile)
@@ -132,9 +134,7 @@ class Storage(conf: HamaConfiguration) extends LocalService {
                       build
   }
 
-  /**
    * Send the initialized job back to {@link Receptionist}.
-   */
   def initJob: Receive = {
     case InitializeJob(jobId, xml) => {
       val job = initJob(jobId, xml)
@@ -145,3 +145,4 @@ class Storage(conf: HamaConfiguration) extends LocalService {
 
   override def receive = initJob orElse isServiceReady orElse serverIsUp orElse unknown 
 }
+*/
