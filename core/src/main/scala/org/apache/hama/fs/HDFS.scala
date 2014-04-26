@@ -28,15 +28,17 @@ import org.apache.hadoop.fs.FileStatus
 import org.apache.hadoop.fs.Path
 import org.apache.hama.HamaConfiguration
 
-trait HDFS extends Operation {
+class HDFS(conf: HamaConfiguration) extends Operation {
 
-  protected var hdfs: FileSystem = _
+  protected val hdfs: FileSystem = FileSystem.get(conf)
  
+/*
   @throws(classOf[IOException])
   override def instantiate(conf: HamaConfiguration) {
     hdfs = FileSystem.get(conf) 
     validate
   }
+*/
  
   @throws(classOf[IOException])
   protected def validate() {

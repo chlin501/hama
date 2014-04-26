@@ -37,9 +37,9 @@ trait Operation {
    * Instantiate underlying file system object.
    * @param conf contains necessary information for creating {@link FileSystem}
    *             object.
-   */
   @throws(classOf[IOException])
   def instantiate(conf: HamaConfiguration)
+   */
 
   /**
    * Create a file based on the {@link Path} for writing.

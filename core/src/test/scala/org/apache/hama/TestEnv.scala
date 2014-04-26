@@ -35,7 +35,7 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                                    with ShouldMatchers 
                                    with BeforeAndAfterAll {
 
-  val LOG = LogFactory.getLog(classOf[TestEnv])
+  val LOG = LogFactory.getLog(getClass.getName)
   val probe = TestProbe()
   val conf = new HamaConfiguration()
 

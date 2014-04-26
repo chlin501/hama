@@ -28,24 +28,27 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
-class TestHDFS extends TestEnv(ActorSystem("TestHDFS")) with HDFS {
+class TestHDFS extends TestEnv(ActorSystem("TestHDFS")) {
+
+  var operation: Operation = _
 
   val testRootDir = testConfiguration.get("bsp.test.fs.root", "/tmp/hama/hdfs")
 
   def createIfAbsent(path: Path) {
-    if(!exists(path)) mkdirs(path)
+    if(!operation.exists(path)) operation.mkdirs(path)
   }
 
   override def beforeAll {
     super.beforeAll
     testConfiguration.set("bsp.test.fs.root", "/tmp/hama/hdfs")
-    instantiate(testConfiguration)
+    operation = OperationProvider.create(testConfiguration)
+    assert(null != operation)
     LOG.info("Create test root path at %s".format(testRootDir))
     createIfAbsent(new Path(testRootDir))
   }
 
   override def afterAll {
-    remove(new Path(testRootDir).getParent) 
+    operation.remove(new Path(testRootDir).getParent) 
     super.afterAll
   }
 
@@ -53,9 +56,9 @@ class TestHDFS extends TestEnv(ActorSystem("TestHDFS")) with HDFS {
     implicit val byteOrder = java.nio.ByteOrder.BIG_ENDIAN
     LOG.info("Test hdfs file system operation")
     val dest = new Path(testRootDir, "parent")
-    mkdirs(dest)
+    operation.mkdirs(dest)
     val target = new Path(dest, "data.txt")
-    val out = create(target)
+    val out = operation.create(target)
     val builder = ByteString.newBuilder
     val result  = builder.putInt(213).result
     LOG.info("Array to be written: %s".format(result)) 
@@ -69,7 +72,7 @@ class TestHDFS extends TestEnv(ActorSystem("TestHDFS")) with HDFS {
     })
     out.write(result.toArray) 
     out.close
-    val in = open(target)
+    val in = operation.open(target)
     val itr = result.iterator
     val content = itr.getInt
     LOG.info("Value stored in file is %s".format(content))
