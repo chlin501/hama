@@ -45,7 +45,7 @@ class TestHDFS extends TestEnv(ActorSystem("TestHDFS")) with HDFS {
   }
 
   override def afterAll {
-    //remove(new Path(testRootDir).getParent) 
+    remove(new Path(testRootDir).getParent) 
     super.afterAll
   }
 
