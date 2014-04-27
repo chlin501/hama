@@ -98,6 +98,18 @@ class HDFSLocal extends Operation {
   override def list[FileStatus](path: Path): java.util.List[FileStatus] = 
     Arrays.asList(localfs.listStatus(path).asInstanceOf[Array[FileStatus]]:_*)
 
+  @throws(classOf[IOException])
+  override def copyToLocal(from: Path)(to: Path) { 
+    throw new UnsupportedOperationException("Operation copyToLocal not "+
+                                            "supported.")
+  }
+
+  @throws(classOf[IOException])
+  override def copyFromLocal(from: Path)(to: Path) {
+    throw new UnsupportedOperationException("Operation copyFromLocal not "+
+                                            "supported.")
+  }
+
   /**
    * Default system directory is set to "/tmp/hadoop/bsp/system".
    */

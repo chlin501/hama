@@ -107,6 +107,28 @@ class HDFS extends Operation {
   override def list[FileStatus](path: Path): java.util.List[FileStatus] = 
     Arrays.asList(hdfs.listStatus(path).asInstanceOf[Array[FileStatus]]:_*)
 
+/*
+  TODO: scheme must be known beforehand so to decide which method to use.
+  override def copy(from: Path)(to: Path) {
+    val fromScheme = from.toUri.getScheme
+    if(null == fromScheme) 
+      throw new IllegalArgumentException("Unknown scheme for from: "+from)
+    val toScheme = to.toUri.getScheme
+    if(null == toScheme) 
+      throw new IllegalArgumentException("Unknown scheme for to: "+to)
+
+    //hdfs.copytToLocalFile(from, to)
+  }
+*/
+
+  override def copyToLocal(from: Path)(to: Path) {
+    hdfs.copyToLocalFile(from, to)
+  }
+
+  override def copyFromLocal(from: Path)(to: Path) {
+    hdfs.copyFromLocalFile(from, to)
+  }
+
   /**
    * Default system directory is set to "/tmp/hadoop/bsp/system".
    */

@@ -113,6 +113,20 @@ trait Operation {
   def list[T](path: Path): java.util.List[T]
 
   /**
+   * Copy file to local path.
+   * @param from the source path the file to be copied. 
+   * @param to the dest path the file to be copied.
+  @throws(classOf[IOException])
+  def copy(from: Path)(to: Path)
+   */
+
+  @throws(classOf[IOException])
+  def copyToLocal(from: Path)(to: Path)
+
+  @throws(classOf[IOException])
+  def copyFromLocal(from: Path)(to: Path)
+
+  /**
    * Retrieve system directory.
    * @return Path of the system directory.
    */
@@ -125,7 +139,7 @@ trait Operation {
   def local: Operation
 
   /**
-   * Obtaain an operation that owns the given path.
+   * Obtain an operation that owns the given path.
    * @return Operation for a particular path supplied.
    */
   def operationFor(path: Path): Operation
