@@ -29,10 +29,25 @@ object Operation {
 
   val seperator: String = "/"
 
+  def create(conf: HamaConfiguration): Operation = {
+    val clazz = conf.getClass("bsp.fs.class", classOf[HDFS])
+    var op: Operation = null
+    if(classOf[HDFS].equals(clazz)) {
+      op = HDFS(conf)
+    } else {
+      throw new UnsupportedOperationException("Operation for underlying "+
+                                              clazz.getSimpleName+" not "+
+                                              " yet supported.")
+    }
+    op
+  }
+
 }
 
 trait Operation {
- 
+
+  def configuration: HamaConfiguration
+
   /**
    * Instantiate underlying file system object.
    * @param conf contains necessary information for creating {@link FileSystem}
@@ -97,4 +112,21 @@ trait Operation {
   @throws(classOf[IOException])
   def list[T](path: Path): java.util.List[T]
 
+  /**
+   * Retrieve system directory.
+   * @return Path of the system directory.
+   */
+  def getSystemDirectory: Path
+
+  /**
+   * Obtain operation for local file system.
+   * @return operation for local file system. 
+   */
+  def local: Operation
+
+  /**
+   * Obtaain an operation that owns the given path.
+   * @return Operation for a particular path supplied.
+   */
+  def operationFor(path: Path): Operation
 }

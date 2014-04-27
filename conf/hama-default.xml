@@ -189,7 +189,12 @@
     <value>org.apache.hadoop.io.serializer.WritableSerialization,org.apache.hadoop.io.serializer.JavaSerialization</value>
     <description>The default IO serialization protocol for HDFS I/O</description>
   </property>
-  
+  <property>
+    <name>bsp.fs.class</name>
+    <value>org.apache.hama.fs.HDFS</value>
+    <description>Default file system class</description>
+  </property>  
+
   <!--
   Beginning of properties that are directly mapped from ZooKeeper's zoo.cfg.
   All properties with an "hama.zookeeper.property." prefix are converted for

@@ -22,52 +22,43 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.Arrays
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.FileStatus
 
 import org.apache.hadoop.fs.Path
 import org.apache.hama.HamaConfiguration
 
-object HDFS {
+object HDFSLocal {
 
-  def apply(conf: HamaConfiguration): HDFS = {
-    val op = new HDFS()
-    op.setConfiguration(conf) 
-    op
-  }
-
-  def apply(fs: FileSystem): HDFS = {
-    val op = new HDFS()
+  def apply(fs: FileSystem): Operation = {
+    val op = new HDFSLocal()
     op.setFileSystem(fs)
-    op.setConfiguration(fs.getConf.asInstanceOf[HamaConfiguration]) 
+    op.setConfiguration(fs.getConf.asInstanceOf[HamaConfiguration])
     op
   }
-
 }
 
-class HDFS extends Operation {
+class HDFSLocal extends Operation {
 
-  private var conf = new HamaConfiguration() // var conf must sit before var hdfs in case NPE
-  protected var hdfs: FileSystem = FileSystem.get(configuration)
-  private val localfs = HDFSLocal(FileSystem.getLocal(configuration))
+  private var localfs: FileSystem = _
+  private var conf = new HamaConfiguration()
 
   private[fs] def setConfiguration(conf: HamaConfiguration) = this.conf = conf
 
   override def configuration: HamaConfiguration = this.conf
 
-  private[fs] def setFileSystem(fs: FileSystem) = this.hdfs = fs
+  private[fs] def setFileSystem(fs: FileSystem) = { this.localfs = fs }
  
   @throws(classOf[IOException])
   protected def validate() {
-    if(null == hdfs)
+    if(null == localfs)
       throw new IOException("Unable to instantiate hadoop FileSystem.")
   }
 
   @throws(classOf[IOException])
   override def mkdirs(path: Path): Boolean = {
     validate
-    hdfs.mkdirs(path)
+    localfs.mkdirs(path)
   }
 
   @throws(classOf[IOException])
@@ -76,48 +67,49 @@ class HDFS extends Operation {
     var out: OutputStream = null
     var created = false
     if(!exists(path)) 
-      created = hdfs.createNewFile(path)
+      created = localfs.createNewFile(path)
     else 
       created = true
     if(created) 
-      out = hdfs.create(path)
+      out = localfs.create(path)
     out 
   }
 
   @throws(classOf[IOException])
   override def open(path: Path): InputStream = {
     validate
-    hdfs.open(path) 
+    localfs.open(path) 
   }
 
   @throws(classOf[IOException])
   override def exists(path: Path): Boolean = {
     validate
-    hdfs.exists(path) 
+    localfs.exists(path) 
   }
 
   @throws(classOf[IOException])
-  override def remove(path: Path): Boolean = hdfs.delete(path, true)
+  override def remove(path: Path): Boolean = localfs.delete(path, true)
 
   @throws(classOf[IOException])
-  override def move(from: Path, to: Path) = hdfs.rename(from, to) 
+  override def move(from: Path, to: Path) = localfs.rename(from, to) 
 
   @throws(classOf[IOException])
   @throws(classOf[FileNotFoundException])
   override def list[FileStatus](path: Path): java.util.List[FileStatus] = 
-    Arrays.asList(hdfs.listStatus(path).asInstanceOf[Array[FileStatus]]:_*)
+    Arrays.asList(localfs.listStatus(path).asInstanceOf[Array[FileStatus]]:_*)
 
   /**
    * Default system directory is set to "/tmp/hadoop/bsp/system".
    */
   override def getSystemDirectory: Path = { 
     val sysDir = configuration.get("bsp.system.dir", "/tmp/hadoop/bsp/system")
-    hdfs.makeQualified(new Path(sysDir))
+    localfs.makeQualified(new Path(sysDir))
   }
   
-  override def local: Operation = localfs
+  override def local: Operation = this 
 
   override def operationFor(path: Path): Operation = {
-    HDFS(path.getFileSystem(configuration))
+    //HDFSLocal(path.getFileSystem(configuration)) 
+    null
   }
 }
