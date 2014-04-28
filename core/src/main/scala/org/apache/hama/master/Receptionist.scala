@@ -32,10 +32,9 @@ import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-//final case object RequestInitJob
-
 /**
  * Receive job submission from clients and put the job to the wait queue.
+ * @param conf contains specific setting for the system.
  */
 class Receptionist(conf: HamaConfiguration) extends LocalService {
 
@@ -44,11 +43,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
   /* Initialized job */
   protected var waitQueue = Queue[Job]()
 
-  /**
-   * Job is stored before being completely initialized.
-  protected var storageQueue = Queue[(BSPJobID, JobFile)]()
-   */
-
   /* Operation against underlying storage. */
   private val operation = Operation.create(configuration)
  
@@ -56,25 +50,10 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
 
   override def name: String = "receptionist"
 
-  //def notifyJobSubmission = mediator ! Request("sched", JobSubmission)  
-
-/*
-  override def afterMediatorUp {
-    LOG.info("Mediator is up! Request to ask init job ...")
-    request(self, RequestInitJob)
-  }
-*/
-
   def request(to: ActorRef, message: Any) {
     import context.dispatcher
     context.system.scheduler.schedule(0.seconds, 2.seconds, to, message)
   }
-
-/*
-  def askForInit(jobId: BSPJobID, jobFile: String) { 
-    mediator ! Request("storage", InitializeJob(jobId, jobFile))
-  }
-*/
 
   /**
    * BSPJobClient calls submitJob(jobId, jobFile), where jobFile submitted is
@@ -86,7 +65,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     case Submit(jobId: BSPJobID, jobFile: String) => {
       LOG.info("Received job {} submitted from the client {}",
                jobId, sender.path.name) 
-      //storageQueue = storageQueue.enqueue((jobId, jobFile))
       val job = initializeJob(jobId, jobFile)
       waitQueue = waitQueue.enqueue(job)
       LOG.info("{} jobs are stored in waitQueue.", waitQueue.size)
@@ -148,8 +126,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     val splitsCreated = jobSplit match {
       case Some(path) => {
         LOG.info("Create split file from {}", path)
-        //val fs = new Path(systemDir).getFileSystem(configuration)
-        //val splitFile = fs.open(new Path(path))
         val splitFile = op(operation.getSystemDirectory).open(new Path(path))
         var splits: Array[BSPJobClient.RawSplit] = null
         try {
@@ -176,30 +152,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
   }
 
   /**
-   * Ask Storage actor for initializing a job.
-  def requestInitJob: Receive = {
-    case RequestInitJob => {
-      if(!storageQueue.isEmpty) {
-        val (tuple, rest) = storageQueue.dequeue
-        //askForInit(tuple._1, tuple._2) 
-      } else LOG.info("Receptionist's storageQueue is empty!")
-    }
-  }
-   */
-
-  /**
-   * After a job is initialized, enqueue that job to waitQueue and notify
-   * the scheduler.
-  def enqueue: Receive = {
-    case Enqueue(job) => {
-      waitQueue = waitQueue.enqueue(job)
-      LOG.debug("Inside waitQueue: {}", waitQueue)
-      //notifyJobSubmission
-    }
-  }
-   */
-
-  /**
    * Dispense a job to Scheduler.
    */
   def take: Receive = {
@@ -214,6 +166,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = /*enqueue orElse requestInitJob orElse*/ isServiceReady orElse serverIsUp orElse take orElse submitJob orElse unknown
+  override def receive = isServiceReady orElse serverIsUp orElse take orElse submitJob orElse unknown
 
 }
