@@ -22,8 +22,7 @@ import akka.actor.ActorRef
 import akka.actor.Props
 import akka.testkit.TestKit
 import akka.testkit.TestProbe
-import org.apache.commons.logging.Log
-import org.apache.commons.logging.LogFactory
+import org.apache.hama.util.Logger
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.FunSpecLike
 import org.scalatest.ShouldMatchers
@@ -31,11 +30,11 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
 class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem) 
-                                   with FunSpecLike 
-                                   with ShouldMatchers 
-                                   with BeforeAndAfterAll {
+                                           with FunSpecLike 
+                                           with ShouldMatchers 
+                                           with BeforeAndAfterAll 
+                                           with Logger {
 
-  val LOG = LogFactory.getLog(getClass.getName)
   val probe = TestProbe()
   val conf = new HamaConfiguration()
 

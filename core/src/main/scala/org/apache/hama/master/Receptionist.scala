@@ -18,6 +18,7 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
+import java.io.DataInputStream
 import org.apache.hadoop.fs.Path
 import org.apache.hama.bsp.BSPJobClient
 import org.apache.hama.bsp.BSPJobClient.RawSplit
@@ -40,13 +41,15 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
 
   type JobFile = String
 
+  /* Initialized job */
   protected var waitQueue = Queue[Job]()
 
   /**
    * Job is stored before being completely initialized.
-   */
   protected var storageQueue = Queue[(BSPJobID, JobFile)]()
+   */
 
+  /* Operation against underlying storage. */
   private val operation = Operation.create(configuration)
  
   override def configuration: HamaConfiguration = conf
@@ -85,6 +88,8 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
                jobId, sender.path.name) 
       //storageQueue = storageQueue.enqueue((jobId, jobFile))
       val job = initializeJob(jobId, jobFile)
+      waitQueue = waitQueue.enqueue(job)
+      LOG.info("{} jobs are stored in waitQueue.", waitQueue.size)
     }
   }
 
@@ -109,8 +114,10 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     operation.operationFor(path)
   }
 
+  def op(path: Path): Operation = operation.operationFor(path)
+
   def copyJobFile(jobId: BSPJobID, jobFile: String, localJobFile: String) = {
-    //fs(jobId).copyToLocalFile(new Path(jobFile), new Path(localJobFile))
+    op(jobId).copyToLocal(new Path(jobFile))(new Path(localJobFile))
   }
 
   def jarFile: Option[String] = configuration.get("bsp.jar") match {
@@ -120,10 +127,10 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
 
   def copyJarFile(jobId: BSPJobID, jarFile: Option[String],
                   localJarFile: String) = jarFile match {
-    case None =>
+    case None => LOG.warning("jarFile for {} is not found!", jobId)
     case Some(jar) => {
       LOG.info("Copy jar file from {} to {}", jar, localJarFile)
-      //fs(jobId).copyToLocalFile(new Path(jar), new Path(localJarFile))
+      op(jobId).copyToLocal(new Path(jar))(new Path(localJarFile))
     }
   }
 
@@ -140,14 +147,16 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     val jobSplit = jobSplitFile 
     val splitsCreated = jobSplit match {
       case Some(path) => {
+        LOG.info("Create split file from {}", path)
         //val fs = new Path(systemDir).getFileSystem(configuration)
         //val splitFile = fs.open(new Path(path))
+        val splitFile = op(operation.getSystemDirectory).open(new Path(path))
         var splits: Array[BSPJobClient.RawSplit] = null
-        //try {
-          //splits = BSPJobClient.readSplitFile(splitFile);
-        //} finally {
-          //splitFile.close();
-        //}
+        try {
+          splits = BSPJobClient.readSplitFile(new DataInputStream(splitFile))
+        } finally {
+          splitFile.close()
+        }
         Some(splits)
       }
       case None => None
@@ -181,7 +190,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
   /**
    * After a job is initialized, enqueue that job to waitQueue and notify
    * the scheduler.
-   */
   def enqueue: Receive = {
     case Enqueue(job) => {
       waitQueue = waitQueue.enqueue(job)
@@ -189,6 +197,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
       //notifyJobSubmission
     }
   }
+   */
 
   /**
    * Dispense a job to Scheduler.
@@ -205,6 +214,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = enqueue orElse /*requestInitJob orElse*/ isServiceReady orElse serverIsUp orElse take orElse submitJob orElse unknown
+  override def receive = /*enqueue orElse requestInitJob orElse*/ isServiceReady orElse serverIsUp orElse take orElse submitJob orElse unknown
 
 }

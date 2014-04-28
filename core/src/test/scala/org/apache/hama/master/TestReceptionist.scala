@@ -17,14 +17,13 @@
  */
 package org.apache.hama.master
 
-/*
 import akka.actor.ActorSystem
 import akka.actor.ActorRef
 import akka.event.Logging
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.Request
-import org.apache.hama.fs.MockStorage
+//import org.apache.hama.fs.MockStorage
 //import org.apache.hama.fs.TestFileSystem
 import org.apache.hama.groom._
 import org.apache.hama.bsp.BSPJobID
@@ -43,7 +42,7 @@ private final case class JobData1(jobId: BSPJobID,
 class MockMaster(conf: HamaConfiguration) extends Master(conf) {
 
   override def initializeServices {
-    create("storage", classOf[MockStorage])
+    //create("storage", classOf[MockStorage])
     create("receptionist", classOf[MockReceptionist])
   }
   
@@ -53,9 +52,11 @@ class MockReceptionist(conf: HamaConfiguration) extends Receptionist(conf) {
 
   override val LOG = Logging(context.system, this)
 
+/*
   override def notifyJobSubmission {
     LOG.info("Request sched to pull job from waitQueue.")
   }
+*/
 
   def getJob: Receive = {
     case GetJob(tester) => {
@@ -74,7 +75,7 @@ class MockReceptionist(conf: HamaConfiguration) extends Receptionist(conf) {
 
 @RunWith(classOf[JUnitRunner])
 class TestReceptionist extends TestEnv(ActorSystem("TestReceptionist")) 
-                               with TestFileSystem {
+                          with JobUtil {
 
   var receptionist: ActorRef = _
 
@@ -85,7 +86,7 @@ class TestReceptionist extends TestEnv(ActorSystem("TestReceptionist"))
     LOG.info("Test submit job to Receptionist")
     val master = create("bspmaster", classOf[MockMaster])
     val jobId = createJobId
-    val jobFile = createJobFile
+    val jobFile = createJobFile(testConfiguration)
     LOG.info("Submit job id "+jobId.toString+" job.xml: "+jobFile)
     master ! Request("receptionist", Submit(jobId, jobFile))
     LOG.info("Wait 5 secs ...")
@@ -98,4 +99,3 @@ class TestReceptionist extends TestEnv(ActorSystem("TestReceptionist"))
     )
   }
 }
-*/
