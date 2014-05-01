@@ -19,7 +19,7 @@ package org.apache.hama.groom
 
 import akka.actor._
 import org.apache.hama._
-import org.apache.hama.bsp.v2.GroomServerSpec
+//import org.apache.hama.bsp.v2.GroomServerSpec
 
 class Registrator(conf: HamaConfiguration) extends LocalService 
                                               with RemoteService {
@@ -37,6 +37,7 @@ class Registrator(conf: HamaConfiguration) extends LocalService
   val groomServerPort = configuration.getInt("bsp.groom.port", 50000)
   val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
   val maxTasks = configuration.getInt("bsp.tasks.maximum", 3)
+  //val freeSlots = maxTasks
 
   override def configuration: HamaConfiguration = conf
 
@@ -47,10 +48,11 @@ class Registrator(conf: HamaConfiguration) extends LocalService
   }
   
   override def afterLinked(proxy: ActorRef) { 
-    proxy ! new GroomServerSpec(groomServerName, 
-                                groomServerHost, 
-                                groomServerPort, 
-                                maxTasks)
+//    proxy ! new GroomServerSpec(groomServerName, 
+                                //groomServerHost, 
+                                //groomServerPort, 
+                                //maxTasks, 
+                                //freeSlots)
   }
 
   override def offline(target: ActorRef) {

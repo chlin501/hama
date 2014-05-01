@@ -152,6 +152,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
   }
 
   /**
+   * Scheduler asks for job computation.
    * Dispense a job to Scheduler.
    */
   def take: Receive = {
@@ -161,7 +162,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
         waitQueue = rest 
         LOG.info("Dispense a job {}. Now {} jobs left in wait queue.", 
                  job.getName, waitQueue.size)
-        sender ! Dispense(job)
+        sender ! Dispense(job) // sender is scheduler
       } else LOG.warning("{} jobs in wait queue", waitQueue.size)
     }
   }

@@ -130,8 +130,8 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
 
   /**
    * Capture unhandled events.
-   * StateChecker type is a special event that used to check if current state is 
-   * matched. 
+   * StateChecker type is a special event that used to check if current state 
+   * is matched. 
    * For instance, if current state, i.e. stateName, is Normal, then notify 
    * listeners with Ready message so that clients can react after services are 
    * ready.

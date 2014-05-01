@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.master
-
+/*
 import akka.actor.ActorRef
 import akka.actor.Cancellable
 import org.apache.hama.HamaConfiguration
@@ -31,12 +31,10 @@ private[master] final case class Groom(groom: ActorRef, spec: GroomServerSpec)
 private[master] final case object Dequeue
 
 final case class TotalTaskCapacity(maxTasks: Int)
-final case class Locate(spec: GroomServerSpec)
+//final case class Locate(spec: GroomServerSpec)
 
-/**
  * A service that manages a set of {@link org.apache.hama.groom.GroomServer}s.
  * @param conf contains specific configuration for this service. 
- */
 class GroomManager(conf: HamaConfiguration) extends LocalService {
 
   type GroomHostName = String
@@ -45,17 +43,13 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
   private var specQueue = Queue[GroomServerSpec]()
   private var specQueueWatcher: Cancellable = _
 
-  /**
    * Store the GroomServerSpec information so that decision can be made during
    * evaluation process.
-   */
   // TODO: move state out of master
   private[this] var grooms = Set.empty[Groom] 
 
-  /**
    * Identical GroomServer host name logically represents the same GroomServer, 
    * even if the underlying hardware is changed.
-   */
   // TODO: may need to reset crash count or 
   //       store more offline line grooms stat info.
   private[this] var offlineGroomsStat = Map.empty[GroomHostName, CrashCount] 
@@ -64,9 +58,7 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
 
   override def name: String = "groomManager"
 
-  /**
    * Quarantine offline GroomServer.
-   */
   def quarantine(offline: ActorRef, resched:(GroomServerSpec) => Unit) {
     grooms.find(p=>p.groom.equals(offline)) match { // move to offline grooms
       case Some(groom) => {
@@ -119,16 +111,12 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  /**
    * Evaluate cluster capacity.
-   */
   def evaluate(spec: GroomServerSpec) {
     mediator ! Request("curator", TotalTaskCapacity(spec.getMaxTasks))
   }
 
-  /**
    * Link remote TaskManager for scheduling tasks.
-   */
   def locate(spec: GroomServerSpec)  {
     mediator ! Request("sched", Locate(spec))
   }
@@ -147,3 +135,4 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
   override def receive = isServiceReady orElse serverIsUp orElse dequeue orElse register orElse superviseeIsTerminated orElse unknown
 
 }
+*/

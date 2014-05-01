@@ -21,7 +21,7 @@ import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Agent
-import org.apache.hama.Tester
+import org.apache.hama.TestRef
 import org.apache.hama.TestEnv
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
@@ -38,7 +38,7 @@ final case class Result(inEnterFun: Boolean, afterLeaveFun: Boolean,
                         actorName: String)
 
 class MockBarrier(conf: HamaConfiguration, ref: ActorRef) 
-    extends Tester(conf, ref) with BarrierParticipant with Agent {
+    extends TestRef(conf, ref) with BarrierParticipant with Agent {
 
   var inEnterFun: Boolean = false 
   var afterLeaveFun: Boolean = false 
@@ -120,8 +120,8 @@ class TestParticipant extends TestEnv(ActorSystem("TestParticipant"))
 
   it("test barrier sync") {
     LOG.info("Test barrier sync.")
-    barrier1 = create("barrier1", classOf[MockBarrier])
-    barrier2 = create("barrier2", classOf[MockBarrier])
+    barrier1 = createWithTester("barrier1", classOf[MockBarrier])
+    barrier2 = createWithTester("barrier2", classOf[MockBarrier])
 
     barrier1 ! Config("test_sync_00001", 7, 2)
     barrier2 ! Config("test_sync_00001", 7, 2)
@@ -130,9 +130,9 @@ class TestParticipant extends TestEnv(ActorSystem("TestParticipant"))
     barrier2 ! Join(barrier1)
 
     barrier1 ! Start(0.seconds)
-    barrier2 ! Start(5.seconds)
+    barrier2 ! Start(3.seconds)
 
-    sleep(10.seconds)
+    sleep(5.seconds)
 
     barrier1 ! GetResult
     expect(Result(true, true, "barrier2"))

@@ -35,9 +35,9 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
 private final case class GetJob(tester: ActorRef)
-private final case class JobData1(jobId: BSPJobID, 
-                                 localJarFile: String, 
-                                 localJobFile: String)
+private final case class JobContent(jobId: BSPJobID, 
+                                    localJarFile: String, 
+                                    localJobFile: String)
 
 class MockMaster(conf: HamaConfiguration) extends Master(conf) {
 
@@ -52,12 +52,6 @@ class MockReceptionist(conf: HamaConfiguration) extends Receptionist(conf) {
 
   override val LOG = Logging(context.system, this)
 
-/*
-  override def notifyJobSubmission {
-    LOG.info("Request sched to pull job from waitQueue.")
-  }
-*/
-
   def getJob: Receive = {
     case GetJob(tester) => {
       if(waitQueue.isEmpty) 
@@ -65,7 +59,7 @@ class MockReceptionist(conf: HamaConfiguration) extends Receptionist(conf) {
                                        "empty!");
       val job = waitQueue.dequeue._1
       LOG.info("GetJob: {}", job)
-      tester ! JobData1(job.getId, job.getLocalJarFile, job.getLocalJobFile)
+      tester ! JobContent(job.getId, job.getLocalJarFile, job.getLocalJobFile)
     }
   }
   
@@ -93,9 +87,9 @@ class TestReceptionist extends TestEnv(ActorSystem("TestReceptionist"))
     sleep(5.seconds)
     master ! Request("receptionist", GetJob(tester))
     expect(
-      JobData1(jobId, 
-               "/tmp/local/bspmaster/job_test_receptionist_1533.jar", 
-               "/tmp/local/bspmaster/job_test_receptionist_1533.xml")
+      JobContent(jobId, 
+                 "/tmp/local/bspmaster/job_test_receptionist_1533.jar", 
+                 "/tmp/local/bspmaster/job_test_receptionist_1533.xml")
     )
   }
 }

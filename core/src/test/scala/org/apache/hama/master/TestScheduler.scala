@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.master
-
+/*
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
@@ -45,10 +45,8 @@ class MockTaskManager(conf: HamaConfiguration, ref: ActorRef,
 
   override val LOG = Logging(context.system, this)
 
-  /** 
    * Disable remote lookup sched.
    * Replace sched with mock sched.
-   */
   override def initializeServices = {
     initializeSlots
     sched = mockSched
@@ -174,3 +172,4 @@ class TestScheduler extends TestEnv(ActorSystem("TestScheduler")) {
     expect("groom_127.0.0.1_50000")
   }
 }
+*/

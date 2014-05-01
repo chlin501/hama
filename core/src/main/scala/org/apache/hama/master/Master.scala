@@ -69,9 +69,8 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine
     initializeCurator(configuration)
     identifier = createMasterId
     LOG.info("Master identifier is {}", identifier)
-    //create("storage", classOf[Storage]) 
     create("receptionist", classOf[Receptionist]) 
-    create("groomManager", classOf[GroomManager]) 
+    //create("groomManager", classOf[GroomManager]) 
     create("monitor", classOf[Monitor]) 
     create("sched", classOf[Scheduler]) 
   }

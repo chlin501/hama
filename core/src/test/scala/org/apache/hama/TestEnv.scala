@@ -52,14 +52,27 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
    * @param clazz denotes the class object of the test actor.
    * @return ActorRef corresponds to class object passed in.
    */
-  protected def createTester(name: String, clazz: Class[_]): ActorRef = 
+  protected def createWithTester(name: String, clazz: Class[_]): ActorRef = 
     system.actorOf(Props(clazz, testConfiguration, tester), name)
 
+  /**
+   * Create testActor with variable arguments.
+   * @param name of the testActor.
+   * @param clazz denotes the actual actor class implementation.
+   * @param args contains the rest of arguments.
+   * @return ActorRef of the target testActor. 
+   */
   protected def createWithArgs(name: String, clazz: Class[_], args: Any*): 
     ActorRef = system.actorOf(Props(clazz, args:_*), name)
 
-  protected def create(name: String, clazz: Class[_]): 
-    ActorRef = system.actorOf(Props(clazz, testConfiguration), name)
+  /**
+   * Create testActor with testConfiguration.
+   * @param name of the testActor.
+   * @param clazz denotes the actual actor class implementation.
+   * @return ActorRef of the target testActor. 
+   */
+  protected def create(name: String, clazz: Class[_]): ActorRef = 
+    system.actorOf(Props(clazz, testConfiguration), name)
 
   /**
    * Check if a message received is as expected.

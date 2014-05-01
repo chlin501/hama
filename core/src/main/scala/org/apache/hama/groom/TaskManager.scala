@@ -17,15 +17,21 @@
  */
 package org.apache.hama.groom
 
-import akka.actor._
-import org.apache.hama.bsp.v2._
-import org.apache.hama._
+import akka.actor.ActorRef
+import akka.actor.Cancellable
+import org.apache.hama.bsp.v2.GroomServerStat
+import org.apache.hama.bsp.v2.Task
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.RemoteService
+import org.apache.hama.ProxyInfo
 import org.apache.hama.master._
 import org.apache.hama.master.Directive._
 import org.apache.hama.master.Directive.Action._
 
 import scala.collection.immutable.Queue
-import scala.concurrent.duration._
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 
 final case object ContainerIsActive
 
@@ -56,6 +62,9 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    */
   private var slots = Set.empty[Slot]
 
+  /**
+   * Active scheduled tasks are stored in queue. 
+   */
   private var queue = Queue[Task]()
 
   override def configuration: HamaConfiguration = conf
@@ -89,13 +98,14 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   /**
    * Periodically send message to an actor an actor.
+   * @param target is the ActorRef to be requested.  
+   * @param message is a RequestMessage sent to remote target.
    */
   def request(target: ActorRef, message: RequestMessage) {
     LOG.debug("Request message {} to target: {}", message, target)
     import context.dispatcher
-    cancellable = 
-      context.system.scheduler.schedule(0.seconds, 5.seconds, target,
-                                        message)
+    cancellable = context.system.scheduler.schedule(0.seconds, 5.seconds, 
+                                                    target, message)
   }
 
   override def afterLinked(proxy: ActorRef) = {
@@ -104,7 +114,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   }
 
   /**
-   * Check if slots available and any unprocessed task in queue.
+   * Check if slots available and any unprocessed tasks in queue.
    * If slots are free, request scheduler to dispatch tasks accordingly.
    * Otherwise deal with task in queue first.
    */
@@ -115,12 +125,36 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
       if(!hasTaskInQueue && hasFreeSlots) { 
         // TODO: also check sys load,  memory, etc.
         LOG.debug("Request {} for assigning new tasks ...", schedPath)
-        request(sched, RequestTask(groomServerName)) 
+        request(sched, RequestTask(currentGroomStat)) 
       } else {
         // TODO: process task in queue first.
       }
     }
   }
+
+  /**
+   * Collect tasks information for report.
+   * @return GroomServerStat contains the latest tasks statistics.
+   */
+  def currentGroomStat(): GroomServerStat = {
+    val stat = new GroomServerStat(groomServerName, groomServerHost, 
+                                   groomServerPort, maxTasks)
+    queue.foreach( task => {
+      stat.addToQueue(task.getId.toString)
+    })
+
+    if(slots.size != stat.slotsLength)
+      throw new RuntimeException("Incorrect slots size: "+stat.slotsLength);
+    var pos = 0
+    slots.foreach( slot => {
+      slot.task match {
+        case None => stat.markWithNull(pos)
+        case Some(aTask) => stat.mark(pos, aTask.getId.toString)
+      }
+      pos += 1
+    }) 
+    stat
+  } 
 
   /**
    * Receive Directive from Scheduler.
@@ -179,54 +213,4 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
       case _ => LOG.warning("Unknown action value "+action)
     }
   }
-
-
 }
-
-/* use groom.BSPPeerContainer instead.
-final case object RequestAssign
-
-class BSPContainer(conf: HamaConfiguration) extends LocalService 
-                                                    with RemoteService {
-
-  /* Task assigned from TaskManager for computation. */
-  var task: Task = _
-
-  /* GroomServer TaskManager proxy. */
-  var taskManager: ActorRef = _
-  
-  /* TaskManager cancellable object. */
-  var cancelTaskManager: Cancellable = _
-
-  /* Sequence denote which slots is occipued. */
-  var seq: Int = configuration.getInt("bsp.task.child.seq", -1)
-
-  val taskManagerInfo = 
-    new ProxyInfo.Builder().withConfiguration(configuration).
-                            withActorName("taskManager").
-                            appendRootPath("bspmaster").
-                            appendChildPath("taskManager").
-                            buildProxyAtMaster
-
-  val taskManagerPath = taskManagerInfo.getPath
-
-  override def configuration: HamaConfiguration = conf
-  override def name = "bspContainer"
- 
-  override def initializeServices {
-    lookup("taskManager", taskManagerPath) 
-  }
-
-  override def afterLinked(proxy: ActorRef) = {
-    taskManager = proxy
-    cancelTaskManager = request(taskManager, RequestAssign)
-  }
-
-  def request(target: ActorRef, message: Any): Cancellable = {
-    import context.dispatcher
-    context.system.scheduler.schedule(0.seconds, 2.seconds, target, message)
-  }
-
-  override def receive = isProxyReady orElse timeout orElse unknown
-}
-*/

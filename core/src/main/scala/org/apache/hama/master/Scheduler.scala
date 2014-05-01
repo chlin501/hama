@@ -26,9 +26,11 @@ import org.apache.hama.Request
 import org.apache.hama.groom.RequestTask
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.bsp.v2.GroomServerSpec
+//import org.apache.hama.bsp.v2.GroomServerSpec
 import org.apache.hama.master.Directive.Action._
 import scala.collection.immutable.Queue
+
+final case object NextPlease
 
 class Scheduler(conf: HamaConfiguration) extends LocalService 
                                          with RemoteService {
@@ -56,25 +58,43 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
 
   override def name: String = "sched"
 
-  /**
-   * GroomServer request for assigning a task.
-   */
-  def requestTask: Receive = {
-    case RequestTask(groomServerName) => {
-      LOG.info("RequestTask from {}", groomServerName)
-      val (from, to) = 
-        assign(groomServerName, taskAssignQueue, sender, dispatch) 
-      this.taskAssignQueue = from
-      if(!to.isEmpty) 
-        this.processingQueue = processingQueue.enqueue(to.dequeue._1)
+/*
+  override def afterMediatorUp {
+    request(self, CheckIfNextJob) 
+  }
+
+  def request(target: ActorRef, message: Any) {
+    import context.dispatch
+    context.system.scheduler.schedule(0.seconds, 3.seconds, target, message)
+  }
+
+  def isTaskAssignQueueEmpty: Boolean = taskAssignQueue.isEmpty
+
+   * Check if the taskQueue is empty. If true, ask Receptionist to dispense a 
+   * job; otherwise do nothing.
+  def nextPlease: Receive = {
+    case CheckIfNextJob => {
+      if(isTaskAssignQueueEmpty) Request("receptionist", Take)
     }
   }
 
-  /**
+   * GroomServer request for assigning a task.
+  def requestTask: Receive = {
+    case RequestTask(groomServerSpec) => {
+      LOG.info("RequestTask from GroomServer {}", groomServerSpec)
+    }
+  }
+
+  def passiveAssign(fromActor: ActorRef) {
+      val (from, to) = 
+        assign(groomServerName, taskAssignQueue, fromActor, dispatch) 
+      this.taskAssignQueue = from
+      if(!to.isEmpty) 
+        this.processingQueue = processingQueue.enqueue(to.dequeue._1)
+  }
+
    * Assign a task to a particular GroomServer by delegating that task to 
    * dispatch function, which normally uses actor ! message.
-   */
-  // TODO: move to a Trait.
   def assign(fromGroom: String, fromQueue: TaskAssignQueue, 
              fromActor: ActorRef, d: (ActorRef, Task) => Unit): 
       (TaskAssignQueue, ProcessingQueue) = {
@@ -90,27 +110,21 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     }
   }
 
-  /**
    * Dispatch a Task to a GroomServer.
    * @param from is the GroomServer task manager.
    * @param task is the task to be executed.
-   */
   protected def dispatch(from: ActorRef, task: Task) {
     from ! new Directive(Launch, task,  
                          conf.get("bsp.master.name", "bspmaster"))  
   }
 
-  /**
    * Dispense next unassigned task. None indiecates all tasks are assigned.
-   */
   def unassignedTask(job: Job): Option[Task] = {
     val task = job.nextUnassignedTask;
     if(null != task) Some(task) else None
   }
   
- /**
   * Rescheduling tasks when a GroomServer goes offline.
-  */
   def reschedTasks: Receive = {
     case RescheduleTasks(spec) => {
        LOG.info("Failed GroomServer having GroomServerSpec "+spec)
@@ -118,15 +132,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
        //       2. if targets has values, call schedule(); otherwise 
        //          put into assign task queue, waiting for groom request.
     }
-  }
-
-  /**
-   * Once receiving job submission notification, Scheduler will request pulling 
-   * a job from Receptionist.waitQueue for scheduling job's tasks.
-   * The request result will be replied with Dispense message.
-   */
-  def jobSubmission: Receive = {
-    case JobSubmission => mediator ! Request("receptionist", Take)
   }
 
   def bookThenDispatch(job: Job, targetActor: ActorRef,  
@@ -146,24 +151,10 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     to
   }
 
-  /**
    * Positive schedule tasks.
    * Actual function that exhaustively schedules tasks to target GroomServers.
-   */ 
   def schedule(fromQueue: TaskAssignQueue): 
       (TaskAssignQueue, ProcessingQueue) = { 
-//TODO: - need to think if multiple tasks are schedule to the same GroomServer.
-//      This may cause deadlock for barrier sync because some tasks are stored 
-//      in GroomServer's queue while others is executing.
-//      - We need to check if all tasks are scheduled/assigned and then trigger
-//      a signal for starting the computation!
-//      - GroomServer (task manager) can't ask a task assignment if no free 
-//      slots available in preventing some tasks stored in queue and others in 
-//      executing (deadlock).
-//      - when scheduling a task, we need to check if target GroomServer's 
-//      task manager queue has free slots. If no free slots in target server,
-//      we have to periodecally(?) check and then schedule that task to the
-//      target server in preventing deadlock issue.
     val (job, rest) = fromQueue.dequeue
     val groomServers = job.getTargets  
     var from = Queue[Job](); var to = Queue[Job]()
@@ -184,21 +175,24 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     (from, to)
   }
 
-  /**
-   * Move a job to a specific queue pending for further processing, either
-   * passive or positive.
+   * Active schedule tasks within a job to particular GroomServers.
+   * @param job contains tasks to be scheduled.
+  def activeSchedule(job: Job) {
+    if(null != job.getTargets && 0 < job.getTargets.length) { 
+      val (from, to) = schedule(taskAssignQueue)  
+      this.taskAssignQueue = from
+      this.processingQueue = processingQueue.enqueue(to.dequeue._1)
+    }
+  }
+
+   * Move a job to a specific queue pending for further processing
    *
    * If a job contains particular target GroomServer, schedule tasks to those
    * GroomServers.
-   */
   def dispense: Receive = {
     case Dispense(job) => { 
-      this.taskAssignQueue = this.taskAssignQueue.enqueue(job)
-      if(null != job.getTargets && 0 < job.getTargets.length) { // active
-        val (from, to) = schedule(taskAssignQueue)  
-        this.taskAssignQueue = from
-        this.processingQueue = processingQueue.enqueue(to.dequeue._1)
-      }
+      taskAssignQueue = taskAssignQueue.enqueue(job)
+      activeSchedule(job) 
     }
   }
 
@@ -214,5 +208,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
   }
 
   override def receive = locate orElse isServiceReady orElse serverIsUp orElse reschedTasks orElse jobSubmission orElse dispense orElse requestTask orElse isProxyReady orElse timeout orElse unknown
-
+*/
+  override def receive = unknown // tmp
 }

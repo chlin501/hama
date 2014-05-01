@@ -21,12 +21,10 @@ import akka.actor.ActorSystem
 import akka.actor.ActorRef
 
 /**
- * Tester wraps {@link org.apache.hama.HamaConfiguration} and 
+ * TestRef wraps {@link org.apache.hama.HamaConfiguration} and 
  * {@link akka.TestKit.TestProbe#ref} for subclass reference.
  */
-abstract class Tester(conf: HamaConfiguration, ref: ActorRef) { 
-
-  protected var probeRef: ActorRef = _
+abstract class TestRef(conf: HamaConfiguration, probeRef: ActorRef) { 
 
   /**
    * {@link akka.TestKit.TestProbe.ref} 

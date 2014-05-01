@@ -22,6 +22,10 @@ import org.apache.hama.bsp.v2.Task
 /**
  * A slot holds relation from its id sequence to a specific 
  * {@link org.apache.hama.bsp.v2.Task}.
+ * @param seq of this slot.
+ * @param task that runs on this slot.
+ * @param master to which this slot belongs.
+ * @param pid that executes the task for this slot.
  */
 case class Slot(seq: Int, 
                 task: Option[Task], 

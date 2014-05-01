@@ -20,7 +20,6 @@ package org.apache.hama.util
 import akka.actor.ActorSystem
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
-import org.apache.hama.Tester
 import org.apache.hama.TestEnv
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
