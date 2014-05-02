@@ -36,6 +36,19 @@ import scala.concurrent.duration.FiniteDuration
 
 final case object NextPlease
 
+/**
+ * - Pull a job from {@link Receptionist#waitQueue} if taskAssignQueue is empty.
+ * - When scheduling a job, either active or passive, in 
+ *   {@link #taskAssignQueue}, scheduler must check the number of total tasks 
+ *   that belong to the same job can't exceed a GroomServer's maxTasks.
+ *   EX: 
+ *     task1 , task2 , task3 , task4 , ..., taskN    <-- task(s)
+ *   [ groom1, groom2, groom1, groom8, ..., groom1 ] <-- run on GroomServer(s)
+ *   if groom1's maxTasks is 2
+ *   we observe tasks runnning on groom1 have count 3 (task1, task3, and taskN)
+ *   so it's illegal/ wrong to schedule more than 2 tasks to groom1.
+ *   only (max) 2 tasks are allowed to be scheduled groom1.
+ */
 class Scheduler(conf: HamaConfiguration) extends LocalService 
                                          with RemoteService {
 
