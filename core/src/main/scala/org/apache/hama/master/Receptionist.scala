@@ -155,8 +155,8 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    * Scheduler asks for job computation.
    * Dispense a job to Scheduler.
    */
-  def take: Receive = {
-    case Take => {
+  def takeFromWaitQueue: Receive = {
+    case TakeFromWaitQueue => {
       if(!waitQueue.isEmpty) {
         val (job, rest) = waitQueue.dequeue
         waitQueue = rest 
@@ -167,6 +167,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = isServiceReady orElse serverIsUp orElse take orElse submitJob orElse unknown
+  override def receive = submitJob orElse takeFromWaitQueue orElse isServiceReady orElse serverIsUp orElse unknown
 
 }

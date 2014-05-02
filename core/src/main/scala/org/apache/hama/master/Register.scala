@@ -17,4 +17,4 @@
  */
 package org.apache.hama.master
 
-private[master] final case object Take
+final case class Register(groomServerName: String)

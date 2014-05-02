@@ -22,5 +22,6 @@ package org.apache.hama.groom
  * @param groomName should be the same name as GroomServerSpec - in a form of
  *                  groom_<host>_<port>
  * @param slots are slots configured. 
- */
 final case class GroomStat(groomName: String, slots: Set[Slot])
+ */
+

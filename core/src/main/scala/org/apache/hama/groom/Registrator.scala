@@ -17,10 +17,12 @@
  */
 package org.apache.hama.groom
 
+/*
 import akka.actor._
 import org.apache.hama._
 //import org.apache.hama.bsp.v2.GroomServerSpec
 
+// TODO: move to TaskManager
 class Registrator(conf: HamaConfiguration) extends LocalService 
                                               with RemoteService {
 
@@ -62,3 +64,4 @@ class Registrator(conf: HamaConfiguration) extends LocalService
   override def receive = isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 
 }
+*/

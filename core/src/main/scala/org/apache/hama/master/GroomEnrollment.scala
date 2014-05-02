@@ -15,10 +15,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama
+package org.apache.hama.master
+
+import akka.actor.ActorRef
 
 /**
- * @param service name to which the message will be sent.
- * @param message contains data will be consumed.
+ * This is used to notify Scheduler that a GroomServer's registered.
+ * Scheduler can simply use {@link #taskManager} to dispatch tasks.
+ * @param groomServerName is used as {@link RemoteService#proxies}'s key.
+ * @param taskManager is used as {@link RemoteService#proxies}'s value.
  */
-final case class Request(service: String, message: Any)
+final case class GroomEnrollment(groomServerName: String, 
+                                 taskManager: ActorRef)

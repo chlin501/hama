@@ -15,10 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama
+package org.apache.hama.master
 
 /**
- * @param service name to which the message will be sent.
- * @param message contains data will be consumed.
+ * A message denotes to take a job from Receptionist's waitQueue.
  */
-final case class Request(service: String, message: Any)
+private[master] final case object TakeFromWaitQueue

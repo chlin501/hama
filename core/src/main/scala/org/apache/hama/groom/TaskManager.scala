@@ -38,6 +38,8 @@ final case object ContainerIsActive
 class TaskManager(conf: HamaConfiguration) extends LocalService 
                                            with RemoteService {
 
+  type ForkedChild = String
+
   val schedInfo =
     new ProxyInfo.Builder().withConfiguration(conf).
                             withActorName("sched").
@@ -47,15 +49,26 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   val schedPath = schedInfo.getPath
 
+  val groomManagerInfo =
+    new ProxyInfo.Builder().withConfiguration(conf).
+                            withActorName("groomManager").
+                            appendRootPath("bspmaster").
+                            appendChildPath("groomManager").
+                            buildProxyAtMaster
+
+  val groomManagerPath = groomManagerInfo.getPath
+
   val groomServerHost = conf.get("bsp.groom.address", "127.0.0.1")
   val groomServerPort = conf.getInt("bsp.groom.port", 50000)
   val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
+  val maxTasks = configuration.getInt("bsp.tasks.maximum", 3) 
+  val bspmaster = configuration.get("bsp.master.name", "bspmaster")
 
   var sched: ActorRef = _
   var cancellable: Cancellable = _
+  var groomManager: ActorRef = _
 
-  val maxTasks = configuration.getInt("bsp.tasks.maximum", 3) 
-  val bspmaster = configuration.get("bsp.master.name", "bspmaster")
+  var children = Map.empty[ForkedChild, ActorRef]
 
   /**
    * The max size of slots can't exceed configured maxTasks.
@@ -81,6 +94,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   override def initializeServices {
     initializeSlots     
     lookup("sched", schedPath)
+    lookup("groomManager", groomManagerPath)
   }
 
   def hasTaskInQueue: Boolean = queue.size > 0
@@ -101,16 +115,28 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    * @param target is the ActorRef to be requested.  
    * @param message is a RequestMessage sent to remote target.
    */
-  def request(target: ActorRef, message: RequestMessage) {
+  def request(target: ActorRef, message: RequestMessage): Cancellable = {
     LOG.debug("Request message {} to target: {}", message, target)
     import context.dispatcher
-    cancellable = context.system.scheduler.schedule(0.seconds, 5.seconds, 
+    context.system.scheduler.schedule(0.seconds, 5.seconds, 
                                                     target, message)
   }
 
   override def afterLinked(proxy: ActorRef) = {
-    sched = proxy  
-    request(self, TaskRequest)
+    if(proxy.path.name.equals("sched")) {
+      sched = proxy  
+      cancellable = request(self, TaskRequest)
+    } else if(proxy.path.name.equals("groomManager")) { // register
+      groomManager = proxy
+      groomManager ! currentGroomServerStat
+    } else {
+      LOG.info("Linking to an unknown proxy {}", proxy.path.name)
+    }
+  }
+
+  override def offline(target: ActorRef) {
+    // TODO: if only groomManager actor fails, simply re-"lookup" will fail.
+    lookup("groomManager", groomManagerPath)
   }
 
   /**
@@ -122,24 +148,31 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     case TaskRequest => {
       LOG.debug("In TaskRequest, sched: {}, hasTaskInQueue: {}"+
                ", hasFreeSlots: {}", sched, hasTaskInQueue, hasFreeSlots)
-      if(!hasTaskInQueue && hasFreeSlots) { 
-        // TODO: also check sys load,  memory, etc.
+      if(!hasTaskInQueue && hasFreeSlots /* && N > sysload */) { 
         LOG.debug("Request {} for assigning new tasks ...", schedPath)
-        request(sched, RequestTask(currentGroomStat)) 
+        sched ! RequestTask(currentGroomServerStat)
       } else {
         // TODO: process task in queue first.
       }
     }
   }
+  
+  /**
+   * Calculate sys loading vlaue, including cpu, memory, etc.
+  def sysload: Double = {
+  }
+   */
 
   /**
    * Collect tasks information for report.
    * @return GroomServerStat contains the latest tasks statistics.
    */
-  def currentGroomStat(): GroomServerStat = {
+  def currentGroomServerStat(): GroomServerStat = {
     val stat = new GroomServerStat(groomServerName, groomServerHost, 
                                    groomServerPort, maxTasks)
     queue.foreach( task => {
+      if(null == task) 
+        throw new NullPointerException("Task can't be null in queue.")
       stat.addToQueue(task.getId.toString)
     })
 
@@ -171,14 +204,24 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     }
   }
 
+  /**
+   * A notification when a container/ process is ready.
+   */
   def containerIsActive: Receive = {
     case ContainerIsActive => {
-      // start assign a task
+      LOG.info("{} is ready for processing a task!", sender.path.name)
+      val forked = sender
+      children ++= Map(sender.path.name -> forked)// cache actorRef
+      // TODO: start assigning a task
     }
   }
 
-  override def receive = requestMessage orElse receiveDirective orElse isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse unknown
+  override def receive = requestMessage orElse receiveDirective orElse isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 
+  /**
+   * Pick up a slot that is not in use.
+   * @return Option[Slot] contains either a slot or None if no slot found.
+   */
   def pickUp: Option[Slot] = {
     var free: Slot = null
     var flag = true
@@ -195,6 +238,10 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     if(null == free) None else Some(free)
   }
 
+  /**
+   * Match an action from the {@link Directive} provided, then execute
+   * the task by forking a process if needed.
+   */
   private def matchThenExecute(action: Action, master: String, 
                                timestamp: Long, task: Task) {
     action.value match {
@@ -202,7 +249,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         // a. pick up a free slot. 
         val slot = pickUp
         //configuration.setInt("bsp.task.child.seq", )
-        // b. fork a new process 
+        // b. check if process is forked
+        // b1. if false, fork a new process else reuse it.
         // c. launch task on the new process
         // d. store the task to a slot
         // e. periodically update stat to plugin

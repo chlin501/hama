@@ -33,7 +33,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
 final case class Args(port: Int, instanceCount: Int, config: Config)
-final case object Setup
+//final case object Setup
 
 object BSPPeerContainer {
 
@@ -100,7 +100,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
                              buildProxyAtGroom
    val taskManagerPath = taskManagerInfo.getPath
    var taskManager: ActorRef = _
-   var cancellable: Cancellable = _
+   //var cancellable: Cancellable = _
 
    override def configuration: HamaConfiguration = conf
 
@@ -118,7 +118,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
    override def afterLinked(proxy: ActorRef) {
      taskManager = proxy
-     taskManager ! Setup
+     taskManager ! ContainerIsActive
    }
 
    def processTask: Receive = {

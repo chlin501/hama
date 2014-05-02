@@ -18,23 +18,28 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
+import akka.actor.Cancellable
+import org.apache.hama.bsp.v2.Job
+import org.apache.hama.bsp.v2.Task
+import org.apache.hama.bsp.v2.GroomServerStat
+import org.apache.hama.groom.RequestTask
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
+import org.apache.hama.master.Directive.Action._
+import org.apache.hama.master.monitor.AskGroomServerStat
 import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.Request
-import org.apache.hama.groom.RequestTask
-import org.apache.hama.bsp.v2.Job
-import org.apache.hama.bsp.v2.Task
-//import org.apache.hama.bsp.v2.GroomServerSpec
-import org.apache.hama.master.Directive.Action._
 import scala.collection.immutable.Queue
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 
 final case object NextPlease
 
 class Scheduler(conf: HamaConfiguration) extends LocalService 
                                          with RemoteService {
 
+  type GroomServerName = String
   type TaskAssignQueue = Queue[Job]
   type ProcessingQueue = Queue[Job]
 
@@ -54,30 +59,158 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    */
   protected var processingQueue = Queue[Job]()
 
+  protected var groomTaskManagers = Map.empty[GroomServerName, ActorRef]
+
+  var taskAssignQueueChecker: Cancellable = _
+
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "sched"
 
-/*
   override def afterMediatorUp {
-    request(self, CheckIfNextJob) 
-  }
-
-  def request(target: ActorRef, message: Any) {
-    import context.dispatch
-    context.system.scheduler.schedule(0.seconds, 3.seconds, target, message)
+    taskAssignQueueChecker = request(self, NextPlease) 
   }
 
   def isTaskAssignQueueEmpty: Boolean = taskAssignQueue.isEmpty
 
+  def request(target: ActorRef, message: Any): Cancellable = {
+    import context.dispatcher
+    context.system.scheduler.schedule(0.seconds, 3.seconds, target, message)
+  }
+
+  /**
    * Check if the taskQueue is empty. If true, ask Receptionist to dispense a 
    * job; otherwise do nothing.
+   */
   def nextPlease: Receive = {
-    case CheckIfNextJob => {
-      if(isTaskAssignQueueEmpty) Request("receptionist", Take)
+    case NextPlease => {
+      if(isTaskAssignQueueEmpty) {
+        if(null == mediator) 
+          throw new IllegalStateException("Mediator shouldn't be null!")
+        mediator ! Request("receptionist", TakeFromWaitQueue)
+      }
     }
   }
 
+  /**
+   * Move a job to a specific queue pending for further processing
+   *
+   * If a job contains particular target GroomServer, schedule tasks to those
+   * GroomServers.
+   */
+  def dispense: Receive = {
+    case Dispense(job) => { 
+      taskAssignQueue = taskAssignQueue.enqueue(job)
+      activeSchedule(job) 
+      //if(null != job.getTargets && 0 < job.getTargets.length) { 
+        //findGroomStat(job.getTargets)
+      //}
+    }
+  }
+
+  /**
+   * Active schedule tasks within a job to particular GroomServers.
+   * Tasks scheduled will be placed in target GroomServer's queue if free slots
+   * are not available.
+   * @param job contains tasks to be scheduled.
+   */
+  def activeSchedule(job: Job) {
+    if(null != job.getTargets && 0 < job.getTargets.length) { 
+      val (from, to) = schedule(taskAssignQueue)  
+      this.taskAssignQueue = from
+      this.processingQueue = processingQueue.enqueue(to.dequeue._1)
+    }
+  }
+
+  /**
+   * Positive schedule tasks.
+   * Actual function that exhaustively schedules tasks to target GroomServers.
+   */
+  def schedule(fromQueue: TaskAssignQueue): 
+      (TaskAssignQueue, ProcessingQueue) = { 
+    val (job, rest) = fromQueue.dequeue
+    val groomServers = job.getTargets  
+    var from = Queue[Job](); var to = Queue[Job]()
+    groomServers.foreach( groomName => {
+      LOG.debug("Check if groomTaskManagers cache contains {}", groomName)
+      val taskManagerActor = groomTaskManagers.getOrElse(groomName, null) 
+      if(null != taskManagerActor) {
+        LOG.debug("GroomServer's taskManager {} found!", groomName)
+        to = bookThenDispatch(job, taskManagerActor, groomName, dispatch)
+      } else LOG.warning("Can't find taskManager for {}", groomName)
+    })
+    if(!to.isEmpty) from = rest 
+    LOG.debug("from queue: {} to queue: {}", from, to)
+    (from, to)
+  }
+
+  /**
+   * Mark the task with the {@link GroomServer} requested; then dispatch that 
+   * task to that {@link GroomServer}.
+   * @param job contains tasks to be scheduled.
+   * @param targetActor is the remote GroomServer's {@link TaskManager}.
+   * @param targetGroomServer to which the task will be scheduled.
+   * @param d is the dispatch function.
+   */
+  def bookThenDispatch(job: Job, targetActor: ActorRef,  
+                       targetGroomServer: String, 
+                       d: (ActorRef, Task) => Unit): ProcessingQueue = {
+    var to = Queue[Job]()
+    unassignedTask(job) match {
+      case Some(task) => {
+        // scan job's tasks checking if sumup of scheduled to the same groom 
+        // server's tasks > maxTasks if passive assigned.
+        task.markWithTarget(targetGroomServer) 
+        d(targetActor, task)
+      }
+      case None => 
+    }
+    LOG.debug("Are all tasks assigned? {}", job.areAllTasksAssigned)
+    if(job.areAllTasksAssigned) to = to.enqueue(job)
+    to
+  }
+
+  /** 
+   * Dispatch a Task to a GroomServer.
+   * @param from is the GroomServer task manager.
+   * @param task is the task to be executed.
+   */
+  protected def dispatch(from: ActorRef, task: Task) {
+    from ! new Directive(Launch, task,  
+                         conf.get("bsp.master.name", "bspmaster"))  
+  }
+
+  /**
+   * Dispense next unassigned task. None indiecates all tasks are assigned.
+   */
+  def unassignedTask(job: Job): Option[Task] = {
+    val task = job.nextUnassignedTask;
+    if(null != task) Some(task) else None
+  }
+
+  /**
+   * Fire a message to find corresponded targets {@link GroomServerStat} in 
+   * {@link GroomTasksTracker}.
+   * @param targets are GroomServers array.
+  def findGroomStat(targets: Array[String]) {
+    if(null == mediator)
+      throw new IllegalStateException("Mediator shouldn't be null!")
+    mediator ! Request("monitor", Request("groomTasksTracker", 
+                                          AskGroomServerStat(targets, self))) 
+  }
+   */ 
+
+  /**
+   * From GroomManager to notify a groom server's task manager is ready for
+   * receiving tasks dispatch.
+   */
+  def enrollment: Receive = {
+    case GroomEnrollment(groomServerName, taskManager) => {
+      groomTaskManagers ++= Map(groomServerName -> taskManager) 
+    }
+  }
+
+/*
    * GroomServer request for assigning a task.
   def requestTask: Receive = {
     case RequestTask(groomServerSpec) => {
@@ -109,20 +242,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
       (Queue[Job](), Queue[Job]())
     }
   }
-
-   * Dispatch a Task to a GroomServer.
-   * @param from is the GroomServer task manager.
-   * @param task is the task to be executed.
-  protected def dispatch(from: ActorRef, task: Task) {
-    from ! new Directive(Launch, task,  
-                         conf.get("bsp.master.name", "bspmaster"))  
-  }
-
-   * Dispense next unassigned task. None indiecates all tasks are assigned.
-  def unassignedTask(job: Job): Option[Task] = {
-    val task = job.nextUnassignedTask;
-    if(null != task) Some(task) else None
-  }
   
   * Rescheduling tasks when a GroomServer goes offline.
   def reschedTasks: Receive = {
@@ -134,80 +253,19 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     }
   }
 
-  def bookThenDispatch(job: Job, targetActor: ActorRef,  
-                       targetGroomServer: String, 
-                       d: (ActorRef, Task) => Unit): ProcessingQueue = {
-    var to = Queue[Job]()
-    unassignedTask(job) match {
-      case Some(task) => {
-        // TODO: check if task assigned exceeds groom server's maxTasks(how)
-        //task.markWithTarget(targetGroomServer) 
-        //d(targetActor, task)
-      }
-      case None => 
-    }
-    LOG.debug("Are all tasks assigned? {}", job.areAllTasksAssigned)
-    if(job.areAllTasksAssigned) to = to.enqueue(job)
-    to
-  }
-
-   * Positive schedule tasks.
-   * Actual function that exhaustively schedules tasks to target GroomServers.
-  def schedule(fromQueue: TaskAssignQueue): 
-      (TaskAssignQueue, ProcessingQueue) = { 
-    val (job, rest) = fromQueue.dequeue
-    val groomServers = job.getTargets  
-    var from = Queue[Job](); var to = Queue[Job]()
-    groomServers.foreach( groomName => {
-      LOG.debug("Check if proxies object contains {}", groomName)
-      proxies.find(p => p.path.name.equals(groomName)) match {
-        case Some(taskManagerActor) => {
-          LOG.debug("GroomServer's taskManager {} found!", groomName)
-          to = bookThenDispatch(job, taskManagerActor, groomName, dispatch)
-        }
-        case None => 
-          LOG.warning("Can't schedule tasks for taskManager {} not found.", 
-                      groomName)
-      }
-    })
-    if(!to.isEmpty) from = rest 
-    LOG.debug("from queue: {} to queue: {}", from, to)
-    (from, to)
-  }
-
-   * Active schedule tasks within a job to particular GroomServers.
-   * @param job contains tasks to be scheduled.
-  def activeSchedule(job: Job) {
-    if(null != job.getTargets && 0 < job.getTargets.length) { 
-      val (from, to) = schedule(taskAssignQueue)  
-      this.taskAssignQueue = from
-      this.processingQueue = processingQueue.enqueue(to.dequeue._1)
-    }
-  }
-
-   * Move a job to a specific queue pending for further processing
-   *
-   * If a job contains particular target GroomServer, schedule tasks to those
-   * GroomServers.
-  def dispense: Receive = {
-    case Dispense(job) => { 
-      taskAssignQueue = taskAssignQueue.enqueue(job)
-      activeSchedule(job) 
-    }
-  }
-
   def lookupTaskManager(spec: GroomServerSpec) {
     LOG.info("Lookup {} at {}", spec.getName, taskManagerInfo.getPath)
     lookup(spec.getName, taskManagerInfo.getPath)
   }
 
+  from GroomManager for looking up registered TaskManager at GroomServer.
   def locate: Receive = {
     case Locate(spec) => {
       lookupTaskManager(spec)
     }
   }
 
-  override def receive = locate orElse isServiceReady orElse serverIsUp orElse reschedTasks orElse jobSubmission orElse dispense orElse requestTask orElse isProxyReady orElse timeout orElse unknown
+  override def receive = locate orElse reschedTasks orElse jobSubmission orElse dispense orElse requestTask orElse 
 */
-  override def receive = unknown // tmp
+  override def receive = isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse unknown
 }

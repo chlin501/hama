@@ -104,6 +104,10 @@ trait RemoteService extends Service {
     proxy
   }
 
+  /**
+   * Post process once the remote actor is linked.
+   * @param proxy is the remote actor linked via {@link RemoteService#lookup}.
+   */
   protected def afterLinked(proxy: ActorRef) {}
 
   /**

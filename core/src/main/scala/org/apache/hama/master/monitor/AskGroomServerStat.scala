@@ -15,10 +15,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama
+package org.apache.hama.master.monitor
+
+import akka.actor.ActorRef
 
 /**
- * @param service name to which the message will be sent.
- * @param message contains data will be consumed.
+ * Ask {@link GroomTasksTracker} for corresponded GroomServerStat(s).
+ * @param groomServers is the target to which tasks will be scheduled.
+ * @param from denotes who sends this request.
  */
-final case class Request(service: String, message: Any)
+final case class AskGroomServerStat(groomServers: Array[String], 
+                                    from: ActorRef)

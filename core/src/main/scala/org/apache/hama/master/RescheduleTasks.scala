@@ -19,4 +19,4 @@ package org.apache.hama.master
 
 import org.apache.hama.bsp.v2.GroomServerStat
 
-final case class RescheduleTasks(spec: GroomServerStat) 
+final case class RescheduleTasks(groomServerName: String) 

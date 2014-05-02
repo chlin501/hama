@@ -24,6 +24,7 @@ import org.apache.hama.master.monitor.JobTasksTracker
 import org.apache.hama.master.monitor.GroomTasksTracker
 import org.apache.hama.master.monitor.SysMetricsTracker
 
+// TODO: rename to Auditor?
 class Monitor(conf: HamaConfiguration) extends LocalService {
 
   override def configuration: HamaConfiguration = conf
@@ -43,6 +44,6 @@ class Monitor(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = areSubServicesReady orElse serverIsUp orElse loadPlugin orElse unknown
+  override def receive = forward orElse areSubServicesReady orElse serverIsUp orElse loadPlugin orElse unknown
 
 }

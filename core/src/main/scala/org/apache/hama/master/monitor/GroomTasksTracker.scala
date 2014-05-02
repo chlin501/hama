@@ -17,30 +17,44 @@
  */
 package org.apache.hama.master.monitor
 
+import org.apache.hama.bsp.v2.GroomServerStat
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
-import org.apache.hama.groom.Slot
-import org.apache.hama.groom.GroomStat
-import org.apache.hama.bsp.v2.Task
 
 final class GroomTasksTracker(conf: HamaConfiguration) extends LocalService {
-
-  var groomTasksStat = Map.empty[String, Set[Slot]]
+ 
+  var groomTasksStat = Set.empty[GroomServerStat]
 
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "groomTasksTracker"
 
-  def updateGroomStat: Receive = {
-    case stat: GroomStat => { 
-      groomTasksStat.find(p=> p._1.equals(stat.groomName)) match {
-        case Some((key, value)) =>  
-          groomTasksStat ++= Map(stat.groomName -> stat.slots)
-        case None => 
-          groomTasksStat ++= Map(stat.groomName -> stat.slots)
-      }
+  /**
+   * Receive {@link GroomServerStat} report from {@link GroomReporter}.
+   */
+  def renewGroomServerStat: Receive = {
+    case stat: GroomServerStat => groomTasksStat ++= Set(stat)
+  }
+  
+  /**
+   * Find corresponded {@link GroomServerStat}. 
+   */
+  def askGroomServerStat: Receive = {
+    case AskGroomServerStat(grooms, from) => {
+      var stats = Set.empty[GroomServerStat]  
+      grooms.foreach( groom => {
+        groomTasksStat.filter( stat => stat.getName.equals(groom)) match {
+          case filtered: Set[GroomServerStat] => stats ++= Set(filtered.head)
+          case unknown@_ => LOG.warning("No stat found for GroomServer {}", 
+                                        groom)
+        }
+      })
+      if(!stats.isEmpty) 
+        from ! stats 
+      else 
+        LOG.warning("{} No GroomServerStat found!", grooms.mkString(", "))
     }
   }
 
-  override def receive = isServiceReady orElse updateGroomStat orElse unknown
+  override def receive = renewGroomServerStat orElse askGroomServerStat orElse isServiceReady orElse unknown
 }

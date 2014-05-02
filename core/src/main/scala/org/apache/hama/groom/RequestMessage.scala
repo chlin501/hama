@@ -21,4 +21,4 @@ import org.apache.hama.bsp.v2.GroomServerStat
 
 sealed trait RequestMessage
 case object TaskRequest extends RequestMessage
-case class RequestTask(spec: GroomServerStat) extends RequestMessage
+case class RequestTask(stat: GroomServerStat) extends RequestMessage

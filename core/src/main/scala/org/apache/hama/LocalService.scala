@@ -162,5 +162,19 @@ trait LocalService extends Service {
         LOG.warning(sender.path.name+" shouldn't send ServerIsUp message!")
     }
   }
- 
+
+  /**
+   * Forward message to a specific service.
+   * Request case class comprises service name and message object.
+   */
+  def forward: Receive = {
+    case Request(service, message) => {
+      services.find(p => service.equals(p.path.name)) match {
+        case Some(found) => found forward message
+        case None =>
+          LOG.warning("Can't forward message because {} not found! Services"+
+                      " available: {}.", service, services.mkString(", "))
+      }
+    }
+  }
 }

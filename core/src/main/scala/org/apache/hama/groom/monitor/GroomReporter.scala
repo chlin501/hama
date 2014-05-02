@@ -18,11 +18,11 @@
 package org.apache.hama.groom.monitor
 
 import akka.actor.ActorRef
+import org.apache.hama.bsp.v2.GroomServerStat
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
-import org.apache.hama.groom._
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 
@@ -56,13 +56,16 @@ final class GroomReporter(conf: HamaConfiguration) extends LocalService
 
   override def afterLinked(proxy: ActorRef) = tracker = proxy
 
+  /**
+   * Receive message from TaskManager reporting GroomServerStat to 
+   * {@link GroomTaskTracker}.
+   */
   def report: Receive = {
-    case stat: GroomStat => { 
-      LOG.info("Report groom server {} to {}", stat.groomName, 
-               tracker.path.name)
+    case stat: GroomServerStat => { 
+      LOG.info("Report {} stat to {}", stat.getName, tracker.path.name)
       tracker ! stat
     }
   }
 
-  override def receive = isServiceReady orElse report orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = report orElse isServiceReady orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 }
