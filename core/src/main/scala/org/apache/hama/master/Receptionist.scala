@@ -39,12 +39,16 @@ import scala.concurrent.duration.FiniteDuration
 class Receptionist(conf: HamaConfiguration) extends LocalService {
 
   type JobFile = String
+  type GroomServerName = String
+  type MaxTasksAllowed = Int
 
   /* Initialized job */
   protected var waitQueue = Queue[Job]()
 
+  protected var groomsStat = Map.empty[GroomServerName, MaxTasksAllowed]
+
   /* Operation against underlying storage. */
-  private val operation = Operation.create(configuration)
+  protected val operation = Operation.create(configuration)
  
   override def configuration: HamaConfiguration = conf
 
@@ -71,6 +75,9 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     }
   }
 
+  /**
+   * Initialize job provided with {@link BSPJobID} and jobFile from the client.
+   */
   def initializeJob(jobId: BSPJobID, jobFile: String): Job = {
     val (localJobFile, localJarFile) = createLocalData(jobId)
     LOG.info("localJobFile: {}, localJarFile: {}", localJobFile, localJarFile)
@@ -79,6 +86,14 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     copyJarFile(jobId, jarFile, localJarFile)
     val splits = createSplits(jobId)
     LOG.info("Job with id {} is created!", jobId)
+    //TODO: 0. from jobFile to job.
+    //      1. check grouped getTargets having tasks running on the same groom 
+    //      server would exceed GroomServer's maxTasks.
+    //      EX:
+    //      groomsStat: (groom1, 3) (groom2, 4) (groom3, 2)
+    //      job.getTargets = [groom3, groom2, groom1, groom3, groom3] is 
+    //      invalide because 3 tasks run on groom3 > groom3's maxTasks 2.
+    //      2. check if numBSPTasks exceeds total maxTasks sumup?
     new Job.Builder().setId(jobId).
                       setConf(configuration).
                       setLocalJobFile(localJobFile).
@@ -167,6 +182,15 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = submitJob orElse takeFromWaitQueue orElse isServiceReady orElse serverIsUp orElse unknown
+  /**
+   * From GroomManager to notify a groom server's maxTasks.
+   */
+  def updateGroomStat: Receive = {
+    case GroomStat(groomServerName, maxTasks) => 
+      groomsStat ++= Map(groomServerName -> maxTasks)
+  }
+
+
+  override def receive = submitJob orElse takeFromWaitQueue orElse updateGroomStat orElse isServiceReady orElse serverIsUp orElse unknown
 
 }

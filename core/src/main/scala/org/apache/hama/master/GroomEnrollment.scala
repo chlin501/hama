@@ -22,8 +22,8 @@ import akka.actor.ActorRef
 /**
  * This is used to notify Scheduler that a GroomServer's registered.
  * Scheduler can simply use {@link #taskManager} to dispatch tasks.
- * @param groomServerName is used as {@link RemoteService#proxies}'s key.
- * @param taskManager is used as {@link RemoteService#proxies}'s value.
+ * @param groomServerName is the GroomServer name .
+ * @param taskManager refers to GroomServer's TaskManager.
  * @param maxTasks denote the capacity the GroomServer has upon registration.
  */
 final case class GroomEnrollment(groomServerName: String, 

@@ -30,8 +30,8 @@ import scala.collection.immutable.Queue
 final case class GroomRegistration(groomServerName: String,
                                    taskManager: ActorRef, 
                                    maxTasks: Int,
-                                   var notifySched: Boolean = false) 
-private[master] final case object NotifyScheduler
+                                   var notified: Boolean = false) 
+private[master] final case object Notifying
 
 /**
  * A service that manages a set of {@link org.apache.hama.groom.GroomServer}s.
@@ -49,7 +49,7 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
 
   /** 
    * Store the GroomServerStat information.
-   * We don't use Map because Set can "filter" for updating notifySched 
+   * We don't use Map because Set can "filter" for updating `notified' 
    * variable.
    */
   private[this] var grooms = Set.empty[GroomRegistration] 
@@ -120,8 +120,7 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
   override def afterMediatorUp {
     import context.dispatcher
     registrationWatcher = 
-      context.system.scheduler.schedule(0.seconds, 5.seconds, self, 
-                                        NotifyScheduler)
+      context.system.scheduler.schedule(0.seconds, 5.seconds, self, Notifying)
   }
 
   /**
@@ -140,26 +139,29 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
 
   /**
    * Notify Scheduler that a GroomServer registers; also update the flag
-   * if the taskManager actor is passed to {@link Scheduler} so that next
-   * time 
+   * if the taskManager actor is passed to {@link Scheduler}. 
+   * {@link Receptionist} will also be notified with GroomServer's maxTasks.
    */
-  def notifyScheduler: Receive = {
-    case NotifyScheduler => {
-      grooms.filter(groom => !groom.notifySched) match {
+  def notifying: Receive = {
+    case Notifying => {
+      grooms.filter(groom => !groom.notified) match {
         case fresh: Set[GroomRegistration] => fresh.foreach( newjoin => {
           if(null == mediator)
             throw new RuntimeException("Impossible no mediator after it's up!")
-          mediator ! Request("sched", 
-                             GroomEnrollment(newjoin.groomServerName, 
-                                             newjoin.taskManager,
-                                             newjoin.maxTasks))
-          newjoin.notifySched = true
+          mediator ! Request("sched", GroomEnrollment(newjoin.groomServerName, 
+                                                      newjoin.taskManager,
+                                                      newjoin.maxTasks))
+          
+          mediator ! Request("receptionist", 
+                             GroomStat(newjoin.groomServerName, 
+                                       newjoin.maxTasks))
+          newjoin.notified = true
         })
         case _ => 
       }
     } 
   }
 
-  override def receive = register orElse notifyScheduler orElse isServiceReady orElse serverIsUp orElse superviseeIsTerminated orElse unknown
+  override def receive = register orElse notifying orElse isServiceReady orElse serverIsUp orElse superviseeIsTerminated orElse unknown
 
 }

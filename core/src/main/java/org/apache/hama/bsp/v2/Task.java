@@ -47,6 +47,7 @@ public final class Task implements Writable {
   /* The unique id for this task, including BSPJobID. */
   private TaskAttemptID id;
 
+  // TODO: maybe we need record time when the task in queue?
   /* Time this task begins. */
   private LongWritable startTime = new LongWritable(0);
 

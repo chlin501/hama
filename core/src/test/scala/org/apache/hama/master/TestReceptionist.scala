@@ -23,8 +23,6 @@ import akka.event.Logging
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.Request
-//import org.apache.hama.fs.MockStorage
-//import org.apache.hama.fs.TestFileSystem
 import org.apache.hama.groom._
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2._
@@ -42,7 +40,6 @@ private final case class JobContent(jobId: BSPJobID,
 class MockMaster(conf: HamaConfiguration) extends Master(conf) {
 
   override def initializeServices {
-    //create("storage", classOf[MockStorage])
     create("receptionist", classOf[MockReceptionist])
   }
   

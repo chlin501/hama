@@ -117,14 +117,18 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    *
    * If a job contains particular target GroomServer, schedule tasks to those
    * GroomServers.
+   * 
+   * TODO: perhaps in the future we will check GroomServerStat first before
+   *       activeSchedule. Right now we rely maxTasks at the time of 
+   *       groom server's registeration, assuming that maxTasks is not changed
+   *       overtime as long as groom is not offline. Otherwise check 
+   *       groomTasksTracker for the latest GroomServerStat (latency still 
+   *       unavoidable).
    */
   def dispense: Receive = {
     case Dispense(job) => { 
       taskAssignQueue = taskAssignQueue.enqueue(job)
-      activeSchedule(job) 
-      //if(null != job.getTargets && 0 < job.getTargets.length) { 
-        //findGroomStat(job.getTargets)
-      //}
+      activeSchedule(job)    
     }
   }
 
@@ -154,8 +158,8 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     groomServers.foreach( groomName => {
       LOG.debug("Check if groomTaskManagers cache contains {}", groomName)
       val (taskManagerActor, maxTasks) = 
-        groomTaskManagers.getOrElse(groomName, null) 
-      if(null != taskManagerActor /* && job.tasks if exceed maxTasks */ ) {
+        groomTaskManagers.getOrElse(groomName, (null, -1)) 
+      if(null != taskManagerActor) {
         LOG.debug("GroomServer's taskManager {} found!", groomName)
         to = bookThenDispatch(job, taskManagerActor, groomName, dispatch)
       } else LOG.warning("Can't find taskManager for {}", groomName)
@@ -164,6 +168,20 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     LOG.debug("from queue: {} to queue: {}", from, to)
     (from, to)
   }
+
+  /* && job.tasks if exceed maxTasks */ 
+/* validate here or in receptionist?
+  def validate(targetGroomServers: Array[String], 
+               groomServer: String, maxTasks: Int): Boolean = {
+    val map = targetGroomServers.groupBy(key=>key).mapValues{ ary=>ary.size} 
+    val tasksSum = map.getOrElse(groomServer, -1)
+    var flag = false
+    if(-1 != tasksSum && tasksSum < maxTasks) {
+      flag = true
+    } 
+    flag
+  }
+*/
 
   /**
    * Mark the task with the {@link GroomServer} requested; then dispatch that 
@@ -208,18 +226,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     val task = job.nextUnassignedTask;
     if(null != task) Some(task) else None
   }
-
-  /**
-   * Fire a message to find corresponded targets {@link GroomServerStat} in 
-   * {@link GroomTasksTracker}.
-   * @param targets are GroomServers array.
-  def findGroomStat(targets: Array[String]) {
-    if(null == mediator)
-      throw new IllegalStateException("Mediator shouldn't be null!")
-    mediator ! Request("monitor", Request("groomTasksTracker", 
-                                          AskGroomServerStat(targets, self))) 
-  }
-   */ 
 
   /**
    * From GroomManager to notify a groom server's task manager is ready for
