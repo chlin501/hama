@@ -27,8 +27,9 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.collection.immutable.Queue
 
-final case class GroomRegistration(taskManager: ActorRef, 
-                                   groomServerName: String,
+final case class GroomRegistration(groomServerName: String,
+                                   taskManager: ActorRef, 
+                                   maxTasks: Int,
                                    var notifySched: Boolean = false) 
 private[master] final case object NotifyScheduler
 
@@ -41,21 +42,25 @@ private[master] final case object NotifyScheduler
  */
 class GroomManager(conf: HamaConfiguration) extends LocalService {
 
-  type GroomHostName = String
+  type GroomServerName = String
   type CrashCount = Int
 
   private var registrationWatcher: Cancellable = _
 
-  /* Store the GroomServerStat information.*/
+  /** 
+   * Store the GroomServerStat information.
+   * We don't use Map because Set can "filter" for updating notifySched 
+   * variable.
+   */
   private[this] var grooms = Set.empty[GroomRegistration] 
-
+ 
   /**
    * Identical GroomServer host name logically represents the same GroomServer, 
    * even if the underlying hardware is changed.
    * TODO: may need to reset crash count or 
    *       store more offline line grooms stat info.
    */
-  private[this] var offlineGroomsStat = Map.empty[GroomHostName, CrashCount] 
+  private[this] var offlineGroomsStat = Map.empty[GroomServerName, CrashCount] 
 
   override def configuration: HamaConfiguration = conf
 
@@ -64,7 +69,7 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
   /**
    * Quarantine offline GroomServer.
    */
-  def quarantine(offline: ActorRef, resched:(GroomHostName) => Unit) {
+  def quarantine(offline: ActorRef, resched:(GroomServerName) => Unit) {
     grooms.find(p=>p.taskManager.equals(offline)) match {//move to offlineGrooms
       case Some(groom) => {
         grooms -= groom 
@@ -85,7 +90,7 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
    * Call {@link Scheduler} to reschedule tasks in failure {@link GroomServer}.
    * @param stat contains all tasks in failure GroomServer.
    */
-  def rescheduleTasks(groomServerName: GroomHostName) { 
+  def rescheduleTasks(groomServerName: GroomServerName) { 
     if(null != mediator) 
       mediator ! Request("sched", RescheduleTasks(groomServerName))
     else 
@@ -96,8 +101,17 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
     quarantine(taskManager, rescheduleTasks)
   }
 
-  def checkIfRejoin(from: ActorRef, groomServerName: String) {
-    grooms ++= Set(GroomRegistration(from, groomServerName))
+  def checkIfRejoin(from: ActorRef, groomServerName: String, maxTasks: Int) {
+/*
+    grooms.find(p=>p.groomServerName.equals(groomServerName)) match {
+      case Some(found) => {   
+        grooms -= found
+        grooms ++= Set(GroomRegistration(groomServerName, from, maxTasks))
+      }
+      case None => 
+        grooms ++= Set(GroomRegistration(groomServerName, from, maxTasks))
+    }
+*/
     // TODO: 
     // 1. specific stat info recording groom crash info.
     // 2. if stat is with refresh hardware, reset crashed count to 0
@@ -111,34 +125,41 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
   }
 
   /**
-   * GroomServer's TaskManager register itself for monitored.
+   * GroomServer's TaskManager register itself for being monitored.
    * N.B.: Mediator may not be up at this momeent.
    */
   def register: Receive = {
-    //case stat: GroomServerStat => { 
-    case Register(groomServerName) => {
-      LOG.info("{} requests to register {}.", sender.path.name) 
-      checkIfRejoin(sender, groomServerName)
+    case register: Register => {
+      LOG.info("{} requests to register {}, allowing {} max tasks.", 
+               sender.path.name, register.getGroomServerName, 
+               register.getMaxTasks) 
+      checkIfRejoin(sender, register.getGroomServerName, register.getMaxTasks)
       context.watch(sender) // watch remote taskManager
     }
-
   }
 
-  def registration: Receive = {
+  /**
+   * Notify Scheduler that a GroomServer registers; also update the flag
+   * if the taskManager actor is passed to {@link Scheduler} so that next
+   * time 
+   */
+  def notifyScheduler: Receive = {
     case NotifyScheduler => {
-      grooms.foreach( groom => {
-        if(!groom.notifySched) {
+      grooms.filter(groom => !groom.notifySched) match {
+        case fresh: Set[GroomRegistration] => fresh.foreach( newjoin => {
           if(null == mediator)
-            throw new RuntimeException("Mediator is missing!")
+            throw new RuntimeException("Impossible no mediator after it's up!")
           mediator ! Request("sched", 
-                             GroomEnrollment(groom.groomServerName, 
-                                             groom.taskManager))
-          groom.notifySched = true
-        }
-      })
+                             GroomEnrollment(newjoin.groomServerName, 
+                                             newjoin.taskManager,
+                                             newjoin.maxTasks))
+          newjoin.notifySched = true
+        })
+        case _ => 
+      }
     } 
   }
 
-  override def receive = register orElse isServiceReady orElse serverIsUp orElse superviseeIsTerminated orElse unknown
+  override def receive = register orElse notifyScheduler orElse isServiceReady orElse serverIsUp orElse superviseeIsTerminated orElse unknown
 
 }

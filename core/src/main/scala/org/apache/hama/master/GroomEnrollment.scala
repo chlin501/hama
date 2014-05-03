@@ -24,6 +24,8 @@ import akka.actor.ActorRef
  * Scheduler can simply use {@link #taskManager} to dispatch tasks.
  * @param groomServerName is used as {@link RemoteService#proxies}'s key.
  * @param taskManager is used as {@link RemoteService#proxies}'s value.
+ * @param maxTasks denote the capacity the GroomServer has upon registration.
  */
 final case class GroomEnrollment(groomServerName: String, 
-                                 taskManager: ActorRef)
+                                 taskManager: ActorRef,
+                                 maxTasks: Int)

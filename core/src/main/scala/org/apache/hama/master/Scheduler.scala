@@ -53,6 +53,8 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
                                          with RemoteService {
 
   type GroomServerName = String
+  type TaskManagerRef = ActorRef
+  type MaxTasksAllowed = Int
   type TaskAssignQueue = Queue[Job]
   type ProcessingQueue = Queue[Job]
 
@@ -72,7 +74,12 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    */
   protected var processingQueue = Queue[Job]()
 
-  protected var groomTaskManagers = Map.empty[GroomServerName, ActorRef]
+  /** 
+   * This map holds GroomServer name as key to its TaskManager Reference and
+   * maxTasks value. 
+   */
+  protected var groomTaskManagers = 
+    Map.empty[GroomServerName, (TaskManagerRef, MaxTasksAllowed)]
 
   var taskAssignQueueChecker: Cancellable = _
 
@@ -146,8 +153,9 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     var from = Queue[Job](); var to = Queue[Job]()
     groomServers.foreach( groomName => {
       LOG.debug("Check if groomTaskManagers cache contains {}", groomName)
-      val taskManagerActor = groomTaskManagers.getOrElse(groomName, null) 
-      if(null != taskManagerActor) {
+      val (taskManagerActor, maxTasks) = 
+        groomTaskManagers.getOrElse(groomName, null) 
+      if(null != taskManagerActor /* && job.tasks if exceed maxTasks */ ) {
         LOG.debug("GroomServer's taskManager {} found!", groomName)
         to = bookThenDispatch(job, taskManagerActor, groomName, dispatch)
       } else LOG.warning("Can't find taskManager for {}", groomName)
@@ -165,9 +173,9 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    * @param targetGroomServer to which the task will be scheduled.
    * @param d is the dispatch function.
    */
-  def bookThenDispatch(job: Job, targetActor: ActorRef,  
+  def bookThenDispatch(job: Job, targetActor: TaskManagerRef,  
                        targetGroomServer: String, 
-                       d: (ActorRef, Task) => Unit): ProcessingQueue = {
+                       d: (TaskManagerRef, Task) => Unit): ProcessingQueue = {
     var to = Queue[Job]()
     unassignedTask(job) match {
       case Some(task) => {
@@ -188,7 +196,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    * @param from is the GroomServer task manager.
    * @param task is the task to be executed.
    */
-  protected def dispatch(from: ActorRef, task: Task) {
+  protected def dispatch(from: TaskManagerRef, task: Task) {
     from ! new Directive(Launch, task,  
                          conf.get("bsp.master.name", "bspmaster"))  
   }
@@ -218,8 +226,8 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    * receiving tasks dispatch.
    */
   def enrollment: Receive = {
-    case GroomEnrollment(groomServerName, taskManager) => {
-      groomTaskManagers ++= Map(groomServerName -> taskManager) 
+    case GroomEnrollment(groomServerName, taskManager, maxTasks) => {
+      groomTaskManagers ++= Map(groomServerName -> (taskManager, maxTasks)) 
     }
   }
 
