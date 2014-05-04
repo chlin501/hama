@@ -55,15 +55,6 @@ public final class Job implements Writable {
   /* The lastest superstep was successfully snapshotted. */
   private IntWritable lastCheckpoint = new IntWritable(0);  // only a record.
 
-  /* Max times a task can retry. */
-  private IntWritable maxTaskAttempts = new IntWritable(3);
-
-  /* Input dir where split files are stored. */
-  private Text inputPath = new Text("");
-
-  /* Output dir where final data to be stored. */
-  private Text outputPath = new Text("");
-
   /* Denote current job state. */
   private State state = State.PREP;
 
@@ -109,25 +100,25 @@ public final class Job implements Writable {
 
     @Override
     public String toString() {
-      String name = null;
+      String stateName = null;
       switch (this) {
         case PREP:
-          name = "SETUP";
+          statName = "SETUP";
           break;  
         case RUNNING:
-          name = "RUNNING";
+          stateName = "RUNNING";
           break;
         case SUCCEEDED:
-          name = "SUCCEEDED";
+          statName = "SUCCEEDED";
           break;
         case FAILED:
-          name = "FAILED";
+          statName = "FAILED";
           break;
         case CANCELLED:
-          name = "CANCELLED";
+          statName = "CANCELLED";
           break;
       }
-      return name;
+      return statName;
     }
   }
   
@@ -138,9 +129,6 @@ public final class Job implements Writable {
     private String localJobFile = "";
     private String localJarFile = "";
     private int lastCheckpoint;
-    private int maxTaskAttempts = 3;
-    private String inputPath = "";
-    private String outputPath = "";
     private State state = State.PREP;
     private long progress;
     private long setupProgress;
@@ -196,17 +184,20 @@ public final class Job implements Writable {
     }
 
     public Builder setMaxTaskAttempts(final int maxTaskAttempts) {
-      this.maxTaskAttempts = maxTaskAttempts;
+      if(0 > maxTaskAttempts)
+        conf.setInt("bsp.tasks.max.attempts", maxTaskAttempts);
       return this;
     }
 
     public Builder setInputPath(final String inputPath) {
-      this.inputPath = inputPath;
+      if(null != inputPath && !inputPath.isEmpty())
+        conf.set("bsp.input.dir", inputPath);
       return this;
     }
 
     public Builder setOutputPath(final String outputPath) {
-      this.outputPath = outputPath;
+      if(null != outputPath && !outputPath.isEmpty())
+        conf.set("bsp.output.dir", outputPath);
       return this;
     }
 
@@ -256,19 +247,16 @@ public final class Job implements Writable {
       this.conf = conf;
       if(null == this.conf) 
         throw new IllegalArgumentException("Configuration provided is null.");
-      setNumBSPTasks(this.conf.getInt("bsp.peers.num", 1));
-      setMaxTaskAttempts(this.conf.getInt("bsp.tasks.max.attempts", 3));
-      setInputPath(this.conf.get("bsp.input.dir", ""));
       return this;
     }
 
     public Builder setTaskTable(final TaskTable taskTable) {
       if(null == this.taskTable)
         throw new IllegalArgumentException("TaskTable is missing."); 
-      if(0 >= this.taskTable.rowLength())
+      if(0 >= taskTable.rowLength())
         throw new IllegalArgumentException("Invalid TableTable numBSPTasks "+
                                            this.taskTable.rowLength());
-      if(0 >= this.taskTable.columnLength())
+      if(0 >= taskTable.columnLength())
         throw new IllegalArgumentException("Invalid TableTable maxTaskAttempts"+
                                            this.taskTable.columnLength());
 
@@ -280,16 +268,13 @@ public final class Job implements Writable {
       if(null == this.id)
         throw new IllegalStateException("BSPJobID is missing when creating "+
                                         "TaskTable.");
-      if(0 >= maxTaskAttempts)
-        throw new IllegalStateException("maxTaskAttempts is missing when "+
-                                        "creating TaskTable.");
     }
 
     public Builder withTaskTable() {
       assertParameters();
       this.taskTable = new TaskTable(this.id, 
                                      conf.getInt("bsp.peers.num", 1), 
-                                     maxTaskAttempts, 
+                                     conf.getInt("bsp.tasks.max.attempts", 3), 
                                      null);
       return this;
     }
@@ -299,10 +284,10 @@ public final class Job implements Writable {
       if(null == splits) {
         return withTaskTable();
       } else {
-        this.taskTable = new TaskTable(this.id, 
-                                       conf.getInt("bsp.peers.num", 1), 
-                                       maxTaskAttempts,
-                                       splits);  
+        taskTable = new TaskTable(this.id, 
+                                  conf.getInt("bsp.peers.num", 1), 
+                                  conf.getInt("bsp.tasks.max.attempts", 3), 
+                                  splits);  
         return this;
       }
     }
@@ -330,9 +315,6 @@ public final class Job implements Writable {
                      localJobFile, 
                      localJarFile, 
                      lastCheckpoint, 
-                     maxTaskAttempts,
-                     inputPath,
-                     outputPath,
                      state,
                      progress,
                      setupProgress,
@@ -352,9 +334,6 @@ public final class Job implements Writable {
              final String localJobFile,
              final String localJarFile,
              final int lastCheckpoint,
-             final int maxTaskAttempts,
-             final String inputPath,
-             final String outputPath,
              final State state,
              final long progress,
              final long setupProgress,
@@ -380,15 +359,6 @@ public final class Job implements Writable {
       this.lastCheckpoint = new IntWritable(0);
     }
 
-    if(0 < maxTaskAttempts) {
-      this.maxTaskAttempts = new IntWritable(maxTaskAttempts);
-    } else {
-      this.maxTaskAttempts = new IntWritable(
-        conf.getInt("bsp.job.task.retry_n_times", 3)
-      );
-    }
-    this.inputPath = (null == inputPath)? new Text(""): new Text(inputPath);
-    this.outputPath = (null == outputPath)? new Text(""): new Text(outputPath);
     this.state = state;
     if(null == this.state)
       throw new IllegalArgumentException("No initial State is assigned.");
@@ -459,20 +429,36 @@ public final class Job implements Writable {
     return conf.getInt("bsp.peers.num", 1);
   }
 
+  /**
+   * Denote on which master this job runs; default to bspmaster.
+   * @return String of the master name.
+   */
   public String getMaster() {
-    return conf.get("bsp.master.name", "bsp.master");
+    return conf.get("bsp.master.name", "bspmaster");
   }
 
+  /**
+   * Obtain max task attempts if a task fails; default to 3.
+   * @return int for retry of a task can attempt.
+   */
   public int getMaxTaskAttempts() {
-    return this.maxTaskAttempts.get();
+    return conf.getInt("bsp.tasks.max.attempts", 3);
   }
 
+  /**
+   * Obtain inputPath directory; default to null.
+   * @return String of input direactory.
+   */
   public String getInputPath() {
-    return this.inputPath.toString();
+    return conf.get("bsp.input.dir");
   }
 
+  /**
+   * Obtain outputPath directory; default to null.
+   * @return String of output directory.
+   */
   public String getOutputPath() {
-    return this.outputPath.toString();
+    return conf.get("bsp.output.dir");
   }
 
   public State getState() {
@@ -539,9 +525,6 @@ public final class Job implements Writable {
     localJobFile.write(out);
     localJarFile.write(out);
     lastCheckpoint.write(out);
-    maxTaskAttempts.write(out);
-    inputPath.write(out);
-    outputPath.write(out);
     WritableUtils.writeEnum(out, state);
     progress.write(out);
     setupProgress.write(out);
@@ -569,12 +552,6 @@ public final class Job implements Writable {
     this.localJarFile.readFields(in);
     this.lastCheckpoint = new IntWritable(0);
     this.lastCheckpoint.readFields(in);
-    this.maxTaskAttempts = new IntWritable(3);
-    this.maxTaskAttempts.readFields(in);
-    this.inputPath = new Text("");
-    this.inputPath.readFields(in);
-    this.outputPath = new Text("");
-    this.outputPath.readFields(in);
     this.state = WritableUtils.readEnum(in, State.class);
     this.progress = new LongWritable();
     this.progress.readFields(in);
@@ -610,9 +587,9 @@ public final class Job implements Writable {
            " lastCheckpoint: " +lastCheckpoint.toString()+
            " numBSPTasks: "+ getNumBSPTasks()+
            " master: "+getMaster()+
-           " maxTaskAttempts: "+maxTaskAttempts.toString()+
-           " inputPath: "+inputPath.toString()+
-           " outputPath: "+outputPath.toString()+
+           " maxTaskAttempts: "+getMaxTaskAttempts()+
+           " inputPath: "+getInputPath()+
+           " outputPath: "+getOutputPath()+
            " state: "+ state.toString()+
            " progress: "+progress.toString()+
            " setupProgress: "+setupProgress.toString()+
