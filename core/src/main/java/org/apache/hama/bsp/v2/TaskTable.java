@@ -52,7 +52,7 @@ public final class TaskTable implements Writable {
 
   public TaskTable(final BSPJobID jobId, final HamaConfiguration conf) {
     this(jobId, conf.getInt("bsp.peers.num", 1), 
-         conf.getInt("bsp.job.task.retry_n_times", 3), null); 
+         conf.getInt("bsp.tasks.max.attempts", 3), null); 
   }
 
   /**

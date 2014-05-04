@@ -236,17 +236,10 @@ public final class Job implements Writable {
       return this;
     }
 
-    /**
-     * This function will also
-     * - setNumBSPTask 
-     * - setMaxTaskAttempts
-     * from HamaConfiguration file. So if conf file doesn't contain related
-     * info provided for those set methods. Information will be overriden.
-     */
     public Builder setConf(final HamaConfiguration conf) {
       this.conf = conf;
       if(null == this.conf) 
-        throw new IllegalArgumentException("Configuration provided is null.");
+        throw new IllegalArgumentException("No HamaConfiguration provided.");
       return this;
     }
 
