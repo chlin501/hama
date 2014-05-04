@@ -103,22 +103,22 @@ public final class Job implements Writable {
       String stateName = null;
       switch (this) {
         case PREP:
-          statName = "SETUP";
+          stateName = "SETUP";
           break;  
         case RUNNING:
           stateName = "RUNNING";
           break;
         case SUCCEEDED:
-          statName = "SUCCEEDED";
+          stateName = "SUCCEEDED";
           break;
         case FAILED:
-          statName = "FAILED";
+          stateName = "FAILED";
           break;
         case CANCELLED:
-          statName = "CANCELLED";
+          stateName = "CANCELLED";
           break;
       }
-      return statName;
+      return stateName;
     }
   }
   
@@ -184,7 +184,7 @@ public final class Job implements Writable {
     }
 
     public Builder setMaxTaskAttempts(final int maxTaskAttempts) {
-      if(0 > maxTaskAttempts)
+      if(0 < maxTaskAttempts)
         conf.setInt("bsp.tasks.max.attempts", maxTaskAttempts);
       return this;
     }
