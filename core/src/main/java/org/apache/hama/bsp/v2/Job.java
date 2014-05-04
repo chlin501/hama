@@ -46,12 +46,6 @@ public final class Job implements Writable {
   /* Id for this job. */
   private BSPJobID id;
 
-  /* name of this job. */
-  private Text name = new Text("");
-
-  /* The user that owns this job. */
-  private Text user = new Text("");
-
   /* job.xml path stored in local fs. */
   private Text localJobFile = new Text("");
 
@@ -59,13 +53,7 @@ public final class Job implements Writable {
   private Text localJarFile = new Text("");
 
   /* The lastest superstep was successfully snapshotted. */
-  private IntWritable lastCheckpoint = new IntWritable(0);
-
-  /* The number of bsp tasks. */
-  private IntWritable numBSPTasks = new IntWritable(1);
-
-  /* The master server to which this job belongs. */
-  private Text master = new Text("bspmaster");
+  private IntWritable lastCheckpoint = new IntWritable(0);  // only a record.
 
   /* Max times a task can retry. */
   private IntWritable maxTaskAttempts = new IntWritable(3);
@@ -146,14 +134,10 @@ public final class Job implements Writable {
   public static final class Builder {
 
     private BSPJobID id;
-    private String name = "";
-    private String user = "";
-    //private String xml = ""; 
+    private HamaConfiguration conf = new HamaConfiguration();
     private String localJobFile = "";
     private String localJarFile = "";
-    private int numBSPTasks = 1;
     private int lastCheckpoint;
-    private String master = "";
     private int maxTaskAttempts = 3;
     private String inputPath = "";
     private String outputPath = "";
@@ -164,7 +148,6 @@ public final class Job implements Writable {
     private long startTime = System.currentTimeMillis();
     private long finishTime;
     private long superstepCount;  
-    private HamaConfiguration conf = new HamaConfiguration();
     private TaskTable taskTable;
     private String[] targets = new String[]{};
 
@@ -174,12 +157,14 @@ public final class Job implements Writable {
     }
 
     public Builder setName(final String name) {
-      this.name = name;
+      if(null != name && !name.isEmpty())
+        conf.set("bsp.job.name", name);
       return this;
     }
 
     public Builder setUser(final String user) {
-      this.user = user;
+      if(null != user && !user.isEmpty())
+        conf.set("user.name", user);
       return this;
     }
 
@@ -199,12 +184,14 @@ public final class Job implements Writable {
     }
 
     public Builder setNumBSPTasks(final int numBSPTasks) {
-      this.numBSPTasks = numBSPTasks;
+      if(1 < numBSPTasks)
+        conf.setInt("bsp.peers.num", numBSPTasks);
       return this;
     }
 
     public Builder setMaster(final String master) {
-      this.master = master;
+      if(null != master && !master.isEmpty())
+        conf.set("bsp.master.name", master);
       return this;
     }
 
@@ -262,8 +249,6 @@ public final class Job implements Writable {
      * This function will also
      * - setNumBSPTask 
      * - setMaxTaskAttempts
-     * - setUser
-     * - setName
      * from HamaConfiguration file. So if conf file doesn't contain related
      * info provided for those set methods. Information will be overriden.
      */
@@ -273,8 +258,6 @@ public final class Job implements Writable {
         throw new IllegalArgumentException("Configuration provided is null.");
       setNumBSPTasks(this.conf.getInt("bsp.peers.num", 1));
       setMaxTaskAttempts(this.conf.getInt("bsp.tasks.max.attempts", 3));
-      setUser(this.conf.get("user.name", System.getProperty("user.name")));
-      setName(this.conf.get("bsp.job.name", ""));
       setInputPath(this.conf.get("bsp.input.dir", ""));
       return this;
     }
@@ -297,9 +280,6 @@ public final class Job implements Writable {
       if(null == this.id)
         throw new IllegalStateException("BSPJobID is missing when creating "+
                                         "TaskTable.");
-      if(0 >= numBSPTasks)
-        throw new IllegalStateException("numBSPTasks is missing for creating "+
-                                         "TaskTable.");
       if(0 >= maxTaskAttempts)
         throw new IllegalStateException("maxTaskAttempts is missing when "+
                                         "creating TaskTable.");
@@ -308,7 +288,7 @@ public final class Job implements Writable {
     public Builder withTaskTable() {
       assertParameters();
       this.taskTable = new TaskTable(this.id, 
-                                     numBSPTasks, 
+                                     conf.getInt("bsp.peers.num", 1), 
                                      maxTaskAttempts, 
                                      null);
       return this;
@@ -320,7 +300,7 @@ public final class Job implements Writable {
         return withTaskTable();
       } else {
         this.taskTable = new TaskTable(this.id, 
-                                       numBSPTasks, 
+                                       conf.getInt("bsp.peers.num", 1), 
                                        maxTaskAttempts,
                                        splits);  
         return this;
@@ -347,13 +327,9 @@ public final class Job implements Writable {
 
     public Job build() {
       return new Job(id, 
-                     name, 
-                     user, 
                      localJobFile, 
                      localJarFile, 
                      lastCheckpoint, 
-                     numBSPTasks, 
-                     master, 
                      maxTaskAttempts,
                      inputPath,
                      outputPath,
@@ -373,13 +349,9 @@ public final class Job implements Writable {
   Job() {} // for Writable
 
   public Job(final BSPJobID id,
-             final String name,
-             final String user,
              final String localJobFile,
              final String localJarFile,
              final int lastCheckpoint,
-             final int numBSPTasks,
-             final String master,
              final int maxTaskAttempts,
              final String inputPath,
              final String outputPath,
@@ -396,9 +368,7 @@ public final class Job implements Writable {
     this.id = id;
     if(null == this.id) 
       throw new IllegalArgumentException("BSPJobID is not provided.");
-    this.name = (null == name)? new Text(): new Text(name);
     this.conf = (null == conf)? new HamaConfiguration(): conf;
-    this.user = (null == user)? new Text(): new Text(user);
     this.localJobFile = 
       (null == localJobFile)? new Text(): new Text(localJobFile);
     this.localJarFile = 
@@ -410,13 +380,6 @@ public final class Job implements Writable {
       this.lastCheckpoint = new IntWritable(0);
     }
 
-    if(0 < numBSPTasks) {
-      this.numBSPTasks = new IntWritable(numBSPTasks);
-    } else {
-      this.numBSPTasks = new IntWritable(conf.getInt("bsp.peers.num", 1));
-    }
-
-    this.master = (null == master)? new Text(): new Text(master);
     if(0 < maxTaskAttempts) {
       this.maxTaskAttempts = new IntWritable(maxTaskAttempts);
     } else {
@@ -439,32 +402,41 @@ public final class Job implements Writable {
     if(null == this.taskTable)
       throw new IllegalArgumentException("TaskTable is not presented.");
 
-    // align numBSPTasks to #splits
+    // align numBSPTasks to # of splits calculated in TaskTable.
     final int actualNumBSPTasks = this.taskTable.getNumBSPTasks();
-    this.numBSPTasks = new IntWritable(actualNumBSPTasks); 
-    conf.setInt("bsp.peers.num", actualNumBSPTasks);
+    LOG.info("Adjust numBSPTasks to "+actualNumBSPTasks);
+    conf.setInt("bsp.peers.num", actualNumBSPTasks); 
 
     if(null != targets && 0 < targets.length) {
       this.targets = new ArrayWritable(targets);
     }
     // verify targets length and numBSPTasks size
-    final String[] tmp = this.targets.toStrings();
+    final String[] targetServers = this.targets.toStrings();
 
-    if(numBSPTasks < tmp.length) 
-      throw new RuntimeException("Target value "+tmp.length +" is larger "+
-                                 "than "+numBSPTasks +" total tasks allowed.");
+    if(getNumBSPTasks() < targetServers.length) 
+      throw new RuntimeException("Target value "+targetServers.length +
+                                 " is larger than "+getNumBSPTasks() +
+                                 " total tasks allowed.");
   }
 
   public BSPJobID getId() {
     return this.id;
   }
 
+  /**
+   * Get BSP job name; default to empty string.
+   * @return String is name of this job.
+   */
   public String getName() {
-    return this.name.toString();
+    return conf.get("bsp.job.name", "");
   }
 
+  /**
+   * Get job user; default set to system property "user.name".
+   * @return String is the user that owns this job.
+   */
   public String getUser() {
-    return this.user.toString();
+    return conf.get("user.name", System.getProperty("user.name"));
   }
 
   public String getLocalJobFile() {
@@ -479,12 +451,16 @@ public final class Job implements Writable {
     return this.lastCheckpoint.get();
   }
 
+  /**
+   * Get the number of BSP tasks to run; default set to 1.
+   * @return int denotes the tasks will be executed.
+   */
   public int getNumBSPTasks() {
-    return this.numBSPTasks.get();
+    return conf.getInt("bsp.peers.num", 1);
   }
 
   public String getMaster() {
-    return this.master.toString();
+    return conf.get("bsp.master.name", "bsp.master");
   }
 
   public int getMaxTaskAttempts() {
@@ -549,6 +525,7 @@ public final class Job implements Writable {
    * GroomServers.
    */
   public String[] getTargets() {
+    // TODO: group first?
     return this.targets.toStrings();
   }
 
@@ -559,13 +536,9 @@ public final class Job implements Writable {
   @Override
   public void write(DataOutput out) throws IOException {
     id.write(out);
-    name.write(out);
-    user.write(out);
     localJobFile.write(out);
     localJarFile.write(out);
     lastCheckpoint.write(out);
-    numBSPTasks.write(out);
-    master.write(out);
     maxTaskAttempts.write(out);
     inputPath.write(out);
     outputPath.write(out);
@@ -590,20 +563,12 @@ public final class Job implements Writable {
   public void readFields(DataInput in) throws IOException {
     this.id = new BSPJobID();
     this.id.readFields(in);
-    this.name = new Text();
-    this.name.readFields(in);
-    this.user = new Text();
-    this.user.readFields(in);
     this.localJobFile = new Text();
     this.localJobFile.readFields(in);
     this.localJarFile = new Text();
     this.localJarFile.readFields(in);
     this.lastCheckpoint = new IntWritable(0);
     this.lastCheckpoint.readFields(in);
-    this.numBSPTasks = new IntWritable(1);
-    this.numBSPTasks.readFields(in);
-    this.master = new Text();
-    this.master.readFields(in);
     this.maxTaskAttempts = new IntWritable(3);
     this.maxTaskAttempts.readFields(in);
     this.inputPath = new Text("");
@@ -638,13 +603,13 @@ public final class Job implements Writable {
   @Override 
   public String toString() {
     return "Job id: "+ id.toString()+ 
-           " name: "+name.toString()+
-           " user: "+ user.toString()+
+           " name: "+ getName() +
+           " user: "+ getUser()+
            " localJobFile: "+localJobFile.toString()+
            " localJarFile: "+localJarFile.toString()+
            " lastCheckpoint: " +lastCheckpoint.toString()+
-           " numBSPTasks: "+ numBSPTasks.toString()+
-           " master: "+master.toString()+
+           " numBSPTasks: "+ getNumBSPTasks()+
+           " master: "+getMaster()+
            " maxTaskAttempts: "+maxTaskAttempts.toString()+
            " inputPath: "+inputPath.toString()+
            " outputPath: "+outputPath.toString()+

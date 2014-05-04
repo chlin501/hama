@@ -26,6 +26,8 @@ import org.apache.hadoop.fs.Path;
 
 /**
  * Adds Hama configuration files to a Configuration.
+ * TODO: - decouple configuration object from underlying file system.
+ *       - ability to convert from/to string/ conf object. 
  */
 public class HamaConfiguration extends Configuration {
   /** constructor */
@@ -58,4 +60,11 @@ public class HamaConfiguration extends Configuration {
     Configuration.addDefaultResource("hama-default.xml");
     Configuration.addDefaultResource("hama-site.xml");
   }
+
+  /**
+   * TODO: xml to configuration.
+  public void fromXml(String xml) {
+  }
+   */
+ 
 }
