@@ -40,13 +40,14 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
 
   type JobFile = String
   type GroomServerName = String
-  type MaxTasksAllowed = Int
+  type MaxTasksPerGroom = Int
 
   /* Initialized job */
   protected var waitQueue = Queue[Job]()
 
   /* Simple information of GroomServer as key value pair. */
-  protected var groomsStat = Map.empty[GroomServerName, MaxTasksAllowed]
+  protected var groomsStat = Map.empty[GroomServerName, MaxTasksPerGroom]
+  var maxTasksSum: Int = 0
 
   /* Operation against underlying storage. may need reload. */
   protected val operation = Operation.create(configuration)
@@ -81,15 +82,15 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
       LOG.info("Received job {} submitted from the client {}",
                jobId, sender.path.name) 
       initializeJob(jobId, jobFilePath) match {
-        case Left(false) => {
-          LOG.info("{} is rejected due to invalid requested target groom "+
-                   "servers!", jobId)
-          sender ! Invalid(jobId, jobFilePath) 
-        }
-        case Right(newJob) => {
+        case Some(newJob) => {
           waitQueue = waitQueue.enqueue(newJob)
           LOG.info("{} jobs are stored in waitQueue.", waitQueue.size)
         }
+        case None => {
+          LOG.info("{} is rejected due to invalid requested target groom "+
+                   "servers!", jobId)
+          sender ! Invalid(jobId, jobFilePath) 
+        }      
       }
     }
   }
@@ -98,10 +99,10 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    * Initialize job provided with {@link BSPJobID} and jobFile from the client.
    * @param jobId is the id of the job to be created.
    * @param jobFilePath is the path pointed to client's jobFile.
-   * @param Either
+   * @param Option[Job] returns some if a job is initialized successfully, 
+   *                    otherwise none.
    */
-  def initializeJob(jobId: BSPJobID, jobFilePath: String): 
-      Either[Boolean, Job] = {
+  def initializeJob(jobId: BSPJobID, jobFilePath: String): Option[Job] = {
     val conf = new HamaConfiguration() 
     val (localJobFilePath, localJarFilePath) = createLocalData(jobId, conf)
     LOG.info("localJobFilePath: {}, localJarFilePath: {}", localJobFilePath, 
@@ -117,14 +118,14 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     LOG.info("Job with id {} is created!", jobId)
     adjustNumBSPTasks(jobId, conf)
     if(!validateRequestedTargets(jobId, conf)) {
-      Left(false)
+      None
     } else {
-      Right(new Job.Builder().setId(jobId). 
-                              setConf(conf).
-                              setLocalJobFile(localJobFilePath).
-                              setLocalJarFile(localJarFilePath).
-                              withTaskTable(splits.getOrElse(null)).
-                              build)
+      Some(new Job.Builder().setId(jobId). 
+                             setConf(conf).
+                             setLocalJobFile(localJobFilePath).
+                             setLocalJarFile(localJarFilePath).
+                             withTaskTable(splits.getOrElse(null)).
+                             build)
     }
   }
 
@@ -140,11 +141,15 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     if(null != targets) { 
       val trimmed = targets.map{ v => v.trim }
       val groomToRequestedCount = trimmed.groupBy(k=>k).mapValues{ v=> v.size }
-      groomToRequestedCount.foreach{ case (groom, requestedSlotCount)=> {
-        val maxTasksPerGroom = groomsStat.getOrElse(groom, 0)
-        if(requestedSlotCount > maxTasksPerGroom) { // invalid setting
-          valid = false  
-        }
+      LOG.info("Mapping from groom to requested count: {}", 
+               groomToRequestedCount)
+      groomToRequestedCount.takeWhile{ case (groom, requestedSlotCount)=> {
+        val maxTasksAllowedPerGroom = groomsStat.getOrElse(groom, 0)
+        LOG.info("User requests {} tasks for groom {}, and the max tasks "+
+                 "allowed is {}", requestedSlotCount, groom, 
+                 maxTasksAllowedPerGroom)
+        if(requestedSlotCount > maxTasksAllowedPerGroom) valid = false
+        valid
       }}
     }
     valid
@@ -157,12 +162,11 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    * @param conf contains bsp configured by the user.
    */
   def adjustNumBSPTasks(jobId: BSPJobID, conf: HamaConfiguration) {
-    val sum = sumOfMaxTasks
     val numOfBSPTasks = conf.getInt("bsp.peers.num", 1)
-    if(numOfBSPTasks > sum) {
-      LOG.warning("Sum of maxTasks {} < {} for job id {} ", sum, numOfBSPTasks,
-               jobId.toString)
-      conf.setInt("bsp.peers.num", sum)
+    if(numOfBSPTasks > maxTasksSum) {
+      LOG.warning("Sum of maxTasks {} < {} for job id {} ", maxTasksSum, 
+                  numOfBSPTasks, jobId.toString)
+      conf.setInt("bsp.peers.num", maxTasksSum)
     } 
   }
 
@@ -243,8 +247,11 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    * From GroomManager to notify a groom server's maxTasks.
    */
   def updateGroomStat: Receive = {
-    case GroomStat(groomServerName, maxTasks) => 
+    case GroomStat(groomServerName, maxTasks) => {
       groomsStat ++= Map(groomServerName -> maxTasks)
+      maxTasksSum = sumOfMaxTasks
+      LOG.info("Sum up of all GroomServers maxTasks is {}", maxTasksSum)
+    }
   }
 
 

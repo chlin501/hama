@@ -25,8 +25,6 @@ import org.apache.hama.TestEnv
 import org.apache.hama.Request
 import org.apache.hama.groom._
 import org.apache.hama.bsp.BSPJobID
-import org.apache.hama.bsp.v2._
-import org.apache.hama.bsp.v2.IDCreator._
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
@@ -55,7 +53,7 @@ class MockReceptionist(conf: HamaConfiguration) extends Receptionist(conf) {
         throw new NullPointerException("Job is not enqueued for waitQueue is "+
                                        "empty!");
       val job = waitQueue.dequeue._1
-      LOG.info("GetJob: {}", job)
+      LOG.info("GetJob: job -> {}", job)
       tester ! JobContent(job.getId, job.getLocalJarFile, job.getLocalJobFile)
     }
   }
@@ -70,23 +68,29 @@ class TestReceptionist extends TestEnv(ActorSystem("TestReceptionist"))
 
   var receptionist: ActorRef = _
 
-  def createJobId(): BSPJobID = 
-    IDCreator.newBSPJobID.withId("test_receptionist").withId(1533).build
-
   it("test submit job to receptionist") {
     LOG.info("Test submit job to Receptionist")
     val master = create("bspmaster", classOf[MockMaster])
-    val jobId = createJobId
+    val jobId = createJobId("test-receptionist", 1533)
+    // set target GroomServers
+    testConfiguration.setStrings("bsp.sched.targets.grooms", 
+                                 "groom5", "groom4", "groom5", "groom4", 
+                                 "groom1") 
     val jobFilePath = createJobFile(testConfiguration)
     LOG.info("Submit job id "+jobId.toString+" job.xml: "+jobFilePath)
+    master ! Request("receptionist", GroomStat("groom1", 3))
+    master ! Request("receptionist", GroomStat("groom4", 2))
+    master ! Request("receptionist", GroomStat("groom5", 7))
+    LOG.info("Wait 1 sec ...")
+    sleep(1.seconds)
     master ! Request("receptionist", Submit(jobId, jobFilePath))
     LOG.info("Wait 5 secs ...")
     sleep(5.seconds)
     master ! Request("receptionist", GetJob(tester))
     expect(
       JobContent(jobId, 
-                 "/tmp/local/bspmaster/job_test_receptionist_1533.jar", 
-                 "/tmp/local/bspmaster/job_test_receptionist_1533.xml")
+                 "/tmp/local/bspmaster/job_test-receptionist_1533.jar", 
+                 "/tmp/local/bspmaster/job_test-receptionist_1533.xml")
     )
   }
 }

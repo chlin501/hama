@@ -23,6 +23,9 @@ import java.io.FileOutputStream
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.Path
+import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.bsp.v2.IDCreator
+import org.apache.hama.bsp.v2.IDCreator._
 import org.apache.hama.fs.HDFS
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.util.Logger
@@ -44,8 +47,11 @@ trait JobUtil extends Logger {
 
   //* Below are Job related functions. *
 
+  def createJobId(identifier: String, id: Int): BSPJobID =
+    IDCreator.newBSPJobID.withId(identifier).withId(id).build
+
   @throws(classOf[Exception])
-  protected def createJobFile(conf: HamaConfiguration): String = {
+  def createJobFile(conf: HamaConfiguration): String = {
     val subDir = getSubmitJobDir(conf)
     createIfAbsent(subDir)
     val jobFilePath = new Path(subDir, "job.xml")
