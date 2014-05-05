@@ -64,6 +64,7 @@ trait JobUtil extends Logger {
         out.close();
       }
     }
+    LOG.info("JobFile is created at %s".format(path))
     path
   }
 

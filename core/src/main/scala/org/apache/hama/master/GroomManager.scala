@@ -69,7 +69,7 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
   /**
    * Quarantine offline GroomServer.
    */
-  def quarantine(offline: ActorRef, resched:(GroomServerName) => Unit) {
+  def quarantine(offline: ActorRef, reaction:(GroomServerName) => Unit) {
     grooms.find(p=>p.taskManager.equals(offline)) match {//move to offlineGrooms
       case Some(groom) => {
         grooms -= groom 
@@ -78,7 +78,7 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
             offlineGroomsStat = offlineGroomsStat.mapValues{ cnt => cnt + 1 }
           case None => offlineGroomsStat ++= Map(groom.groomServerName -> 1)
         }
-        resched(groom.groomServerName) 
+        reaction(groom.groomServerName) 
       }
       case None => 
         LOG.warning("GroomServer {} is watched but not found in the list!")
@@ -90,15 +90,17 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
    * Call {@link Scheduler} to reschedule tasks in failure {@link GroomServer}.
    * @param stat contains all tasks in failure GroomServer.
    */
-  def rescheduleTasks(groomServerName: GroomServerName) { 
-    if(null != mediator) 
+  def offlineReaction(groomServerName: GroomServerName) { 
+    if(null != mediator) {
       mediator ! Request("sched", RescheduleTasks(groomServerName))
-    else 
-      LOG.warning("Mediator is not ready so rescheduling is impossible!")
+      mediator ! Request("receptionist", GroomStat(groomServerName, 0))
+    } else 
+      LOG.warning("No mediator so offline reaction for {} is impossible!", 
+                  groomServerName)
   }
 
   override def offline(taskManager: ActorRef) {
-    quarantine(taskManager, rescheduleTasks)
+    quarantine(taskManager, offlineReaction)
   }
 
   def checkIfRejoin(from: ActorRef, groomServerName: String, maxTasks: Int) {

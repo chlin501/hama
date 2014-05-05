@@ -291,7 +291,10 @@ public final class Job implements Writable {
     }
      
     /**
+     * Add a target GroomServer on which the task may run.
      * This will create a temp array.
+     * @param groomServerName is the target groom on which a task will run.
+     * @return Builder contains necessary parameters.
      */
     public Builder withTarget(final String groomServerName) {
       if(null == groomServerName || "".equals(groomServerName))
@@ -502,9 +505,10 @@ public final class Job implements Writable {
    * Return an array of GroomServers name.
    * If it's array size is 0, indicating all tasks are passive assigning to 
    * GroomServers.
+   * Note: target servers are not distincted/ grouped here because multiple 
+   *       tasks may run on the same GroomServer.
    */
   public String[] getTargets() {
-    // TODO: group first?
     return this.targets.toStrings();
   }
 
