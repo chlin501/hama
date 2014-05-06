@@ -81,6 +81,12 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
   protected def expect(message: Any) = probe.expectMsg(message)
 
   /**
+   * Check if messages is one of provided messages.
+   * @param messages that may be returned.
+   */
+  protected def expectAnyOf(messages: Any*) = probe.expectMsgAnyOf(messages:_*)
+
+  /**
    * Thread sleep {@link FiniteDuration} of time.
    * @param duration with default to 3 seconds.
    */
@@ -92,4 +98,6 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
    * @return ActorRef of {@link TestProbe#ref}
    */
   protected def tester: ActorRef = probe.ref
+
+  
 }

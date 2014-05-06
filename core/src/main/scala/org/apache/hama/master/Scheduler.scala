@@ -294,5 +294,5 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
 
   override def receive = locate orElse reschedTasks orElse jobSubmission orElse dispense orElse requestTask orElse 
 */
-  override def receive = isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse unknown
+  override def receive = nextPlease orElse enrollment orElse isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse unknown
 }
