@@ -112,7 +112,7 @@ class TestGroomManager extends TestEnv(ActorSystem("TestGroomManager")) {
     master ! Request("groomManager", reg1) 
     master ! Request("groomManager", reg2) 
     master ! Request("groomManager", reg3) 
-    sleep(8.seconds)
+    sleep(5.seconds)
     master ! Request("groomManager", GetStat("groom7", tester))
     master ! Request("groomManager", GetStat("groom4", tester))
     master ! Request("groomManager", GetStat("groom9", tester))
