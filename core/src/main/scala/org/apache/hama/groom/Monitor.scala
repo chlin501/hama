@@ -39,6 +39,6 @@ class Monitor(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  def receive = areSubServicesReady orElse serverIsUp orElse loadPlugin orElse unknown
+  def receive = areSubServicesReady orElse mediatorIsUp orElse loadPlugin orElse unknown
 
 }

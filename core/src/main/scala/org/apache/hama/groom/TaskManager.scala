@@ -216,7 +216,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     }
   }
 
-  override def receive = requestMessage orElse receiveDirective orElse isServiceReady orElse serverIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = requestMessage orElse receiveDirective orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 
   /**
    * Pick up a slot that is not in use.

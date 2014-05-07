@@ -149,9 +149,13 @@ trait LocalService extends Service {
     }
   }
 
-  // TODO: with bspmater var moves to another sub trait?
-  protected def serverIsUp: Receive = {
-    case ServerIsUp => {
+  /**
+   * A message signify that the mediator is up.
+   * TODO: move to Mediator trait.
+   * @return Receive 
+   */
+  protected def mediatorIsUp: Receive = {
+    case MediatorIsUp => {
       val master = configuration.get("bsp.master.name", "bspmaster")
       val groom = configuration.get("bsp.groom.name", "groomServer")
       if(master.equals(sender.path.name) || groom.equals(sender.path.name)) {
@@ -159,7 +163,7 @@ trait LocalService extends Service {
         mediator = sender
         afterMediatorUp
       } else 
-        LOG.warning(sender.path.name+" shouldn't send ServerIsUp message!")
+        LOG.warning(sender.path.name+" shouldn't send MediatorIsUp message!")
     }
   }
 

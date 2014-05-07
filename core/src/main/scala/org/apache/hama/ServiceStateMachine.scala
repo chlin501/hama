@@ -36,7 +36,7 @@ sealed trait StateChecker
 private case object WhichState extends StateChecker
 
 sealed trait BroadcastMessage
-case object ServerIsUp extends BroadcastMessage
+case object MediatorIsUp extends BroadcastMessage
 
 /**
  * This trait defines generic states a system will use.
@@ -165,9 +165,10 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
 
   /**
    * Broadcast to sub services that master receives all loaded messages.
+   * @param state denotes which state the service is in now.
    */
   protected def broadcast(state: ServiceState) {
-    if(Normal.equals(state)) services.foreach(service => service ! ServerIsUp)
+    if(Normal.equals(state)) services.foreach(service => service ! MediatorIsUp)
   }
 
   protected def serviceStateListenerManagement: Receive = {

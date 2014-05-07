@@ -288,6 +288,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = submitJob orElse takeFromWaitQueue orElse updateGroomStat orElse isServiceReady orElse serverIsUp orElse unknown
+  override def receive = submitJob orElse takeFromWaitQueue orElse updateGroomStat orElse isServiceReady orElse mediatorIsUp orElse unknown
 
 }

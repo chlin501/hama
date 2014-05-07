@@ -170,6 +170,6 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
     } 
   }
 
-  override def receive = enroll orElse notifying orElse isServiceReady orElse serverIsUp orElse superviseeIsTerminated orElse unknown
+  override def receive = enroll orElse notifying orElse isServiceReady orElse mediatorIsUp orElse superviseeIsTerminated orElse unknown
 
 }
