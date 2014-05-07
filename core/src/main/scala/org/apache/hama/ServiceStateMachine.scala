@@ -35,9 +35,6 @@ private case class Cache(services: Set[ActorRef]) extends HamaServices
 sealed trait StateChecker
 private case object WhichState extends StateChecker
 
-sealed trait BroadcastMessage
-case object MediatorIsUp extends BroadcastMessage
-
 /**
  * This trait defines generic states a system will use.
  */

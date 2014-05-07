@@ -24,6 +24,8 @@ import akka.actor.Cancellable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
+final case object MediatorIsUp
+
 /**
  * A service that provides functions in creating local services. 
  * Local services communication relies on mediator, either master or groom
