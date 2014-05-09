@@ -164,8 +164,11 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
                                           maxTasksAllowed)
         if((currentTaskCount+1) <= maxTasksAllowed)  
           to = bookThenDispatch(job, taskManagerActor, groomName, dispatch)
-        else LOG.warning("Can't assign task because task slots {} for groom "+
-                         "{} are full.", maxTasksAllowed, groomName) 
+        else throw new RuntimeException("Can't assign task because currently "+
+                                        currentTaskCount+" tasks assigned "+
+                                        "to groom server "+groomName+", "+
+                                        "which allows "+maxTasksAllowed+
+                                        " tasks to run.")
       } else LOG.warning("Can't find taskManager for {}", groomName)
     })
     if(!to.isEmpty) from = rest 

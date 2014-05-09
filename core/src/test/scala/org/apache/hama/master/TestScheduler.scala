@@ -32,12 +32,6 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-private final case class JobData(fromQueueSize: Int, 
-                                 toQueueSize: Int, 
-                                 jobId: BSPJobID)
-private final case object GetJobData
-private final case object GetTarget
-
 class MockMaster2(conf: HamaConfiguration) extends Master(conf) {
 
   override def initializeServices {
@@ -69,12 +63,9 @@ class MockTaskManager(conf: HamaConfiguration, mockSched: ActorRef)
 class MockScheduler(conf: HamaConfiguration, tester: ActorRef) 
     extends Scheduler(conf) {
 
-  var task: Task = _
-
   override def dispatch(from: ActorRef, task: Task) {
     LOG.info("Task ({}) will be dispatch to {}", 
              task.getAssignedTarget, from.path.name)
-    this.task = task
     LOG.info("Target groom name: {}", task.getAssignedTarget)
     groomTaskManagers.find(p =>   
       p._1.equals(task.getAssignedTarget)
@@ -100,28 +91,6 @@ class MockScheduler(conf: HamaConfiguration, tester: ActorRef)
       groomTaskManagers ++= Map(groomServerName -> (taskManager, maxTasks))
     }
   } 
- 
-/*
-  def getTask: Receive = {
-    case GetTarget => {
-      if(null == tester) 
-        throw new IllegalStateException("ProbeRef is null!")
-      tester ! task.getAssignedTarget
-    }
-  }
-
-  def getJobData: Receive = {
-    case GetJobData => {
-      val fromQueueSize = taskAssignQueue.size
-      val toQueueSize = processingQueue.size
-      val (job, rest) = processingQueue.dequeue
-      LOG.info("TaskAssignQueue size: {}, ProcessingQueue has size {}, "+
-               " and the job id is {}", 
-               fromQueueSize, toQueueSize, job.getId)
-      tester ! JobData(fromQueueSize, toQueueSize, job.getId)
-    }
-  }
-*/
   
   override def receive = super.receive
 }
@@ -152,15 +121,12 @@ class TestScheduler extends TestEnv(ActorSystem("TestScheduler"))
     sched ! GroomEnrollment("groom5", null, 3)
     sched ! GroomEnrollment("groom2", null, 2)
     sched ! GroomEnrollment("groom9", null, 7)
+    sleep(1.seconds)
     sched ! Dispense(job)
     expect("groom5")
     expect("groom2")
     expect("groom5")
     expect("groom9")
-    //sched ! GetTarget
-    //expect("groom1")
-    //sched ! GetJobData
-    //expect(JobData(0, 1, job.getId))
   }
 
 /*
