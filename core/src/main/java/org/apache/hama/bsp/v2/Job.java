@@ -20,6 +20,7 @@ package org.apache.hama.bsp.v2;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Arrays;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.Path;
@@ -47,10 +48,10 @@ public final class Job implements Writable {
   private BSPJobID id;
 
   /* job.xml path stored in local fs. */
-  private Text localJobFile = new Text("");
+  private Text localJobFilePath = new Text("");
 
   /* The jar file path stored in local fs. */
-  private Text localJarFile = new Text("");
+  private Text localJarFilePath = new Text("");
 
   /* The lastest superstep was successfully snapshotted. */
   private IntWritable lastCheckpoint = new IntWritable(0);  // only a record.
@@ -82,21 +83,13 @@ public final class Job implements Writable {
   /* 2d task array. size ~= numBSPTasks x maxTaskAttempts. */
   private TaskTable taskTable;
 
-  /* A list of GroomServers to which tasks will be scheduled. */
-  private ArrayWritable targets = new ArrayWritable(new String[]{});
-
-  // TODO: refactr? 
   public static enum State {
     PREP(1), RUNNING(2), SUCCEEDED(3), FAILED(4), CANCELLED(5);
     int s;
 
-    State(int s) {
-      this.s = s;
-    }
+    State(int s) { this.s = s; }
 
-    public int value() {
-      return this.s;
-    }
+    public int value() { return this.s; }
 
     @Override
     public String toString() {
@@ -126,8 +119,8 @@ public final class Job implements Writable {
 
     private BSPJobID id;
     private HamaConfiguration conf = new HamaConfiguration();
-    private String localJobFile = "";
-    private String localJarFile = "";
+    private String localJobFilePath = "";
+    private String localJarFilePath = "";
     private int lastCheckpoint;
     private State state = State.PREP;
     private long progress;
@@ -137,7 +130,6 @@ public final class Job implements Writable {
     private long finishTime;
     private long superstepCount;  
     private TaskTable taskTable;
-    private String[] targets = new String[]{};
 
     public Builder setId(final BSPJobID id) {
       this.id = id;
@@ -156,13 +148,13 @@ public final class Job implements Writable {
       return this;
     }
 
-    public Builder setLocalJobFile(final String localJobFile) {
-      this.localJobFile = localJobFile;
+    public Builder setLocalJobFile(final String localJobFilePath) {
+      this.localJobFilePath = localJobFilePath;
       return this;
     }
 
-    public Builder setLocalJarFile(final String localJarFile) {
-      this.localJarFile = localJarFile;
+    public Builder setLocalJarFile(final String localJarFilePath) {
+      this.localJarFilePath = localJarFilePath;
       return this;
     }
 
@@ -286,7 +278,9 @@ public final class Job implements Writable {
     }
 
     public Builder setTargets(final String[] targets) {
-      this.targets = targets;
+      if(null == targets || 0 == targets.length) 
+        throw new IllegalArgumentException("Invalid targets provided");
+      conf.setStrings("bsp.sched.targets.grooms", targets);
       return this;
     }
      
@@ -298,18 +292,20 @@ public final class Job implements Writable {
      */
     public Builder withTarget(final String groomServerName) {
       if(null == groomServerName || "".equals(groomServerName))
-        throw new IllegalArgumentException("Provided groomServerName invalid.");
-      final String[] ary = new String[this.targets.length+1];
-      System.arraycopy(this.targets, 0, ary, 0, this.targets.length);
-      ary[ary.length-1] = groomServerName;
-      this.targets = ary;
+        throw new IllegalArgumentException("Invalid GroomServerName "+
+                                            groomServerName);
+      final String[] newArray = 
+         Arrays.copyOf(conf.getStrings("bsp.sched.targets.grooms"), 
+                       conf.getStrings("bsp.sched.targets.grooms").length+1);
+      newArray[newArray.length-1] = groomServerName;
+      conf.setStrings("bsp.sched.targets.grooms", newArray);
       return this;
     }
 
     public Job build() {
       return new Job(id, 
-                     localJobFile, 
-                     localJarFile, 
+                     localJobFilePath, 
+                     localJarFilePath, 
                      lastCheckpoint, 
                      state,
                      progress,
@@ -319,16 +315,15 @@ public final class Job implements Writable {
                      finishTime,
                      superstepCount,
                      conf,
-                     taskTable, 
-                     targets);
+                     taskTable);
     }
   }
 
   Job() {} // for Writable
 
   public Job(final BSPJobID id,
-             final String localJobFile,
-             final String localJarFile,
+             final String localJobFilePath,
+             final String localJarFilePath,
              final int lastCheckpoint,
              final State state,
              final long progress,
@@ -338,16 +333,15 @@ public final class Job implements Writable {
              final long finishTime,
              final long superstepCount,
              final HamaConfiguration conf,
-             final TaskTable taskTable, 
-             final String[] targets) {
+             final TaskTable taskTable) {
     this.id = id;
     if(null == this.id) 
       throw new IllegalArgumentException("BSPJobID is not provided.");
     this.conf = (null == conf)? new HamaConfiguration(): conf;
-    this.localJobFile = 
-      (null == localJobFile)? new Text(): new Text(localJobFile);
-    this.localJarFile = 
-      (null == localJarFile)? new Text(): new Text(localJarFile);
+    this.localJobFilePath = 
+      (null == localJobFilePath)? new Text(""): new Text(localJobFilePath);
+    this.localJarFilePath = 
+      (null == localJarFilePath)? new Text(""): new Text(localJarFilePath);
 
     if(0 < lastCheckpoint) {
       this.lastCheckpoint = new IntWritable(lastCheckpoint);
@@ -373,18 +367,16 @@ public final class Job implements Writable {
     LOG.info("Adjust numBSPTasks to "+actualNumBSPTasks);
     conf.setInt("bsp.peers.num", actualNumBSPTasks); 
 
-    if(null != targets && 0 < targets.length) {
-      this.targets = new ArrayWritable(targets);
-    }
-    // verify targets length and numBSPTasks size
-    final String[] targetServers = this.targets.toStrings();
-
-    if(getNumBSPTasks() < targetServers.length) 
-      throw new RuntimeException("Target value "+targetServers.length +
+    if(getNumBSPTasks() < getTargets().length) 
+      throw new RuntimeException("Target value "+getTargets().length +
                                  " is larger than "+getNumBSPTasks() +
                                  " total tasks allowed.");
   }
 
+  /**
+   * An unique identifier {@link BSPJobID} for this job.
+   * @return BSPJobID that identifies a job.
+   */
   public BSPJobID getId() {
     return this.id;
   }
@@ -406,11 +398,11 @@ public final class Job implements Writable {
   }
 
   public String getLocalJobFile() {
-    return this.localJobFile.toString();
+    return this.localJobFilePath.toString();
   }
 
   public String getLocalJarFile() {
-    return this.localJarFile.toString();
+    return this.localJarFilePath.toString();
   }
 
   public int getLastCheckpoint() {
@@ -489,7 +481,7 @@ public final class Job implements Writable {
     return this.conf;
   }
 
-  public TaskTable getTasks() {
+  public TaskTable getTasks() { // TODO: consider to hide taskTable ref.
     return this.taskTable;
   }
 
@@ -509,18 +501,38 @@ public final class Job implements Writable {
    *       tasks may run on the same GroomServer.
    */
   public String[] getTargets() {
-    return this.targets.toStrings();
+    return conf.getStrings("bsp.sched.targets.grooms", new String[]{});
+  }
+
+  /**
+   * Obtain tasks in a form of string.
+   * @return String of all target GroomServers, delimited by comma(,).
+   */
+  String getTargetStrings() {
+    return conf.get("bsp.sched.targets.grooms", "");
   }
 
   public boolean areAllTasksAssigned() {
     return this.taskTable.areAllTasksAssigned();
   }
 
+  /**
+   * Find the current task assignment count according to the GroomServer name.
+   * @param groomServerName is the group key to tasks assigned to it.
+   * @return int is the count of tasks assigned to the same GroomServer.
+   */
+  public int getTaskCountFor(final String groomServerName) {
+    final Integer count = this.taskTable.group().get(groomServerName);
+    int cnt = 0;
+    if(null != count) cnt = count.intValue();
+    return cnt;
+  }
+
   @Override
   public void write(DataOutput out) throws IOException {
     id.write(out);
-    localJobFile.write(out);
-    localJarFile.write(out);
+    localJobFilePath.write(out);
+    localJarFilePath.write(out);
     lastCheckpoint.write(out);
     WritableUtils.writeEnum(out, state);
     progress.write(out);
@@ -536,17 +548,16 @@ public final class Job implements Writable {
     } else {
       out.writeBoolean(false);
     }
-    targets.write(out);
   }
 
   @Override
   public void readFields(DataInput in) throws IOException {
     this.id = new BSPJobID();
     this.id.readFields(in);
-    this.localJobFile = new Text();
-    this.localJobFile.readFields(in);
-    this.localJarFile = new Text();
-    this.localJarFile.readFields(in);
+    this.localJobFilePath = new Text("");
+    this.localJobFilePath.readFields(in);
+    this.localJarFilePath = new Text("");
+    this.localJarFilePath.readFields(in);
     this.lastCheckpoint = new IntWritable(0);
     this.lastCheckpoint.readFields(in);
     this.state = WritableUtils.readEnum(in, State.class);
@@ -571,7 +582,6 @@ public final class Job implements Writable {
       LOG.warn("TaskTable for id "+this.id.toString()+" is null!");
       this.taskTable = null;
     } 
-    this.targets.readFields(in);
   }
 
   @Override 
@@ -579,8 +589,8 @@ public final class Job implements Writable {
     return "Job id: "+ id.toString()+ 
            " name: "+ getName() +
            " user: "+ getUser()+
-           " localJobFile: "+localJobFile.toString()+
-           " localJarFile: "+localJarFile.toString()+
+           " localJobFile: "+localJobFilePath.toString()+
+           " localJarFile: "+localJarFilePath.toString()+
            " lastCheckpoint: " +lastCheckpoint.toString()+
            " numBSPTasks: "+ getNumBSPTasks()+
            " master: "+getMaster()+
@@ -596,15 +606,8 @@ public final class Job implements Writable {
            " superstepCount: " +superstepCount.toString()+
            " conf: "+conf.toString()+
            " taskTable: "+taskTable.toString()+
-           " targets: "+targetsToString();  
+           " targets: "+ getTargetStrings();  
   }
 
-  private String targetsToString() {
-    final StringBuilder sb = new StringBuilder();
-    for(final String target: targets.toStrings()) {
-      sb.append(target+" ");
-    }
-    return sb.toString();
-  }
 }
 

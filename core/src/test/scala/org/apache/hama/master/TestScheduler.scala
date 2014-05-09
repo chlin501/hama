@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.master
-/*
+
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
@@ -37,32 +37,37 @@ private final case class JobData(fromQueueSize: Int,
                                  jobId: BSPJobID)
 private final case object GetJobData
 private final case object GetTarget
-private final case object AddProxy
-private final case object ProxyAdded
 
-class MockTaskManager(conf: HamaConfiguration, ref: ActorRef, 
-                      mockSched: ActorRef) extends TaskManager(conf) {
+class MockMaster2(conf: HamaConfiguration) extends Master(conf) {
 
-  override val LOG = Logging(context.system, this)
+  override def initializeServices {
+    create("sched", classOf[MockScheduler])
+    create("taskManager", classOf[MockTaskManager])
+  }
 
+}
+
+class MockTaskManager(conf: HamaConfiguration, mockSched: ActorRef) 
+      extends TaskManager(conf) {
+
+  /**
    * Disable remote lookup sched.
    * Replace sched with mock sched.
+   */
   override def initializeServices = {
     initializeSlots
     sched = mockSched
-    LOG.info("Schedule request TaskRequest message.")
     request(self, TaskRequest)
   }
 
+  /* override TaskManager's lookup mechanism. */
   override def afterLinked(proxy: ActorRef) { }
   
   override def receive = super.receive
 }
 
-class MockSched(conf: HamaConfiguration, actorName: String, ref: ActorRef) 
+class MockScheduler(conf: HamaConfiguration, tester: ActorRef) 
     extends Scheduler(conf) {
-
-  override val LOG = Logging(context.system, this)
 
   var task: Task = _
 
@@ -70,35 +75,39 @@ class MockSched(conf: HamaConfiguration, actorName: String, ref: ActorRef)
     LOG.info("Task ({}) will be dispatch to {}", 
              task.getAssignedTarget, from.path.name)
     this.task = task
-    LOG.info("ActorName: {}, target groom name: {}", 
-             actorName, task.getAssignedTarget)
-    if("groom_127.0.0.1_50000".equals(actorName)) {
-      LOG.info("Task is dispatched to the groom that perfoms request.")
-      ref ! task.getAssignedTarget
+    LOG.info("Target groom name: {}", task.getAssignedTarget)
+    groomTaskManagers.find(p =>   
+      p._1.equals(task.getAssignedTarget)
+    ) match {
+      case Some(found) => {
+        LOG.info("Dispatching a task to "+task.getAssignedTarget)
+        tester ! task.getAssignedTarget
+      }
+      case None => 
+        throw new RuntimeException("TaskManager "+task.getAssignedTarget+
+                                   " not found!")
     }
   }
-  
-  def addMockProxy: Receive = {
-    case AddProxy => {
-      LOG.info("Who is the sender? {}", ref.path.name)
-      LOG.info("Before looking up MockTaskManager, proxies size  {}", 
-               proxies.size)
-      LOG.info("TaskManager name: {}", actorName)
-      proxies ++= 
-        Set(context.actorOf(Props(classOf[MockTaskManager], 
-                                  conf, 
-                                  ref, 
-                                  self), 
-                            actorName))
-      if(1 != proxies.size)
-        throw new RuntimeException("Proxy size should be 1!");
-      LOG.info("Proxies size now is {}!", proxies.size)
-      ref ! ProxyAdded
+
+  override def enrollment: Receive = {
+    case GroomEnrollment(groomServerName, tm, maxTasks) => {
+      if(null != tm) 
+        throw new IllegalArgumentException("Parameter tm should be null!")
+      val taskManager = context.actorOf(Props(classOf[MockTaskManager], 
+                                              conf, 
+                                              self), 
+                                        groomServerName)
+      groomTaskManagers ++= Map(groomServerName -> (taskManager, maxTasks))
     }
-  }
+  } 
  
+/*
   def getTask: Receive = {
-    case GetTarget => ref ! task.getAssignedTarget
+    case GetTarget => {
+      if(null == tester) 
+        throw new IllegalStateException("ProbeRef is null!")
+      tester ! task.getAssignedTarget
+    }
   }
 
   def getJobData: Receive = {
@@ -109,28 +118,19 @@ class MockSched(conf: HamaConfiguration, actorName: String, ref: ActorRef)
       LOG.info("TaskAssignQueue size: {}, ProcessingQueue has size {}, "+
                " and the job id is {}", 
                fromQueueSize, toQueueSize, job.getId)
-      ref ! JobData(fromQueueSize, toQueueSize, job.getId)
+      tester ! JobData(fromQueueSize, toQueueSize, job.getId)
     }
   }
+*/
   
-  override def receive = getJobData orElse addMockProxy orElse getTask orElse super.receive
+  override def receive = super.receive
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestScheduler extends TestEnv(ActorSystem("TestScheduler")) {
+class TestScheduler extends TestEnv(ActorSystem("TestScheduler")) 
+                    with JobUtil {
 
-  var sched: ActorRef = _
-
-  def createActiveJob(): Job = {
-    val jobId = IDCreator.newBSPJobID.withId("test_active_sched").
-                                      withId(7).build
-    new Job.Builder().setId(jobId).
-                      setName("test-scheduler").
-                      withTarget("groom1").
-                      withTaskTable.
-                      build
-  }
-
+/*
   def createPassiveJob(): Job = {
     val jobId = IDCreator.newBSPJobID.withId("test_passive_sched").
                                       withId(9).build
@@ -139,37 +139,46 @@ class TestScheduler extends TestEnv(ActorSystem("TestScheduler")) {
                       withTaskTable.
                       build
   }
+*/
 
   it("test schedule tasks") {
     LOG.info("Actively schedule tasks")
-    sched = createWithArgs("activeSched", 
-                           classOf[MockSched], 
+    val sched = createWithArgs("activeSched", 
+                           classOf[MockScheduler], 
                            conf, 
-                           "groom1", 
                            tester)
-    sched ! AddProxy
-    expect(ProxyAdded)
-    sched ! Dispense(createActiveJob)
-    sched ! GetTarget
-    expect("groom1")
-    sched ! GetJobData
-    expect(JobData(0, 1, createActiveJob.getId))
+    val job = createJob("test-active-sched", 7, "test-scheduler", 
+                        Array("groom5", "groom2", "groom5", "groom9"), 4)
+    sched ! GroomEnrollment("groom5", null, 3)
+    sched ! GroomEnrollment("groom2", null, 2)
+    sched ! GroomEnrollment("groom9", null, 7)
+    sched ! Dispense(job)
+    expect("groom5")
+    expect("groom2")
+    expect("groom5")
+    expect("groom9")
+    //sched ! GetTarget
+    //expect("groom1")
+    //sched ! GetJobData
+    //expect(JobData(0, 1, job.getId))
   }
 
+/*
   it("test tasks assign") {
     LOG.info("Passively schedule tasks")
     sched = createWithArgs("passiveSched", 
-                           classOf[MockSched], 
+                           classOf[MockScheduler], 
                            testConfiguration, 
                            "groom_127.0.0.1_50000",
                            tester)
     LOG.info("MockSched and TestProb are created! sched: "+sched+
              ", ref: "+tester)
+    val job = createJob("test-active-sched", 7, "test-scheduler")
     sched ! AddProxy
     expect(ProxyAdded)
-    sched ! Dispense(createPassiveJob)
+    sched ! Dispense(job)
     sleep(5.seconds)
     expect("groom_127.0.0.1_50000")
   }
-}
 */
+}

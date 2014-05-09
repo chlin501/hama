@@ -130,7 +130,8 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
   }
 
   /**
-   * Validate target "bsp.sched.targets.grooms"
+   * Validate if requested target array, set in "bsp.sched.targets.grooms", 
+   * exceeds a single GroomServer's maxTasks allowed. 
    * @return Boolean denotes if user requested groom servers count > maxTasks;
    *                 true if request is invalid; otherwise false.
    */

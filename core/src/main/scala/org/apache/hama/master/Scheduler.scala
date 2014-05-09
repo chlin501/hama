@@ -118,12 +118,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    * If a job contains particular target GroomServer, schedule tasks to those
    * GroomServers.
    * 
-   * TODO: perhaps in the future we will check GroomServerStat first before
-   *       activeSchedule. Right now we rely maxTasks at the time of 
-   *       groom server's registeration, assuming that maxTasks is not changed
-   *       overtime as long as groom is not offline. Otherwise check 
-   *       groomTasksTracker for the latest GroomServerStat (latency still 
-   *       unavoidable).
+   * Assuming GroomServer's maxTasks is not changed over time.
    */
   def dispense: Receive = {
     case Dispense(job) => { 
@@ -152,16 +147,25 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    */
   def schedule(fromQueue: TaskAssignQueue): 
       (TaskAssignQueue, ProcessingQueue) = { 
+    LOG.info("TaskAssignQueue size is {}", fromQueue.size)
     val (job, rest) = fromQueue.dequeue
     val groomServers = job.getTargets  
     var from = Queue[Job](); var to = Queue[Job]()
     groomServers.foreach( groomName => {
-      LOG.debug("Check if groomTaskManagers cache contains {}", groomName)
-      val (taskManagerActor, maxTasks) = 
-        groomTaskManagers.getOrElse(groomName, (null, -1)) 
+      LOG.info("Check if groomTaskManagers cache contains {}", groomName)
+      val (taskManagerActor, maxTasksAllowed) = 
+        groomTaskManagers.getOrElse(groomName, (null, 0)) 
       if(null != taskManagerActor) {
         LOG.debug("GroomServer's taskManager {} found!", groomName)
-        to = bookThenDispatch(job, taskManagerActor, groomName, dispatch)
+        val currentTaskCount = job.getTaskCountFor(groomName)
+        if(maxTasksAllowed < currentTaskCount)
+          throw new IllegalStateException("Current tasks "+currentTaskCount+
+                                          " for "+groomName+" exceeds "+
+                                          maxTasksAllowed)
+        if((currentTaskCount+1) <= maxTasksAllowed)  
+          to = bookThenDispatch(job, taskManagerActor, groomName, dispatch)
+        else LOG.warning("Can't assign task because task slots {} for groom "+
+                         "{} are full.", maxTasksAllowed, groomName) 
       } else LOG.warning("Can't find taskManager for {}", groomName)
     })
     if(!to.isEmpty) from = rest 
@@ -237,13 +241,16 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     }
   }
 
-/*
+  /**
    * GroomServer request for assigning a task.
+   */
   def requestTask: Receive = {
-    case RequestTask(groomServerSpec) => {
-      LOG.info("RequestTask from GroomServer {}", groomServerSpec)
+    case RequestTask(groomServerStat) => {
+      LOG.info("GroomServer {} requests task assign.", groomServerStat)
     }
   }
+
+/*
 
   def passiveAssign(fromActor: ActorRef) {
       val (from, to) = 
@@ -294,5 +301,5 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
 
   override def receive = locate orElse reschedTasks orElse jobSubmission orElse dispense orElse requestTask orElse 
 */
-  override def receive = nextPlease orElse enrollment orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse unknown
+  override def receive = requestTask orElse dispense orElse nextPlease orElse enrollment orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse unknown
 }

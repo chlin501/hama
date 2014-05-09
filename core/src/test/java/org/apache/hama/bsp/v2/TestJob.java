@@ -84,7 +84,6 @@ public class TestJob extends TestCase {
                                      .setConf(conf)
                                      .setName("test-job-serilaization")
                                      .setUser("jeremy")
-                                     //.setJobXml("hdfs:///path/to/job.xml")
                                      .setLocalJobFile("/path/to/job.xml")
                                      .setLocalJarFile("/path/to/job.jar")
                                      .setNumBSPTasks(numBSPTasks)
@@ -116,10 +115,6 @@ public class TestJob extends TestCase {
     LOG.info("Restored user is "+forVerification.getUser());
     assertEquals("User should be the same.", 
                  forVerification.getUser(), "jeremy");
-
-    //LOG.info("Restored job xml is "+forVerification.getJobXml());
-    //assertEquals("Job xml should be the same.", 
-                 //forVerification.getJobXml(), "hdfs:///path/to/job.xml");
 
     LOG.info("Restored local job file is "+forVerification.getLocalJobFile());
     assertEquals("Local job file should be the same.", 

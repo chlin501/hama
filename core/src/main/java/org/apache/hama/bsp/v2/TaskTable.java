@@ -20,6 +20,8 @@ package org.apache.hama.bsp.v2;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.Map;
+import java.util.HashMap;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -171,7 +173,7 @@ public final class TaskTable implements Writable {
 
   /**
    * Set the task array to a specific row.
-   * @param row denotes the i-th row of the table.
+   * @param row denotes the i-th row, started from 0, of the table.
    * @param tasks are the entire tasks to be retried, including the init task.
    */
   public void set(final int row, final Task[] tasks) {
@@ -183,10 +185,46 @@ public final class TaskTable implements Writable {
     tasks[column] = task;
   }
 
+  /**
+   * Tell the size of tasks at N-th row.
+   * @param row dentoes the N-th row, started from 0, in the task table.
+   */
   public int sizeAt(final int row) {
     final Task[] taskAttemptArray = get(row); 
     if(null == taskAttemptArray) return -1;
     return taskAttemptArray.length;
+  }
+
+  /**
+   * Retrieve the latest task at the N-th row.
+   * @param row dentoes the N-th row, started from 0, in the task table.
+   */
+  public Task latestTaskAt(final int row) {
+    final Task[] taskAttemptArray = get(row); 
+    if(null == taskAttemptArray) return null;
+    return taskAttemptArray[taskAttemptArray.length-1];
+  }
+
+  /**
+   * Group tasks by target GroomServer's name.
+   * TODO: calculation is only done when a task assignment changes would 
+   *       increase performance.
+   * @return Map contains GroomServer name as key, and GroomServer count as
+   *             value.
+   */
+  public Map<String, Integer> group() {
+    final Map<String, Integer> group = new HashMap<String, Integer>();
+    for(int row=0;row<rowLength(); row++) {
+      final Task task = latestTaskAt(row);
+      final String groomName = task.getAssignedTarget();
+      final Integer count = group.get(groomName);
+      if(null == count) {
+        group.put(groomName, new Integer(1)); 
+      } else {
+        group.put(groomName, new Integer(count.intValue()+1));
+      }
+    }
+    return group;
   }
 
   /**

@@ -101,6 +101,10 @@ public final class Task implements Writable {
       return assigned.get();
     }
 
+    /**
+     * Tell to which GroomServer this task is dispatched.
+     * @return String is the name of target GroomServer.
+     */
     public String getAssignedTarget() {
       return this.groomServerName.toString();
     }
@@ -346,13 +350,19 @@ public final class Task implements Writable {
     return this.marker.isAssigned();
   }
 
+  /**
+   * Tell to which GroomServer this task is dispatched.
+   * @return String of the target GroomServer.
+   */
   public String getAssignedTarget() {
     return this.marker.getAssignedTarget();
   } 
 
+/*
   public void markAsAssigned() {
     this.marker = new Marker(true, "");
   }
+*/
 
   public void markWithTarget(final String name) {
     this.marker = new Marker(true, name);
