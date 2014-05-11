@@ -40,7 +40,8 @@ final case object NextPlease
  * - Pull a job from {@link Receptionist#waitQueue} if taskAssignQueue is empty.
  * - When scheduling a job, either active or passive, in 
  *   {@link #taskAssignQueue}, scheduler must check the number of total tasks 
- *   that belong to the same job can't exceed a GroomServer's maxTasks.
+ *   to be scheduled to the GroomServer N, which belongs to the same job can't 
+ *   exceed a GroomServer's maxTasks.
  *   EX: 
  *     task1 , task2 , task3 , task4 , ..., taskN    <-- task(s)
  *   [ groom1, groom2, groom1, groom8, ..., groom1 ] <-- run on GroomServer(s)
