@@ -155,13 +155,13 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    */
   def requestMessage: Receive = {
     case TaskRequest => {
-      LOG.info("In TaskRequest, sched: {}, hasTaskInQueue: {}"+
+      LOG.debug("In TaskRequest, sched: {}, hasTaskInQueue: {}"+
                ", hasFreeSlots: {}", sched, hasTaskInQueue, hasFreeSlots)
       if(!hasTaskInQueue && hasFreeSlots /* && N > sysload */) { 
-        LOG.info("Request {} for assigning new tasks ...", getSchedulerPath)
+        LOG.debug("Request {} for assigning new tasks ...", getSchedulerPath)
         sched ! RequestTask(currentGroomServerStat)
       } else {
-        LOG.info("--> Process tasks in queue, {} tasks, first!", queue.size)
+        LOG.debug("Process tasks in queue, {} tasks, first!", queue.size)
         // TODO: process task in queue first.
       }
     }

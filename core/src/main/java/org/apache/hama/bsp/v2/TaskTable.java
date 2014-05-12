@@ -99,7 +99,7 @@ public final class TaskTable implements Writable {
       this.numBSPTasks = rawSplits.length;
       LOG.info("Adjusting numBSPTasks to "+numBSPTasks);
     }  
-LOG.info("xxxxxxxxxx numBSPTasks value in task table is "+numBSPTasks);
+
     // init tasks
     this.tasks = new ArrayWritable[numBSPTasks];
     for(int row = 0; row < numBSPTasks; row++) {
@@ -137,6 +137,10 @@ LOG.info("xxxxxxxxxx numBSPTasks value in task table is "+numBSPTasks);
     return isValidRow(row) && isValidColumn(column);
   }
 
+  /**
+   * BSPJobID to which this task table belongs.
+   * @return BSPJobID for this task table. 
+   */
   public BSPJobID getJobId() {
     return this.jobId;
   }
@@ -149,10 +153,19 @@ LOG.info("xxxxxxxxxx numBSPTasks value in task table is "+numBSPTasks);
     return getNumBSPTasks();
   }
 
+  /**
+   * The number of BSP tasks in this task table. 
+   * @return int denotes the number of the BSP tasks.
+   */
   public int getNumBSPTasks() {
     return this.numBSPTasks;
   }
   
+  /**
+   * This value denotes the max retry a task can have. Not all task will use
+   * up all retry.
+   * @return int denotes the max value of a task retry.
+   */
   public int columnLength() {
     return getMaxTaskAttempts();
   }

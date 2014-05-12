@@ -50,7 +50,6 @@ class MockTaskManager(conf: HamaConfiguration, mockSched: ActorRef,
    * Replace sched with mock sched.
    */
   override def initializeServices = {
-    LOG.info("initialize {} slots", constraint)
     initializeSlots(constraint)
     sched = mockSched
     request(self, TaskRequest) 
@@ -70,14 +69,14 @@ class MockScheduler(conf: HamaConfiguration, tester: ActorRef)
     extends Scheduler(conf) {
 
   override def dispatch(from: ActorRef, task: Task) {
-    LOG.info("Task ({}) will be dispatch to {}", 
+    LOG.debug("Task will be dispatched to {} via actor {}", 
              task.getAssignedTarget, from.path.name)
-    LOG.info("Target groom name: {}", task.getAssignedTarget)
     groomTaskManagers.find(p =>   
       p._1.equals(task.getAssignedTarget)
     ) match {
       case Some(found) => {
-        LOG.info("Dispatching a task to "+task.getAssignedTarget)
+        LOG.info("Target groom server {} is found. Sending message {} ...", 
+                 found, task.getAssignedTarget)
         tester ! task.getAssignedTarget
       }
       case None => 
@@ -108,7 +107,7 @@ class TestScheduler extends TestEnv(ActorSystem("TestScheduler"))
                     with JobUtil {
 
   it("test schedule tasks") {
-    LOG.info("Actively schedule tasks")
+    LOG.info("Test scheduler active and passive functions ...")
     val sched = createWithArgs("TestScheduler", 
                            classOf[MockScheduler], 
                            conf, 
@@ -124,9 +123,12 @@ class TestScheduler extends TestEnv(ActorSystem("TestScheduler"))
     expect("groom2")
     expect("groom5")
     expect("groom9")
-    receiveWhile(5.seconds) {
-      case groom: String => LOG.info("groom name is "+groom)
-    }
+    var count = 0
+    sleep(8.seconds)
+    LOG.info("The rest of the message should be either groom2 or groom9, "+
+             "but not groom5!")
+    expectAnyOf("groom2", "groom9")
+    expectAnyOf("groom2", "groom9")
+    expectAnyOf("groom2", "groom9")
   }
-
 }
