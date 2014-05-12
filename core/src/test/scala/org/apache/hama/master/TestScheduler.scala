@@ -41,7 +41,8 @@ class MockMaster2(conf: HamaConfiguration) extends Master(conf) {
 
 }
 
-class MockTaskManager(conf: HamaConfiguration, mockSched: ActorRef) 
+class MockTaskManager(conf: HamaConfiguration, mockSched: ActorRef, 
+                      name: String, constraint: Int) 
       extends TaskManager(conf) {
 
   /**
@@ -49,13 +50,18 @@ class MockTaskManager(conf: HamaConfiguration, mockSched: ActorRef)
    * Replace sched with mock sched.
    */
   override def initializeServices = {
-    initializeSlots
+    LOG.info("initialize {} slots", constraint)
+    initializeSlots(constraint)
     sched = mockSched
-    request(self, TaskRequest)
+    request(self, TaskRequest) 
   }
 
   /* override TaskManager's lookup mechanism. */
   override def afterLinked(proxy: ActorRef) { }
+
+  override def getGroomServerName: String = name
+  override def getSchedulerPath: String = mockSched.path.name
+  override def getMaxTasks: Int = constraint 
   
   override def receive = super.receive
 }
@@ -86,7 +92,9 @@ class MockScheduler(conf: HamaConfiguration, tester: ActorRef)
         throw new IllegalArgumentException("Parameter tm should be null!")
       val taskManager = context.actorOf(Props(classOf[MockTaskManager], 
                                               conf, 
-                                              self), 
+                                              self,
+                                              groomServerName,
+                                              maxTasks), 
                                         groomServerName)
       groomTaskManagers ++= Map(groomServerName -> (taskManager, maxTasks))
     }
@@ -99,25 +107,14 @@ class MockScheduler(conf: HamaConfiguration, tester: ActorRef)
 class TestScheduler extends TestEnv(ActorSystem("TestScheduler")) 
                     with JobUtil {
 
-/*
-  def createPassiveJob(): Job = {
-    val jobId = IDCreator.newBSPJobID.withId("test_passive_sched").
-                                      withId(9).build
-    new Job.Builder().setId(jobId).
-                      setName("test-scheduler").
-                      withTaskTable.
-                      build
-  }
-*/
-
   it("test schedule tasks") {
     LOG.info("Actively schedule tasks")
-    val sched = createWithArgs("activeSched", 
+    val sched = createWithArgs("TestScheduler", 
                            classOf[MockScheduler], 
                            conf, 
                            tester)
     val job = createJob("test-active-sched", 7, "test-scheduler", 
-                        Array("groom5", "groom2", "groom5", "groom9"), 4)
+                        Array("groom5", "groom2", "groom5", "groom9"), 7)
     sched ! GroomEnrollment("groom5", null, 2)
     sched ! GroomEnrollment("groom2", null, 3)
     sched ! GroomEnrollment("groom9", null, 7)
@@ -127,24 +124,9 @@ class TestScheduler extends TestEnv(ActorSystem("TestScheduler"))
     expect("groom2")
     expect("groom5")
     expect("groom9")
+    receiveWhile(5.seconds) {
+      case groom: String => LOG.info("groom name is "+groom)
+    }
   }
 
-/*
-  it("test tasks assign") {
-    LOG.info("Passively schedule tasks")
-    sched = createWithArgs("passiveSched", 
-                           classOf[MockScheduler], 
-                           testConfiguration, 
-                           "groom_127.0.0.1_50000",
-                           tester)
-    LOG.info("MockSched and TestProb are created! sched: "+sched+
-             ", ref: "+tester)
-    val job = createJob("test-active-sched", 7, "test-scheduler")
-    sched ! AddProxy
-    expect(ProxyAdded)
-    sched ! Dispense(job)
-    sleep(5.seconds)
-    expect("groom_127.0.0.1_50000")
-  }
-*/
 }

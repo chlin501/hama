@@ -84,15 +84,20 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   override def name: String = "taskManager"
 
-  protected def initializeSlots {
-    for(seq <- 1 to maxTasks) {
+  /**
+   * Initialize slots with default slots value to 3, which comes from maxTasks,
+   * or "bsp.tasks.maximum".
+   * @param constraint of the slots can be created.
+   */
+  protected def initializeSlots(constraint: Int = 3) {
+    for(seq <- 1 to constraint) {
       slots ++= Set(Slot(seq, None, bspmaster, None))
     }
-    LOG.debug("{} GroomServer slots are initialied.", maxTasks)
+    LOG.debug("{} GroomServer slots are initialied.", constraint)
   }
 
   override def initializeServices {
-    initializeSlots     
+    initializeSlots(getMaxTasks)
     lookup("sched", schedPath)
     lookup("groomManager", groomManagerPath)
   }
@@ -119,18 +124,20 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     LOG.debug("Request message {} to target: {}", message, target)
     import context.dispatcher
     context.system.scheduler.schedule(0.seconds, 5.seconds, 
-                                                    target, message)
+                                      target, message)
   }
 
   override def afterLinked(proxy: ActorRef) = {
-    if(proxy.path.name.equals("sched")) {
-      sched = proxy  
-      cancellable = request(self, TaskRequest)
-    } else if(proxy.path.name.equals("groomManager")) { // register
-      groomManager = proxy
-      groomManager ! currentGroomServerStat
-    } else {
-      LOG.info("Linking to an unknown proxy {}", proxy.path.name)
+    proxy.path.name match {
+      case "sched" => {
+        sched = proxy  
+        cancellable = request(self, TaskRequest)
+      } 
+      case "groomManager" => { // register
+        groomManager = proxy
+        groomManager ! currentGroomServerStat
+      } 
+      case _ => LOG.info("Linking to an unknown proxy {}", proxy.path.name)
     }
   }
 
@@ -139,6 +146,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     lookup("groomManager", groomManagerPath)
   }
 
+  protected def getSchedulerPath: String = schedPath
+
   /**
    * Check if slots available and any unprocessed tasks in queue.
    * If slots are free, request scheduler to dispatch tasks accordingly.
@@ -146,12 +155,13 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    */
   def requestMessage: Receive = {
     case TaskRequest => {
-      LOG.debug("In TaskRequest, sched: {}, hasTaskInQueue: {}"+
+      LOG.info("In TaskRequest, sched: {}, hasTaskInQueue: {}"+
                ", hasFreeSlots: {}", sched, hasTaskInQueue, hasFreeSlots)
       if(!hasTaskInQueue && hasFreeSlots /* && N > sysload */) { 
-        LOG.debug("Request {} for assigning new tasks ...", schedPath)
+        LOG.info("Request {} for assigning new tasks ...", getSchedulerPath)
         sched ! RequestTask(currentGroomServerStat)
       } else {
+        LOG.info("--> Process tasks in queue, {} tasks, first!", queue.size)
         // TODO: process task in queue first.
       }
     }
@@ -163,13 +173,18 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   }
    */
 
+  protected def getGroomServerName(): String = groomServerName
+  protected def getGroomServerHost(): String = groomServerHost
+  protected def getGroomServerPort(): Int = groomServerPort
+  protected def getMaxTasks(): Int = maxTasks
+
   /**
    * Collect tasks information for report.
    * @return GroomServerStat contains the latest tasks statistics.
    */
   def currentGroomServerStat(): GroomServerStat = {
-    val stat = new GroomServerStat(groomServerName, groomServerHost, 
-                                   groomServerPort, maxTasks)
+    val stat = new GroomServerStat(getGroomServerName, getGroomServerHost, 
+                                   getGroomServerPort, getMaxTasks)
     queue.foreach( task => {
       if(null == task) 
         throw new NullPointerException("Task can't be null in queue.")

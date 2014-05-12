@@ -67,13 +67,21 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
 
   /**
    * A queue that holds jobs with tasks left unassigning to GroomServers.
+   * N.B.: Jobs in this queue are processed sequentially. Only after a job 
+   *       with all tasks are dispatched to GroomServers and is moved to 
+   *       processingQueue the next job will be processed. 
    */
   protected var taskAssignQueue = Queue[Job]()
 
   /**
    * A queue that holds jobs having all tasks assigned to GroomServers.
+   * A {@link Job} in this queue may be moved back to taskAssignQueue if crash
+   * events occurr.
    */
   protected var processingQueue = Queue[Job]()
+
+  /* Store jobs that finishes its computation. */
+  // protected var finishedQueue = Queue[Job]() 
 
   /** 
    * This map holds GroomServer name as key to its TaskManager Reference and
@@ -124,7 +132,8 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
   def dispense: Receive = {
     case Dispense(job) => { 
       taskAssignQueue = taskAssignQueue.enqueue(job)
-      activeSchedule(job)    
+      // TODO: activeSchedule requires askin' GroomManager first for crash info
+      activeSchedule(job) 
     }
   }
 
@@ -138,7 +147,11 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     if(null != job.getTargets && 0 < job.getTargets.length) { 
       val (from, to) = schedule(taskAssignQueue)  
       this.taskAssignQueue = from
-      this.processingQueue = processingQueue.enqueue(to.dequeue._1)
+      if(!to.isEmpty) 
+        this.processingQueue = processingQueue.enqueue(to.dequeue._1)
+      LOG.info("In activeSchedule, taskAssignQueue has {} jobs, and "+
+               "processingQueue has {} jobs", 
+               taskAssignQueue.size, processingQueue.size)
     }
   }
 
@@ -172,28 +185,15 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
                                         " tasks to run.")
       } else LOG.warning("Can't find taskManager for {}", groomName)
     })
-    if(!to.isEmpty) from = rest 
-    LOG.debug("from queue: {} to queue: {}", from, to)
+    if(!to.isEmpty) from = rest else from = from.enqueue(job)
+    LOG.info("In schedule function, from queue: {} to queue: {}", from, to)
     (from, to)
   }
 
-  /* && job.tasks if exceed maxTasks */ 
-/* validate here or in receptionist?
-  def validate(targetGroomServers: Array[String], 
-               groomServer: String, maxTasks: Int): Boolean = {
-    val map = targetGroomServers.groupBy(key=>key).mapValues{ ary=>ary.size} 
-    val tasksSum = map.getOrElse(groomServer, -1)
-    var flag = false
-    if(-1 != tasksSum && tasksSum < maxTasks) {
-      flag = true
-    } 
-    flag
-  }
-*/
-
   /**
-   * Mark the task with the {@link GroomServer} requested; then dispatch that 
-   * task to that {@link GroomServer}.
+   * Mark the task with the corresponded {@link GroomServer}; then dispatch 
+   * the task to that {@link GroomServer}.
+   * Also if all tasks are assigned, cleanup the task assign queue.
    * @param job contains tasks to be scheduled.
    * @param targetActor is the remote GroomServer's {@link TaskManager}.
    * @param targetGroomServer to which the task will be scheduled.
@@ -212,7 +212,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
       }
       case None => 
     }
-    LOG.debug("Are all tasks assigned? {}", job.areAllTasksAssigned)
+    LOG.info("Are all tasks assigned? {}", job.areAllTasksAssigned)
     if(job.areAllTasksAssigned) to = to.enqueue(job)
     to
   }
@@ -246,41 +246,55 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
   }
 
   /**
-   * GroomServer request for assigning a task.
+   * GroomServer's TaskManager requests for assigning a task.
+   * @return Receive partiail function.
    */
   def requestTask: Receive = {
-    case RequestTask(groomServerStat) => {
-      LOG.info("GroomServer {} requests task assign.", groomServerStat)
+    case RequestTask(stat) => {
+      LOG.info("GroomServer {} requests for assigning a task.", stat.getName)
+      passiveAssign(stat.getName, sender)
     }
   }
 
-/*
-
-  def passiveAssign(fromActor: ActorRef) {
+  /**
+   * Assign a task to the requesting GroomServer's task manager.
+   * Assign function follows after schedule one, it means th rest unassigned
+   * tasks are all for passive.
+   * @param groomServerName is the name of GroomServer in a form of 
+   *                        groom_<host>_<port>
+   * @param taskManager refers to the remote GroomServer TaskManager instance.
+   */
+  def passiveAssign(groomServerName: String, taskManager: ActorRef) {
       val (from, to) = 
-        assign(groomServerName, taskAssignQueue, fromActor, dispatch) 
+        assign(groomServerName, taskAssignQueue, taskManager, dispatch) 
       this.taskAssignQueue = from
       if(!to.isEmpty) 
         this.processingQueue = processingQueue.enqueue(to.dequeue._1)
+      LOG.info("In passiveAssign, taskAssignQueue has {} jobs, and "+
+               "processingQueue has {} jobs", 
+               taskAssignQueue.size, processingQueue.size)
   }
 
+  /**
    * Assign a task to a particular GroomServer by delegating that task to 
    * dispatch function, which normally uses actor ! message.
-  def assign(fromGroom: String, fromQueue: TaskAssignQueue, 
-             fromActor: ActorRef, d: (ActorRef, Task) => Unit): 
+   */
+  def assign(targetGroomServer: String, fromQueue: TaskAssignQueue, 
+             taskManager: ActorRef, d: (ActorRef, Task) => Unit): 
       (TaskAssignQueue, ProcessingQueue) = {
     if(!fromQueue.isEmpty) {
       val (job, rest) = fromQueue.dequeue 
       var from = Queue[Job]()
-      val to = bookThenDispatch(job, fromActor, fromGroom, d) 
-      if(!to.isEmpty) from = rest
-      LOG.debug("from queue: {}, to queue: {}", from, to)
+      val to = bookThenDispatch(job, taskManager, targetGroomServer, d) 
+      if(!to.isEmpty) from = rest else from = from.enqueue(job)
+      LOG.info("In assign function, from queue: {}, to queue: {}", from, to)
       (from, to)
     } else {
-      (Queue[Job](), Queue[Job]())
+      (fromQueue, Queue[Job]())
     }
   }
   
+/*
   * Rescheduling tasks when a GroomServer goes offline.
   def reschedTasks: Receive = {
     case RescheduleTasks(spec) => {

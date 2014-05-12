@@ -99,7 +99,7 @@ public final class TaskTable implements Writable {
       this.numBSPTasks = rawSplits.length;
       LOG.info("Adjusting numBSPTasks to "+numBSPTasks);
     }  
-
+LOG.info("xxxxxxxxxx numBSPTasks value in task table is "+numBSPTasks);
     // init tasks
     this.tasks = new ArrayWritable[numBSPTasks];
     for(int row = 0; row < numBSPTasks; row++) {
@@ -213,18 +213,18 @@ public final class TaskTable implements Writable {
    *             value.
    */
   public Map<String, Integer> group() {
-    final Map<String, Integer> group = new HashMap<String, Integer>();
+    final Map<String, Integer> cache = new HashMap<String, Integer>();
     for(int row=0;row<rowLength(); row++) {
       final Task task = latestTaskAt(row);
       final String groomName = task.getAssignedTarget();
-      final Integer count = group.get(groomName);
+      final Integer count = cache.get(groomName);
       if(null == count) {
-        group.put(groomName, new Integer(1)); 
+        cache.put(groomName, new Integer(1)); 
       } else {
-        group.put(groomName, new Integer(count.intValue()+1));
+        cache.put(groomName, new Integer(count.intValue()+1));
       }
     }
-    return group;
+    return cache;
   }
 
   /**

@@ -96,22 +96,43 @@ public final class GroomServerStat implements Writable {
     return (toNullString().equals(string));
   }
 
+  /**
+   * The name of the GroomServer.
+   * @return String in a form of groom_<host>_<port>
+   */
   public String getName() {
     return name;
   }
 
+  /**
+   * The host of the GroomServer.
+   * @return String vlaue is the GroomServer host.
+   */
   public String getHost() {
     return host;
   }
 
+  /**
+   * The port used by the GroomServer.
+   * @return int denotes the port number.
+   */
   public int getPort() {
     return this.port;
   }
 
+  /**
+   * The max tasks the GroomServer can manage.
+   * @return int denotes the value of the maxTasks.
+   */
   public int getMaxTasks() {
     return maxTasks;
   }
 
+  /**
+   * Jobs hold within GroomServer's queue. 
+   * TODO: remove this one because this value should always be 0 as GroomServer deals 1, slots 2, queue, 3 request orderly. So no request to sched if slots or queue is not empty.
+   * @return 
+   */
   public int queueLength() {
     return this.queue.get().length;
   }
