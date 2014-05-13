@@ -127,19 +127,6 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     hasFreeSlot
   }
 
-/* wrong function
-  def hasFreeSlots(): Boolean = {
-    var isFree = true
-    var flag = true
-    slots.takeWhile(slot => {
-      isFree = None.equals(slot.task)
-      isFree
-    }) 
-    if(isFree) flag = true else flag = false
-    flag
-  }
-*/
-
   /**
    * Periodically send message to an actor an actor.
    * @param target is the ActorRef to be requested.  
@@ -172,22 +159,27 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   }
 
   /**
-   * Check if slots available and any unprocessed tasks in queue.
-   * If slots are free, request scheduler to dispatch tasks accordingly.
-   * Otherwise deal with task in queue first.
+   * Check if slots are available and any unprocessed directive in queue. When
+   * slots are free but any directives exist, process directive first. 
+   * @return Receive is partial function.
    */
   def taskRequest: Receive = {
     case TaskRequest => {
       LOG.debug("In TaskRequest, sched: {}, hasTaskInQueue: {}"+
                ", hasFreeSlots: {}", sched, hasTaskInQueue, hasFreeSlots)
-      if(hasFreeSlots && !hasTaskInQueue /* && N > sysload */) { //xxxx 
-        LOG.debug("Request {} for assigning new tasks ...", getSchedulerPath)
-        sched ! RequestTask(currentGroomServerStat)
-      } else {
-        LOG.debug("Process tasks in queue, {} tasks, first!", queue.size)
-        // TODO: process task in queue first.
-        //val (directive, rest) = queue.dequeue  xxxx
-      }
+      if(hasFreeSlots) { 
+        if(!hasTaskInQueue) { 
+          LOG.debug("Request {} for assigning new tasks ...", getSchedulerPath)
+          sched ! RequestTask(currentGroomServerStat)
+        } else {
+          LOG.debug("{} tasks in queue, process them first!", queue.size)
+          val (directive, rest) =  queue.dequeue     
+          if(null == directive)
+            throw new NullPointerException("Dequeued directive is null!")
+          matchThenExecute(directive.action, directive.master, 
+                           directive.timestamp, directive.task)
+        }
+      } 
     }
   }
   
@@ -228,22 +220,38 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   /**
    * Receive {@link Directive} from Scheduler.
-   * It may store task in queue when no free slots available. xx
+   * It may store directive in queue when no free slot available. 
    * @return Receive is partial function.
    */
   def receiveDirective: Receive = {
     case directive: Directive => { 
-      if(hasFreeSlots) {
-         val action: Action = directive.action  
-         val master: String = directive.master  
-         val timestamp: Long = directive.timestamp  
-         val task: Task = directive.task  
-         LOG.info("Action {} sent from {} for {} at {}", 
-                  action, master, task, timestamp) 
-         matchThenExecute(action, master, timestamp, task)
-      } else {
-        queue = queue.enqueue(directive)
-      }
+      if(null != directive) {
+        if(hasFreeSlots) {
+          if(hasTaskInQueue) {
+            queue = queue.enqueue(directive)
+            val (first, rest) = queue.dequeue
+
+            LOG.info("Execute task {} in queue, which is sent from {} "+
+                     "with action {} at {}", first.task.getId, first.master, 
+                     first.action, first.timestamp) 
+            matchThenExecute(first.action, first.master, first.timestamp, 
+                             first.task)
+          } else {
+            LOG.info("Execute task {} sent from {} with action {} at {}", 
+                     directive.task.getId , directive.master, 
+                     directive.action, directive.timestamp) 
+            matchThenExecute(directive.action, directive.master, 
+                             directive.timestamp, directive.task)
+          }
+        } else {
+          val task: Task = directive.task  
+          if(null != task) 
+            LOG.info("Enqueue directive: action-> {}, master-> {} , task-> {}", 
+                     directive.action, directive.master, task.getId.toString)
+          queue = queue.enqueue(directive)
+        }
+      } else LOG.warning("Directive dispatched from {} is null!", 
+                         sender.path.name)
     }
   }
 
@@ -282,7 +290,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   }
 
   /**
-   * Match an action from the {@link Directive} provided, then execute
+   * Match an action from the {@link Directive} supplied, then execute
    * the task by forking a process if needed.
    */
   private def matchThenExecute(action: Action, master: String, 
@@ -291,7 +299,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
       case 1 => {
         // a. pick up a free slot. 
         val slot = pickUp
-        //configuration.setInt("bsp.task.child.seq", )
+        // configuration.setInt("bsp.task.child.seq", )
         // b. check if process is forked
         // b1. if false, fork a new process else reuse it.
         // c. launch task on the new process
