@@ -58,8 +58,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   val groomManagerPath = groomManagerInfo.getPath
 
-  val groomServerHost = conf.get("bsp.groom.address", "127.0.0.1")
-  val groomServerPort = conf.getInt("bsp.groom.port", 50000)
+  val groomServerHost = configuration.get("bsp.groom.address", "127.0.0.1")
+  val groomServerPort = configuration.getInt("bsp.groom.port", 50000)
   val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
   val maxTasks = configuration.getInt("bsp.tasks.maximum", 3) 
   val bspmaster = configuration.get("bsp.master.name", "bspmaster")
@@ -78,7 +78,14 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   /**
    * Active scheduled tasks are stored in queue. 
    */
-  private var queue = Queue[Task]()
+  private var queue = Queue[Directive]()
+
+  /* can be overriden in test. */
+  protected def getGroomServerName(): String = groomServerName
+  protected def getGroomServerHost(): String = groomServerHost
+  protected def getGroomServerPort(): Int = groomServerPort
+  protected def getMaxTasks(): Int = maxTasks
+  protected def getSchedulerPath: String = schedPath
 
   override def configuration: HamaConfiguration = conf
 
@@ -102,8 +109,25 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     lookup("groomManager", groomManagerPath)
   }
 
-  def hasTaskInQueue: Boolean = queue.size > 0
+  def hasTaskInQueue: Boolean = !queue.isEmpty
 
+  /**
+   * Check if there is slot available. 
+   * @return Boolean denotes whether having free slots. Tree if free slots 
+   *                 available, false otherwise.
+   */
+  def hasFreeSlots(): Boolean = {
+    var isOccupied = true
+    var hasFreeSlot = false
+    slots.takeWhile(slot => {
+      isOccupied = !None.equals(slot.task)
+      isOccupied
+    })
+    if(!isOccupied) hasFreeSlot = true else hasFreeSlot = false
+    hasFreeSlot
+  }
+
+/* wrong function
   def hasFreeSlots(): Boolean = {
     var isFree = true
     var flag = true
@@ -114,6 +138,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     if(isFree) flag = true else flag = false
     flag
   }
+*/
 
   /**
    * Periodically send message to an actor an actor.
@@ -146,23 +171,22 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     lookup("groomManager", groomManagerPath)
   }
 
-  protected def getSchedulerPath: String = schedPath
-
   /**
    * Check if slots available and any unprocessed tasks in queue.
    * If slots are free, request scheduler to dispatch tasks accordingly.
    * Otherwise deal with task in queue first.
    */
-  def requestMessage: Receive = {
+  def taskRequest: Receive = {
     case TaskRequest => {
       LOG.debug("In TaskRequest, sched: {}, hasTaskInQueue: {}"+
                ", hasFreeSlots: {}", sched, hasTaskInQueue, hasFreeSlots)
-      if(!hasTaskInQueue && hasFreeSlots /* && N > sysload */) { 
+      if(hasFreeSlots && !hasTaskInQueue /* && N > sysload */) { //xxxx 
         LOG.debug("Request {} for assigning new tasks ...", getSchedulerPath)
         sched ! RequestTask(currentGroomServerStat)
       } else {
         LOG.debug("Process tasks in queue, {} tasks, first!", queue.size)
         // TODO: process task in queue first.
+        //val (directive, rest) = queue.dequeue  xxxx
       }
     }
   }
@@ -173,11 +197,6 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   }
    */
 
-  protected def getGroomServerName(): String = groomServerName
-  protected def getGroomServerHost(): String = groomServerHost
-  protected def getGroomServerPort(): Int = groomServerPort
-  protected def getMaxTasks(): Int = maxTasks
-
   /**
    * Collect tasks information for report.
    * @return GroomServerStat contains the latest tasks statistics.
@@ -185,10 +204,13 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   def currentGroomServerStat(): GroomServerStat = {
     val stat = new GroomServerStat(getGroomServerName, getGroomServerHost, 
                                    getGroomServerPort, getMaxTasks)
-    queue.foreach( task => {
-      if(null == task) 
-        throw new NullPointerException("Task can't be null in queue.")
-      stat.addToQueue(task.getId.toString)
+    queue.foreach( directive => {
+      if(null != directive) 
+        stat.addToQueue(directive.task.getId.toString)
+      else {
+        LOG.warning("Directive shouldn't be null!")
+        stat.addToQueue("(null)")
+      }
     })
 
     if(slots.size != stat.slotsLength)
@@ -205,17 +227,23 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   } 
 
   /**
-   * Receive Directive from Scheduler.
+   * Receive {@link Directive} from Scheduler.
+   * It may store task in queue when no free slots available. xx
+   * @return Receive is partial function.
    */
   def receiveDirective: Receive = {
     case directive: Directive => { 
-       val action: Action = directive.action  
-       val master: String = directive.master  
-       val timestamp: Long = directive.timestamp  
-       val task: Task = directive.task  
-       LOG.info("Action {} sent from {} for {} at {}", 
-                action, master, task, timestamp) 
-       matchThenExecute(action, master, timestamp, task)
+      if(hasFreeSlots) {
+         val action: Action = directive.action  
+         val master: String = directive.master  
+         val timestamp: Long = directive.timestamp  
+         val task: Task = directive.task  
+         LOG.info("Action {} sent from {} for {} at {}", 
+                  action, master, task, timestamp) 
+         matchThenExecute(action, master, timestamp, task)
+      } else {
+        queue = queue.enqueue(directive)
+      }
     }
   }
 
@@ -231,7 +259,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     }
   }
 
-  override def receive = requestMessage orElse receiveDirective orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = taskRequest orElse receiveDirective orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 
   /**
    * Pick up a slot that is not in use.

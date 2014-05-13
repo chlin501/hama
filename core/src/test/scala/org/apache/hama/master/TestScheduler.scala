@@ -37,12 +37,12 @@ class MockMaster2(conf: HamaConfiguration) extends Master(conf) {
 
   override def initializeServices {
     create("sched", classOf[MockScheduler])
-    create("taskManager", classOf[MockTaskManager])
+    create("taskManager", classOf[MockTaskMgr])
   }
 
 }
 
-class MockTaskManager(conf: HamaConfiguration, mockSched: ActorRef, 
+class MockTaskMgr(conf: HamaConfiguration, mockSched: ActorRef, 
                       name: String, constraint: Int) 
       extends TaskManager(conf) {
 
@@ -90,7 +90,7 @@ class MockScheduler(conf: HamaConfiguration, tester: ActorRef)
     case GroomEnrollment(groomServerName, tm, maxTasks) => {
       if(null != tm) 
         throw new IllegalArgumentException("Parameter tm should be null!")
-      val taskManager = context.actorOf(Props(classOf[MockTaskManager], 
+      val taskManager = context.actorOf(Props(classOf[MockTaskMgr], 
                                               conf, 
                                               self,
                                               groomServerName,
