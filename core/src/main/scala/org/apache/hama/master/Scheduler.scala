@@ -25,6 +25,7 @@ import org.apache.hama.bsp.v2.GroomServerStat
 import org.apache.hama.groom.RequestTask
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
+import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.master.monitor.AskGroomServerStat
 import org.apache.hama.ProxyInfo
@@ -201,14 +202,15 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    */
   def bookThenDispatch(job: Job, targetActor: TaskManagerRef,  
                        targetGroomServer: String, 
-                       d: (TaskManagerRef, Task) => Unit): ProcessingQueue = {
+                       d: (TaskManagerRef, Action, Task) => Unit): 
+      ProcessingQueue = {
     var to = Queue[Job]()
     unassignedTask(job) match {
       case Some(task) => {
         // scan job's tasks checking if sumup of scheduled to the same groom 
         // server's tasks > maxTasks if passive assigned.
         task.markWithTarget(targetGroomServer) 
-        d(targetActor, task)
+        d(targetActor, Launch, task)
       }
       case None => 
     }
@@ -220,10 +222,11 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
   /** 
    * Dispatch a Task to a GroomServer.
    * @param from is the GroomServer task manager.
+   * @param action denotes what action will be performed upon the task.
    * @param task is the task to be executed.
    */
-  protected def dispatch(from: TaskManagerRef, task: Task) {
-    from ! new Directive(Launch, task,  
+  protected def dispatch(from: TaskManagerRef, action: Action, task: Task) {
+    from ! new Directive(action, task,  
                          conf.get("bsp.master.name", "bspmaster"))  
   }
 
@@ -237,7 +240,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
 
   /**
    * From GroomManager to notify a groom server's task manager is ready for
-   * receiving tasks dispatch.
+   * receiving tasks.
    */
   def enrollment: Receive = {
     case GroomEnrollment(groomServerName, taskManager, maxTasks) => {
@@ -260,8 +263,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    * Assign a task to the requesting GroomServer's task manager.
    * Assign function follows after schedule one, it means th rest unassigned
    * tasks are all for passive.
-   * @param groomServerName is the name of GroomServer in a form of 
-   *                        groom_<host>_<port>
+   * @param groomServerStat is the most recent stat of a GroomServer.
    * @param taskManager refers to the remote GroomServer TaskManager instance.
    */
   def passiveAssign(stat: GroomServerStat, taskManager: ActorRef) {
@@ -280,7 +282,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    * dispatch function, which normally uses actor ! message.
    */
   def assign(stat: GroomServerStat, fromQueue: TaskAssignQueue, 
-             taskManager: ActorRef, d: (ActorRef, Task) => Unit): 
+             taskManager: ActorRef, d: (ActorRef, Action, Task) => Unit): 
       (TaskAssignQueue, ProcessingQueue) = {
     if(!fromQueue.isEmpty) {
       val (job, rest) = fromQueue.dequeue 
@@ -327,8 +329,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
       lookupTaskManager(spec)
     }
   }
-
-  override def receive = locate orElse reschedTasks orElse jobSubmission orElse dispense orElse requestTask orElse 
 */
   override def receive = requestTask orElse dispense orElse nextPlease orElse enrollment orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse unknown
 }

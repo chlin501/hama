@@ -23,6 +23,7 @@ import akka.actor.Props
 import akka.event.Logging
 import org.apache.hama.TestEnv
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.master.Directive.Action
 import org.apache.hama.groom._
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2._
@@ -68,7 +69,7 @@ class MockTaskManager(conf: HamaConfiguration, mockSched: ActorRef,
 class MockScheduler(conf: HamaConfiguration, tester: ActorRef) 
     extends Scheduler(conf) {
 
-  override def dispatch(from: ActorRef, task: Task) {
+  override def dispatch(from: ActorRef, action: Action, task: Task) {
     LOG.debug("Task will be dispatched to {} via actor {}", 
              task.getAssignedTarget, from.path.name)
     groomTaskManagers.find(p =>   
