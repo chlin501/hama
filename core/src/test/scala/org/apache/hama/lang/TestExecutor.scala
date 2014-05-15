@@ -17,6 +17,7 @@
  */
 package org.apache.hama.lang
 
+/*
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import java.io.File
@@ -204,18 +205,19 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor")) {
     val className = classOf[BSPPeerContainer].getName
     val taskAttemptId = createTaskAttemptId(jobId)
     val superstep = 7
-    val insCount = 3
+    val slotSeq = 3
     LOG.info("BSPJobId: "+jobId+" jobFilePath: "+jobFilePath+
              " jarPath: "+jarPath +" taskAttemptId: "+taskAttemptId+
-             " childSystemName: BSPPeerSystem"+insCount)
+             " childSystemName: BSPPeerSystem"+slotSeq)
     executor ! Fork(jobId.toString, jobFilePath, jarPath, 
-                    taskAttemptId.toString, insCount, conf)
+                    taskAttemptId.toString, slotSeq, conf)
     executor ! GetProcessParam
     
     val cmd = System.getProperty("java.home")+"/bin/java,-Xmx200m,"+
-              className+",50001,"+insCount
+              className+",50001,"+slotSeq
     val workDir = "/tmp/hama/work"
     val logDir = "/tmp/hama/logs/tasklogs/job_test_fork_process_1234"
     expect(ProcessParam(cmd, workDir, logDir))
   }
 }
+*/

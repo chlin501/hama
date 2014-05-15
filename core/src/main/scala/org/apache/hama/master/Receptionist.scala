@@ -66,11 +66,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     sum
   }
 
-  def request(to: ActorRef, message: Any) {
-    import context.dispatcher
-    context.system.scheduler.schedule(0.seconds, 2.seconds, to, message)
-  }
-
   /**
    * BSPJobClient calls submitJob(jobId, jobFile), where jobFile submitted is
    * the job.xml path.

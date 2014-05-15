@@ -103,11 +103,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
 
   def isTaskAssignQueueEmpty: Boolean = taskAssignQueue.isEmpty
 
-  def request(target: ActorRef, message: Any): Cancellable = {
-    import context.dispatcher
-    context.system.scheduler.schedule(0.seconds, 3.seconds, target, message)
-  }
-
   /**
    * Check if the taskQueue is empty. If true, ask Receptionist to dispense a 
    * job; otherwise do nothing.

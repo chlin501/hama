@@ -32,7 +32,7 @@ import org.apache.hama.RemoteService
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
-final case class Args(port: Int, instanceCount: Int, config: Config)
+final case class Args(port: Int, seq: Int, config: Config)
 //final case object Setup
 
 object BSPPeerContainer {
@@ -69,20 +69,20 @@ object BSPPeerContainer {
       throw new IllegalArgumentException("No arguments supplied when "+
                                          "BSPPeerContainer is forked.")
     val port = args(0).toInt
-    val instanceCount = args(1).toInt
+    val seq = args(1).toInt
     val config = toConfig(port) 
-    Args(port, instanceCount, config)
+    Args(port, seq, config)
   }
 
   @throws(classOf[Throwable])
   def main(args: Array[String]) {
     val defaultConf = new HamaConfiguration()
     val arguments = toArgs(args)
-    val system = ActorSystem("BSPPeerSystem%s".format(arguments.instanceCount), 
+    val system = ActorSystem("BSPPeerSystem%s".format(arguments.seq), 
                              arguments.config)
-    defaultConf.setInt("bsp.child.instance.count", arguments.instanceCount)
+    defaultConf.setInt("bsp.child.slot.seq", arguments.seq)
     system.actorOf(Props(classOf[BSPPeerContainer], defaultConf), 
-                   "bspPeerContainer%s".format(arguments.instanceCount))
+                   "bspPeerContainer%s".format(arguments.seq))
   }
 }
 
@@ -105,12 +105,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    override def configuration: HamaConfiguration = conf
 
    override def name: String = 
-     "bspPeerContainer%s".format(conf.getInt("bsp.child.instance.count", 1))
-
-   def request(target: ActorRef, message: Any): Cancellable = {
-     import context.dispatcher
-     context.system.scheduler.schedule(0.seconds, 2.seconds, target, message)
-   }
+     "bspPeerContainer%s".format(conf.getInt("bsp.child.slot.seq", 1))
  
    override def initializeServices {
      lookup("taskManager", taskManagerPath)
@@ -124,6 +119,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    def processTask: Receive = {
      case task: Task => {
        LOG.info("Start processing task {}", task.getId)
+       
      }
    }
 

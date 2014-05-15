@@ -125,6 +125,12 @@ trait Operation {
   def getSystemDirectory: Path
 
   /**
+   * Obtain file system's working directory.
+   * @return Path of underlying file system's working directory.
+   */  
+  def getWorkingDirectory: Path 
+
+  /**
    * Obtain operation for local file system.
    * @return operation for local file system. 
    */

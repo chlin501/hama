@@ -117,6 +117,8 @@ class HDFSLocal extends Operation {
     val sysDir = configuration.get("bsp.system.dir", "/tmp/hadoop/bsp/system")
     localfs.makeQualified(new Path(sysDir))
   }
+
+  override def getWorkingDirectory: Path = localfs.getWorkingDirectory
   
   override def local: Operation = this 
 

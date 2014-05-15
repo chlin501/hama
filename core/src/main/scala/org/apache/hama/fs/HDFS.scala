@@ -136,6 +136,8 @@ class HDFS extends Operation {
     val sysDir = configuration.get("bsp.system.dir", "/tmp/hadoop/bsp/system")
     hdfs.makeQualified(new Path(sysDir))
   }
+
+  override def getWorkingDirectory: Path = hdfs.getWorkingDirectory
   
   override def local: Operation = localfs
 

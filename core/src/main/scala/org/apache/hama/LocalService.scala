@@ -57,6 +57,22 @@ trait LocalService extends Service {
   protected var servicesLookup = Map.empty[String, Cancellable]
 
   /**
+   * Request with message sent to a particular actor.
+   * @param target is the actor to which the message will be routed.
+   * @param message denotes what will be consumed by the target.
+   * @param initial is the time the scheduler will start sending message. 
+   * @param delay is the time the scheduler will wait for sending next message. 
+   */
+  protected def request(target: ActorRef, message: Any, 
+                        initial: FiniteDuration = 0.seconds,
+                        delay: FiniteDuration = 3.seconds): Cancellable = {
+    LOG.debug("Request message {} to target: {}", message, target)
+    import context.dispatcher
+    context.system.scheduler.schedule(initial, delay, target, message)
+  }
+
+
+  /**
    * Create a service actor and schedule message checking if it's ready.
    * Another service must be in the same jvm as actor that creates the service,
    * so keep sending message instead of scheduleOnce.

@@ -41,7 +41,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   type ForkedChild = String
 
   val schedInfo =
-    new ProxyInfo.Builder().withConfiguration(conf).
+    new ProxyInfo.Builder().withConfiguration(configuration).
                             withActorName("sched").
                             appendRootPath("bspmaster").
                             appendChildPath("sched").
@@ -50,7 +50,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   val schedPath = schedInfo.getPath
 
   val groomManagerInfo =
-    new ProxyInfo.Builder().withConfiguration(conf).
+    new ProxyInfo.Builder().withConfiguration(configuration).
                             withActorName("groomManager").
                             appendRootPath("bspmaster").
                             appendChildPath("groomManager").
@@ -98,7 +98,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    */
   protected def initializeSlots(constraint: Int = 3) {
     for(seq <- 1 to constraint) {
-      slots ++= Set(Slot(seq, None, bspmaster, None))
+      slots ++= Set(Slot(seq, None, bspmaster))
     }
     LOG.debug("{} GroomServer slots are initialied.", constraint)
   }
@@ -125,18 +125,6 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     })
     if(!isOccupied) hasFreeSlot = true else hasFreeSlot = false
     hasFreeSlot
-  }
-
-  /**
-   * Periodically send message to an actor an actor.
-   * @param target is the ActorRef to be requested.  
-   * @param message is a RequestMessage sent to remote target.
-   */
-  def request(target: ActorRef, message: RequestMessage): Cancellable = {
-    LOG.debug("Request message {} to target: {}", message, target)
-    import context.dispatcher
-    context.system.scheduler.schedule(0.seconds, 5.seconds, 
-                                      target, message)
   }
 
   override def afterLinked(proxy: ActorRef) = {
@@ -173,7 +161,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
           sched ! RequestTask(currentGroomServerStat)
         } else {
           LOG.debug("{} tasks in queue, process them first!", queue.size)
-          val (directive, rest) =  queue.dequeue     
+          val (directive, rest) = queue.dequeue
           if(null == directive)
             throw new NullPointerException("Dequeued directive is null!")
           matchThenExecute(directive.action, directive.master, 
@@ -298,9 +286,11 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     action.value match {
       case 1 => {
         // a. pick up a free slot. 
-        val slot = pickUp
-        // configuration.setInt("bsp.task.child.seq", )
-        // b. check if process is forked
+        val slot = pickUp 
+        //if(!slot.isRunning) {
+          //Executor
+        //}
+        // b. check if process is forked -> check seq if booked.
         // b1. if false, fork a new process else reuse it.
         // c. launch task on the new process
         // d. store the task to a slot

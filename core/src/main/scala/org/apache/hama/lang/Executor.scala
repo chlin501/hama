@@ -17,6 +17,7 @@
  */
 package org.apache.hama.lang 
 
+/*
 import akka.actor._
 import akka.event._
 import java.io.BufferedReader
@@ -39,9 +40,13 @@ import org.apache.hama.HamaConfiguration
 import scala.collection.JavaConversions._
 import scala.sys.process._
 
+ TODO: send jobFilePath and reconstruct necessary information, including job id, jar path, task attempt id, etc., in child process.
 final case class Fork(jobId: String, jobFile: String, jarPath: String, 
-                      taskAttemptId: String, instanceCount: Int, 
+                      taskAttemptId: String, slotSeq: Int, 
                       conf: HamaConfiguration)
+
+//final case class Fork(slotSeq: Int, conf: HamaConfiguration)
+
 sealed trait LogMessage
 final case class StdOutMsg(input: InputStream) extends LogMessage
 final case class StdErrMsg(error: InputStream) extends LogMessage
@@ -105,10 +110,12 @@ class StdErr(logDir: File, taskAttemptId: String, conf: HamaConfiguration)
   def receive = {
     case StdErrMsg(error) => 
       logStream(error, Stderr, logDir, taskAttemptId, conf) 
-    case msg@_ => LOG.warning("Unknown StdOut message {}", msg)
+    case msg@_ => LOG.warning("Unknown StdErr message {}", msg)
   } 
 }
 
+ * An actor forks a new child process in executing tasks.
+ * @param conf cntains necessary setting for launching the child process.
 class Executor(conf: HamaConfiguration) extends Actor {
  
   val LOG = Logging(context.system, this)
@@ -129,11 +136,9 @@ class Executor(conf: HamaConfiguration) extends Actor {
     workDir
   }
 
-  /**
    * Log directory, in a form of "log/tasklogs/job_id"
    * @param logPath is the System.getProperty("hama.log.dir")
    * @param jobId 
-   */
   def loggingDir(logPath: String, jobId: String): File = {
     val logDir = new File(logPath + File.separator + "tasklogs" + 
                           File.separator + jobId)
@@ -162,12 +167,10 @@ class Executor(conf: HamaConfiguration) extends Actor {
     builder.toString
   }
 
-  /**
    * @param javaClasspath denotes the classpath from 
    *                      System.getProperty("java.class.path")
    * @param jarPath is the file containing bsp job.
    * @param workDir denotes the working directory.
-   */
   def classpath(javaClasspath: String, jarPath: String, workDir: File): 
       String = {
     val classPath = new StringBuilder()
@@ -186,15 +189,11 @@ class Executor(conf: HamaConfiguration) extends Actor {
     classPath.toString
   }
 
-  /**
    * Address to be used to launch the child process, default to 127.0.0.1.
-   */
   def taskAddress: String = conf.get("bsp.child.address", "127.0.0.1")
 
-  /**
    * Pick up a port value configured in HamaConfiguration object. Otherwise
    * use default 50001.
-   */
   def taskPort: String = {
     var port = "50001" 
     val ports = conf.getStrings("bsp.child.port", "50001")
@@ -220,7 +219,7 @@ class Executor(conf: HamaConfiguration) extends Actor {
   def defaultOpts: String = conf.get("bsp.child.java.opts", "-Xmx200m")
 
   private def jvmArgs(javaHome: String, classpath: String, child: Class[_], 
-                      instanceCount: Int): 
+                      slotSeq: Int): 
       Seq[String] = {
     val java = new File(new File(javaHome, "bin"), "java").toString
     LOG.debug("Arg java: {}", java)
@@ -229,43 +228,32 @@ class Executor(conf: HamaConfiguration) extends Actor {
     val bspClassName = child.getName 
     LOG.debug("Arg bspClasName: {}", bspClassName)
     val command = Seq(java) ++ opts.toSeq ++ Seq(bspClassName) ++ 
-                  Seq(taskPort) ++ Seq(instanceCount.toString)
+                  Seq(taskPort) ++ Seq(slotSeq.toString)
     LOG.debug("jvm args: {}", command)
     command
   }
 
-/* In forked actor. send pid back to task manager
-  private def pid: PID = {
-    val str = ManagementFactory.getRuntimeMXBean.getName
-    val ary = str.split("@")
-    var ret = -1
-    if(null != ary && 0 < ary.size) ret = ary.head.toInt
-    if(ret > 65535) 
-      throw new IllegalStateException("Pid value can't be larger than 65535.")
-    ret 
-  }
-*/
-
-  /**
    * @param jarPath is the path obtained from conf.get("bsp.jar").
-   */
   def fork(jobId: String, jobFilePath: String, jarPath: String, 
-           taskAttemptId: String, instanceCount: Int, 
+           taskAttemptId: String, slotSeq: Int, 
            conf: HamaConfiguration) {
     val workDir = workingDir(jobFilePath)
     val logDir = loggingDir(logPath, jobId)
     LOG.info("jobId {} logDir is {}", jobId, logDir)
     val cp = classpath(javacp, jarPath, workDir)
     LOG.info("jobId {} classpath: {}", jobId, cp)
-    val cmd = jvmArgs(javaHome, cp, classOf[BSPPeerContainer], instanceCount)
+    val cmd = jvmArgs(javaHome, cp, classOf[BSPPeerContainer], slotSeq)
     LOG.info("jobId {} cmd: {}", jobId, cmd)
     createProcess(cmd, workDir, logDir, taskAttemptId, conf)
   }
 
-  /**
+  def fork(slotSeq: Int, conf: HamaConfiguration) {
+
+  }
+  
+
    * @param logDir is the directory for a running task with particular forked  
    *               process.
-   */
   def createProcess(cmd: Seq[String], workDir: File, logDir: File, 
                     taskAttemptId: String, conf: HamaConfiguration) {
     if(!logDir.exists) logDir.mkdirs
@@ -288,13 +276,13 @@ class Executor(conf: HamaConfiguration) extends Actor {
       case ioe: IOException => 
         LOG.error("Fail launching BSPPeerContainer process {}", ioe)
     }
-
   }
 
   def forkProcess: Receive = {
-    case Fork(jobId, jobFilePath, jarPath, taskAttemptId, instanceCount, 
+    // TODO: need refactor/ reduce parameters.
+    case Fork(jobId, jobFilePath, jarPath, taskAttemptId, slotSeq, 
               conf) => 
-      fork(jobId, jobFilePath, jarPath, taskAttemptId, instanceCount, conf) 
+      fork(jobId, jobFilePath, jarPath, taskAttemptId, slotSeq, conf) 
   } 
 
   def unknown: Receive = {
@@ -304,4 +292,4 @@ class Executor(conf: HamaConfiguration) extends Actor {
   def receive = forkProcess orElse unknown
      
 }
-
+*/

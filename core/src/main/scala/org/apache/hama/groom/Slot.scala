@@ -25,9 +25,9 @@ import org.apache.hama.bsp.v2.Task
  * @param seq of this slot.
  * @param task that runs on this slot.
  * @param master to which this slot belongs.
- * @param pid that executes the task for this slot.
+ * @param isRunning that executes the task for this slot.
  */
 case class Slot(seq: Int, 
                 task: Option[Task], 
                 master: String, 
-                pid: Option[Int])
+                isRunning: Boolean = false)
