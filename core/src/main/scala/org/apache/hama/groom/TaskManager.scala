@@ -288,7 +288,10 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         // a. pick up a free slot. 
         val slot = pickUp 
         //if(!slot.isRunning) {
-          //Executor
+          // TODO: create executor actor with different names 
+          //       e.g. task attempt id so that actor won't collide and the 
+          //       instance var e.g. process won't be the overriden.
+          //context.actorOf(Props(classOf[Executor], conf), task.getId.toString)
         //}
         // b. check if process is forked -> check seq if booked.
         // b1. if false, fork a new process else reuse it.

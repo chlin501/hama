@@ -17,9 +17,10 @@
  */
 package org.apache.hama.lang 
 
-/*
-import akka.actor._
-import akka.event._
+import akka.actor.Actor
+import akka.actor.ActorRef
+import akka.actor.Props
+import akka.event.Logging
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
@@ -27,173 +28,126 @@ import java.io.FileWriter
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.IOException
-import java.lang.management._
+import java.io.OutputStream
 import java.lang.ProcessBuilder
-import org.apache.commons.logging.Log
-import org.apache.commons.logging.LogFactory
 import org.apache.commons.lang.math.NumberUtils
 import org.apache.hadoop.io.IOUtils
 import org.apache.hama.groom.BSPPeerContainer
-import org.apache.hama.util.RunJar
-import org.apache.hama.util.BSPNetUtils
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.fs.Operation
+import org.apache.hama.util.BSPNetUtils
 import scala.collection.JavaConversions._
-import scala.sys.process._
 
- TODO: send jobFilePath and reconstruct necessary information, including job id, jar path, task attempt id, etc., in child process.
-final case class Fork(jobId: String, jobFile: String, jarPath: String, 
-                      taskAttemptId: String, slotSeq: Int, 
-                      conf: HamaConfiguration)
+final case class Fork(slotSeq: Int, conf: HamaConfiguration)
+final case class StdOutMsg(logDir: String, logFile: String) 
+final case class StdErrMsg(logDir: String, logFile: String)
+final case class LogWith(jobId: String, taskAttemptId: String)
+final case object StreamClosed
+final case object StopProcess
 
-//final case class Fork(slotSeq: Int, conf: HamaConfiguration)
+trait LogToFile {
 
-sealed trait LogMessage
-final case class StdOutMsg(input: InputStream) extends LogMessage
-final case class StdErrMsg(error: InputStream) extends LogMessage
+  def error(msg: String, e: IOException) 
+  def warn(msg: String, e: IOException)
+  def info(msg: String)
 
-sealed trait LogType
-final case object Stdout extends LogType
-final case object Stderr extends LogType
-final case object Console extends LogType
+  def redirect(conf: HamaConfiguration): Boolean = 
+    conf.getBoolean("hama.child.redirect.log.console", false)
 
-trait LogAssistant {
+  def logToConsole(input: InputStream, conf: HamaConfiguration) {
+    try {
+      IOUtils.copyBytes(input, System.out, conf)
+    } catch {
+      case ioe: IOException => error("Fail logging to console", ioe)
+    }
+  }
 
-  def logStream(input: InputStream, logType: LogType, logDir: File, 
-                taskAttemptId: String, conf: HamaConfiguration) {
-    logType match { 
-      case Console => try {
-        IOUtils.copyBytes(input, System.out, conf)
-      } catch {
-        case ioe: IOException => throw ioe
+  def logStream(input: InputStream, logPath: File, process: ActorRef) {
+    var writer: BufferedWriter = null;
+    try {
+      writer = new BufferedWriter(new FileWriter(logPath))
+      var in: BufferedReader = new BufferedReader(new InputStreamReader(input))
+      var line: String = null
+      while ({line = in.readLine; null != line}) {
+        writer.write(line)
+        writer.newLine
       }
-      // STDOUT file can be found under LOG_DIR/task_attempt_id.log
-      // ERROR file can be found under LOG_DIR/task_attempt_id.err
-      case t@ _ => {
-        val end = t match { 
-          case Stdout => "log"
-          case Stderr => "err"
-          case Console =>
-        }
-        val taskLogFile = new File(logDir, taskAttemptId+"."+end)
-        var writer: BufferedWriter  = null
-        try {
-          writer = new BufferedWriter(new FileWriter(taskLogFile))
-          val in = new BufferedReader(new InputStreamReader(input))
-          var line: String = null
-          while(null != (line = in.readLine)) {
-            writer.write(line)
-            writer.newLine
-          }
-        } catch {
-          case ioe: IOException => throw ioe
-        }
-      }
+    } catch {
+      case ioe: IOException => 
+        error("Fail logging to %s".format(logPath.toString), ioe)
+    } finally {
+      try { input.close } catch { case ioe: IOException => }
+      try { writer.close } catch { case ioe: IOException => }
+      info("InputStream is closed!")
+      process ! StreamClosed 
     }
   }
 }
 
-class StdOut(logDir: File, taskAttemptId: String, conf: HamaConfiguration) 
-    extends Actor with LogAssistant {
+class StdOut(input: InputStream, conf: HamaConfiguration, process: ActorRef) 
+      extends Actor with LogToFile {
 
   val LOG = Logging(context.system, this)
 
+  def error(msg: String, ioe: IOException) = LOG.error(msg, ioe)
+  def warn(msg: String, ioe: IOException) = LOG.warning(msg, ioe)
+  def info(msg: String) = LOG.info(msg)
+
   def receive = {
-    case StdOutMsg(input) => 
-      logStream(input, Stdout, logDir, taskAttemptId, conf) 
-    case msg@_ => LOG.warning("Unknown StdOut message {}", msg)
+    case StdOutMsg(logDir, logFile) => { 
+      if(redirect(conf)) logToConsole(input, conf) else {
+        if(null != logDir && !logDir.isEmpty) {
+          val logPath = new File(logDir, logFile+".log")
+          logStream(input, logPath, process) 
+        } else LOG.warning("Invalid log dirrectory for stdout!")
+      }
+    }
+    case msg@_ => LOG.warning("Unknown stdout message {}", msg)
   } 
 }
 
-class StdErr(logDir: File, taskAttemptId: String, conf: HamaConfiguration) 
-    extends Actor with LogAssistant {
+class StdErr(input: InputStream, conf: HamaConfiguration, process: ActorRef) 
+      extends Actor with LogToFile {
+
   val LOG = Logging(context.system, this)
+  def error(msg: String, ioe: IOException) = LOG.error(msg, ioe)
+  def warn(msg: String, ioe: IOException) = LOG.warning(msg, ioe)
+  def info(msg: String) = LOG.info(msg)
+
   def receive = {
-    case StdErrMsg(error) => 
-      logStream(error, Stderr, logDir, taskAttemptId, conf) 
-    case msg@_ => LOG.warning("Unknown StdErr message {}", msg)
+    case StdErrMsg(logDir, logFile) => {
+      if(redirect(conf)) logToConsole(input, conf) else {
+        if(null != logDir && !logDir.isEmpty) {
+          val logPath = new File(logDir, logFile+".err")
+          logStream(input, logPath, process) 
+        } else LOG.warning("Invalid log dirrectory for stdout!")
+      }
+    }
+    case msg@_ => LOG.warning("Unknown stderr message {}", msg)
   } 
 }
 
- * An actor forks a new child process in executing tasks.
+/**
+ * An actor forks a child process for executing tasks.
  * @param conf cntains necessary setting for launching the child process.
+ */
 class Executor(conf: HamaConfiguration) extends Actor {
  
   val LOG = Logging(context.system, this)
-
-  //type PID = Int
-
-  val pathSeperator = System.getProperty("path.separator")
+  val pathSeparator = System.getProperty("path.separator")
+  val fileSeparator = System.getProperty("file.separator")
   val javaHome = System.getProperty("java.home")
+  val javacp: String  = System.getProperty("java.class.path")
+  val logPath: String = System.getProperty("hama.log.dir")
+  val operation = Operation.create(conf)
+  var stdout: ActorRef = _
+  var stderr: ActorRef = _
+  var process: Process = _
 
-  def logPath: String = System.getProperty("hama.log.dir")
-  def javacp: String = System.getProperty("java.class.path")
-
-  def workingDir(jobFilePath: String): File = {
-    val workDir = new File(new File(jobFilePath).getParent(), "work")
-    val isCreated = workDir.mkdirs
-    if (isCreated) 
-      LOG.info("Working directory is created at {}", workDir)
-    workDir
-  }
-
-   * Log directory, in a form of "log/tasklogs/job_id"
-   * @param logPath is the System.getProperty("hama.log.dir")
-   * @param jobId 
-  def loggingDir(logPath: String, jobId: String): File = {
-    val logDir = new File(logPath + File.separator + "tasklogs" + 
-                          File.separator + jobId)
-    if (!logDir.exists) logDir.mkdirs
-    logDir
-  }
-
-  def unjar(jarPath: String, workDir: File) {
-    try {
-      RunJar.unJar(new File(jarPath), workDir)
-    } catch {
-      case ioe: IOException => 
-        LOG.error("Fail unjar to directory {}", workDir.toString)
-    }
-  }
-
-  def libsPath(workDir: File): String = {
-    val builder = new StringBuilder()
-    val libs = new File(workDir, "lib").listFiles
-    if (null != libs) {
-      libs.foreach(lib => {
-        builder.append(pathSeperator)
-        builder.append(lib)
-      })
-    }
-    builder.toString
-  }
-
-   * @param javaClasspath denotes the classpath from 
-   *                      System.getProperty("java.class.path")
-   * @param jarPath is the file containing bsp job.
-   * @param workDir denotes the working directory.
-  def classpath(javaClasspath: String, jarPath: String, workDir: File): 
-      String = {
-    val classPath = new StringBuilder()
-    if(null != javaClasspath && !javaClasspath.isEmpty) {
-      classPath.append(javaClasspath)
-      classPath.append(pathSeperator)
-    }
-    if(null != jarPath && !jarPath.isEmpty) {
-      unjar(jarPath, workDir)
-      classPath.append(libsPath(workDir))
-      classPath.append(pathSeperator)
-      classPath.append(new File(workDir, "classes"))
-      classPath.append(pathSeperator)
-      classPath.append(workDir) 
-    }
-    classPath.toString
-  }
-
-   * Address to be used to launch the child process, default to 127.0.0.1.
-  def taskAddress: String = conf.get("bsp.child.address", "127.0.0.1")
-
+  /**
    * Pick up a port value configured in HamaConfiguration object. Otherwise
    * use default 50001.
+   */
   def taskPort: String = {
     var port = "50001" 
     val ports = conf.getStrings("bsp.child.port", "50001")
@@ -218,78 +172,104 @@ class Executor(conf: HamaConfiguration) extends Actor {
   //      following execution e.g. LOG.info after conf.get disappers 
   def defaultOpts: String = conf.get("bsp.child.java.opts", "-Xmx200m")
 
-  private def jvmArgs(javaHome: String, classpath: String, child: Class[_], 
-                      slotSeq: Int): 
-      Seq[String] = {
+  def jvmArgs(cp: String, slotSeq: Int, child: Class[_]): Seq[String] = {
     val java = new File(new File(javaHome, "bin"), "java").toString
-    LOG.debug("Arg java: {}", java)
     val opts = defaultOpts.split(" ")
-    LOG.debug("Arg opts: {}", opts)
-    val bspClassName = child.getName 
-    LOG.debug("Arg bspClasName: {}", bspClassName)
-    val command = Seq(java) ++ opts.toSeq ++ Seq(bspClassName) ++ 
-                  Seq(taskPort) ++ Seq(slotSeq.toString)
-    LOG.debug("jvm args: {}", command)
+    val bspClassName = child.getName
+    val command = Seq(java) ++ opts.toSeq ++ Seq("-classpath") ++ 
+                  Seq(cp) ++ Seq(bspClassName) ++ Seq(taskPort) ++ 
+                  Seq(slotSeq.toString)
+    LOG.info("jvm args: {}", command)
     command
   }
 
-   * @param jarPath is the path obtained from conf.get("bsp.jar").
-  def fork(jobId: String, jobFilePath: String, jarPath: String, 
-           taskAttemptId: String, slotSeq: Int, 
-           conf: HamaConfiguration) {
-    val workDir = workingDir(jobFilePath)
-    val logDir = loggingDir(logPath, jobId)
-    LOG.info("jobId {} logDir is {}", jobId, logDir)
-    val cp = classpath(javacp, jarPath, workDir)
-    LOG.info("jobId {} classpath: {}", jobId, cp)
-    val cmd = jvmArgs(javaHome, cp, classOf[BSPPeerContainer], slotSeq)
-    LOG.info("jobId {} cmd: {}", jobId, cmd)
-    createProcess(cmd, workDir, logDir, taskAttemptId, conf)
-  }
-
   def fork(slotSeq: Int, conf: HamaConfiguration) {
-
+    val cmd = jvmArgs(javacp, slotSeq, classOf[BSPPeerContainer])
+    createProcess(cmd, conf) 
   }
   
+  def defaultWorkingDirectory(conf: HamaConfiguration): String = {
+    var workDir = conf.get("bsp.working.dir")
+    if(null == workDir) {
+      val fsDir = operation.getWorkingDirectory
+      LOG.info("Use file system's working directory {}", fsDir.toString)
+      conf.set("bsp.working.dir", fsDir.toString)
+      workDir = fsDir.toString
+    }
+    workDir
+  }
 
-   * @param logDir is the directory for a running task with particular forked  
-   *               process.
-  def createProcess(cmd: Seq[String], workDir: File, logDir: File, 
-                    taskAttemptId: String, conf: HamaConfiguration) {
-    if(!logDir.exists) logDir.mkdirs
+  /**
+   * Fork a child process as container.
+   * @param cmd is the command to excute the process.
+   * @param conf contains related information for creating process.
+   */
+  def createProcess(cmd: Seq[String], conf: HamaConfiguration) {
     val builder = new ProcessBuilder(asJavaList(cmd))
-    builder.directory(workDir)
+    builder.directory(new File(defaultWorkingDirectory(conf)))
     try {
-      val process = builder.start
-
-      val out = context.actorOf(Props(classOf[StdOut], logDir, 
-                                                       taskAttemptId, 
-                                                       conf)) 
-      out ! StdOutMsg(process.getInputStream)
-
-      val err = context.actorOf(Props(classOf[StdErr], logDir, 
-                                                       taskAttemptId, 
-                                                       conf)) 
-      err ! StdErrMsg(process.getErrorStream)
-
+      process = builder.start
+      stdout = context.actorOf(Props(classOf[StdOut], 
+                                     process.getInputStream, 
+                                     conf, self)) 
+      stderr = context.actorOf(Props(classOf[StdErr], 
+                                     process.getErrorStream, 
+                                     conf, self)) 
+      val exitCode = process.waitFor
+      if(0 != exitCode)
+        throw new IOException("Child process exist with code = "+exitCode+
+                              ", command = "+cmd.mkString(" ")+"!")
     } catch {
       case ioe: IOException => 
         LOG.error("Fail launching BSPPeerContainer process {}", ioe)
     }
   }
 
-  def forkProcess: Receive = {
-    // TODO: need refactor/ reduce parameters.
-    case Fork(jobId, jobFilePath, jarPath, taskAttemptId, slotSeq, 
-              conf) => 
-      fork(jobId, jobFilePath, jarPath, taskAttemptId, slotSeq, conf) 
+  /**
+   * Create a container for executing tasks that will assign to it.
+   * @return Receive partial function.
+   */
+  def fork: Receive = {
+    case Fork(slotSeq, conf) => fork(slotSeq, conf) 
   } 
+
+  def logDir(jobId: String): String = {
+    val log = new File(logPath + fileSeparator + "tasklogs" + fileSeparator + 
+                       jobId);
+    if (!log.exists) log.mkdirs
+    log.toString
+  }
+
+  def stdoutAndStderrExists: Boolean = (null != stdout && null != stderr)
+
+  def switchLog: Receive = {
+    case LogWith(jobId, taskAttemptId) => { 
+      if(null != jobId && !jobId.isEmpty) {
+        if(stdoutAndStderrExists) {
+          stdout ! StdOutMsg(logDir(jobId), taskAttemptId)
+          stderr ! StdErrMsg(logDir(jobId), taskAttemptId)
+        } else LOG.warning("Standard out or standard err is missing!")
+      } else LOG.warning("Unknown logging path!")
+    }
+  }
+
+  def streamClosed: Receive = {
+    case StreamClosed => {
+      LOG.info("{} notify InputStream is closed!", sender.path.name)
+    }
+  }
+
+  def stopProcess: Receive = {
+    case StopProcess => {
+      if(null != process) process.destroy
+    }
+  }
 
   def unknown: Receive = {
     case msg@_=> LOG.warning("Unknown message {} for Executor", msg)
   }
 
-  def receive = forkProcess orElse unknown
+  def receive = fork orElse switchLog orElse streamClosed orElse stopProcess orElse unknown
      
 }
-*/
+
