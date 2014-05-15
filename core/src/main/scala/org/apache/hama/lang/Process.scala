@@ -42,11 +42,13 @@ final case class Fork(slotSeq: Int, conf: HamaConfiguration)
 final case class StdOutMsg(logDir: String, logFile: String) 
 final case class StdErrMsg(logDir: String, logFile: String)
 final case class LogWith(jobId: String, taskAttemptId: String)
+final case class StreamClosed
 
 trait LogToFile {
 
   def error(msg: String, e: IOException) 
   def warn(msg: String, e: IOException)
+  def info(msg: String)
 
   def redirect(conf: HamaConfiguration): Boolean = 
     conf.getBoolean("hama.child.redirect.log.console", false)
@@ -59,7 +61,7 @@ trait LogToFile {
     }
   }
 
-  def logStream(input: InputStream, logPath: File) {
+  def logStream(input: InputStream, logPath: File, process: ActorRef) {
     var writer: BufferedWriter = null;
     try {
       writer = new BufferedWriter(new FileWriter(logPath))
@@ -75,24 +77,27 @@ trait LogToFile {
     } finally {
       try { input.close } catch { case ioe: IOException => }
       try { writer.close } catch { case ioe: IOException => }
+      info("InputStream is closed!")
+      process ! StreamClosed 
     }
   }
 }
 
-class StdOut(input: InputStream, conf: HamaConfiguration) extends Actor 
-                                                          with LogToFile {
+class StdOut(input: InputStream, conf: HamaConfiguration, process: ActorRef) 
+      extends Actor with LogToFile {
 
   val LOG = Logging(context.system, this)
 
   def error(msg: String, ioe: IOException) = LOG.error(msg, ioe)
   def warn(msg: String, ioe: IOException) = LOG.warning(msg, ioe)
+  def info(msg: String) = LOG.info(msg)
 
   def receive = {
     case StdOutMsg(logDir, logFile) => { 
       if(redirect(conf)) logToConsole(input, conf) else {
         if(null != logDir && !logDir.isEmpty) {
           val logPath = new File(logDir, logFile+".log")
-          logStream(input, logPath) 
+          logStream(input, logPath, process) 
         } else LOG.warning("Invalid log dirrectory for stdout!")
       }
     }
@@ -100,19 +105,20 @@ class StdOut(input: InputStream, conf: HamaConfiguration) extends Actor
   } 
 }
 
-class StdErr(input: InputStream, conf: HamaConfiguration) extends Actor 
-                                                            with LogToFile {
+class StdErr(input: InputStream, conf: HamaConfiguration, process: ActorRef) 
+      extends Actor with LogToFile {
 
   val LOG = Logging(context.system, this)
   def error(msg: String, ioe: IOException) = LOG.error(msg, ioe)
   def warn(msg: String, ioe: IOException) = LOG.warning(msg, ioe)
+  def info(msg: String) = LOG.info(msg)
 
   def receive = {
     case StdErrMsg(logDir, logFile) => {
       if(redirect(conf)) logToConsole(input, conf) else {
         if(null != logDir && !logDir.isEmpty) {
           val logPath = new File(logDir, logFile+".err")
-          logStream(input, logPath) 
+          logStream(input, logPath, process) 
         } else LOG.warning("Invalid log dirrectory for stdout!")
       }
     }
@@ -203,10 +209,10 @@ class Process(conf: HamaConfiguration) extends Actor {
       val process = builder.start
       stdout = context.actorOf(Props(classOf[StdOut], 
                                      process.getInputStream, 
-                                     conf)) 
+                                     conf, self)) 
       stderr = context.actorOf(Props(classOf[StdErr], 
                                      process.getErrorStream, 
-                                     conf)) 
+                                     conf, self)) 
       val exitCode = process.waitFor
       if(0 != exitCode)
         throw new IOException("Child process exist with code = "+exitCode+
@@ -245,11 +251,17 @@ class Process(conf: HamaConfiguration) extends Actor {
     }
   }
 
+  def streamClosed: Receive = {
+    case StreamClosed => {
+      LOG.info("{} notify InputStream is closed!", sender.path.name)
+    }
+  }
+
   def unknown: Receive = {
     case msg@_=> LOG.warning("Unknown message {} for Executor", msg)
   }
 
-  def receive = fork orElse switchLog orElse unknown
+  def receive = fork orElse switchLog orElse streamClosed orElse unknown
      
 }
 

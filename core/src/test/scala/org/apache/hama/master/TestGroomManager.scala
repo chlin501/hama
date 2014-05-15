@@ -20,11 +20,11 @@ package org.apache.hama.master
 import akka.actor.ActorSystem
 import akka.actor.ActorRef
 import akka.event.Logging
-import org.apache.hama.HamaConfiguration
-import org.apache.hama.TestEnv
-import org.apache.hama.Request
-import org.apache.hama.groom._
 import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.groom._
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.Request
+import org.apache.hama.TestEnv
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
