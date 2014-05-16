@@ -34,13 +34,6 @@ import org.scalatest.junit.JUnitRunner
 
 class MockExecutor(conf: HamaConfiguration, ref: ActorRef) 
       extends Executor(conf) {
-
-  var command: Seq[String] = _
-
-  override def createProcess(cmd: Seq[String], conf: HamaConfiguration) {
-    command = cmd
-    LOG.info("command: {}", command)
-  }
   
   override def receive = super.receive
   

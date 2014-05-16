@@ -140,9 +140,12 @@ class Executor(conf: HamaConfiguration) extends Actor {
   val javacp: String  = System.getProperty("java.class.path")
   val logPath: String = System.getProperty("hama.log.dir")
   val operation = Operation.create(conf)
-  var stdout: ActorRef = _
-  var stderr: ActorRef = _
-  var process: Process = _
+  protected var stdout: ActorRef = _
+  protected var stderr: ActorRef = _
+  protected var isStdoutClosed = false
+  protected var isStderrClosed = false
+  protected var process: Process = _
+  protected var slotSeq: Int = -1
 
   /**
    * Pick up a port value configured in HamaConfiguration object. Otherwise
@@ -211,14 +214,18 @@ class Executor(conf: HamaConfiguration) extends Actor {
       process = builder.start
       stdout = context.actorOf(Props(classOf[StdOut], 
                                      process.getInputStream, 
-                                     conf, self)) 
+                                     conf, 
+                                     self),
+                               "stdout%s".format(slotSeq)) 
       stderr = context.actorOf(Props(classOf[StdErr], 
                                      process.getErrorStream, 
-                                     conf, self)) 
-      val exitCode = process.waitFor
-      if(0 != exitCode)
-        throw new IOException("Child process exist with code = "+exitCode+
-                              ", command = "+cmd.mkString(" ")+"!")
+                                     conf, 
+                                     self),
+                               "stderr%s".format(slotSeq)) 
+      //val exitCode = process.waitFor
+      //if(0 != exitCode)
+        //throw new IOException("Child process exist with code = "+exitCode+
+                              //", command = "+cmd.mkString(" ")+"!")
     } catch {
       case ioe: IOException => 
         LOG.error("Fail launching BSPPeerContainer process {}", ioe)
@@ -230,7 +237,12 @@ class Executor(conf: HamaConfiguration) extends Actor {
    * @return Receive partial function.
    */
   def fork: Receive = {
-    case Fork(slotSeq, conf) => fork(slotSeq, conf) 
+    case Fork(slotSeq, conf) => {
+      if(0 >= slotSeq) 
+        throw new IllegalArgumentException("Invalid slotSeq: "+slotSeq)
+      this.slotSeq = slotSeq
+      fork(slotSeq, conf) 
+    }
   } 
 
   def logDir(jobId: String): String = {
@@ -256,12 +268,26 @@ class Executor(conf: HamaConfiguration) extends Actor {
   def streamClosed: Receive = {
     case StreamClosed => {
       LOG.info("{} notify InputStream is closed!", sender.path.name)
+      if(sender.path.name.equals("stdout%s".format(slotSeq))) { 
+        isStdoutClosed = true
+      } else if(sender.path.name.equals("stderr%s".format(slotSeq))) {
+        isStderrClosed = true
+      }
+      if(isStdoutClosed && isStderrClosed) self ! StopProcess
     }
   }
 
   def stopProcess: Receive = {
     case StopProcess => {
-      if(null != process) process.destroy
+      if(null != process) {
+        if(!isStdoutClosed || !isStderrClosed) {
+          LOG.warning("Stdout or stderr is not yet closed for slot {}!", 
+                      slotSeq)
+        } else {
+          LOG.info("Destroy child process for slot seq {}", slotSeq)
+          process.destroy 
+        }
+      } else LOG.warning("Process instance is null!")
     }
   }
 

@@ -291,7 +291,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
           // TODO: create executor actor with different names 
           //       e.g. task attempt id so that actor won't collide and the 
           //       instance var e.g. process won't be the overriden.
-          //context.actorOf(Props(classOf[Executor], conf), task.getId.toString)
+          //context.actorOf(Props(classOf[Executor], conf), 
+          //                      groom-server-id+"_"+slot.seq.toString)
         //}
         // b. check if process is forked -> check seq if booked.
         // b1. if false, fork a new process else reuse it.
