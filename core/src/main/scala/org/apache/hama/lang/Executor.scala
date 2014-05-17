@@ -152,6 +152,7 @@ class Executor(conf: HamaConfiguration) extends Actor {
   /**
    * Pick up a port value configured in HamaConfiguration object. Otherwise
    * use default 50001.
+   * @param String of the port value.
    */
   def taskPort: String = {
     var port = "50001" 
@@ -177,23 +178,36 @@ class Executor(conf: HamaConfiguration) extends Actor {
   //      following execution e.g. LOG.info after conf.get disappers 
   def defaultOpts: String = conf.get("bsp.child.java.opts", "-Xmx200m")
 
+  /**
+   * Assemble java command for launching the child process.  
+   * @param cp is the classpath.
+   * @param slotSeq indicates to which slot this process belongs.
+   * @param child is the class used to launced the process.
+   * @return Seq[String] is the command for launching the process.
+   */
   def javaArgs(cp: String, slotSeq: Int, child: Class[_]): Seq[String] = {
     val java = new File(new File(javaHome, "bin"), "java").getCanonicalPath
     LOG.info("Java for slot seq {} is at {}", slotSeq, java)
     val opts = defaultOpts
     val bspClassName = child.getName
     val command = Seq(java) ++ Seq(opts) ++ 
-                  Seq("-classpath") ++ Seq(classpath(hamaHome)) ++
+                  Seq("-classpath") ++ Seq(classpath(hamaHome, cp)) ++
                   Seq(bspClassName) ++ 
                   Seq(taskPort) ++ Seq(slotSeq.toString)
     LOG.info("jvm args: {}", command.mkString(" "))
     command
   }
 
-  def classpath(hamaHome: String): String = {
+  /**
+   * Collect jar files found under ${HAMA_HOME}/lib to form the classpath 
+   * variable for the child process.
+   * @param hamaHome is pointed to hama home directory.
+   * @return String of classpath value.
+   */
+  def classpath(hamaHome: String, parentClasspath: String): String = {
     if(null == hamaHome) 
       throw new RuntimeException("Variable hama.home is not set!")
-    var cp = "./"
+    var cp = "./:%s".format(parentClasspath)
     val lib = new File(hamaHome, "lib")
     lib.listFiles(new FilenameFilter {
       def accept(dir: File, name: String): Boolean = {
@@ -203,18 +217,27 @@ class Executor(conf: HamaConfiguration) extends Actor {
         } 
         flag
       }
-    }).foreach( jar => {
-      cp += ":"+jar
-    })
+    }).foreach( jar => { cp += ":"+jar })
     LOG.debug("Classpath: {}", cp)
     cp
   }
 
+  /**
+   * Fork a child process based on command assembled.
+   * @param slotSeq indicate which seq the slot is.
+   * @param conf contains specific setting for creating child process.
+   */
   def fork(slotSeq: Int, conf: HamaConfiguration) {
     val cmd = javaArgs(javacp, slotSeq, classOf[BSPPeerContainer])
     createProcess(cmd, conf) 
   }
-  
+
+  /**
+   * Configure working directory, either be configuration's key 
+   * "bsp.working.dir" or file system's working directory.
+   * @param conf will store working directory configuration.
+   * @return String of working directory.
+   */  
   def defaultWorkingDirectory(conf: HamaConfiguration): String = {
     var workDir = conf.get("bsp.working.dir")
     if(null == workDir) {
