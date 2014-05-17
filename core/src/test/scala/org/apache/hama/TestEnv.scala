@@ -22,6 +22,8 @@ import akka.actor.ActorRef
 import akka.actor.Props
 import akka.testkit.TestKit
 import akka.testkit.TestProbe
+import java.io.File
+import org.apache.commons.io.FileUtils
 import org.apache.hama.util.Logger
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.FunSpecLike
@@ -38,7 +40,23 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
   val probe = TestProbe()
   val conf = new HamaConfiguration()
 
-  override protected def afterAll = system.shutdown
+  def testRoot: File = {
+    val tmpRoot = new File("/tmp/hama")
+    if(!tmpRoot.exists) tmpRoot.mkdirs
+    tmpRoot
+  }
+
+  def deleteTestRoot {
+    if(testRoot.exists) {
+      LOG.info("Delete test root path: "+testRoot.getCanonicalPath)
+      FileUtils.deleteDirectory(testRoot)
+    }
+  }
+
+  override protected def afterAll = {
+    deleteTestRoot
+    system.shutdown
+  }
 
   /**
    * Test configuration.

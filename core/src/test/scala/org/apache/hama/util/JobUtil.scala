@@ -117,19 +117,6 @@ trait JobUtil extends Logger {
 
   def fsQualified(path: Path): Path = op.getHDFS.makeQualified(path)
 
-  def testRoot: File = {
-    val tmpRoot = new File("/tmp/hama")
-    if(!tmpRoot.exists) tmpRoot.mkdirs
-    tmpRoot 
-  }
-  
-  def deleteTestRoot {
-    if(testRoot.exists) {
-      LOG.info("Delete test root path: "+testRoot.getPath)
-      FileUtils.deleteDirectory(testRoot)
-    }
-  }
-
   //* Below are Job related functions. *
 
   def createJobId(identifier: String, id: Int): BSPJobID =
@@ -181,7 +168,7 @@ trait JobUtil extends Logger {
   }
 
   @throws(classOf[Exception])
-  def createJobFile(content: String): File = { 
+  def createJobFile(content: String)(implicit testRoot: File): File = { 
     val tmpJobFile = File.createTempFile("temp_", ".xml", testRoot)
     FileUtils.writeStringToFile(tmpJobFile, content)
     tmpJobFile
@@ -196,7 +183,7 @@ trait JobUtil extends Logger {
                        .build
   }
 
-  def createJarPath(jar: String): File = new File(testRoot, jar)
+  def createJarPath(jar: String)(implicit testRoot: File): File = new File(testRoot, jar)
 
   def getSystemDir(conf: HamaConfiguration): Path = {
     val sysDir = new Path(conf.get("bsp.system.dir", "/tmp/hadoop/bsp/system"))

@@ -32,9 +32,20 @@ import org.junit.runner.RunWith
 import org.scalatest._
 import org.scalatest.junit.JUnitRunner
 
-class MockExecutor(conf: HamaConfiguration, ref: ActorRef) 
-      extends Executor(conf) {
-  
+final case class Created(slotSeq: Int, successful: Boolean)
+
+class MockExecutor(testConf: HamaConfiguration, tester: ActorRef) 
+      extends Executor(testConf) {
+
+  override def createProcess(cmd: Seq[String], conf: HamaConfiguration) {
+    super.createProcess(cmd, conf)
+    LOG.info("Is process created successfully? {}", process)
+    if(null == process) 
+      tester ! Created(slotSeq, false) 
+    else 
+      tester ! Created(slotSeq, true)
+  }
+
   override def receive = super.receive
   
 }
@@ -42,17 +53,31 @@ class MockExecutor(conf: HamaConfiguration, ref: ActorRef)
 @RunWith(classOf[JUnitRunner])
 class TestExecutor extends TestEnv(ActorSystem("TestExecutor")) {
 
-  var process: ActorRef = _
+  override protected def beforeAll = {
+    super.beforeAll
+    testConfiguration.set("bsp.working.dir", testRoot.getCanonicalPath)
+  }
 
-  override protected def afterAll = system.shutdown
+  override protected def afterAll = {
+    super.afterAll
+  }
+
+  def createProcess(name: String): ActorRef = {
+    LOG.info("Create actor: "+name)
+    createWithArgs(name, 
+                   classOf[MockExecutor], 
+                   testConfiguration, 
+                   tester)
+  }
 
   it("test forking a process") {
     LOG.info("Test forking a process...")
-    process = createWithArgs("process", 
-                              classOf[MockExecutor], 
-                              testConfiguration, 
-                              tester)
-    val slotSeq = 3
-    process ! Fork(slotSeq, conf)
+    val process1 = createProcess("process1")
+    val process2 = createProcess("process2")
+    val process3 = createProcess("process3")
+    process1 ! Fork(1, testConfiguration)
+    process2 ! Fork(2, testConfiguration)
+    process3 ! Fork(3, testConfiguration)
+    expectAnyOf(Created(1, true), Created(2, true), Created(3, true))
   }
 }

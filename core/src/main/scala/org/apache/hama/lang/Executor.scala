@@ -24,6 +24,7 @@ import akka.event.Logging
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
+import java.io.FilenameFilter
 import java.io.FileWriter
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -62,7 +63,7 @@ trait LogToFile {
     }
   }
 
-  def logStream(input: InputStream, logPath: File, process: ActorRef) {
+  def logStream(input: InputStream, logPath: File, executor: ActorRef) {
     var writer: BufferedWriter = null;
     try {
       writer = new BufferedWriter(new FileWriter(logPath))
@@ -79,12 +80,12 @@ trait LogToFile {
       try { input.close } catch { case ioe: IOException => }
       try { writer.close } catch { case ioe: IOException => }
       info("InputStream is closed!")
-      process ! StreamClosed 
+      executor ! StreamClosed 
     }
   }
 }
 
-class StdOut(input: InputStream, conf: HamaConfiguration, process: ActorRef) 
+class StdOut(input: InputStream, conf: HamaConfiguration, executor: ActorRef) 
       extends Actor with LogToFile {
 
   val LOG = Logging(context.system, this)
@@ -98,7 +99,7 @@ class StdOut(input: InputStream, conf: HamaConfiguration, process: ActorRef)
       if(redirect(conf)) logToConsole(input, conf) else {
         if(null != logDir && !logDir.isEmpty) {
           val logPath = new File(logDir, logFile+".log")
-          logStream(input, logPath, process) 
+          logStream(input, logPath, executor) 
         } else LOG.warning("Invalid log dirrectory for stdout!")
       }
     }
@@ -106,7 +107,7 @@ class StdOut(input: InputStream, conf: HamaConfiguration, process: ActorRef)
   } 
 }
 
-class StdErr(input: InputStream, conf: HamaConfiguration, process: ActorRef) 
+class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef) 
       extends Actor with LogToFile {
 
   val LOG = Logging(context.system, this)
@@ -119,7 +120,7 @@ class StdErr(input: InputStream, conf: HamaConfiguration, process: ActorRef)
       if(redirect(conf)) logToConsole(input, conf) else {
         if(null != logDir && !logDir.isEmpty) {
           val logPath = new File(logDir, logFile+".err")
-          logStream(input, logPath, process) 
+          logStream(input, logPath, executor) 
         } else LOG.warning("Invalid log dirrectory for stdout!")
       }
     }
@@ -137,7 +138,8 @@ class Executor(conf: HamaConfiguration) extends Actor {
   val pathSeparator = System.getProperty("path.separator")
   val fileSeparator = System.getProperty("file.separator")
   val javaHome = System.getProperty("java.home")
-  val javacp: String  = System.getProperty("java.class.path")
+  val hamaHome = System.getProperty("hama.home.dir")
+  val javacp: String  = "./:"+System.getProperty("java.class.path")
   val logPath: String = System.getProperty("hama.log.dir")
   val operation = Operation.create(conf)
   protected var stdout: ActorRef = _
@@ -175,19 +177,41 @@ class Executor(conf: HamaConfiguration) extends Actor {
   //      following execution e.g. LOG.info after conf.get disappers 
   def defaultOpts: String = conf.get("bsp.child.java.opts", "-Xmx200m")
 
-  def jvmArgs(cp: String, slotSeq: Int, child: Class[_]): Seq[String] = {
-    val java = new File(new File(javaHome, "bin"), "java").toString
-    val opts = defaultOpts.split(" ")
+  def javaArgs(cp: String, slotSeq: Int, child: Class[_]): Seq[String] = {
+    val java = new File(new File(javaHome, "bin"), "java").getCanonicalPath
+    LOG.info("Java for slot seq {} is at {}", slotSeq, java)
+    val opts = defaultOpts
     val bspClassName = child.getName
-    val command = Seq(java) ++ opts.toSeq ++ Seq("-classpath") ++ 
-                  Seq(cp) ++ Seq(bspClassName) ++ Seq(taskPort) ++ 
-                  Seq(slotSeq.toString)
-    LOG.info("jvm args: {}", command)
+    val command = Seq(java) ++ Seq(opts) ++ 
+                  Seq("-classpath") ++ Seq(classpath(hamaHome)) ++
+                  Seq(bspClassName) ++ 
+                  Seq(taskPort) ++ Seq(slotSeq.toString)
+    LOG.info("jvm args: {}", command.mkString(" "))
     command
   }
 
+  def classpath(hamaHome: String): String = {
+    if(null == hamaHome) 
+      throw new RuntimeException("Variable hama.home is not set!")
+    var cp = "./"
+    val lib = new File(hamaHome, "lib")
+    lib.listFiles(new FilenameFilter {
+      def accept(dir: File, name: String): Boolean = {
+        var flag = false
+        if(lib.equals(dir) && name.endsWith("jar")) {
+          flag = true
+        } 
+        flag
+      }
+    }).foreach( jar => {
+      cp += ":"+jar
+    })
+    LOG.debug("Classpath: {}", cp)
+    cp
+  }
+
   def fork(slotSeq: Int, conf: HamaConfiguration) {
-    val cmd = jvmArgs(javacp, slotSeq, classOf[BSPPeerContainer])
+    val cmd = javaArgs(javacp, slotSeq, classOf[BSPPeerContainer])
     createProcess(cmd, conf) 
   }
   
