@@ -33,7 +33,6 @@ import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
 final case class Args(port: Int, seq: Int, config: Config)
-//final case object Setup
 
 object BSPPeerContainer {
 
@@ -88,32 +87,33 @@ object BSPPeerContainer {
 
 /**
  * Launched BSP actor via forked process.
+ * @param conf contains setting sepcific to this service.
  */
 class BSPPeerContainer(conf: HamaConfiguration) extends LocalService 
                                             with RemoteService {
 
-   val taskManagerInfo = 
-     new ProxyInfo.Builder().withConfiguration(conf).
-                             withActorName("taskManager").
-                             appendRootPath("groomServer"). // TODO: from conf
-                             appendChildPath("taskManager").
+   val groomName = configuration.get("bsp.groom.name", "groomServer")
+   val executorInfo = 
+     new ProxyInfo.Builder().withConfiguration(configuration).
+                             withActorName(executorName).
+                             appendRootPath(groomName). 
+                             appendChildPath(executorName). 
                              buildProxyAtGroom
-   val taskManagerPath = taskManagerInfo.getPath
-   var taskManager: ActorRef = _
-   //var cancellable: Cancellable = _
-
+   val executorPath = executorInfo.getPath
+   var executor: ActorRef = _
    override def configuration: HamaConfiguration = conf
+   def executorName: String = groomName+"_executor_"+slotSeq
+   def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", 1)
 
-   override def name: String = 
-     "bspPeerContainer%s".format(conf.getInt("bsp.child.slot.seq", 1))
+   override def name: String = "bspPeerContainer%s".format(slotSeq)
  
    override def initializeServices {
-     lookup("taskManager", taskManagerPath)
+     lookup(executorName, executorPath)
    }
 
    override def afterLinked(proxy: ActorRef) {
-     taskManager = proxy
-     taskManager ! ContainerIsActive
+     executor = proxy
+     executor ! ContainerReady
    }
 
    def processTask: Receive = {
@@ -123,5 +123,17 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
      }
    }
 
-   override def receive = processTask orElse isProxyReady orElse timeout orElse unknown
+   def close {
+   }
+
+   def exit: Receive = {
+     case Exit => {
+       LOG.info("Stop everything before exiting programme {} ...", name)
+       close 
+       LOG.info("Shutdown BSPContainer system ...")
+       context.system.shutdown
+     }
+   }
+
+   override def receive = exit orElse processTask orElse isProxyReady orElse timeout orElse unknown
 }

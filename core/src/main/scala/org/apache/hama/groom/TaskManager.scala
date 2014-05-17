@@ -33,8 +33,6 @@ import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-final case object ContainerIsActive
-
 class TaskManager(conf: HamaConfiguration) extends LocalService 
                                            with RemoteService {
 
@@ -159,14 +157,14 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         if(!hasTaskInQueue) { 
           LOG.debug("Request {} for assigning new tasks ...", getSchedulerPath)
           sched ! RequestTask(currentGroomServerStat)
-        } else {
+        } /*else {
           LOG.debug("{} tasks in queue, process them first!", queue.size)
           val (directive, rest) = queue.dequeue
           if(null == directive)
             throw new NullPointerException("Dequeued directive is null!")
           matchThenExecute(directive.action, directive.master, 
                            directive.timestamp, directive.task)
-        }
+        } */
       } 
     }
   }
@@ -217,6 +215,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         if(hasFreeSlots) {
           if(hasTaskInQueue) {
             queue = queue.enqueue(directive)
+/* TODO: change to let executor *3 auto pull task from queue whenever they are
+         ready! So matchThenExecute is not needed in TaskManager.
             val (first, rest) = queue.dequeue
 
             LOG.info("Execute task {} in queue, which is sent from {} "+
@@ -224,13 +224,14 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
                      first.action, first.timestamp) 
             matchThenExecute(first.action, first.master, first.timestamp, 
                              first.task)
-          } else {
+*/
+          } /*else {
             LOG.info("Execute task {} sent from {} with action {} at {}", 
                      directive.task.getId , directive.master, 
                      directive.action, directive.timestamp) 
             matchThenExecute(directive.action, directive.master, 
                              directive.timestamp, directive.task)
-          }
+          }*/
         } else {
           val task: Task = directive.task  
           if(null != task) 
@@ -240,18 +241,6 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         }
       } else LOG.warning("Directive dispatched from {} is null!", 
                          sender.path.name)
-    }
-  }
-
-  /**
-   * A notification when a container/ process is ready.
-   */
-  def containerIsActive: Receive = {
-    case ContainerIsActive => {
-      LOG.info("{} is ready for processing a task!", sender.path.name)
-      val forked = sender
-      children ++= Map(sender.path.name -> forked)// cache actorRef
-      // TODO: start assigning a task
     }
   }
 
@@ -280,7 +269,6 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   /**
    * Match an action from the {@link Directive} supplied, then execute
    * the task by forking a process if needed.
-   */
   private def matchThenExecute(action: Action, master: String, 
                                timestamp: Long, task: Task) {
     action.value match {
@@ -292,7 +280,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
           //       e.g. task attempt id so that actor won't collide and the 
           //       instance var e.g. process won't be the overriden.
           //context.actorOf(Props(classOf[Executor], conf), 
-          //                      groom-server-id+"_"+slot.seq.toString)
+          //                      groom-name+"_executor_"+slot.seq.toString)
         //}
         // b. check if process is forked -> check seq if booked.
         // b1. if false, fork a new process else reuse it.
@@ -306,4 +294,6 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
       case _ => LOG.warning("Unknown action value "+action)
     }
   }
+   */
+
 }
