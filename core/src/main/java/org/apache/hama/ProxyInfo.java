@@ -70,21 +70,24 @@ public final class ProxyInfo extends SystemInfo implements Writable {
 
     public Builder withActorPath(final String fullPath) {
       assertPath(fullPath);
-      this.actorPath.append(actorPath);
+      this.actorPath = new StringBuilder(actorPath);
       return this;
     }
 
     public Builder appendRootPath(final String root) {
+      if(!this.actorPath.toString().isEmpty())
+        throw new RuntimeException("Actro path is already defind: "+
+                                   this.actorPath.toString());
       this.actorPath.append(root);
       return this;
     }
 
     public Builder appendChildPath(final String child) {
-      if(0 >= this.actorPath.length()) 
+      if(this.actorPath.toString().isEmpty()) 
         throw new RuntimeException("Root actor path is missing!");
       if(null == child || child.startsWith("/"))
-        throw new IllegalArgumentException("Child actor path can't be null "+
-                                           "start with '/'");
+        throw new IllegalArgumentException("Child actor path can't be null or"+
+                                           " started with '/'");
       this.actorPath.append("/"+child);
       return this;
     }

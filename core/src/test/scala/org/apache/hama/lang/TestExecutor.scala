@@ -17,67 +17,193 @@
  */
 package org.apache.hama.lang
 
+import akka.actor.Actor
 import akka.actor.ActorRef
+import akka.event.Logging
 import akka.actor.ActorSystem
-import org.apache.commons.io.FileUtils
-import org.apache.commons.logging.Log
-import org.apache.commons.logging.LogFactory
-import org.apache.hama._
-import org.apache.hama.groom._
-import org.apache.hama.bsp.BSPJobID
-import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.bsp.v2._
-import org.apache.hama.bsp.v2.IDCreator._
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
+import org.apache.hama.TestEnv
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.groom.BSPPeerContainer
+import org.apache.hama.groom.ContainerReady
+import org.apache.hama.groom.ContainerStopped
+import org.apache.hama.groom.MockContainer
+import org.apache.hama.groom.ShutdownSystem
+import org.apache.hama.groom.TaskManager
 import org.junit.runner.RunWith
-import org.scalatest._
 import org.scalatest.junit.JUnitRunner
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 
-final case class Created(slotSeq: Int, successful: Boolean)
+final case class Add(e: ActorRef)
 
-class MockExecutor(testConf: HamaConfiguration, tester: ActorRef) 
-      extends Executor(testConf) {
+class Aggregator(conf: HamaConfiguration, tester: ActorRef) 
+      extends TaskManager(conf) {
 
-  override def createProcess(cmd: Seq[String], conf: HamaConfiguration) {
-    super.createProcess(cmd, conf)
-    LOG.info("Is process created successfully? {}", process)
-    if(null == process) 
-      tester ! Created(slotSeq, false) 
-    else 
-      tester ! Created(slotSeq, true)
+  var e1_notified = false
+  var e2_notified = false
+  var e3_notified = false
+
+  var executors = Set.empty[ActorRef]
+
+  override def initializeServices { }
+
+  def add: Receive = {
+    case Add(e) => {
+      executors += e
+      LOG.info("{} is added. Now executors size is {}", 
+               e.path.name, executors.size)
+    }
   }
 
-  override def receive = super.receive
-  
-}
+  def reg: Receive = {
+    case "register" => {
+      executors.foreach( e => e ! Register)
+      LOG.info("Register all executors to BSPPeerContainers ...")
+    }
+  }
+
+  def fork: Receive = {
+    case "fork" => {
+      executors.foreach( e => e.path.name match {
+        case "groomServer_executor_1" => { 
+          e ! Fork(1, configuration); Thread.sleep(3*1000)
+        }
+        case "groomServer_executor_2" => {
+          e ! Fork(2, configuration); Thread.sleep(3*1000)
+        }
+        case "groomServer_executor_3" => {
+          e ! Fork(3, configuration); Thread.sleep(3*1000)
+        }
+        case rest@_ => 
+          throw new RuntimeException("Unknown executor "+rest) 
+      })
+    }
+  }
+
+  def readyx: Receive = {
+    case ContainerReady => {
+      LOG.info("Container {} replies it's ready!", sender.path.name)
+      tester ! sender.path.name+"_ready"
+    }
+  }
+
+  def stopAll: Receive = {
+    case "stopAll" => {
+      executors.foreach( e =>  e ! StopProcess)
+      LOG.info("Send StopProcess message to all BSPPeerCotnainer ...")
+    }  
+  }
+
+  def stopped: Receive = {
+    case ContainerStopped => tester ! sender.path.name+"_container_stopped"
+  }
+
+  def shut: Receive = {
+    case "shutdown" => {
+      executors.foreach( e => e ! ShutdownSystem)
+    }
+  }
+
+  override def receive = shut orElse add orElse reg orElse fork orElse readyx orElse stopAll orElse stopped orElse super.receive
+} 
+
+object WithRemoteSetting {
+  def toConfig: Config = {
+    ConfigFactory.parseString("""
+      akka {
+        actor {
+          provider = "akka.remote.RemoteActorRefProvider"
+          serializers {
+            java = "akka.serialization.JavaSerializer"
+            proto = "akka.remote.serialization.ProtobufSerializer"
+            writable = "org.apache.hama.io.serialization.WritableSerializer"
+          }
+          serialization-bindings {
+            "com.google.protobuf.Message" = proto
+            "org.apache.hadoop.io.Writable" = writable
+          }
+        }
+        remote {
+          netty.tcp {
+            hostname = "127.0.0.1" 
+            port = 50000
+          }
+        }
+      }
+    """)
+  }
+} 
 
 @RunWith(classOf[JUnitRunner])
-class TestExecutor extends TestEnv(ActorSystem("TestExecutor")) {
+class TestExecutor extends TestEnv(ActorSystem("TestExecutor", 
+                                               WithRemoteSetting.toConfig)) {
 
   override protected def beforeAll = {
     super.beforeAll
     testConfiguration.set("bsp.working.dir", testRoot.getCanonicalPath)
-  }
-
-  override protected def afterAll = {
-    super.afterAll
+    testConfiguration.setClass("bsp.child.class", classOf[MockContainer],
+                               classOf[BSPPeerContainer])
   }
 
   def createProcess(name: String): ActorRef = {
-    LOG.info("Create actor: "+name)
-    createWithArgs(name, 
-                   classOf[MockExecutor], 
-                   testConfiguration, 
-                   tester)
+    LOG.info("Create actor "+name+" ...")
+    createWithArgs(name, classOf[Executor], testConfiguration)
   }
 
   it("test forking a process") {
     LOG.info("Test forking a process...")
-    val process1 = createProcess("process1")
-    val process2 = createProcess("process2")
-    val process3 = createProcess("process3")
-    process1 ! Fork(1, testConfiguration)
-    process2 ! Fork(2, testConfiguration)
-    process3 ! Fork(3, testConfiguration)
-    expectAnyOf(Created(1, true), Created(2, true), Created(3, true))
+    val e1 = createProcess("groomServer_executor_1")
+    val e2 = createProcess("groomServer_executor_2")
+    val e3 = createProcess("groomServer_executor_3")
+    val taskManagerName = 
+      testConfiguration.get("bsp.groom.taskmanager.name", "taskManager")
+    val aggregator = createWithTester(taskManagerName, classOf[Aggregator]) 
+    aggregator ! Add(e1) 
+    aggregator ! Add(e2) 
+    aggregator ! Add(e3) 
+
+    aggregator ! "register"
+  
+    aggregator ! "fork"
+
+    LOG.info("Wait 20 seconds for child process being started up.")
+    sleep(20.seconds)
+  
+    expectAnyOf("groomServer_executor_1_ready", "groomServer_executor_2_ready",
+                "groomServer_executor_3_ready")
+
+    expectAnyOf("groomServer_executor_1_ready", "groomServer_executor_2_ready",
+                "groomServer_executor_3_ready")
+
+    expectAnyOf("groomServer_executor_1_ready", "groomServer_executor_2_ready",
+                "groomServer_executor_3_ready")
+
+    LOG.info("Wait 3 seconds before calling stopAll.")
+    sleep(3.seconds)
+
+    aggregator ! "stopAll"
+
+    LOG.info("Wait 3 seconds for child process to be stopped.")
+    sleep(3.seconds)
+
+    expectAnyOf("groomServer_executor_1_container_stopped", 
+                "groomServer_executor_2_container_stopped", 
+                "groomServer_executor_3_container_stopped")
+
+    expectAnyOf("groomServer_executor_1_container_stopped", 
+                "groomServer_executor_2_container_stopped", 
+                "groomServer_executor_3_container_stopped")
+
+    expectAnyOf("groomServer_executor_1_container_stopped", 
+                "groomServer_executor_2_container_stopped", 
+                "groomServer_executor_3_container_stopped")
+
+    aggregator ! "shutdown"
+
+    sleep(3.seconds)
+
+    LOG.info("Done!")
   }
 }

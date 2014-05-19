@@ -73,15 +73,24 @@ object BSPPeerContainer {
     Args(port, seq, config)
   }
 
-  @throws(classOf[Throwable])
-  def main(args: Array[String]) {
+  def initialize(args: Array[String]): (ActorSystem, HamaConfiguration, Int) = {
     val defaultConf = new HamaConfiguration()
     val arguments = toArgs(args)
     val system = ActorSystem("BSPPeerSystem%s".format(arguments.seq), 
                              arguments.config)
     defaultConf.setInt("bsp.child.slot.seq", arguments.seq)
-    system.actorOf(Props(classOf[BSPPeerContainer], defaultConf), 
-                   "bspPeerContainer%s".format(arguments.seq))
+    (system, defaultConf, arguments.seq)
+  }
+
+  def launch(system: ActorSystem, conf: HamaConfiguration, seq: Int) {
+    system.actorOf(Props(classOf[BSPPeerContainer], conf), 
+                   "bspPeerContainer%s".format(seq))
+  }
+
+  @throws(classOf[Throwable])
+  def main(args: Array[String]) = {
+    val (sys, conf, seq)= initialize(args)
+    launch(sys, conf, seq)
   }
 }
 
@@ -90,20 +99,26 @@ object BSPPeerContainer {
  * @param conf contains setting sepcific to this service.
  */
 class BSPPeerContainer(conf: HamaConfiguration) extends LocalService 
-                                            with RemoteService {
+                                                with RemoteService {
 
    val groomName = configuration.get("bsp.groom.name", "groomServer")
-   val executorInfo = 
+   //val executorInfo = createProxy
+   //val executorPath = executorInfo.getPath
+   protected var executor: ActorRef = _
+   override def configuration: HamaConfiguration = conf
+   def executorName: String = groomName+"_executor_"+slotSeq
+   def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", 1)
+
+   // TODO: refactor for easier proxy lookup!
+   protected def executorInfo: ProxyInfo = { 
      new ProxyInfo.Builder().withConfiguration(configuration).
                              withActorName(executorName).
                              appendRootPath(groomName). 
                              appendChildPath(executorName). 
                              buildProxyAtGroom
-   val executorPath = executorInfo.getPath
-   var executor: ActorRef = _
-   override def configuration: HamaConfiguration = conf
-   def executorName: String = groomName+"_executor_"+slotSeq
-   def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", 1)
+   }
+
+   protected def executorPath: String = executorInfo.getPath
 
    override def name: String = "bspPeerContainer%s".format(slotSeq)
  
@@ -114,6 +129,8 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    override def afterLinked(proxy: ActorRef) {
      executor = proxy
      executor ! ContainerReady
+     LOG.debug("Slot seq {} sends ContainerReady to {}", 
+               slotSeq, executor.path.name)
    }
 
    /**
@@ -131,7 +148,14 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     * A function to close all necessary operations before shutting down the 
     * system.
     */
-   def close { }
+   protected def close { 
+     LOG.info("Stop related operations before exiting programme {} ...", name)
+     context.unwatch(executor)
+   }
+
+   override def postStop {
+     close
+   }
 
    /**
     * Close all related process operations and then shutdown the actor system.
@@ -139,12 +163,17 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     */
    def stopContainer: Receive = {
      case StopContainer => {
-       LOG.info("Stop everything before exit programme {} ...", name)
-       close 
-       LOG.info("Shutdown BSPContainer system ...")
+       executor ! ContainerStopped  
+       LOG.debug("Send ContainerStopped message ...")
+     }
+   }
+
+   def shutdownSystem: Receive = {
+     case ShutdownSystem => {
+       LOG.info("Completely shutdown BSPContainer system ...")
        context.system.shutdown
      }
    }
 
-   override def receive = stopContainer orElse processTask orElse isProxyReady orElse timeout orElse unknown
+   override def receive = shutdownSystem orElse stopContainer orElse processTask orElse isProxyReady orElse timeout orElse unknown
 }

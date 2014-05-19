@@ -35,69 +35,28 @@ import org.apache.commons.lang.math.NumberUtils
 import org.apache.hadoop.io.IOUtils
 import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.groom.ContainerReady
+import org.apache.hama.groom.ContainerStopped
 import org.apache.hama.groom.StopContainer
+import org.apache.hama.groom.ShutdownSystem
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.fs.Operation
 import org.apache.hama.util.BSPNetUtils
 import scala.collection.JavaConversions._
 
 final case class Fork(slotSeq: Int, conf: HamaConfiguration)
-//final case class StdOutMsg(logDir: String, logFile: String) 
-//final case class StdErrMsg(logDir: String, logFile: String)
-//final case class LogWith(jobId: String, taskAttemptId: String)
 final case object StreamClosed
 final case object StopProcess
 
-/*
-trait LogToFile {
-
-  def error(msg: String, e: IOException) 
-  def warn(msg: String, e: IOException)
-  def info(msg: String)
-
-  def redirect(conf: HamaConfiguration): Boolean = 
-    conf.getBoolean("hama.child.redirect.log.console", false)
-
-  def logToConsole(input: InputStream, conf: HamaConfiguration) {
-    try {
-      IOUtils.copyBytes(input, System.out, conf)
-    } catch {
-      case ioe: IOException => error("Fail logging to console", ioe)
-    }
-  }
-
-  def logStream(input: InputStream, logPath: File, executor: ActorRef) {
-    var writer: BufferedWriter = null;
-    try {
-      writer = new BufferedWriter(new FileWriter(logPath))
-      var in: BufferedReader = new BufferedReader(new InputStreamReader(input))
-      var line: String = null
-      while ({line = in.readLine; null != line}) {
-        writer.write(line)
-        writer.newLine
-      }
-    } catch {
-      case ioe: IOException => 
-        error("Fail logging to %s".format(logPath.toString), ioe)
-    } finally {
-      try { input.close } catch { case ioe: IOException => }
-      try { writer.close } catch { case ioe: IOException => }
-      info("InputStream is closed!")
-      executor ! StreamClosed 
-    }
-  }
-}
-*/
-
-class StdOut(input: InputStream,/*conf: HamaConfiguration,*/executor: ActorRef) 
-      extends Actor { /*with LogToFile */
-
+class StdOut(input: InputStream, executor: ActorRef) extends Actor { 
+  import scala.language.postfixOps
   val LOG = Logging(context.system, this)
-
+  val out = new java.io.FileOutputStream("/tmp/"+executor.path.name+".log")
   override def preStart {
-    try { Iterator.continually(input.read).takeWhile(-1!=_) } 
-    catch { case e: Exception => LOG.error("Fail reading stdout {}.", e) }
-    finally { 
+    try { 
+      Iterator.continually(input.read).takeWhile(-1!=).foreach(out.write) 
+    } catch { 
+      case e: Exception => LOG.error("Fail reading stdout {}.", e) 
+    } finally { 
       input.close 
       executor ! StreamClosed 
     }
@@ -106,61 +65,27 @@ class StdOut(input: InputStream,/*conf: HamaConfiguration,*/executor: ActorRef)
   override def receive = { 
     case msg@_ => LOG.warning("Unknown stdout message {}", msg)
   }
-
-/*
-  def error(msg: String, ioe: IOException) = LOG.error(msg, ioe)
-  def warn(msg: String, ioe: IOException) = LOG.warning(msg, ioe)
-  def info(msg: String) = LOG.info(msg)
-
-  def receive = {
-    case StdOutMsg(logDir, logFile) => { 
-      if(redirect(conf)) logToConsole(input, conf) else {
-        if(null != logDir && !logDir.isEmpty) {
-          val logPath = new File(logDir, logFile+".log")
-          logStream(input, logPath, executor) 
-        } else LOG.warning("Invalid log dirrectory for stdout!")
-      }
-    }
-    case msg@_ => LOG.warning("Unknown stdout message {}", msg)
-  } 
-*/
 }
 
-class StdErr(input: InputStream,/*conf: HamaConfiguration,*/executor: ActorRef) 
-      extends Actor /*with LogToFile*/ {
-
+class StdErr(input: InputStream, executor: ActorRef) extends Actor {
+  import scala.language.postfixOps
   val LOG = Logging(context.system, this)
+  val out = new java.io.FileOutputStream("/tmp/"+executor.path.name+".err")
 
   override def preStart {
-    try { Iterator.continually(input.read).takeWhile(-1!=_) } 
-    catch { case e: Exception => LOG.error("Fail reading stderr {}.", e) }
-    finally { 
+    try { 
+      Iterator.continually(input.read).takeWhile(-1!=).foreach(out.write) 
+    } catch { 
+      case e: Exception => LOG.error("Fail reading stderr {}.", e) 
+    } finally { 
       input.close 
-      executor ! StreamClosed 
+      //executor ! StreamClosed 
     }
   }
 
   override def receive = { 
     case msg@_ => LOG.warning("Unknown stderr message {}", msg)
   }
-
-/*
-  def error(msg: String, ioe: IOException) = LOG.error(msg, ioe)
-  def warn(msg: String, ioe: IOException) = LOG.warning(msg, ioe)
-  def info(msg: String) = LOG.info(msg)
-
-  def receive = {
-    case StdErrMsg(logDir, logFile) => {
-      if(redirect(conf)) logToConsole(input, conf) else {
-        if(null != logDir && !logDir.isEmpty) {
-          val logPath = new File(logDir, logFile+".err")
-          logStream(input, logPath, executor) 
-        } else LOG.warning("Invalid log dirrectory for stdout!")
-      }
-    }
-    case msg@_ => LOG.warning("Unknown stderr message {}", msg)
-  } 
-*/
 }
 
 /**
@@ -176,7 +101,9 @@ class Executor(conf: HamaConfiguration) extends Actor {
   val hamaHome = System.getProperty("hama.home.dir")
   val javacp: String  = "./:"+System.getProperty("java.class.path")
   val logPath: String = System.getProperty("hama.log.dir")
+  val taskManagerName = conf.get("bsp.groom.taskmanager.name", "taskManager") 
   val operation = Operation.create(conf)
+  protected var taskManagerListener: ActorRef = _
   protected var bspPeerContainer: ActorRef =_
   protected var stdout: ActorRef = _
   protected var stderr: ActorRef = _
@@ -191,22 +118,8 @@ class Executor(conf: HamaConfiguration) extends Actor {
    * @param String of the port value.
    */
   def taskPort: String = {
-    var port = "50001" 
-    val ports = conf.getStrings("bsp.child.port", "50001")
-    if(1 != ports.length) {
-      var cont = true
-      ports.takeWhile( p => {
-        if(NumberUtils.isDigits(p)) {
-          if(BSPNetUtils.available(p.toInt)) {
-            port = p
-            cont = false
-          }
-        } 
-        cont
-      })
-    } else {
-      port = ports(0)
-    }
+    val port = BSPNetUtils.getFreePort(50002).toString
+    LOG.debug("Port value to be used is {}", port)
     port
   }
 
@@ -223,7 +136,7 @@ class Executor(conf: HamaConfiguration) extends Actor {
    */
   def javaArgs(cp: String, slotSeq: Int, child: Class[_]): Seq[String] = {
     val java = new File(new File(javaHome, "bin"), "java").getCanonicalPath
-    LOG.info("Java for slot seq {} is at {}", slotSeq, java)
+    LOG.debug("Java for slot seq {} is at {}", slotSeq, java)
     val opts = defaultOpts
     val bspClassName = child.getName
     val command = Seq(java) ++ Seq(opts) ++ 
@@ -237,12 +150,12 @@ class Executor(conf: HamaConfiguration) extends Actor {
   /**
    * Collect jar files found under ${HAMA_HOME}/lib to form the classpath 
    * variable for the child process.
-   * @param hamaHome is pointed to hama home directory.
+   * @param hamaHome is pointed to hama home.dir directory.
    * @return String of classpath value.
    */
   def classpath(hamaHome: String, parentClasspath: String): String = {
     if(null == hamaHome) 
-      throw new RuntimeException("Variable hama.home is not set!")
+      throw new RuntimeException("Variable hama.home.dir is not set!")
     var cp = "./:%s".format(parentClasspath)
     val lib = new File(hamaHome, "lib")
     lib.listFiles(new FilenameFilter {
@@ -264,7 +177,10 @@ class Executor(conf: HamaConfiguration) extends Actor {
    * @param conf contains specific setting for creating child process.
    */
   def fork(slotSeq: Int, conf: HamaConfiguration) {
-    val cmd = javaArgs(javacp, slotSeq, classOf[BSPPeerContainer])
+    val containerClass = 
+      conf.getClass("bsp.child.class", classOf[BSPPeerContainer])
+    LOG.debug("Container class to be instantiated is {}", containerClass)
+    val cmd = javaArgs(javacp, slotSeq, containerClass)
     createProcess(cmd, conf) 
   }
 
@@ -278,10 +194,11 @@ class Executor(conf: HamaConfiguration) extends Actor {
     var workDir = conf.get("bsp.working.dir")
     if(null == workDir) {
       val fsDir = operation.getWorkingDirectory
-      LOG.info("Use file system's working directory {}", fsDir.toString)
+      LOG.debug("Use file system's working directory {}", fsDir.toString)
       conf.set("bsp.working.dir", fsDir.toString)
       workDir = fsDir.toString
     }
+    LOG.debug("Working directory for slot {} is set to {}", slotSeq, workDir)
     workDir
   }
 
@@ -297,21 +214,32 @@ class Executor(conf: HamaConfiguration) extends Actor {
       process = builder.start
       stdout = context.actorOf(Props(classOf[StdOut], 
                                      process.getInputStream, 
-                                     //conf, 
                                      self),
                                "stdout%s".format(slotSeq)) 
       stderr = context.actorOf(Props(classOf[StdErr], 
                                      process.getErrorStream, 
-                                     //conf, 
                                      self),
                                "stderr%s".format(slotSeq)) 
-      //val exitCode = process.waitFor
-      //if(0 != exitCode)
-        //throw new IOException("Child process exist with code = "+exitCode+
-                              //", command = "+cmd.mkString(" ")+"!")
     } catch {
       case ioe: IOException => 
         LOG.error("Fail launching BSPPeerContainer process {}", ioe)
+    }
+  }
+
+  /**
+   * Taks manager register itself for notification.
+   * @return Receive is partial function.
+   */
+  def register: Receive = {
+    case Register => {
+      sender.path.name match {
+        case `taskManagerName` => {
+          taskManagerListener = sender
+          LOG.info("TaskManager {} registers.", taskManagerListener.path.name)
+        }
+        case rest@_ => LOG.warning("Only accept task manager but {} found.", 
+                                   rest)
+      }
     }
   }
 
@@ -328,40 +256,19 @@ class Executor(conf: HamaConfiguration) extends Actor {
     }
   } 
 
-  def logDir(jobId: String): String = {
-    val log = new File(logPath + fileSeparator + "tasklogs" + fileSeparator + 
-                       jobId);
-    if (!log.exists) log.mkdirs
-    log.toString
-  }
-
-  //def stdoutAndStderrExists: Boolean = (null != stdout && null != stderr)
-
-/*
-  def switchLog: Receive = {
-    case LogWith(jobId, taskAttemptId) => { 
-      if(null != jobId && !jobId.isEmpty) {
-        if(stdoutAndStderrExists) {
-          stdout ! StdOutMsg(logDir(jobId), taskAttemptId)
-          stderr ! StdErrMsg(logDir(jobId), taskAttemptId)
-        } else LOG.warning("Standard out or standard err is missing!")
-      } else LOG.warning("Unknown logging path!")
-    }
-  }
-*/
-
   /**
    * Once the stream, including input and error stream, is closed, the system
    * will destroy process automatically.
    */
   def streamClosed: Receive = {
     case StreamClosed => {
-      LOG.info("{} notify InputStream is closed!", sender.path.name)
+      LOG.info("{} notifies InputStream is closed!", sender.path.name)
       if(sender.path.name.equals("stdout%s".format(slotSeq))) { 
         isStdoutClosed = true
       } else if(sender.path.name.equals("stderr%s".format(slotSeq))) {
         isStderrClosed = true
-      }
+      } else LOG.warning("Unknown sender ask for closing stream {}.", 
+                         sender.path.name)
       if(isStdoutClosed && isStderrClosed) self ! StopProcess
     }
   }
@@ -371,7 +278,24 @@ class Executor(conf: HamaConfiguration) extends Actor {
    * @return Receive is partial function.
    */
   def containerReady: Receive = {
-    case ContainerReady => bspPeerContainer = sender
+    case ContainerReady => {
+      bspPeerContainer = sender
+      if(null != taskManagerListener) {
+        LOG.info("Notify {} ContainerReady by {}", 
+                 taskManagerListener.path.name, self.path.name)
+        taskManagerListener ! ContainerReady
+      }
+    }
+  }
+
+  /**
+   * Notify when BSPPeerContainer is stopped.
+   * @return Receive is partial function.
+   */
+  def containerStopped: Receive = {
+    case ContainerStopped => {
+      if(null != taskManagerListener) taskManagerListener ! ContainerStopped
+    }
   }
 
   /**
@@ -383,18 +307,18 @@ class Executor(conf: HamaConfiguration) extends Actor {
       if(null != bspPeerContainer) 
         bspPeerContainer ! StopContainer 
       else 
-        LOG.warning("BSPPeerContainer for slot {} is not yet ready.", slotSeq)
-/*
-      if(null != process) {
-        if(!isStdoutClosed || !isStderrClosed) {
-          LOG.warning("Stdout or stderr is not yet closed for slot {}!", 
-                      slotSeq)
-        } else {
-          LOG.info("Destroy child process for slot seq {}", slotSeq)
-          process.destroy 
-        }
-      } else LOG.warning("Process instance is null!")
-*/
+        LOG.warning("Can't stop BSPPeerContainer for slot {} is not yet "+
+                    "ready.", slotSeq)
+    }
+  }
+
+  def shutdownSystem: Receive = {
+    case ShutdownSystem => {
+      if(null != bspPeerContainer) 
+        bspPeerContainer ! ShutdownSystem 
+      else 
+        LOG.warning("Can't shutdown because BSPPeerContainer for slot {} is "+ 
+                    "not ready.", slotSeq)
     }
   }
 
@@ -402,7 +326,7 @@ class Executor(conf: HamaConfiguration) extends Actor {
     case msg@_=> LOG.warning("Unknown message {} for Executor", msg)
   }
 
-  def receive = fork /*orElse switchLog*/ orElse containerReady orElse streamClosed orElse stopProcess orElse unknown
+  def receive = register orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse shutdownSystem orElse unknown
      
 }
 
