@@ -34,18 +34,21 @@ import java.lang.ProcessBuilder
 import org.apache.commons.lang.math.NumberUtils
 import org.apache.hadoop.io.IOUtils
 import org.apache.hama.groom.BSPPeerContainer
+import org.apache.hama.groom.ContainerReady
+import org.apache.hama.groom.StopContainer
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.fs.Operation
 import org.apache.hama.util.BSPNetUtils
 import scala.collection.JavaConversions._
 
 final case class Fork(slotSeq: Int, conf: HamaConfiguration)
-final case class StdOutMsg(logDir: String, logFile: String) 
-final case class StdErrMsg(logDir: String, logFile: String)
-final case class LogWith(jobId: String, taskAttemptId: String)
+//final case class StdOutMsg(logDir: String, logFile: String) 
+//final case class StdErrMsg(logDir: String, logFile: String)
+//final case class LogWith(jobId: String, taskAttemptId: String)
 final case object StreamClosed
 final case object StopProcess
 
+/*
 trait LogToFile {
 
   def error(msg: String, e: IOException) 
@@ -84,12 +87,27 @@ trait LogToFile {
     }
   }
 }
+*/
 
-class StdOut(input: InputStream, conf: HamaConfiguration, executor: ActorRef) 
-      extends Actor with LogToFile {
+class StdOut(input: InputStream,/*conf: HamaConfiguration,*/executor: ActorRef) 
+      extends Actor { /*with LogToFile */
 
   val LOG = Logging(context.system, this)
 
+  override def preStart {
+    try { Iterator.continually(input.read).takeWhile(-1!=_) } 
+    catch { case e: Exception => LOG.error("Fail reading stdout {}.", e) }
+    finally { 
+      input.close 
+      executor ! StreamClosed 
+    }
+  }
+
+  override def receive = { 
+    case msg@_ => LOG.warning("Unknown stdout message {}", msg)
+  }
+
+/*
   def error(msg: String, ioe: IOException) = LOG.error(msg, ioe)
   def warn(msg: String, ioe: IOException) = LOG.warning(msg, ioe)
   def info(msg: String) = LOG.info(msg)
@@ -105,12 +123,28 @@ class StdOut(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
     }
     case msg@_ => LOG.warning("Unknown stdout message {}", msg)
   } 
+*/
 }
 
-class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef) 
-      extends Actor with LogToFile {
+class StdErr(input: InputStream,/*conf: HamaConfiguration,*/executor: ActorRef) 
+      extends Actor /*with LogToFile*/ {
 
   val LOG = Logging(context.system, this)
+
+  override def preStart {
+    try { Iterator.continually(input.read).takeWhile(-1!=_) } 
+    catch { case e: Exception => LOG.error("Fail reading stderr {}.", e) }
+    finally { 
+      input.close 
+      executor ! StreamClosed 
+    }
+  }
+
+  override def receive = { 
+    case msg@_ => LOG.warning("Unknown stderr message {}", msg)
+  }
+
+/*
   def error(msg: String, ioe: IOException) = LOG.error(msg, ioe)
   def warn(msg: String, ioe: IOException) = LOG.warning(msg, ioe)
   def info(msg: String) = LOG.info(msg)
@@ -126,6 +160,7 @@ class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
     }
     case msg@_ => LOG.warning("Unknown stderr message {}", msg)
   } 
+*/
 }
 
 /**
@@ -142,6 +177,7 @@ class Executor(conf: HamaConfiguration) extends Actor {
   val javacp: String  = "./:"+System.getProperty("java.class.path")
   val logPath: String = System.getProperty("hama.log.dir")
   val operation = Operation.create(conf)
+  protected var bspPeerContainer: ActorRef =_
   protected var stdout: ActorRef = _
   protected var stderr: ActorRef = _
   protected var isStdoutClosed = false
@@ -261,12 +297,12 @@ class Executor(conf: HamaConfiguration) extends Actor {
       process = builder.start
       stdout = context.actorOf(Props(classOf[StdOut], 
                                      process.getInputStream, 
-                                     conf, 
+                                     //conf, 
                                      self),
                                "stdout%s".format(slotSeq)) 
       stderr = context.actorOf(Props(classOf[StdErr], 
                                      process.getErrorStream, 
-                                     conf, 
+                                     //conf, 
                                      self),
                                "stderr%s".format(slotSeq)) 
       //val exitCode = process.waitFor
@@ -299,8 +335,9 @@ class Executor(conf: HamaConfiguration) extends Actor {
     log.toString
   }
 
-  def stdoutAndStderrExists: Boolean = (null != stdout && null != stderr)
+  //def stdoutAndStderrExists: Boolean = (null != stdout && null != stderr)
 
+/*
   def switchLog: Receive = {
     case LogWith(jobId, taskAttemptId) => { 
       if(null != jobId && !jobId.isEmpty) {
@@ -311,7 +348,12 @@ class Executor(conf: HamaConfiguration) extends Actor {
       } else LOG.warning("Unknown logging path!")
     }
   }
+*/
 
+  /**
+   * Once the stream, including input and error stream, is closed, the system
+   * will destroy process automatically.
+   */
   def streamClosed: Receive = {
     case StreamClosed => {
       LOG.info("{} notify InputStream is closed!", sender.path.name)
@@ -324,8 +366,25 @@ class Executor(conf: HamaConfiguration) extends Actor {
     }
   }
 
+  /**
+   * BSPPeerContainer notify it's in ready state.
+   * @return Receive is partial function.
+   */
+  def containerReady: Receive = {
+    case ContainerReady => bspPeerContainer = sender
+  }
+
+  /**
+   * Send StopContainer message to shutdown BSPPeerContainer process.
+   * @return Receive is partial function.
+   */
   def stopProcess: Receive = {
     case StopProcess => {
+      if(null != bspPeerContainer) 
+        bspPeerContainer ! StopContainer 
+      else 
+        LOG.warning("BSPPeerContainer for slot {} is not yet ready.", slotSeq)
+/*
       if(null != process) {
         if(!isStdoutClosed || !isStderrClosed) {
           LOG.warning("Stdout or stderr is not yet closed for slot {}!", 
@@ -335,6 +394,7 @@ class Executor(conf: HamaConfiguration) extends Actor {
           process.destroy 
         }
       } else LOG.warning("Process instance is null!")
+*/
     }
   }
 
@@ -342,7 +402,7 @@ class Executor(conf: HamaConfiguration) extends Actor {
     case msg@_=> LOG.warning("Unknown message {} for Executor", msg)
   }
 
-  def receive = fork orElse switchLog orElse streamClosed orElse stopProcess orElse unknown
+  def receive = fork /*orElse switchLog*/ orElse containerReady orElse streamClosed orElse stopProcess orElse unknown
      
 }
 

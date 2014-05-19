@@ -86,7 +86,7 @@ object BSPPeerContainer {
 }
 
 /**
- * Launched BSP actor via forked process.
+ * Launched BSP actor in forked process.
  * @param conf contains setting sepcific to this service.
  */
 class BSPPeerContainer(conf: HamaConfiguration) extends LocalService 
@@ -116,24 +116,35 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
      executor ! ContainerReady
    }
 
+   /**
+    * Start executing task dispatched to the container.
+    * @return Receive is partial function.
+    */
    def processTask: Receive = {
      case task: Task => {
        LOG.info("Start processing task {}", task.getId)
-       
+       // not yet implemented ... 
      }
    }
 
-   def close {
-   }
+   /**
+    * A function to close all necessary operations before shutting down the 
+    * system.
+    */
+   def close { }
 
-   def exit: Receive = {
-     case Exit => {
-       LOG.info("Stop everything before exiting programme {} ...", name)
+   /**
+    * Close all related process operations and then shutdown the actor system.
+    * @return Receive is partial function.
+    */
+   def stopContainer: Receive = {
+     case StopContainer => {
+       LOG.info("Stop everything before exit programme {} ...", name)
        close 
        LOG.info("Shutdown BSPContainer system ...")
        context.system.shutdown
      }
    }
 
-   override def receive = exit orElse processTask orElse isProxyReady orElse timeout orElse unknown
+   override def receive = stopContainer orElse processTask orElse isProxyReady orElse timeout orElse unknown
 }

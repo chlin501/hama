@@ -20,5 +20,4 @@ package org.apache.hama.groom
 /**
  * Notify BSPPeerContainer actor to exit.
  */
-final case object Exit
-
+final case object StopContainer
