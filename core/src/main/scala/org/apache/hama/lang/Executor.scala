@@ -20,6 +20,7 @@ package org.apache.hama.lang
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Props
+import akka.actor.Terminated
 import akka.event.Logging
 import java.io.BufferedReader
 import java.io.BufferedWriter
@@ -156,7 +157,7 @@ class Executor(conf: HamaConfiguration) extends Actor {
   def classpath(hamaHome: String, parentClasspath: String): String = {
     if(null == hamaHome) 
       throw new RuntimeException("Variable hama.home.dir is not set!")
-    var cp = "./:%s".format(parentClasspath)
+    var cp = "./:%s/conf:%s".format(hamaHome, parentClasspath)
     val lib = new File(hamaHome, "lib")
     lib.listFiles(new FilenameFilter {
       def accept(dir: File, name: String): Boolean = {
@@ -326,7 +327,11 @@ class Executor(conf: HamaConfiguration) extends Actor {
     case msg@_=> LOG.warning("Unknown message {} for Executor", msg)
   }
 
-  def receive = register orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse shutdownSystem orElse unknown
+  def terminated: Receive = {
+    case Terminated(target) => LOG.info("{} is offline.", target.path.name)
+  }
+
+  def receive = register orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownSystem orElse unknown
      
 }
 

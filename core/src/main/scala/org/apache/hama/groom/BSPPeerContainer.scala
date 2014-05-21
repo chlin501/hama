@@ -40,6 +40,8 @@ object BSPPeerContainer {
     ConfigFactory.parseString(s"""
       peer {
         akka {
+          loggers = ["akka.event.slf4j.TaskLogger"]
+          loglevel = "INFO"
           actor {
             provider = "akka.remote.RemoteActorRefProvider"
             serializers {
@@ -77,7 +79,7 @@ object BSPPeerContainer {
     val defaultConf = new HamaConfiguration()
     val arguments = toArgs(args)
     val system = ActorSystem("BSPPeerSystem%s".format(arguments.seq), 
-                             arguments.config)
+                             arguments.config.getConfig("peer"))
     defaultConf.setInt("bsp.child.slot.seq", arguments.seq)
     (system, defaultConf, arguments.seq)
   }
@@ -149,12 +151,12 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     * system.
     */
    protected def close { 
-     LOG.info("Stop related operations before exiting programme {} ...", name)
-     context.unwatch(executor)
+     LOG.debug("Stop related operations before exiting programme {} ...", name)
    }
 
    override def postStop {
      close
+     super.postStop
    }
 
    /**
@@ -163,6 +165,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     */
    def stopContainer: Receive = {
      case StopContainer => {
+       context.unwatch(executor)
        executor ! ContainerStopped  
        LOG.debug("Send ContainerStopped message ...")
      }
@@ -171,9 +174,14 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    def shutdownSystem: Receive = {
      case ShutdownSystem => {
        LOG.info("Completely shutdown BSPContainer system ...")
+       context.stop(self)
        context.system.shutdown
      }
    }
 
-   override def receive = shutdownSystem orElse stopContainer orElse processTask orElse isProxyReady orElse timeout orElse unknown
+   override def offline(target: ActorRef) {
+     LOG.info("{} is unwatched.", target.path.name)
+   }
+
+   override def receive = shutdownSystem orElse stopContainer orElse processTask orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 }

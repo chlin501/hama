@@ -105,6 +105,7 @@
     <ant.version>1.7.1</ant.version>
     <scala.version>2.10</scala.version>
     <akka.version>2.2.3</akka.version>
+    <logback.version>1.0.13</logback.version>
   </properties>
 
   <repositories>

@@ -112,23 +112,25 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
 object WithRemoteSetting {
   def toConfig: Config = {
     ConfigFactory.parseString("""
-      akka {
-        actor {
-          provider = "akka.remote.RemoteActorRefProvider"
-          serializers {
-            java = "akka.serialization.JavaSerializer"
-            proto = "akka.remote.serialization.ProtobufSerializer"
-            writable = "org.apache.hama.io.serialization.WritableSerializer"
+      testExecutor {
+        akka {
+          actor {
+            provider = "akka.remote.RemoteActorRefProvider"
+            serializers {
+              java = "akka.serialization.JavaSerializer"
+              proto = "akka.remote.serialization.ProtobufSerializer"
+              writable = "org.apache.hama.io.serialization.WritableSerializer"
+            }
+            serialization-bindings {
+              "com.google.protobuf.Message" = proto
+              "org.apache.hadoop.io.Writable" = writable
+            }
           }
-          serialization-bindings {
-            "com.google.protobuf.Message" = proto
-            "org.apache.hadoop.io.Writable" = writable
-          }
-        }
-        remote {
-          netty.tcp {
-            hostname = "127.0.0.1" 
-            port = 50000
+          remote {
+            netty.tcp {
+              hostname = "127.0.0.1" 
+              port = 50000
+            }
           }
         }
       }
@@ -138,7 +140,8 @@ object WithRemoteSetting {
 
 @RunWith(classOf[JUnitRunner])
 class TestExecutor extends TestEnv(ActorSystem("TestExecutor", 
-                                               WithRemoteSetting.toConfig)) {
+                                               WithRemoteSetting.toConfig.
+                                               getConfig("testExecutor"))) {
 
   override protected def beforeAll = {
     super.beforeAll
@@ -185,8 +188,8 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
 
     aggregator ! "stopAll"
 
-    LOG.info("Wait 3 seconds for child process to be stopped.")
-    sleep(3.seconds)
+    LOG.info("Wait 10 seconds for child process to be stopped.")
+    sleep(10.seconds)
 
     expectAnyOf("groomServer_executor_1_container_stopped", 
                 "groomServer_executor_2_container_stopped", 
@@ -199,6 +202,8 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
     expectAnyOf("groomServer_executor_1_container_stopped", 
                 "groomServer_executor_2_container_stopped", 
                 "groomServer_executor_3_container_stopped")
+ 
+    sleep(10.seconds)
 
     aggregator ! "shutdown"
 
