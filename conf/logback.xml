@@ -1,9 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
   <appender name="SIFT" class="ch.qos.logback.classic.sift.SiftingAppender">
+    <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+      <evaluator class="ch.qos.logback.classic.boolex.GEventEvaluator">
+        <expression>
+           e.level.toInt() >= INFO.toInt() &amp;&amp;
+           e.level.toInt() &lt; WARN.toInt()
+        </expression>
+      </evaluator>
+      <OnMatch>ACCEPT</OnMatch>
+      <OnMismatch>DENY</OnMismatch>
+    </filter>
     <discriminator>
       <key>log_path</key>
-      <defaultValue>unknown</defaultValue>
+      <defaultValue>default</defaultValue>
     </discriminator>
     <sift>
       <appender name="FILE-${log_path}" 
@@ -15,7 +25,33 @@
       </appender>
     </sift>
   </appender>
+
+  <appender name="SIFT-ERROR" class="ch.qos.logback.classic.sift.SiftingAppender">
+    <filter class="ch.qos.logback.core.filter.EvaluatorFilter">
+      <evaluator class="ch.qos.logback.classic.boolex.GEventEvaluator">
+        <expression>
+           e.level.toInt() >= WARN.toInt()
+        </expression>
+      </evaluator>
+      <OnMatch>ACCEPT</OnMatch>
+      <OnMismatch>DENY</OnMismatch>
+    </filter>
+    <discriminator>
+      <key>log_path</key>
+      <defaultValue>default</defaultValue>
+    </discriminator>
+    <sift>
+      <appender name="ERROR-${log_ath}" class="ch.qos.logback.core.FileAppender">
+        <file>logs/${log_path}.err</file>
+        <layout class="ch.qos.logback.classic.PatternLayout">
+          <pattern>[%d{HH:mm:ss:SSS}] [%-6level] [%thread] %logger{20} %msg%n%rEx</pattern>
+        </layout>
+      </appender>
+    </sift>
+  </appender>
+
   <root level="ALL">
     <appender-ref ref="SIFT" />
+    <appender-ref ref="SIFT-ERROR" />
   </root>
 </configuration>
