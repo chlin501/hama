@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package akka.event.slf4j
-
+/*
 import org.slf4j.MDC
 import akka.event.Logging._
 import akka.actor._
@@ -72,4 +72,4 @@ class TaskLogger extends Slf4jLogger {
       MDC.remove(mdcAkkaTimestamp)
     }
   }
-}
+}*/
