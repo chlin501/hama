@@ -26,6 +26,7 @@ import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
 import java.io.FilenameFilter
+import java.io.FileOutputStream
 import java.io.FileWriter
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -51,9 +52,13 @@ final case object StopProcess
 class StdOut(input: InputStream, executor: ActorRef) extends Actor { 
   import scala.language.postfixOps
   val LOG = Logging(context.system, this)
-  val out = new java.io.FileOutputStream("/tmp/"+executor.path.name+".log")
   override def preStart {
     try { 
+      val hamaHome = System.getProperty("hama.home.dir")
+      val dir = new File("%s/logs".format(hamaHome))
+      if(!dir.exists) dir.mkdirs
+      val out = 
+        new FileOutputStream(new File(dir, "%s.log".format(executor.path.name)))
       Iterator.continually(input.read).takeWhile(-1!=).foreach(out.write) 
     } catch { 
       case e: Exception => LOG.error("Fail reading stdout {}.", e) 
@@ -71,16 +76,19 @@ class StdOut(input: InputStream, executor: ActorRef) extends Actor {
 class StdErr(input: InputStream, executor: ActorRef) extends Actor {
   import scala.language.postfixOps
   val LOG = Logging(context.system, this)
-  val out = new java.io.FileOutputStream("/tmp/"+executor.path.name+".err")
-
   override def preStart {
     try { 
+      val hamaHome = System.getProperty("hama.home.dir")
+      val dir = new File("%s/logs".format(hamaHome))
+      if(!dir.exists) dir.mkdirs
+      val out = 
+        new FileOutputStream(new File(dir, "%s.err".format(executor.path.name)))
       Iterator.continually(input.read).takeWhile(-1!=).foreach(out.write) 
     } catch { 
       case e: Exception => LOG.error("Fail reading stderr {}.", e) 
     } finally { 
       input.close 
-      //executor ! StreamClosed 
+      executor ! StreamClosed 
     }
   }
 
@@ -162,7 +170,8 @@ class Executor(conf: HamaConfiguration) extends Actor {
     lib.listFiles(new FilenameFilter {
       def accept(dir: File, name: String): Boolean = {
         var flag = false
-        if(lib.equals(dir) && name.endsWith("jar")) {
+        if(lib.equals(dir) && name.endsWith("jar") && 
+           !name.contains("commons-logging")) {
           flag = true
         } 
         flag
