@@ -46,12 +46,13 @@ private final case class Warning(message: String)
 private final case class Error(message: String)
 private final case class Close(taskAttemptId: TaskAttemptID)
 
-private[groom] final class TaskLogger extends Actor {
+private[groom] final class TaskLogger(conf: HamaConfiguration) extends Actor {
 
   private val log = Logging(context.system, this)
   private val hamaHome = System.getProperty("hama.home.dir")
   private var taskAttemptId: TaskAttemptID = _
-  private val dir = new File("%s/logs/tasklogs".format(hamaHome))
+  private val logDir = new File(conf.get("bsp.child.log.dir", 
+                                hamaHome+"/logs/tasklogs"))
   private var stdout: FileWriter = _
   private var stderr: FileWriter = _
   val Append = true
@@ -60,7 +61,7 @@ private[groom] final class TaskLogger extends Actor {
     case Initialize(attemptId) => {
       taskAttemptId = attemptId
       val jobId = taskAttemptId.getJobID.toString
-      val jobIdDir = new File(dir, jobId)
+      val jobIdDir = new File(logDir, jobId)
       if(!jobIdDir.exists) jobIdDir.mkdirs
       stdout = new FileWriter(new File(jobIdDir, taskAttemptId.toString+".log"),
                               Append)
@@ -107,19 +108,19 @@ private[groom] class DefaultLogger(logger: ActorRef) extends Logger {
                                               "intialize logging.")
     }
 
-  def info(message: String, args: Any*) = if(null != logger) {
+  override def info(message: String, args: Any*) = if(null != logger) {
     logger ! Info(format(message, args))
   }
 
-  def debug(message: String, args: Any*) = if(null != logger) {
+  override def debug(message: String, args: Any*) = if(null != logger) {
     logger ! Debug(format(message, args))
   }
 
-  def warning(message: String, args: Any*) = if(null != logger) {
+  override def warning(message: String, args: Any*) = if(null != logger) {
     logger ! Warning(format(message, args))
   }
 
-  def error(message: String, args: Any*) = if(null != logger) {
+  override def error(message: String, args: Any*) = if(null != logger) {
     logger ! Error(format(message, args))
   }
 
@@ -143,12 +144,15 @@ private[groom] class DefaultLogger(logger: ActorRef) extends Logger {
 
 private[groom] object TaskLogging {
  
-  def apply(cxt: ActorContext, slotSeq: Int): Logger = {
+  def apply(cxt: ActorContext, conf: HamaConfiguration, slotSeq: Int): 
+      Logger = {
     if(null == cxt) 
       throw new IllegalArgumentException("ActorContext is missing!")
+    if(null == conf)
+      throw new IllegalArgumentException("HamaConfiguration not provided!")
     if(0 >= slotSeq)
       throw new IllegalArgumentException("Slot seq should be larger than 0.")
-    val logger = cxt.actorOf(Props(classOf[TaskLogger]), 
+    val logger = cxt.actorOf(Props(classOf[TaskLogger], conf), 
                              "taskLogger%s".format(slotSeq))
     new DefaultLogger(logger)
   }
@@ -222,7 +226,7 @@ object BSPPeerContainer {
 class BSPPeerContainer(conf: HamaConfiguration) extends LocalService 
                                                 with RemoteService {
  
-  val logger = TaskLogging(context, slotSeq)
+  val logger = TaskLogging(context, conf, slotSeq)
 
   val groomName = configuration.get("bsp.groom.name", "groomServer")
   protected var executor: ActorRef = _
@@ -261,6 +265,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   def processTask: Receive = {
     case task: Task => {
       LOG.info("Start processing task {}", task.getId)
+      logger.asInstanceOf[DefaultLogger].initialize(task.getId)
       // not yet implemented ... 
       // initialize bsp peer interface
       // add logger variable
