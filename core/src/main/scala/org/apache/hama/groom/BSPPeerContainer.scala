@@ -39,19 +39,19 @@ import scala.concurrent.duration.DurationInt
 
 final case class Args(port: Int, seq: Int, config: Config)
 
-private final case class Initialize(taskAttemptId: String)
+private final case class Initialize(taskAttemptId: TaskAttemptID)
 private final case class Info(message: String)
 private final case class Debug(message: String)
 private final case class Warning(message: String)
 private final case class Error(message: String)
-private final case class Close(taskAttemptId: String)
+private final case class Close(taskAttemptId: TaskAttemptID)
 
 private[groom] final class TaskLogger extends Actor {
 
   private val log = Logging(context.system, this)
   private val hamaHome = System.getProperty("hama.home.dir")
-  private var taskAttemptId: String = _
-  private val dir = new File("%s/logs".format(hamaHome))
+  private var taskAttemptId: TaskAttemptID = _
+  private val dir = new File("%s/logs/tasklogs".format(hamaHome))
   private var stdout: FileWriter = _
   private var stderr: FileWriter = _
   val Append = true
@@ -59,27 +59,31 @@ private[groom] final class TaskLogger extends Actor {
   override def receive = {
     case Initialize(attemptId) => {
       taskAttemptId = attemptId
-      if(!dir.exists) dir.mkdirs
-      stdout = new FileWriter(new File(dir, taskAttemptId+".log"), Append)
-      stderr = new FileWriter(new File(dir, taskAttemptId+".err"), Append)
+      val jobId = taskAttemptId.getJobID.toString
+      val jobIdDir = new File(dir, jobId)
+      if(!jobIdDir.exists) jobIdDir.mkdirs
+      stdout = new FileWriter(new File(jobIdDir, taskAttemptId.toString+".log"),
+                              Append)
+      stderr = new FileWriter(new File(jobIdDir, taskAttemptId.toString+".err"),
+                              Append)
     }
     case Info(msg) => stdout.write(msg+"\n")
     case Debug(msg) => stdout.write(msg+"\n")
     case Warning(msg) => stderr.write(msg+"\n")
     case Error(msg) => stderr.write(msg+"\n")
     case Close(attemptId) => {
-      if(null != taskAttemptId && !taskAttemptId.isEmpty) {
+      if(null != taskAttemptId) {
         if(taskAttemptId.equals(attemptId)) {
            try { } finally { stdout.close; stderr.close }
         } else {
           log.error("Try closing task logging but id {} not matched "+
-                    "current {}", attemptId, taskAttemptId)
+                    "current {}", attemptId.toString, taskAttemptId.toString)
         }
       } else log.warning("Attempt to close log for task {} but {} not "+
-                         "matched.", taskAttemptId, attemptId)
+                         "matched.", taskAttemptId.toString, attemptId.toString)
     }
     case msg@_ => log.warning("Unknown message "+msg+" for taksAttemptId "+
-                              taskAttemptId)
+                              taskAttemptId.toString)
   }
 }
 
@@ -96,12 +100,12 @@ private[groom] trait Logger {
 
 private[groom] class DefaultLogger(logger: ActorRef) extends Logger {
 
-  protected[groom] def initialize(taskAttemptId: String) = if(null != logger) {
-    if(null != taskAttemptId && !taskAttemptId.isEmpty) 
-      logger ! Initialize(taskAttemptId)
-    else throw new IllegalArgumentException("TaskAttemptId not provided to "+
-                                            "intialize logging.")
-  }
+  protected[groom] def initialize(taskAttemptId: TaskAttemptID) = 
+    if(null != logger) {
+      if(null != taskAttemptId) logger ! Initialize(taskAttemptId)
+      else throw new IllegalArgumentException("TaskAttemptId not provided to "+
+                                              "intialize logging.")
+    }
 
   def info(message: String, args: Any*) = if(null != logger) {
     logger ! Info(format(message, args))
@@ -119,12 +123,12 @@ private[groom] class DefaultLogger(logger: ActorRef) extends Logger {
     logger ! Error(format(message, args))
   }
 
-  protected[groom] def close(taskAttemptId: String) = if(null != logger) {
-    if(null != taskAttemptId && !taskAttemptId.isEmpty) 
-      logger ! Close(taskAttemptId)
-    else throw new IllegalArgumentException("TaskAttemptId not provided to "+
-                                            "close logging.")
-  }
+  protected[groom] def close(taskAttemptId: TaskAttemptID) = 
+    if(null != logger) {
+      if(null != taskAttemptId) logger ! Close(taskAttemptId)
+      else throw new IllegalArgumentException("TaskAttemptId not provided to "+
+                                              "close logging.")
+    }
 
   /**
    * Replace place hold with arguments.
