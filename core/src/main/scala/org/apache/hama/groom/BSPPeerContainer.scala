@@ -132,13 +132,23 @@ private[groom] class DefaultLogger(logger: ActorRef) extends Logger {
     }
 
   /**
-   * Replace place hold with arguments.
-   * @param msg contains place holder.
+   * Format string.
+   * The string to be formatted is in a form of %1$s, %2$s, etc. where %N 
+   * indicates the <i>N</i>th position and $s says it's a string format.
+   * For example, 
+   * <pre>
+   *   format("select count, name from accounts where name = %1$s and " \
+   *          "gender = %2$s", "'hohn'", "'male'")
+   * </pre>
+   * produces the result 
+   * <pre>
+   *   "select count, name from accounts where name = 'john' and "\
+   *   "gender = 'male'"
+   * </pre>
+   * @param msg contains place holder to be formatted.
    * @param args are values used to  
    */
-  private def format(msg: String, args: Any*): String = {
-    "" // TODO:
-  }
+  private def format(msg: String, args: Any*): String = msg.format(args:_*)
  
 }
 
@@ -308,6 +318,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
   override def offline(target: ActorRef) {
     LOG.info("{} is unwatched.", target.path.name)
+    context.unwatch(target)
   }
 
   override def receive = shutdownSystem orElse stopContainer orElse processTask orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown

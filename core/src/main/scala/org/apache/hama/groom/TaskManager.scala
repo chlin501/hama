@@ -96,7 +96,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    */
   protected def initializeSlots(constraint: Int = 3) {
     for(seq <- 1 to constraint) {
-      slots ++= Set(Slot(seq, None, bspmaster))
+      slots ++= Set(Slot(seq, None, bspmaster, None))
     }
     LOG.debug("{} GroomServer slots are initialied.", constraint)
   }
@@ -157,14 +157,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         if(!hasTaskInQueue) { 
           LOG.debug("Request {} for assigning new tasks ...", getSchedulerPath)
           sched ! RequestTask(currentGroomServerStat)
-        } /*else {
-          LOG.debug("{} tasks in queue, process them first!", queue.size)
-          val (directive, rest) = queue.dequeue
-          if(null == directive)
-            throw new NullPointerException("Dequeued directive is null!")
-          matchThenExecute(directive.action, directive.master, 
-                           directive.timestamp, directive.task)
-        } */
+        } 
       } 
     }
   }
@@ -204,51 +197,29 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     stat
   } 
 
-  /**
-   * Receive {@link Directive} from Scheduler.
-   * It may store directive in queue when no free slot available. 
-   * @return Receive is partial function.
-   */
-  def receiveDirective: Receive = {
-    case directive: Directive => { 
-      if(null != directive) {
-        if(hasFreeSlots) {
-          if(hasTaskInQueue) {
-            queue = queue.enqueue(directive)
-/* TODO: change to let executor *3 auto pull task from queue whenever they are
-         ready! So matchThenExecute is not needed in TaskManager.
-            val (first, rest) = queue.dequeue
-
-            LOG.info("Execute task {} in queue, which is sent from {} "+
-                     "with action {} at {}", first.task.getId, first.master, 
-                     first.action, first.timestamp) 
-            matchThenExecute(first.action, first.master, first.timestamp, 
-                             first.task)
-*/
-          } /*else {
-            LOG.info("Execute task {} sent from {} with action {} at {}", 
-                     directive.task.getId , directive.master, 
-                     directive.action, directive.timestamp) 
-            matchThenExecute(directive.action, directive.master, 
-                             directive.timestamp, directive.task)
-          }*/
-        } else {
-          val task: Task = directive.task  
-          if(null != task) 
-            LOG.info("Enqueue directive: action-> {}, master-> {} , task-> {}", 
-                     directive.action, directive.master, task.getId.toString)
-          queue = queue.enqueue(directive)
-        }
-      } else LOG.warning("Directive dispatched from {} is null!", 
-                         sender.path.name)
+  def findTargetToKill(task: Task): Option[ActorRef] = { 
+    slots.find(slot=> slot.task.equals(Some(task))) match {
+      case Some(slot) => slot.executor 
+      case None => None
     }
   }
 
-  override def receive = taskRequest orElse receiveDirective orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+  /**
+   * 1. Create Executor actor.
+   * 2. Send Fork message in forking a child process.
+   * Forked child process will send PullForExecution message for task execution.
+   */
+  def initializeExecutor() {
+    pickUp match {
+      case Some(slot) => { // xxx
+      }
+      case None => // all slots are in use 
+    }
+  }
 
   /**
    * Pick up a slot that is not in use.
-   * @return Option[Slot] contains either a slot or None if no slot found.
+   * @return Option[Slot] contains either a slot or None if no slot available.
    */
   def pickUp: Option[Slot] = {
     var free: Slot = null
@@ -267,33 +238,67 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   }
 
   /**
-   * Match an action from the {@link Directive} supplied, then execute
-   * the task by forking a process if needed.
-  private def matchThenExecute(action: Action, master: String, 
-                               timestamp: Long, task: Task) {
-    action.value match {
-      case 1 => {
-        // a. pick up a free slot. 
-        val slot = pickUp 
-        //if(!slot.isRunning) {
-          // TODO: create executor actor with different names 
-          //       e.g. task attempt id so that actor won't collide and the 
-          //       instance var e.g. process won't be the overriden.
-          //context.actorOf(Props(classOf[Executor], conf), 
-          //                      groom-name+"_executor_"+slot.seq.toString)
-        //}
-        // b. check if process is forked -> check seq if booked.
-        // b1. if false, fork a new process else reuse it.
-        // c. launch task on the new process
-        // d. store the task to a slot
-        // e. periodically update stat to plugin
-      }
-      case 2 => 
-      case 3 =>
-      case 4 =>
-      case _ => LOG.warning("Unknown action value "+action)
+   * Receive {@link Directive} from Scheduler, deciding what to do next.
+   * @return Receive is partial function.
+   */
+  def receiveDirective: Receive = {
+    case directive: Directive => { 
+      if(null != directive) {
+        directive.action match {
+          case Launch => {
+             initializeExecutor() // fork then pullForExecution
+             queue = queue.enqueue(directive)
+          }
+          case Kill => {
+            findTargetToKill(directive.task) match {
+              case Some(executor) => executor ! KillTask
+              case None => LOG.warning("Ask to Kill task {}, but no "+
+                                       "corresponded executor found!", 
+                                       directive.task.toString)
+            }
+          }
+          case Resume => queue = queue.enqueue(directive)
+        }
+      } else LOG.warning("Directive dispatched from {} is null!", 
+                         sender.path.name)
     }
   }
+
+  def book(slotSeq: Int, task: Task, executor: ActorRef) {
+    slots.find(slot => (slotSeq == slot.seq)) match {
+      case Some(slot) => {
+        val newSlot = Slot(slot.seq, Some(task), slot.master, Some(executor))
+        slots -= slot 
+        slots += newSlot
+      }
+      case None => throw new RuntimeException("Slot with seq "+slotSeq+" not "+
+                                              "found")
+    }
+  }
+
+  /**
+   * Executor on behalf of BSPPeerContainer requests for task execution.
+   * @return Receive is partial function.
    */
+  def pullForExecution: Receive = {
+    case PullForExecution(slotSeq) => {
+      val (directive, rest) = queue.dequeue 
+      directive.action match {
+        case Launch => {
+          sender ! LaunchTask(directive.task)
+          book(slotSeq, directive.task, sender)
+        }
+        case Kill => // TaskManager issues Kill to Executor, not by executor
+        case Resume => {
+          sender ! ResumeTask(directive.task)
+          book(slotSeq, directive.task, sender)
+        }
+        case _ => LOG.warning("Unknown action {}", directive.action)
+      }
+    }
+  }
+
+  override def receive = pullForExecution orElse taskRequest orElse receiveDirective orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+
 
 }

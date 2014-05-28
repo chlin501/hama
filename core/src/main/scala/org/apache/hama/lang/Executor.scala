@@ -38,6 +38,7 @@ import org.apache.hadoop.io.IOUtils
 import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.groom.ContainerReady
 import org.apache.hama.groom.ContainerStopped
+import org.apache.hama.groom.PullForExecution
 import org.apache.hama.groom.StopContainer
 import org.apache.hama.groom.ShutdownSystem
 import org.apache.hama.HamaConfiguration
@@ -293,7 +294,7 @@ class Executor(conf: HamaConfiguration) extends Actor {
       if(null != taskManagerListener) {
         LOG.info("Notify {} ContainerReady by {}", 
                  taskManagerListener.path.name, self.path.name)
-        taskManagerListener ! ContainerReady
+        taskManagerListener ! PullForExecution(slotSeq) 
       }
     }
   }

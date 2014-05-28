@@ -26,6 +26,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Job
+import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.v2.IDCreator
 import org.apache.hama.bsp.v2.IDCreator._
 import org.apache.hama.fs.HDFS
@@ -181,6 +182,30 @@ trait JobUtil extends Logger {
                        .getTaskAttemptIDBuilder
                        .withId(taskAttemptId)
                        .build
+  }
+
+  def createTask(jobIdentifier: String = "test", jobId: Int = 1,
+                 taskId: Int = 1, taskAttemptId: Int = 1, 
+                 partition: Int = 7): Task = {
+    val attemptId = IDCreator.newBSPJobID.withId(jobIdentifier)
+                                         .withId(jobId)
+                                         .getTaskIDBuilder
+                                         .withId(taskId)
+                                         .getTaskAttemptIDBuilder
+                                         .withId(taskAttemptId)
+                                         .build
+    val startTime = System.currentTimeMillis
+    val finishTime = startTime + 1000*10
+    val state = Task.State.RUNNING
+    val phase = Task.Phase.SETUP
+    new Task.Builder().setId(attemptId)
+                      .setStartTime(startTime)
+                      .setFinishTime(finishTime)
+                      .setPartition(partition)
+                      .setState(state)
+                      .setPhase(phase)
+                      .setCompleted(true)
+                      .build
   }
 
   def createJarPath(jar: String)(implicit testRoot: File): File = new File(testRoot, jar)

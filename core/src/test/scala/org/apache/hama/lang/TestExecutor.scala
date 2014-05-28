@@ -23,14 +23,16 @@ import akka.event.Logging
 import akka.actor.ActorSystem
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import org.apache.hama.TestEnv
-import org.apache.hama.HamaConfiguration
+import org.apache.hama.bsp.v2.Task
 import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.groom.ContainerReady
 import org.apache.hama.groom.ContainerStopped
 import org.apache.hama.groom.MockContainer
 import org.apache.hama.groom.ShutdownSystem
 import org.apache.hama.groom.TaskManager
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.TestEnv
+import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
@@ -89,6 +91,12 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
     }
   }
 
+  def taskx: Receive = {
+    case task: Task => { 
+      executors.foreach( e=> e! task)
+    }
+  }
+
   def stopAll: Receive = {
     case "stopAll" => {
       executors.foreach( e =>  e ! StopProcess)
@@ -141,7 +149,8 @@ object WithRemoteSetting {
 @RunWith(classOf[JUnitRunner])
 class TestExecutor extends TestEnv(ActorSystem("TestExecutor", 
                                                WithRemoteSetting.toConfig.
-                                               getConfig("testExecutor"))) {
+                                               getConfig("testExecutor"))) 
+                   with JobUtil {
 
   override protected def beforeAll = {
     super.beforeAll
@@ -203,6 +212,17 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
                 "groomServer_executor_2_container_stopped", 
                 "groomServer_executor_3_container_stopped")
  
+    sleep(10.seconds)
+  
+/*
+    val jobId = 1
+    val taskId = 7
+    val taskAttemptId = 2
+    val partition = 7
+    val task = createTask("test", jobId, taskId, taskAttemptId, partition) 
+    aggregator ! task
+*/
+
     sleep(10.seconds)
 
     aggregator ! "shutdown"

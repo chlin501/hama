@@ -17,18 +17,6 @@
  */
 package org.apache.hama.groom
 
-import akka.actor.ActorRef
 import org.apache.hama.bsp.v2.Task
 
-/**
- * A slot holds relation from its id sequence to a specific 
- * {@link org.apache.hama.bsp.v2.Task}.
- * @param seq of this slot.
- * @param task that runs on this slot.
- * @param master to which this slot belongs.
- * @param executor that executes the task for this slot.
- */
-case class Slot(seq: Int, 
-                task: Option[Task], 
-                master: String, 
-                executor: Option[ActorRef])
+final case class ResumeTask(task: Task) 
