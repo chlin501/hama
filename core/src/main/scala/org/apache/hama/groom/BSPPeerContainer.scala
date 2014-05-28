@@ -271,7 +271,6 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   /**
    * Start executing task dispatched to the container.
    * @return Receive is partial function.
-   */
   def processTask: Receive = {
     case task: Task => {
       LOG.info("Start processing task {}", task.getId)
@@ -284,6 +283,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
       // perform bsp() w/ another actor
     }
   }
+   */
 
   /**
    * A function to close all necessary operations before shutting down the 
@@ -321,5 +321,5 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     context.unwatch(target)
   }
 
-  override def receive = shutdownSystem orElse stopContainer orElse processTask orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = shutdownSystem orElse stopContainer /*orElse processTask*/ orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 }

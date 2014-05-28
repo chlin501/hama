@@ -19,16 +19,18 @@ package org.apache.hama.groom
 
 import akka.actor.ActorRef
 import akka.actor.Cancellable
+import akka.actor.Props
 import org.apache.hama.bsp.v2.GroomServerStat
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
 import org.apache.hama.ProxyInfo
+import org.apache.hama.lang.Executor
 import org.apache.hama.master._
 import org.apache.hama.master.Directive._
 import org.apache.hama.master.Directive.Action._
-
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -74,9 +76,15 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   private var slots = Set.empty[Slot]
 
   /**
-   * Active scheduled tasks are stored in queue. 
+   * All {@link Directive}s are stored in this queue. 
    */
   private var queue = Queue[Directive]()
+
+  /**
+   * {@link Directive}s to be acked and then removed will be placed in this 
+   * queue.
+   */
+  private var pendingQueue = Queue[Directive]()
 
   /* can be overriden in test. */
   protected def getGroomServerName(): String = groomServerName
@@ -209,9 +217,16 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    * 2. Send Fork message in forking a child process.
    * Forked child process will send PullForExecution message for task execution.
    */
-  def initializeExecutor() {
+  def initializeExecutor(master: String) {
     pickUp match {
-      case Some(slot) => { // xxx
+      case Some(slot) => { 
+        val executorName = configuration.get("bsp.groom.name", "groomServer") +
+                           "_executor_" + slot.seq 
+        val executor = context.actorOf(Props(classOf[Executor], configuration,
+                                       executorName))  
+        val newSlot = Slot(slot.seq, None, master, Some(executor))
+        slots -= slot
+        slots += slot
       }
       case None => // all slots are in use 
     }
@@ -238,6 +253,31 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   }
 
   /**
+   * Executor replies the task is killed so remove the cooresponded task.
+   * @return Receive is partial function
+   */
+  def removeTask: Receive = {
+    case RemoveTask(slotSeq, taskAttemptId) => {
+      slots.find( slot => {
+        val seqEquals = (slot.seq == slotSeq)  
+        val idEquals = slot.task match { 
+          case Some(found) => found.getId.equals(taskAttemptId)
+          case None => false
+        }
+        seqEquals && idEquals
+      }) match {
+        case Some(slot) => {
+          val newSlot = Slot(slot.seq, None, slot.master, slot.executor)
+          slots -= slot
+          slots += newSlot
+        }
+        case None => LOG.warning("Can't remove task for taskAttemptId {} not "+
+                                 "found.", taskAttemptId)
+      }
+    }
+  }
+
+  /**
    * Receive {@link Directive} from Scheduler, deciding what to do next.
    * @return Receive is partial function.
    */
@@ -246,7 +286,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
       if(null != directive) {
         directive.action match {
           case Launch => {
-             initializeExecutor() // fork then pullForExecution
+             initializeExecutor(directive.master) 
              queue = queue.enqueue(directive)
           }
           case Kill => {
@@ -258,12 +298,19 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
             }
           }
           case Resume => queue = queue.enqueue(directive)
+          case d@_ => LOG.warning("Unknown directive {}", d)
         }
       } else LOG.warning("Directive dispatched from {} is null!", 
                          sender.path.name)
     }
   }
 
+  /**
+   * Book slot with corresponded {@link Task} and {@link Executor}.
+   * @param slotSeq indicates the <i>N</i>th slot.
+   * @param task is the task being executed
+   * @param executor is the executor that runs the task.
+   */
   def book(slotSeq: Int, task: Task, executor: ActorRef) {
     slots.find(slot => (slotSeq == slot.seq)) match {
       case Some(slot) => {
@@ -274,6 +321,30 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
       case None => throw new RuntimeException("Slot with seq "+slotSeq+" not "+
                                               "found")
     }
+  }
+  /**
+   * Executor ack for Launch action.
+   * @return Receive is partial function.
+   */
+  def launchAck: Receive = {
+    case LaunchAck(slotSeq, taskAttemptId) => doAck(slotSeq, taskAttemptId)
+  }
+
+  def resumeAck: Receive = {
+    case ResumeAck(slotSeq, taskAttemptId) => doAck(slotSeq, taskAttemptId)
+  }
+
+  def doAck(slotSeq: Int, taskAttemptId: TaskAttemptID) {
+    if(!pendingQueue.isEmpty) {
+      pendingQueue.find( directive =>
+        taskAttemptId.equals(directive.task.getId) 
+      ) match {
+        case Some(directive) => book(slotSeq, directive.task, sender)
+        case None => LOG.error("No pending directive for task {}, slot {} "+
+                               "matches ack.", taskAttemptId, slotSeq)
+      }
+    } else LOG.warning("Pending queue is empty when slot {}, task {} ack!", 
+                       slotSeq, taskAttemptId)
   }
 
   /**
@@ -286,19 +357,21 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
       directive.action match {
         case Launch => {
           sender ! LaunchTask(directive.task)
-          book(slotSeq, directive.task, sender)
+          pendingQueue = pendingQueue.enqueue(directive)
+          queue = rest 
         }
-        case Kill => // TaskManager issues Kill to Executor, not by executor
+        case Kill => // Kill will be issued when receiveDirective not here.
         case Resume => {
           sender ! ResumeTask(directive.task)
-          book(slotSeq, directive.task, sender)
+          pendingQueue = pendingQueue.enqueue(directive)
+          queue = rest  
         }
         case _ => LOG.warning("Unknown action {}", directive.action)
       }
     }
   }
 
-  override def receive = pullForExecution orElse taskRequest orElse receiveDirective orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = launchAck orElse resumeAck orElse removeTask orElse pullForExecution orElse taskRequest orElse receiveDirective orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 
 
 }
