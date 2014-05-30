@@ -269,6 +269,51 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   }
 
   /**
+   * - Asynchronouly create task with an actor.
+   * - When that actor finishes setup, sending ack back to executor.
+   * @param Receive is partial function.
+   */
+  def launchTask: Receive = {
+    case LaunchTask(task) => {
+      // TODO: 
+      //sender ! LaunchAck(slotSeq, task.getId)
+      doLaunch(task)
+    }
+  }
+
+  def doLaunch(task: Task) {
+  }
+
+  /**
+   * - Asynchronouly create task with an actor.
+   * - When that actor finishes setup, sending ack back to executor.
+   * @param Receive is partial function.
+   */
+  def resumeTask: Receive = {
+    case ResumeTask(task) => {
+      // TODO: 
+      //sender ! ResumeAck(slotSeq, task.getId)
+    }
+  }
+
+  def doResume(task: Task) {
+  }
+
+  /**
+   * Kill the task that is running.
+   * @param Receive is partial function.
+   */
+  def killTask: Receive = {
+    case KillTask(taskAttemptId) => {
+      // TODO: 
+      //sender ! KillAck(slotSeq, taskAttemptId)
+    }
+  }
+
+  def doKill(taskAttemptId: TaskAttemptID) {
+  }
+
+  /**
    * Start executing task dispatched to the container.
    * @return Receive is partial function.
   def processTask: Receive = {
@@ -321,5 +366,5 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     context.unwatch(target)
   }
 
-  override def receive = shutdownSystem orElse stopContainer /*orElse processTask*/ orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownSystem orElse stopContainer /*orElse processTask*/ orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 }

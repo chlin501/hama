@@ -277,7 +277,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
             case Kill => {
               findTargetToKill(directive.task) match {
                 case Some(executor) => {
-                  executor ! KillTask
+                  executor ! KillTask(directive.task.getId)
                   pendingQueue = pendingQueue.enqueue(directive) 
                 }
                 case None => LOG.warning("Ask to Kill task {}, but no "+

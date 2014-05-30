@@ -38,9 +38,12 @@ import org.apache.hadoop.io.IOUtils
 import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.groom.ContainerReady
 import org.apache.hama.groom.ContainerStopped
+import org.apache.hama.groom.KillAck
 import org.apache.hama.groom.KillTask
+import org.apache.hama.groom.LaunchAck
 import org.apache.hama.groom.LaunchTask
 import org.apache.hama.groom.PullForExecution
+import org.apache.hama.groom.ResumeAck
 import org.apache.hama.groom.ResumeTask
 import org.apache.hama.groom.StopContainer
 import org.apache.hama.groom.ShutdownSystem
@@ -260,6 +263,11 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
     case LaunchTask(task) =>  bspPeerContainer ! LaunchTask(task)
   }
 
+  def launchAck: Receive = {
+    case LaunchAck(slotSeq, taskAttemptId) => 
+      taskManagerListener ! LaunchAck(slotSeq, taskAttemptId) 
+  }
+
   /** 
    * Ask {@link BSPPeerContainer} to resume a specific task.
    * This should happens after {@link BSPPeerContainer} is ready.
@@ -269,13 +277,23 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
     case ResumeTask(task) => bspPeerContainer ! ResumeTask(task)
   }
 
+  def resumeAck: Receive = {
+    case ResumeAck(slotSeq, taskAttemptId) => 
+      taskManagerListener ! ResumeAck(slotSeq, taskAttemptId)
+  }
+
   /**
    * Ask {@link BSPPeerContainer} to kill the task that is currently running.
    * This should happens after {@link BSPPeerContainer} is ready.
    * @param Receive is partial function.
    */
   def killTask: Receive = {
-    case KillTask => bspPeerContainer ! KillTask
+    case KillTask(taskAttemptId) => bspPeerContainer ! KillTask(taskAttemptId)
+  }
+
+  def killAck: Receive = {
+    case KillAck(slotSeq, taskAttemptId) => 
+      taskManagerListener ! KillAck(slotSeq, taskAttemptId)
   }
 
   /**
@@ -356,7 +374,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
     case Terminated(target) => LOG.info("{} is offline.", target.path.name)
   }
 
-  def receive = launchTask orElse resumeTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownSystem orElse unknown
+  def receive = launchAck orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownSystem orElse unknown
      
 }
 

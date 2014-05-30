@@ -17,7 +17,10 @@
  */
 package org.apache.hama.groom
 
+import org.apache.hama.bsp.TaskAttemptID
+
 /**
  * Kill current running task in container anyway.
+ * @param taskAttemptId is the task that is running on the target container.
  */
-final case object KillTask
+final case class KillTask(taskAttemptId: TaskAttemptID)
