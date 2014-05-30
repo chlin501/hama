@@ -584,6 +584,28 @@ public final class Job implements Writable {
     } 
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (o == this)
+      return true;
+    if (null == o)
+      return false;
+    if (getClass() != o.getClass())
+      return false;
+
+    final Job s = (Job) o;
+    if (!s.id.equals(id)) 
+      return false;
+    return true;
+  }
+
+  @Override
+  public int hashCode() {
+    int result = 17;
+    result = 37 * result + id.hashCode();
+    return result;
+  }
+
   @Override 
   public String toString() {
     return "Job id: "+ id.toString()+ 

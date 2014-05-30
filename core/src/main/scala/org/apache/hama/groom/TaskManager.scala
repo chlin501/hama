@@ -28,6 +28,7 @@ import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
 import org.apache.hama.ProxyInfo
 import org.apache.hama.lang.Executor
+import org.apache.hama.lang.Fork
 import org.apache.hama.master._
 import org.apache.hama.master.Directive._
 import org.apache.hama.master.Directive.Action._
@@ -78,7 +79,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   /**
    * All {@link Directive}s are stored in this queue. 
    */
-  private var queue = Queue[Directive]()
+  private var directiveQueue = Queue[Directive]()
 
   /**
    * {@link Directive}s to be acked and then removed will be placed in this 
@@ -115,7 +116,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     lookup("groomManager", groomManagerPath)
   }
 
-  def hasTaskInQueue: Boolean = !queue.isEmpty
+  def hasTaskInQueue: Boolean = !directiveQueue.isEmpty
 
   /**
    * Check if there is slot available. 
@@ -183,12 +184,13 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   def currentGroomServerStat(): GroomServerStat = {
     val stat = new GroomServerStat(getGroomServerName, getGroomServerHost, 
                                    getGroomServerPort, getMaxTasks)
-    queue.foreach( directive => {
-      if(null != directive) 
-        stat.addToQueue(directive.task.getId.toString)
-      else {
-        LOG.warning("Directive shouldn't be null!")
-        stat.addToQueue("(null)")
+    directiveQueue.foreach( directive => {
+      directive match {
+        case null => {
+          LOG.warning("Directive shouldn't be null!")
+          stat.addToQueue("(null)")
+        }
+        case _ => stat.addToQueue(directive.task.getId.toString)
       }
     })
 
@@ -213,20 +215,25 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   }
 
   /**
-   * 1. Create Executor actor.
-   * 2. Send Fork message in forking a child process.
-   * Forked child process will send PullForExecution message for task execution.
+   * 1. Create an Executor actor.
+   * 2. Send Fork message so that {@link Executor} will fork a child process.
+   * Forked child process will send {@link PullForExecution} message for task 
+   * execution.
    */
   def initializeExecutor(master: String) {
     pickUp match {
       case Some(slot) => { 
         val executorName = configuration.get("bsp.groom.name", "groomServer") +
                            "_executor_" + slot.seq 
-        val executor = context.actorOf(Props(classOf[Executor], configuration,
-                                       executorName))  
+        // TODO: move to spawn()
+        val executor = context.actorOf(Props(classOf[Executor], 
+                                             configuration,
+                                             self),
+                                       executorName)  
+        executor ! Fork(slot.seq, configuration) 
         val newSlot = Slot(slot.seq, None, master, Some(executor))
         slots -= slot
-        slots += slot
+        slots += newSlot
       }
       case None => // all slots are in use 
     }
@@ -283,30 +290,37 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    */
   def receiveDirective: Receive = {
     case directive: Directive => { 
-      if(null != directive) {
-        directive.action match {
-          case Launch => {
-             initializeExecutor(directive.master) 
-             queue = queue.enqueue(directive)
-          }
-          case Kill => {
-            findTargetToKill(directive.task) match {
-              case Some(executor) => executor ! KillTask
-              case None => LOG.warning("Ask to Kill task {}, but no "+
-                                       "corresponded executor found!", 
-                                       directive.task.toString)
+      directive match {
+        case null => LOG.warning("Directive dispatched from {} is null!", 
+                                 sender.path.name)
+        case _ => {
+          directive.action match {
+            case Launch => {
+               initializeExecutor(directive.master) 
+               directiveQueue = directiveQueue.enqueue(directive)
             }
+            case Kill => {
+              findTargetToKill(directive.task) match {
+                case Some(executor) => {
+                  executor ! KillTask
+                  directiveQueue = directiveQueue.enqueue(directive)
+                }
+                case None => LOG.warning("Ask to Kill task {}, but no "+
+                                         "corresponded executor found!", 
+                                         directive.task.toString)
+              }
+            }
+            case Resume => directiveQueue = directiveQueue.enqueue(directive)
+            case d@_ => LOG.warning("Unknown directive {}", d)
           }
-          case Resume => queue = queue.enqueue(directive)
-          case d@_ => LOG.warning("Unknown directive {}", d)
         }
-      } else LOG.warning("Directive dispatched from {} is null!", 
-                         sender.path.name)
+      }
     }
   }
 
   /**
-   * Book slot with corresponded {@link Task} and {@link Executor}.
+   * Book the slot with corresponded {@link Task} and {@link Executor} when
+   * receiving LaunchAck and ResumeAck.
    * @param slotSeq indicates the <i>N</i>th slot.
    * @param task is the task being executed
    * @param executor is the executor that runs the task.
@@ -330,10 +344,33 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     case LaunchAck(slotSeq, taskAttemptId) => doAck(slotSeq, taskAttemptId)
   }
 
+  /**
+   * Executor ack for Resume action.
+   * @return Receive is partial function.
+   */
   def resumeAck: Receive = {
     case ResumeAck(slotSeq, taskAttemptId) => doAck(slotSeq, taskAttemptId)
   }
 
+  /**
+   * Executor ack for Kill action.
+   * Verify corresponded task is with Kill action and correct taskAttemptId.
+  def killAck: Receive = {
+    case KillAck(slotSeq, taskAttemptId) => {
+      slots.find(slot=>taskAttemptId.equals())
+    }
+  }
+   */
+
+  /**
+   * Update slot information according to {@link Slot#seq} and 
+   * {@link TaskAttemptID} acked by {@link Executor}.
+   * This function:
+   * - search directive in pendingQueue.
+   * - update slot information with found directive content. 
+   * @param slotSeq is the sequence number of slot.
+   * @param taskAttemptId is the task attempt id executed at BSPPeerContainer.
+   */
   def doAck(slotSeq: Int, taskAttemptId: TaskAttemptID) {
     if(!pendingQueue.isEmpty) {
       pendingQueue.find( directive =>
@@ -349,24 +386,30 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   /**
    * Executor on behalf of BSPPeerContainer requests for task execution.
+   * - dequeue a directive from queue.
    * @return Receive is partial function.
    */
   def pullForExecution: Receive = {
     case PullForExecution(slotSeq) => {
-      val (directive, rest) = queue.dequeue 
+      val (directive, rest) = directiveQueue.dequeue 
       directive.action match {
         case Launch => {
           sender ! LaunchTask(directive.task)
           pendingQueue = pendingQueue.enqueue(directive)
-          queue = rest 
+          directiveQueue = rest 
         }
-        case Kill => // Kill will be issued when receiveDirective not here.
+        case Kill => // Kill will be issued when receiveDirective, not here.
         case Resume => {
           sender ! ResumeTask(directive.task)
           pendingQueue = pendingQueue.enqueue(directive)
-          queue = rest  
+          directiveQueue = rest  
         }
-        case _ => LOG.warning("Unknown action {}", directive.action)
+        case _ => {
+          LOG.warning("Unknown action {} for task {} from master {}", 
+                              directive.action, directive.task.getId, 
+                              directive.master)
+          directiveQueue = rest
+        }
       }
     }
   }

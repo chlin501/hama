@@ -59,13 +59,6 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
     }
   }
 
-  def reg: Receive = {
-    case "register" => {
-      executors.foreach( e => e ! Register)
-      LOG.info("Register all executors to BSPPeerContainers ...")
-    }
-  }
-
   def fork: Receive = {
     case "fork" => {
       executors.foreach( e => e.path.name match {
@@ -114,7 +107,7 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
     }
   }
 
-  override def receive = shut orElse add orElse reg orElse fork orElse readyx orElse stopAll orElse stopped orElse super.receive
+  override def receive = shut orElse add orElse fork orElse readyx orElse stopAll orElse stopped orElse super.receive
 } 
 
 object WithRemoteSetting {
@@ -159,24 +152,22 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
                                classOf[BSPPeerContainer])
   }
 
-  def createProcess(name: String): ActorRef = {
+  def createProcess(name: String, taskMgr: ActorRef): ActorRef = {
     LOG.info("Create actor "+name+" ...")
-    createWithArgs(name, classOf[Executor], testConfiguration)
+    createWithArgs(name, classOf[Executor], testConfiguration, taskMgr)
   }
 
   it("test forking a process") {
     LOG.info("Test forking a process...")
-    val e1 = createProcess("groomServer_executor_1")
-    val e2 = createProcess("groomServer_executor_2")
-    val e3 = createProcess("groomServer_executor_3")
     val taskManagerName = 
       testConfiguration.get("bsp.groom.taskmanager.name", "taskManager")
     val aggregator = createWithTester(taskManagerName, classOf[Aggregator]) 
+    val e1 = createProcess("groomServer_executor_1", aggregator)
+    val e2 = createProcess("groomServer_executor_2", aggregator)
+    val e3 = createProcess("groomServer_executor_3", aggregator)
     aggregator ! Add(e1) 
     aggregator ! Add(e2) 
     aggregator ! Add(e3) 
-
-    aggregator ! "register"
   
     aggregator ! "fork"
 

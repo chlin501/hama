@@ -301,6 +301,17 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
       (fromQueue, Queue[Job]())
     }
   }
+
+  /**
+   * once offline detected, replace non-active tasks from a job either in 
+   * taskQueue or processingQueue (in order).
+   * If the scheduled job (in processingQueue) is not fully assigned after 
+   * resched, move the job from processingQueue to taskQueue.
+   * If the job is in taskQueue, then keep it as is unless the failure tasks
+   * is not fully assigned. In that case, prepend unfully-assigned job ahead
+   * of that in taskQueue; unfully-assigned job should be moved from 
+   * processingQueue to taskQueue.
+   */
   
 /*
   * Rescheduling tasks when a GroomServer goes offline.

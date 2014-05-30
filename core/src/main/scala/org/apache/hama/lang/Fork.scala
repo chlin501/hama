@@ -17,4 +17,6 @@
  */
 package org.apache.hama.lang
 
-final case object Register
+import org.apache.hama.HamaConfiguration
+
+final case class Fork(slotSeq: Int, conf: HamaConfiguration)

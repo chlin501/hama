@@ -92,12 +92,14 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
    * @param stat contains all tasks in failure GroomServer.
    */
   def offlineReaction(groomServerName: GroomServerName) { 
-    if(null != mediator) {
+    if(null != mediator) { 
       mediator ! Request("sched", RescheduleTasks(groomServerName))
       mediator ! Request("receptionist", GroomStat(groomServerName, 0))
-    } else 
+    } else {
+      // TODO: put Requests to queue and notify when mediator is up  
       LOG.warning("No mediator so offline reaction for {} is impossible!", 
                   groomServerName)
+    }
   }
 
   override def offline(taskManager: ActorRef) {
@@ -127,7 +129,7 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
   
   override def afterMediatorUp {
     import context.dispatcher
-    registrationWatcher = 
+    registrationWatcher =  // TODO: cancel watcher when shutting down. 
       context.system.scheduler.schedule(0.seconds, 3.seconds, self, Notifying)
   }
 
@@ -146,9 +148,10 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
   }
 
   /**
-   * Notify Scheduler that a GroomServer enrolls; also update the flag
-   * if the taskManager actor is passed to {@link Scheduler}. 
-   * {@link Receptionist} will also be notified with GroomServer's maxTasks.
+   * Periodically notify Scheduler GroomServers enroll.
+   * Also update the flag notified if the taskManager actor is passed to 
+   * {@link Scheduler}. {@link Receptionist} will also be notified with 
+   * GroomServer's maxTasks.
    */
   def notifying: Receive = {
     case Notifying => {

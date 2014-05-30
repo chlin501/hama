@@ -425,6 +425,28 @@ public final class Task implements Writable {
   }
 
   @Override
+  public boolean equals(Object o) {
+    if (o == this)
+      return true;
+    if (null == o)
+      return false;
+    if (getClass() != o.getClass())
+      return false;
+
+    final Task s = (Task) o;
+    if (!s.id.equals(id))
+      return false;
+    return true;
+  }
+
+  @Override
+  public int hashCode() {
+    int result = 17;
+    result = 37 * result + id.hashCode();
+    return result;
+  }
+
+  @Override
   public String toString() {
     return "TaskId: "+id.toString()+" startTime: "+getStartTime()+
            " finishTime: "+getFinishTime()+" partition: "+
