@@ -138,7 +138,7 @@ private[groom] class DefaultLogger(logger: ActorRef) extends Logger {
    * For example, 
    * <pre>
    *   format("select count, name from accounts where name = %1$s and " \
-   *          "gender = %2$s", "'hohn'", "'male'")
+   *          "gender = %2$s", "'john'", "'male'")
    * </pre>
    * produces the result 
    * <pre>

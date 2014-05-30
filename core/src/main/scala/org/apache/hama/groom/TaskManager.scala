@@ -207,8 +207,19 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     stat
   } 
 
+  /**
+   * Find if there is corresponded task running on a slot.
+   * @param task is the target task to be killed.
+   * @return Option[ActorRef] contains {@link Executor} if matched; otherwise
+   *                          None is returned.
+   */
   def findTargetToKill(task: Task): Option[ActorRef] = { 
-    slots.find(slot=> slot.task.equals(Some(task))) match {
+    slots.find( slot => { 
+      slot.task match {
+        case Some(found) => found.getId.equals(task.getId)
+        case None => false
+      }
+    }) match {
       case Some(slot) => slot.executor 
       case None => None
     }
@@ -276,10 +287,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
             }
             case Kill => {
               findTargetToKill(directive.task) match {
-                case Some(executor) => {
-                  executor ! KillTask(directive.task.getId)
-                  pendingQueue = pendingQueue.enqueue(directive) 
-                }
+                case Some(executor) => executor ! KillTask(directive.task.getId)
                 case None => LOG.warning("Ask to Kill task {}, but no "+
                                          "corresponded executor found!", 
                                          directive.task.toString)
@@ -303,9 +311,17 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   def book(slotSeq: Int, task: Task, executor: ActorRef) {
     slots.find(slot => (slotSeq == slot.seq)) match {
       case Some(slot) => {
-        val newSlot = Slot(slot.seq, Some(task), slot.master, Some(executor))
-        slots -= slot 
-        slots += newSlot
+        slot.task match {
+          case None => {
+            val newSlot = Slot(slot.seq, Some(task), slot.master, 
+                               Some(executor))
+            slots -= slot 
+            slots += newSlot
+          }
+          case Some(found) => 
+            throw new RuntimeException("Task %1$s can't exist at slot %2$s". 
+                                       format(found.getId, slotSeq))
+        }
       }
       case None => throw new RuntimeException("Slot with seq "+slotSeq+" not "+
                                               "found")
@@ -317,7 +333,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    * @return Receive is partial function.
    */
   def launchAck: Receive = {
-    case LaunchAck(slotSeq, taskAttemptId) => doAck(slotSeq, taskAttemptId)
+    case LaunchAck(slotSeq, taskAttemptId) => 
+      doAck(slotSeq, taskAttemptId, sender)
   }
 
   /**
@@ -325,7 +342,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    * @return Receive is partial function.
    */
   def resumeAck: Receive = {
-    case ResumeAck(slotSeq, taskAttemptId) => doAck(slotSeq, taskAttemptId)
+    case ResumeAck(slotSeq, taskAttemptId) => 
+      doAck(slotSeq, taskAttemptId, sender)
   }
 
   /**
@@ -347,6 +365,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
           val newSlot = Slot(slot.seq, None, slot.master, slot.executor)
           slots -= slot 
           slots += newSlot 
+          // TODO: inform reporter!! 
         } 
         case None => LOG.warning("Killed task {} not found.", taskAttemptId)
       }
@@ -362,12 +381,16 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    * @param slotSeq is the sequence number of slot.
    * @param taskAttemptId is the task attempt id executed at BSPPeerContainer.
    */
-  def doAck(slotSeq: Int, taskAttemptId: TaskAttemptID) {
+  def doAck(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) {
     if(!pendingQueue.isEmpty) {
       pendingQueue.find( directive =>
-        taskAttemptId.equals(directive.task.getId) 
+        directive.task.getId.equals(taskAttemptId) 
       ) match {
-        case Some(directive) => book(slotSeq, directive.task, sender)
+        case Some(directive) => { 
+          book(slotSeq, directive.task, from)
+          pendingQueue = pendingQueue diff Queue(directive)
+          // TODO: inform reporter!!
+        }
         case None => LOG.error("No pending directive for task {}, slot {} "+
                                "matches ack.", taskAttemptId, slotSeq)
       }
