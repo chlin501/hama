@@ -38,6 +38,7 @@ import org.apache.hadoop.io.IOUtils
 import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.groom.ContainerReady
 import org.apache.hama.groom.ContainerStopped
+import org.apache.hama.groom.KillTask
 import org.apache.hama.groom.LaunchTask
 import org.apache.hama.groom.PullForExecution
 import org.apache.hama.groom.ResumeTask
@@ -266,6 +267,15 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    */
   def resumeTask: Receive = {
     case ResumeTask(task) => bspPeerContainer ! ResumeTask(task)
+  }
+
+  /**
+   * Ask {@link BSPPeerContainer} to kill the task that is currently running.
+   * This should happens after {@link BSPPeerContainer} is ready.
+   * @param Receive is partial function.
+   */
+  def killTask: Receive = {
+    case KillTask => bspPeerContainer ! KillTask
   }
 
   /**

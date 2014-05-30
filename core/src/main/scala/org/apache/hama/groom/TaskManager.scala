@@ -260,31 +260,6 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   }
 
   /**
-   * Executor replies the task is killed so remove the cooresponded task.
-   * @return Receive is partial function
-   */
-  def removeTask: Receive = {
-    case RemoveTask(slotSeq, taskAttemptId) => {
-      slots.find( slot => {
-        val seqEquals = (slot.seq == slotSeq)  
-        val idEquals = slot.task match { 
-          case Some(found) => found.getId.equals(taskAttemptId)
-          case None => false
-        }
-        seqEquals && idEquals
-      }) match {
-        case Some(slot) => {
-          val newSlot = Slot(slot.seq, None, slot.master, slot.executor)
-          slots -= slot
-          slots += newSlot
-        }
-        case None => LOG.warning("Can't remove task for taskAttemptId {} not "+
-                                 "found.", taskAttemptId)
-      }
-    }
-  }
-
-  /**
    * Receive {@link Directive} from Scheduler, deciding what to do next.
    * @return Receive is partial function.
    */
@@ -303,7 +278,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
               findTargetToKill(directive.task) match {
                 case Some(executor) => {
                   executor ! KillTask
-                  directiveQueue = directiveQueue.enqueue(directive)
+                  pendingQueue = pendingQueue.enqueue(directive) 
                 }
                 case None => LOG.warning("Ask to Kill task {}, but no "+
                                          "corresponded executor found!", 
@@ -336,6 +311,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
                                               "found")
     }
   }
+
   /**
    * Executor ack for Launch action.
    * @return Receive is partial function.
@@ -355,12 +331,27 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   /**
    * Executor ack for Kill action.
    * Verify corresponded task is with Kill action and correct taskAttemptId.
+   * @param Receive is partial function.
+   */
   def killAck: Receive = {
     case KillAck(slotSeq, taskAttemptId) => {
-      slots.find(slot=>taskAttemptId.equals())
+      slots.find( slot => {
+        val seqEquals = (slot.seq == slotSeq)  
+        val idEquals = slot.task match {
+          case Some(found) => found.getId.equals(taskAttemptId)
+          case None => false
+        }
+        seqEquals && idEquals
+      }) match {
+        case Some(slot) => {
+          val newSlot = Slot(slot.seq, None, slot.master, slot.executor)
+          slots -= slot 
+          slots += newSlot 
+        } 
+        case None => LOG.warning("Killed task {} not found.", taskAttemptId)
+      }
     }
   }
-   */
 
   /**
    * Update slot information according to {@link Slot#seq} and 
@@ -414,7 +405,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     }
   }
 
-  override def receive = launchAck orElse resumeAck orElse removeTask orElse pullForExecution orElse taskRequest orElse receiveDirective orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse taskRequest orElse receiveDirective orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 
 
 }
