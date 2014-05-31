@@ -24,10 +24,19 @@ import akka.actor.ActorSystem
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.master.Directive
+import org.apache.hama.master.Directive.Action
+import org.apache.hama.master.Directive.Action._
 import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.groom.ContainerReady
 import org.apache.hama.groom.ContainerStopped
+import org.apache.hama.groom.KillAck
+//import org.apache.hama.groom.KillTask
+import org.apache.hama.groom.LaunchAck
+//import org.apache.hama.groom.LaunchTask
 import org.apache.hama.groom.MockContainer
+import org.apache.hama.groom.ResumeAck
+//import org.apache.hama.groom.ResumeTask
 import org.apache.hama.groom.ShutdownSystem
 import org.apache.hama.groom.TaskManager
 import org.apache.hama.HamaConfiguration
@@ -43,6 +52,7 @@ final case class Add(e: ActorRef)
 class Aggregator(conf: HamaConfiguration, tester: ActorRef) 
       extends TaskManager(conf) {
 
+/*
   var e1_notified = false
   var e2_notified = false
   var e3_notified = false
@@ -83,13 +93,26 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
       tester ! sender.path.name+"_ready"
     }
   }
+*/
 
-  def taskx: Receive = {
-    case task: Task => { 
-      executors.foreach( e=> e! task)
+/*
+  def tasksx: Receive = {
+    case tasks: Array[Task] => { 
+      var idx = 0
+      executors.foreach( e => { 
+        idx match {
+          case 0 => e ! LaunchTask(tasks(idx))
+          case 1 => e ! ResumeTask(tasks(idx))
+          case 2 => e ! KillTask(tasks(idx).getId)
+          case i@_ => throw new Exception("Out of expected size: "+i)
+        }
+        idx+=1
+      })
     }
   }
+*/
 
+/*
   def stopAll: Receive = {
     case "stopAll" => {
       executors.foreach( e =>  e ! StopProcess)
@@ -106,8 +129,9 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
       executors.foreach( e => e ! ShutdownSystem)
     }
   }
+*/
 
-  override def receive = shut orElse add orElse fork orElse readyx orElse stopAll orElse stopped orElse super.receive
+  override def receive = /*tasksx orElse shut orElse add orElse fork orElse readyx orElse stopAll orElse stopped orElse*/ super.receive
 } 
 
 object WithRemoteSetting {
@@ -152,25 +176,31 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
                                classOf[BSPPeerContainer])
   }
 
+/*
   def createProcess(name: String, taskMgr: ActorRef): ActorRef = {
     LOG.info("Create actor "+name+" ...")
     createWithArgs(name, classOf[Executor], testConfiguration, taskMgr)
   }
+*/
+
+  def createDirective(action: Directive.Action, task: Task): Directive = 
+    new Directive(action, task, "testMaster")
 
   it("test forking a process") {
     LOG.info("Test forking a process...")
+
     val taskManagerName = 
       testConfiguration.get("bsp.groom.taskmanager.name", "taskManager")
+
     val aggregator = createWithTester(taskManagerName, classOf[Aggregator]) 
+/*
     val e1 = createProcess("groomServer_executor_1", aggregator)
     val e2 = createProcess("groomServer_executor_2", aggregator)
     val e3 = createProcess("groomServer_executor_3", aggregator)
     aggregator ! Add(e1) 
     aggregator ! Add(e2) 
     aggregator ! Add(e3) 
-  
     aggregator ! "fork"
-
     LOG.info("Wait 20 seconds for child process being started up.")
     sleep(20.seconds)
   
@@ -182,6 +212,27 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
 
     expectAnyOf("groomServer_executor_1_ready", "groomServer_executor_2_ready",
                 "groomServer_executor_3_ready")
+*/
+
+    sleep(10.seconds)
+  
+    /* jobid, taskId, taskAttemptId, partition */
+    val task1 = createTask("test", 1, 7, 2, 7) 
+    val directive1 = createDirective(Launch, task1)
+    aggregator ! directive1
+
+    val task2 = createTask("test", 3, 1, 1, 9) 
+    val directive2 = createDirective(Resume, task2)
+    aggregator ! directive2
+
+    val task3 = createTask("test", 1, 4, 3, 2) 
+    val directive3 = createDirective(Kill, task3)
+    aggregator ! directive3
+
+    sleep(20.seconds)
+
+    expectAnyOf(LaunchAck(1, task1.getId), ResumeAck(2, task2.getId), 
+                KillAck(3, task3.getId))
 
     LOG.info("Wait 3 seconds before calling stopAll.")
     sleep(3.seconds)
@@ -202,23 +253,10 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
     expectAnyOf("groomServer_executor_1_container_stopped", 
                 "groomServer_executor_2_container_stopped", 
                 "groomServer_executor_3_container_stopped")
- 
-    sleep(10.seconds)
-  
-/*
-    val jobId = 1
-    val taskId = 7
-    val taskAttemptId = 2
-    val partition = 7
-    val task = createTask("test", jobId, taskId, taskAttemptId, partition) 
-    aggregator ! task
-*/
-
-    sleep(10.seconds)
 
     aggregator ! "shutdown"
 
-    sleep(3.seconds)
+    sleep(10.seconds)
 
     LOG.info("Done!")
   }

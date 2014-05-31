@@ -79,13 +79,13 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   /**
    * All {@link Directive}s are stored in this queue. 
    */
-  private var directiveQueue = Queue[Directive]()
+  protected var directiveQueue = Queue[Directive]()
 
   /**
-   * {@link Directive}s to be acked and then removed will be placed in this 
-   * queue.
+   * {@link Directive}s to be acked will be placed in this queue. After acked,
+   * directive will be removed.
    */
-  private var pendingQueue = Queue[Directive]()
+  protected var pendingQueue = Queue[Directive]()
 
   /* can be overriden in test. */
   protected def getGroomServerName(): String = groomServerName
@@ -405,24 +405,26 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    */
   def pullForExecution: Receive = {
     case PullForExecution(slotSeq) => {
-      val (directive, rest) = directiveQueue.dequeue 
-      directive.action match {
-        case Launch => {
-          sender ! LaunchTask(directive.task)
-          pendingQueue = pendingQueue.enqueue(directive)
-          directiveQueue = rest 
-        }
-        case Kill => // Kill will be issued when receiveDirective, not here.
-        case Resume => {
-          sender ! ResumeTask(directive.task)
-          pendingQueue = pendingQueue.enqueue(directive)
-          directiveQueue = rest  
-        }
-        case _ => {
-          LOG.warning("Unknown action {} for task {} from master {}", 
-                              directive.action, directive.task.getId, 
-                              directive.master)
-          directiveQueue = rest
+      if(!directiveQueue.isEmpty) {
+        val (directive, rest) = directiveQueue.dequeue 
+        directive.action match {
+          case Launch => {
+            sender ! LaunchTask(directive.task)
+            pendingQueue = pendingQueue.enqueue(directive)
+            directiveQueue = rest 
+          }
+          case Kill => // Kill will be issued when receiveDirective, not here.
+          case Resume => {
+            sender ! ResumeTask(directive.task)
+            pendingQueue = pendingQueue.enqueue(directive)
+            directiveQueue = rest  
+          }
+          case _ => {
+            LOG.warning("Unknown action {} for task {} from master {}", 
+                                directive.action, directive.task.getId, 
+                                directive.master)
+            directiveQueue = rest
+          }
         }
       }
     }

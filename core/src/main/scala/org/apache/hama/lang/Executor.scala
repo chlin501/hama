@@ -314,7 +314,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   }
 
   /**
-   * BSPPeerContainer notify it's in ready state.
+   * BSPPeerContainer notify when it's in ready state.
    * @return Receive is partial function.
    */
   def containerReady: Receive = {
@@ -325,10 +325,11 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
         bspPeerContainer ! cmd.msg
         commandQueue = rest  
       }
-      taskManagerListener ! PullForExecution(slotSeq) 
+      afterContainerReady(taskManagerListener)
     }
   }
 
+  def afterContainerReady(target: ActorRef) = target ! PullForExecution(slotSeq) 
   /**
    * Notify when BSPPeerContainer is stopped.
    * @return Receive is partial function.

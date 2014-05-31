@@ -275,14 +275,18 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    */
   def launchTask: Receive = {
     case LaunchTask(task) => {
-      // TODO: 
-      //sender ! LaunchAck(slotSeq, task.getId)
       doLaunch(task)
+      postLaunch(slotSeq, task.getId, sender)
     }
   }
 
   def doLaunch(task: Task) {
+    LOG.info("function doLaunch is not yet implemented!") // TODO:
   }
+
+  def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) =
+    from ! LaunchAck(slotSeq, taskAttemptId)
+    
 
   /**
    * - Asynchronouly create task with an actor.
@@ -291,13 +295,18 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    */
   def resumeTask: Receive = {
     case ResumeTask(task) => {
-      // TODO: 
-      //sender ! ResumeAck(slotSeq, task.getId)
+      doResume(task)
+      postResume(slotSeq, task.getId, sender)
     }
   }
 
   def doResume(task: Task) {
+    LOG.info("function doResume is not yet implemented!") // TODO:
   }
+
+  def postResume(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) =
+    from ! ResumeAck(slotSeq, taskAttemptId)
+    
 
   /**
    * Kill the task that is running.
@@ -305,13 +314,17 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    */
   def killTask: Receive = {
     case KillTask(taskAttemptId) => {
-      // TODO: 
-      //sender ! KillAck(slotSeq, taskAttemptId)
+      doKill(slotSeq, taskAttemptId)
+      postKill(slotSeq, taskAttemptId, sender)
     }
   }
 
-  def doKill(taskAttemptId: TaskAttemptID) {
+  def doKill(slotSeq: Int, taskAttemptId: TaskAttemptID) {
+    LOG.info("function doKill is not yet implemented!") // TODO:
   }
+
+  def postKill(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = 
+    from ! KillAck(slotSeq, taskAttemptId)
 
   /**
    * Start executing task dispatched to the container.
@@ -354,6 +367,10 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     }
   }
 
+  /**
+   * Shutdown the system. The spawned process will be stopped as well.
+   * @return Receive is partial function.
+   */
   def shutdownSystem: Receive = {
     case ShutdownSystem => {
       LOG.info("Completely shutdown BSPContainer system ...")
