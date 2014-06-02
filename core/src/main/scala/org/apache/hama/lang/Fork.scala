@@ -19,4 +19,4 @@ package org.apache.hama.lang
 
 import org.apache.hama.HamaConfiguration
 
-final case class Fork(slotSeq: Int, conf: HamaConfiguration)
+final case class Fork(slotSeq: Int)

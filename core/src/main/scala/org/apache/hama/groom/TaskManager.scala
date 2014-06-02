@@ -18,8 +18,11 @@
 package org.apache.hama.groom
 
 import akka.actor.ActorRef
+import akka.actor.AddressFromURIString
 import akka.actor.Cancellable
+import akka.actor.Deploy
 import akka.actor.Props
+import akka.remote.RemoteScope
 import org.apache.hama.bsp.v2.GroomServerStat
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.TaskAttemptID
@@ -41,7 +44,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   type ForkedChild = String
 
-  val schedInfo =
+  def schedInfo: ProxyInfo = 
     new ProxyInfo.Builder().withConfiguration(configuration).
                             withActorName("sched").
                             appendRootPath("bspmaster").
@@ -50,7 +53,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   val schedPath = schedInfo.getPath
 
-  val groomManagerInfo =
+  def groomManagerInfo: ProxyInfo = 
     new ProxyInfo.Builder().withConfiguration(configuration).
                             withActorName("groomManager").
                             appendRootPath("bspmaster").
@@ -107,7 +110,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     for(seq <- 1 to constraint) {
       slots ++= Set(Slot(seq, None, bspmaster, None))
     }
-    LOG.debug("{} GroomServer slots are initialied.", constraint)
+    LOG.info("{} GroomServer slots are initialied.", constraint)
   }
 
   override def initializeServices {
@@ -234,19 +237,22 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   def initializeExecutor(master: String) {
     pickUp match {
       case Some(slot) => { 
+        LOG.info("Initialize executor for slot seq {}", slot.seq)
         val executorName = configuration.get("bsp.groom.name", "groomServer") +
                            "_executor_" + slot.seq 
         // TODO: move to spawn()
         val executor = context.actorOf(Props(classOf[Executor], 
                                              configuration,
                                              self),
-                                       executorName)  
-        executor ! Fork(slot.seq, configuration) 
+                                       executorName)
+        executor ! Fork(slot.seq) 
         val newSlot = Slot(slot.seq, None, master, Some(executor))
         slots -= slot
         slots += newSlot
       }
-      case None => // all slots are in use 
+      case None => {// all slots are in use 
+        LOG.info("All slots are in use! {}", slots.mkString("\n"))
+      }
     }
   }
 
@@ -277,23 +283,25 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   def receiveDirective: Receive = {
     case directive: Directive => { 
       directive match {
-        case null => LOG.warning("Directive dispatched from {} is null!", 
+        case null => LOG.info("Directive dispatched from {} is null!", 
                                  sender.path.name)
         case _ => {
+          LOG.info("Receive directive action: "+directive.action+" task: "+
+                   directive.task.getId.toString+" master: "+directive.master)
           directive.action match {
-            case Launch => {
-               initializeExecutor(directive.master) 
-               directiveQueue = directiveQueue.enqueue(directive)
+            case Launch | Resume => {
+              initializeExecutor(directive.master) 
+              directiveQueue = directiveQueue.enqueue(directive)
             }
             case Kill => {
               findTargetToKill(directive.task) match {
-                case Some(executor) => executor ! KillTask(directive.task.getId)
+                case Some(executor) => 
+                  executor ! new KillTask(directive.task.getId)
                 case None => LOG.warning("Ask to Kill task {}, but no "+
                                          "corresponded executor found!", 
                                          directive.task.toString)
               }
             }
-            case Resume => directiveQueue = directiveQueue.enqueue(directive)
             case d@_ => LOG.warning("Unknown directive {}", d)
           }
         }
@@ -333,8 +341,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    * @return Receive is partial function.
    */
   def launchAck: Receive = {
-    case LaunchAck(slotSeq, taskAttemptId) => 
-      doAck(slotSeq, taskAttemptId, sender)
+    case action: LaunchAck => 
+      doAck(action.slotSeq, action.taskAttemptId, sender)
   }
 
   /**
@@ -342,8 +350,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    * @return Receive is partial function.
    */
   def resumeAck: Receive = {
-    case ResumeAck(slotSeq, taskAttemptId) => 
-      doAck(slotSeq, taskAttemptId, sender)
+    case action: ResumeAck => 
+      doAck(action.slotSeq, action.taskAttemptId, sender)
   }
 
   /**
@@ -352,11 +360,11 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    * @param Receive is partial function.
    */
   def killAck: Receive = {
-    case KillAck(slotSeq, taskAttemptId) => {
+    case action: KillAck => {
       slots.find( slot => {
-        val seqEquals = (slot.seq == slotSeq)  
+        val seqEquals = (slot.seq == action.slotSeq)  
         val idEquals = slot.task match {
-          case Some(found) => found.getId.equals(taskAttemptId)
+          case Some(found) => found.getId.equals(action.taskAttemptId)
           case None => false
         }
         seqEquals && idEquals
@@ -367,7 +375,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
           slots += newSlot 
           // TODO: inform reporter!! 
         } 
-        case None => LOG.warning("Killed task {} not found.", taskAttemptId)
+        case None => LOG.warning("Killed task {} not found.", 
+                                 action.taskAttemptId)
       }
     }
   }
@@ -409,13 +418,13 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         val (directive, rest) = directiveQueue.dequeue 
         directive.action match {
           case Launch => {
-            sender ! LaunchTask(directive.task)
+            sender ! new LaunchTask(directive.task)
             pendingQueue = pendingQueue.enqueue(directive)
             directiveQueue = rest 
           }
           case Kill => // Kill will be issued when receiveDirective, not here.
           case Resume => {
-            sender ! ResumeTask(directive.task)
+            sender ! new ResumeTask(directive.task)
             pendingQueue = pendingQueue.enqueue(directive)
             directiveQueue = rest  
           }

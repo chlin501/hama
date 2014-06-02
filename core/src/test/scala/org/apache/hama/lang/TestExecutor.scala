@@ -19,6 +19,7 @@ package org.apache.hama.lang
 
 import akka.actor.Actor
 import akka.actor.ActorRef
+import akka.actor.Props
 import akka.event.Logging
 import akka.actor.ActorSystem
 import com.typesafe.config.Config
@@ -47,10 +48,17 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-final case class Add(e: ActorRef)
+//final case class Add(e: ActorRef)
 
 class Aggregator(conf: HamaConfiguration, tester: ActorRef) 
       extends TaskManager(conf) {
+
+  override def initializeServices {
+    LOG.info("Start initializse task manager actor {} with max tasks {}.", 
+             self, getMaxTasks)
+    initializeSlots(getMaxTasks)
+    LOG.info("Done initializing slots ...")
+  }
 
 /*
   var e1_notified = false
@@ -59,7 +67,6 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
 
   var executors = Set.empty[ActorRef]
 
-  override def initializeServices { }
 
   def add: Receive = {
     case Add(e) => {
@@ -172,6 +179,7 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
   override protected def beforeAll = {
     super.beforeAll
     testConfiguration.set("bsp.working.dir", testRoot.getCanonicalPath)
+    testConfiguration.set("bsp.groom.actor-system.name", "TestExecutor")
     testConfiguration.setClass("bsp.child.class", classOf[MockContainer],
                                classOf[BSPPeerContainer])
   }
@@ -193,6 +201,7 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
       testConfiguration.get("bsp.groom.taskmanager.name", "taskManager")
 
     val aggregator = createWithTester(taskManagerName, classOf[Aggregator]) 
+
 /*
     val e1 = createProcess("groomServer_executor_1", aggregator)
     val e2 = createProcess("groomServer_executor_2", aggregator)
@@ -213,8 +222,6 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
     expectAnyOf("groomServer_executor_1_ready", "groomServer_executor_2_ready",
                 "groomServer_executor_3_ready")
 */
-
-    sleep(10.seconds)
   
     /* jobid, taskId, taskAttemptId, partition */
     val task1 = createTask("test", 1, 7, 2, 7) 
@@ -225,14 +232,15 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
     val directive2 = createDirective(Resume, task2)
     aggregator ! directive2
 
-    val task3 = createTask("test", 1, 4, 3, 2) 
-    val directive3 = createDirective(Kill, task3)
-    aggregator ! directive3
+    //val task3 = createTask("test", 1, 4, 3, 2) 
+    //val directive3 = createDirective(Kill, task3)
+    //aggregator ! directive3
 
-    sleep(20.seconds)
+    sleep(10.seconds)
 
-    expectAnyOf(LaunchAck(1, task1.getId), ResumeAck(2, task2.getId), 
-                KillAck(3, task3.getId))
+    expectAnyOf(new LaunchAck(1, task1.getId), new ResumeAck(2, task2.getId))
+                //new KillAck(3, task3.getId))
+/*
 
     LOG.info("Wait 3 seconds before calling stopAll.")
     sleep(3.seconds)
@@ -257,6 +265,7 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
     aggregator ! "shutdown"
 
     sleep(10.seconds)
+*/
 
     LOG.info("Done!")
   }

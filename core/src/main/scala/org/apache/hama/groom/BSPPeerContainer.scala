@@ -37,7 +37,8 @@ import org.apache.hama.RemoteService
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
-final case class Args(port: Int, seq: Int, config: Config)
+final case class Args(actorSystemName: String, port: Int, seq: Int, 
+                      config: Config)
 
 private final case class Initialize(taskAttemptId: TaskAttemptID)
 private final case class Info(message: String)
@@ -202,10 +203,11 @@ object BSPPeerContainer {
     if(null == args || 0 == args.length)
       throw new IllegalArgumentException("No arguments supplied when "+
                                          "BSPPeerContainer is forked.")
-    val port = args(0).toInt
-    val seq = args(1).toInt
+    val actorSystemName = args(0)
+    val port = args(1).toInt
+    val seq = args(2).toInt
     val config = toConfig(port) 
-    Args(port, seq, config)
+    Args(actorSystemName, port, seq, config)
   }
 
   def initialize(args: Array[String]): (ActorSystem, HamaConfiguration, Int) = {
@@ -213,6 +215,7 @@ object BSPPeerContainer {
     val arguments = toArgs(args)
     val system = ActorSystem("BSPPeerSystem%s".format(arguments.seq), 
                              arguments.config.getConfig("peer"))
+    defaultConf.set("bsp.groom.actor-system.name", arguments.actorSystemName)
     defaultConf.setInt("bsp.child.slot.seq", arguments.seq)
     (system, defaultConf, arguments.seq)
   }
@@ -246,11 +249,14 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
   // TODO: refactor for proxy lookup by test!
   protected def executorInfo: ProxyInfo = { 
-     new ProxyInfo.Builder().withConfiguration(configuration).
+    val proxy = new ProxyInfo.Builder().withConfiguration(configuration).
                              withActorName(executorName).
                              appendRootPath(groomName). 
+                             appendChildPath("taskManager"). 
                              appendChildPath(executorName). 
                              buildProxyAtGroom
+    LOG.info("xxxx executor proxy is at {}", proxy.getPath)
+    proxy
   }
 
   protected def executorPath: String = executorInfo.getPath
@@ -274,9 +280,9 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * @param Receive is partial function.
    */
   def launchTask: Receive = {
-    case LaunchTask(task) => {
-      doLaunch(task)
-      postLaunch(slotSeq, task.getId, sender)
+    case action: LaunchTask => {
+      doLaunch(action.task)
+      postLaunch(slotSeq, action.task.getId, sender)
     }
   }
 
@@ -285,7 +291,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   }
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) =
-    from ! LaunchAck(slotSeq, taskAttemptId)
+    from ! new LaunchAck(slotSeq, taskAttemptId)
     
 
   /**
@@ -294,9 +300,9 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * @param Receive is partial function.
    */
   def resumeTask: Receive = {
-    case ResumeTask(task) => {
-      doResume(task)
-      postResume(slotSeq, task.getId, sender)
+    case action: ResumeTask => {
+      doResume(action.task)
+      postResume(slotSeq, action.task.getId, sender)
     }
   }
 
@@ -305,7 +311,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   }
 
   def postResume(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) =
-    from ! ResumeAck(slotSeq, taskAttemptId)
+    from ! new ResumeAck(slotSeq, taskAttemptId)
     
 
   /**
@@ -313,18 +319,18 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * @param Receive is partial function.
    */
   def killTask: Receive = {
-    case KillTask(taskAttemptId) => {
-      doKill(slotSeq, taskAttemptId)
-      postKill(slotSeq, taskAttemptId, sender)
+    case action: KillTask => {
+      doKill(action.taskAttemptId)
+      postKill(slotSeq, action.taskAttemptId, sender)
     }
   }
 
-  def doKill(slotSeq: Int, taskAttemptId: TaskAttemptID) {
+  def doKill(taskAttemptId: TaskAttemptID) {
     LOG.info("function doKill is not yet implemented!") // TODO:
   }
 
   def postKill(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = 
-    from ! KillAck(slotSeq, taskAttemptId)
+    from ! new KillAck(slotSeq, taskAttemptId)
 
   /**
    * Start executing task dispatched to the container.

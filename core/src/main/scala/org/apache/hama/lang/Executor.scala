@@ -62,7 +62,10 @@ class StdOut(input: InputStream, executor: ActorRef) extends Actor {
   val LOG = Logging(context.system, this)
   override def preStart {
     try { 
-      val logDir = new File(System.getProperty("hama.log.dir"))
+      val logPath = System.getProperty("hama.log.dir")
+      if(null == logPath || logPath.isEmpty) 
+        throw new NullPointerException("hama.log.dir is not set!")
+      val logDir = new File(logPath)
       if(!logDir.exists) logDir.mkdirs
       val out = 
         new FileOutputStream(new File(logDir, 
@@ -86,7 +89,10 @@ class StdErr(input: InputStream, executor: ActorRef) extends Actor {
   val LOG = Logging(context.system, this)
   override def preStart {
     try { 
-      val logDir = new File(System.getProperty("hama.log.dir"))
+      val logPath = System.getProperty("hama.log.dir")
+      if(null == logPath || logPath.isEmpty) 
+        throw new NullPointerException("hama.log.dir is not set!")
+      val logDir = new File(logPath)
       if(!logDir.exists) logDir.mkdirs
       val out = 
         new FileOutputStream(new File(logDir, 
@@ -157,11 +163,13 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
     LOG.debug("Java for slot seq {} is at {}", slotSeq, java)
     val opts = defaultOpts
     val bspClassName = child.getName
-    val command = Seq(java) ++ Seq(opts) ++ 
+    val groomActorSystemName = conf.get("bsp.groom.actor-system.name", 
+                                        "GroomSystem")
+    val command = Seq(java) ++ Seq(opts) ++  
                   Seq("-classpath") ++ Seq(classpath(hamaHome, cp)) ++
-                  Seq(bspClassName) ++ 
+                  Seq(bspClassName) ++ Seq(groomActorSystemName) ++ 
                   Seq(taskPort) ++ Seq(slotSeq.toString)
-    LOG.info("jvm args: {}", command.mkString(" "))
+    LOG.info("java args: {}", command.mkString(" "))
     command
   }
 
@@ -186,9 +194,8 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   /**
    * Fork a child process based on command assembled.
    * @param slotSeq indicate which seq the slot is.
-   * @param conf contains specific setting for creating child process.
    */
-  def fork(slotSeq: Int, conf: HamaConfiguration) {
+  def fork(slotSeq: Int) {
     val containerClass = 
       conf.getClass("bsp.child.class", classOf[BSPPeerContainer])
     LOG.debug("Container class to be instantiated is {}", containerClass)
@@ -246,11 +253,11 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    * @return Receive partial function.
    */
   def fork: Receive = {
-    case Fork(slotSeq, conf) => {
+    case Fork(slotSeq) => {
       if(0 >= slotSeq) 
         throw new IllegalArgumentException("Invalid slotSeq: "+slotSeq)
       this.slotSeq = slotSeq
-      fork(slotSeq, conf) 
+      fork(slotSeq) 
     }
   } 
 
@@ -260,12 +267,12 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    * @param Receive is partial function.
    */
   def launchTask: Receive = {
-    case LaunchTask(task) =>  bspPeerContainer ! LaunchTask(task)
+    case action: LaunchTask =>  bspPeerContainer ! new LaunchTask(action.task)
   }
 
   def launchAck: Receive = {
-    case LaunchAck(slotSeq, taskAttemptId) => 
-      taskManagerListener ! LaunchAck(slotSeq, taskAttemptId) 
+    case action: LaunchAck => 
+      taskManagerListener ! new LaunchAck(action.slotSeq, action.taskAttemptId) 
   }
 
   /** 
@@ -274,12 +281,12 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    * @param Receive is partial function.
    */
   def resumeTask: Receive = {
-    case ResumeTask(task) => bspPeerContainer ! ResumeTask(task)
+    case action: ResumeTask => bspPeerContainer ! new ResumeTask(action.task)
   }
 
   def resumeAck: Receive = {
-    case ResumeAck(slotSeq, taskAttemptId) => 
-      taskManagerListener ! ResumeAck(slotSeq, taskAttemptId)
+    case action: ResumeAck => 
+      taskManagerListener ! new ResumeAck(action.slotSeq, action.taskAttemptId)
   }
 
   /**
@@ -288,12 +295,13 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    * @param Receive is partial function.
    */
   def killTask: Receive = {
-    case KillTask(taskAttemptId) => bspPeerContainer ! KillTask(taskAttemptId)
+    case action: KillTask => 
+      bspPeerContainer ! new KillTask(action.taskAttemptId)
   }
 
   def killAck: Receive = {
-    case KillAck(slotSeq, taskAttemptId) => 
-      taskManagerListener ! KillAck(slotSeq, taskAttemptId)
+    case action: KillAck => 
+      taskManagerListener ! new KillAck(action.slotSeq, action.taskAttemptId)
   }
 
   /**

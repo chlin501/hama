@@ -15,8 +15,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama.groom;
 
-import org.apache.hama.bsp.TaskAttemptID
+import java.io.IOException;
+import java.io.DataInput;
+import java.io.DataOutput;
+import org.apache.hadoop.io.Writable;
+import org.apache.hama.bsp.v2.Task;
 
-final case class ResumeAck(slotSeq: Int, taskAttemptId: TaskAttemptID) 
+public final class LaunchTask implements Writable {
+
+  private Task task;
+
+  public LaunchTask(final Task task) {
+    if(null == task)
+      throw new IllegalArgumentException("Task is missing!");
+    this.task = task;
+  }
+  
+  public final Task task() {
+    return this.task;
+  }
+
+  @Override 
+  public void write(DataOutput out) throws IOException {
+    this.task.write(out);     
+  }
+
+  @Override 
+  public void readFields(DataInput in) throws IOException {
+    this.task = new Task();
+    this.task.readFields(in);
+  }
+
+}

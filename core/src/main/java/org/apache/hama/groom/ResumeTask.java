@@ -15,12 +15,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama.groom;
 
-import org.apache.hama.bsp.TaskAttemptID
+import java.io.IOException;
+import java.io.DataInput;
+import java.io.DataOutput;
+import org.apache.hadoop.io.Writable;
+import org.apache.hama.bsp.v2.Task;
 
-/**
- * Kill current running task in container anyway.
- * @param taskAttemptId is the task that is running on the target container.
- */
-final case class KillTask(taskAttemptId: TaskAttemptID)
+public final class ResumeTask implements Writable {
+
+  private Task task;
+
+  public ResumeTask(final Task task) {
+    if(null == task)
+      throw new IllegalArgumentException("Task is missing!");
+    this.task = task;
+  }
+  
+  public final Task task() {
+    return this.task;
+  }
+
+  @Override 
+  public void write(DataOutput out) throws IOException {
+    this.task.write(out);     
+  }
+
+  @Override 
+  public void readFields(DataInput in) throws IOException {
+    this.task = new Task();
+    this.task.readFields(in);
+  }
+
+}
