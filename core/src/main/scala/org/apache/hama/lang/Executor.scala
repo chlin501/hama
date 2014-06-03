@@ -57,54 +57,54 @@ final case class Command(msg: Any, recipient: ActorRef)
 final case object StreamClosed
 final case object StopProcess
 
-class StdOut(input: InputStream, executor: ActorRef) extends Actor { 
-  import scala.language.postfixOps
-  val LOG = Logging(context.system, this)
-  override def preStart {
+trait TaskLog {
+
+  def log(name: String, input: InputStream, conf: HamaConfiguration, 
+          executor: ActorRef, error: (String, Any*) => Unit) {
+    import scala.language.postfixOps
     try { 
       val logPath = System.getProperty("hama.log.dir")
-      if(null == logPath || logPath.isEmpty) 
-        throw new NullPointerException("hama.log.dir is not set!")
-      val logDir = new File(logPath)
-      if(!logDir.exists) logDir.mkdirs
-      val out = 
-        new FileOutputStream(new File(logDir, 
-                                      "%s.log".format(executor.path.name)))
-      Iterator.continually(input.read).takeWhile(-1!=).foreach(out.write) 
+      logPath match {
+        case null | "" => error("'hama.log.dir' is not set!")
+        case _ => {
+          val logDir = new File(logPath)
+          if(!logDir.exists) logDir.mkdirs
+          if(!conf.getBoolean("bsp.tasks.log.console", false)) {
+            val out = new FileOutputStream(new File(logDir, 
+                                           "%s.log".format(executor.path.name)))
+            Iterator.continually(input.read).takeWhile(-1!=).foreach(out.write) 
+          } else {
+            Iterator.continually(input.read).takeWhile(-1!=).foreach(println) 
+          }
+        }
+      }
     } catch { 
-      case e: Exception => LOG.error("Fail reading stdout {}.", e) 
+      case e: Exception => error("Fail reading "+name, e) 
     } finally { 
       input.close 
       executor ! StreamClosed 
     }
   }
+
+}
+
+class StdOut(input: InputStream, conf: HamaConfiguration, executor: ActorRef) 
+      extends Actor with TaskLog { 
+
+  val LOG = Logging(context.system, this)
+  
+  override def preStart = log(self.path.name, input, conf, executor, LOG.error)
 
   override def receive = { 
     case msg@_ => LOG.warning("Unknown stdout message {}", msg)
   }
 }
 
-class StdErr(input: InputStream, executor: ActorRef) extends Actor {
-  import scala.language.postfixOps
+class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef) 
+      extends Actor with TaskLog {
   val LOG = Logging(context.system, this)
-  override def preStart {
-    try { 
-      val logPath = System.getProperty("hama.log.dir")
-      if(null == logPath || logPath.isEmpty) 
-        throw new NullPointerException("hama.log.dir is not set!")
-      val logDir = new File(logPath)
-      if(!logDir.exists) logDir.mkdirs
-      val out = 
-        new FileOutputStream(new File(logDir, 
-                                      "%s.err".format(executor.path.name)))
-      Iterator.continually(input.read).takeWhile(-1!=).foreach(out.write) 
-    } catch { 
-      case e: Exception => LOG.error("Fail reading stderr {}.", e) 
-    } finally { 
-      input.close 
-      executor ! StreamClosed 
-    }
-  }
+
+  override def preStart = log(self.path.name, input, conf, executor, LOG.error)
 
   override def receive = { 
     case msg@_ => LOG.warning("Unknown stderr message {}", msg)
@@ -169,7 +169,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
                   Seq("-classpath") ++ Seq(classpath(hamaHome, cp)) ++
                   Seq(bspClassName) ++ Seq(groomActorSystemName) ++ 
                   Seq(taskPort) ++ Seq(slotSeq.toString)
-    LOG.info("java args: {}", command.mkString(" "))
+    LOG.debug("java args: {}", command.mkString(" "))
     command
   }
 
@@ -236,10 +236,12 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
       process = builder.start
       stdout = context.actorOf(Props(classOf[StdOut], 
                                      process.getInputStream, 
+                                     conf, 
                                      self),
                                "stdout%s".format(slotSeq)) 
       stderr = context.actorOf(Props(classOf[StdErr], 
                                      process.getErrorStream, 
+                                     conf,
                                      self),
                                "stderr%s".format(slotSeq)) 
     } catch {
@@ -310,7 +312,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    */
   def streamClosed: Receive = {
     case StreamClosed => {
-      LOG.info("{} notifies InputStream is closed!", sender.path.name)
+      LOG.debug("{} notifies InputStream is closed!", sender.path.name)
       if(sender.path.name.equals("stdout%s".format(slotSeq))) { 
         isStdoutClosed = true
       } else if(sender.path.name.equals("stderr%s".format(slotSeq))) {

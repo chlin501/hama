@@ -32,12 +32,9 @@ import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.groom.ContainerReady
 import org.apache.hama.groom.ContainerStopped
 import org.apache.hama.groom.KillAck
-//import org.apache.hama.groom.KillTask
 import org.apache.hama.groom.LaunchAck
-//import org.apache.hama.groom.LaunchTask
 import org.apache.hama.groom.MockContainer
 import org.apache.hama.groom.ResumeAck
-//import org.apache.hama.groom.ResumeTask
 import org.apache.hama.groom.ShutdownSystem
 import org.apache.hama.groom.TaskManager
 import org.apache.hama.HamaConfiguration
@@ -48,16 +45,26 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-//final case class Add(e: ActorRef)
-
 class Aggregator(conf: HamaConfiguration, tester: ActorRef) 
       extends TaskManager(conf) {
 
+  override def name: String = "mockTaskManager"
+
   override def initializeServices {
-    LOG.info("Start initializse task manager actor {} with max tasks {}.", 
-             self, getMaxTasks)
     initializeSlots(getMaxTasks)
-    LOG.info("Done initializing slots ...")
+    LOG.info("Done initializing {} with {} slots ...", self, getMaxTasks)
+  }
+
+  // LaunchAck(2,attempt_test_0001_000007_2)
+  override def preLaunchAck(ack: LaunchAck) {
+    LOG.info("{} receives {}", name, ack)
+    tester ! ack.taskAttemptId.toString
+  }
+
+  // ResumeAck(1,attempt_test_0003_000001_1)
+  override def preResumeAck(ack: ResumeAck) {
+    LOG.info("{} receives {}", name, ack)
+    tester ! ack.taskAttemptId.toString
   }
 
 /*
@@ -79,7 +86,7 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
   }
 */
 
-  override def receive = /*tasksx orElse shut orElse add orElse fork orElse readyx orElse stopAll orElse stopped orElse*/ super.receive
+  override def receive = super.receive
 } 
 
 object WithRemoteSetting {
@@ -119,18 +126,12 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
 
   override protected def beforeAll = {
     super.beforeAll
+    testConfiguration.setBoolean("bsp.tasks.log.console", true)
     testConfiguration.set("bsp.working.dir", testRoot.getCanonicalPath)
     testConfiguration.set("bsp.groom.actor-system.name", "TestExecutor")
     testConfiguration.setClass("bsp.child.class", classOf[MockContainer],
                                classOf[BSPPeerContainer])
   }
-
-/*
-  def createProcess(name: String, taskMgr: ActorRef): ActorRef = {
-    LOG.info("Create actor "+name+" ...")
-    createWithArgs(name, classOf[Executor], testConfiguration, taskMgr)
-  }
-*/
 
   def createDirective(action: Directive.Action, task: Task): Directive = 
     new Directive(action, task, "testMaster")
@@ -142,17 +143,6 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
       testConfiguration.get("bsp.groom.taskmanager.name", "taskManager")
 
     val aggregator = createWithTester(taskManagerName, classOf[Aggregator]) 
-
-/*
-    expectAnyOf("groomServer_executor_1_ready", "groomServer_executor_2_ready",
-                "groomServer_executor_3_ready")
-
-    expectAnyOf("groomServer_executor_1_ready", "groomServer_executor_2_ready",
-                "groomServer_executor_3_ready")
-
-    expectAnyOf("groomServer_executor_1_ready", "groomServer_executor_2_ready",
-                "groomServer_executor_3_ready")
-*/
   
     /* jobid, taskId, taskAttemptId, partition */
     val task1 = createTask("test", 1, 7, 2, 7) 
@@ -167,10 +157,12 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
     //val directive3 = createDirective(Kill, task3)
     //aggregator ! directive3
 
-    sleep(20.seconds)
+    sleep(5.seconds)
 
-    expectAnyOf(new LaunchAck(1, task1.getId), new ResumeAck(2, task2.getId))
-                //new KillAck(3, task3.getId))
+    expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")
+
+    // TODO: 1. issue kill action, then verify
+    //       2. stop/ shutdown the system
 /*
 
     LOG.info("Wait 3 seconds before calling stopAll.")

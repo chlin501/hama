@@ -290,7 +290,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
     from ! new LaunchAck(slotSeq, taskAttemptId)
-    LOG.info("LaunchAck is sent back!")
+    LOG.debug("LaunchAck is sent back!")
   }
     
 
@@ -312,7 +312,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
   def postResume(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
     from ! new ResumeAck(slotSeq, taskAttemptId)
-    LOG.info("ResumeAck is sent back!")
+    LOG.debug("ResumeAck is sent back!")
   }
     
 
@@ -386,9 +386,13 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     }
   }
 
+  /**
+   * 
+   */
   override def offline(target: ActorRef) {
     LOG.info("{} is unwatched.", target.path.name)
     context.unwatch(target)
+    // TODO: shutdown the BSPPeerContainer system if GroomServer is down. 
   }
 
   override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownSystem orElse stopContainer /*orElse processTask*/ orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown

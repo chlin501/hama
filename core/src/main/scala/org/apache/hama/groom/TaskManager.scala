@@ -110,7 +110,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     for(seq <- 1 to constraint) {
       slots ++= Set(Slot(seq, None, bspmaster, None))
     }
-    LOG.info("{} GroomServer slots are initialied.", constraint)
+    LOG.debug("{} GroomServer slots are initialied.", constraint)
   }
 
   override def initializeServices {
@@ -147,7 +147,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         groomManager = proxy
         groomManager ! currentGroomServerStat
       } 
-      case _ => LOG.info("Linking to an unknown proxy {}", proxy.path.name)
+      case _ => LOG.warning("Linking to an unknown proxy {}", proxy.path.name)
     }
   }
 
@@ -251,7 +251,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         slots += newSlot
       }
       case None => {// all slots are in use 
-        LOG.info("All slots are in use! {}", slots.mkString("\n"))
+        LOG.debug("All slots are in use! {}", slots.mkString("\n"))
       }
     }
   }
@@ -283,11 +283,11 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   def receiveDirective: Receive = {
     case directive: Directive => { 
       directive match {
-        case null => LOG.info("Directive dispatched from {} is null!", 
+        case null => LOG.warning("Directive dispatched from {} is null!", 
                                  sender.path.name)
         case _ => {
-          LOG.info("Receive directive action: "+directive.action+" task: "+
-                   directive.task.getId.toString+" master: "+directive.master)
+          LOG.debug("Receive directive action: "+directive.action+" task: "+
+                    directive.task.getId.toString+" master: "+directive.master)
           directive.action match {
             case Launch | Resume => {
               initializeExecutor(directive.master) 
@@ -327,8 +327,9 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
             slots += newSlot
           }
           case Some(found) => 
-            throw new RuntimeException("Task %1$s can't exist at slot %2$s". 
-                                       format(found.getId, slotSeq))
+            throw new RuntimeException(("Task %1$s can't run on slot %2$s "+  
+                                       "because %3%s exists").
+                                       format(task.getId, slotSeq, found.getId))
         }
       }
       case None => throw new RuntimeException("Slot with seq "+slotSeq+" not "+
@@ -342,10 +343,12 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    */
   def launchAck: Receive = {
     case action: LaunchAck => {
-      LOG.info("xxxxxxxxxxxxxxxxx Receive LaunchAck ... "+action)
+      preLaunchAck(action)
       doAck(action.slotSeq, action.taskAttemptId, sender)
     }
   }
+
+  def preLaunchAck(ack: LaunchAck) {}
 
   /**
    * Executor ack for Resume action.
@@ -353,10 +356,12 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    */
   def resumeAck: Receive = {
     case action: ResumeAck => {
-      LOG.info("yyyyyyyyyyyyyyyyyy Receive ResumeAck ... "+action)
+      preResumeAck(action)
       doAck(action.slotSeq, action.taskAttemptId, sender)
     }
   }
+
+  def preResumeAck(ack: ResumeAck) {}
 
   /**
    * Executor ack for Kill action.
