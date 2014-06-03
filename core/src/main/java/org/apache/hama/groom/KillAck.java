@@ -29,6 +29,8 @@ public final class KillAck implements Writable {
   private IntWritable slotSeq = new IntWritable(0);
   private TaskAttemptID taskAttemptId;
 
+  public KillAck() {}
+
   public KillAck(final int slotSeq, final TaskAttemptID taskAttemptId) {
     if(0 >= slotSeq) 
       throw new IllegalArgumentException("Invalid slot seq value: "+slotSeq);
@@ -58,6 +60,11 @@ public final class KillAck implements Writable {
     this.slotSeq.readFields(in);
     this.taskAttemptId = new TaskAttemptID();
     this.taskAttemptId.readFields(in);
+  }
+
+  @Override
+  public String toString() {
+    return "KillAck("+slotSeq()+ ","+taskAttemptId().toString()+")";
   }
 
 }

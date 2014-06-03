@@ -29,6 +29,8 @@ public final class ResumeAck implements Writable {
   private IntWritable slotSeq = new IntWritable(0);
   private TaskAttemptID taskAttemptId;
 
+  public ResumeAck() {}
+
   public ResumeAck(final int slotSeq, final TaskAttemptID taskAttemptId) {
     if(0 >= slotSeq) 
       throw new IllegalArgumentException("Invalid slot seq value: "+slotSeq);
@@ -59,5 +61,11 @@ public final class ResumeAck implements Writable {
     this.taskAttemptId = new TaskAttemptID();
     this.taskAttemptId.readFields(in);
   }
+
+  @Override
+  public String toString() {
+    return "ResumeAck("+slotSeq()+ ","+taskAttemptId().toString()+")";
+  }
+
 
 }

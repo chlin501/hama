@@ -27,6 +27,8 @@ public final class LaunchTask implements Writable {
 
   private Task task;
 
+  public LaunchTask() {}
+
   public LaunchTask(final Task task) {
     if(null == task)
       throw new IllegalArgumentException("Task is missing!");
@@ -46,6 +48,11 @@ public final class LaunchTask implements Writable {
   public void readFields(DataInput in) throws IOException {
     this.task = new Task();
     this.task.readFields(in);
+  }
+
+  @Override
+  public String toString() {
+    return "LaunchTask("+task().toString()+")";
   }
 
 }

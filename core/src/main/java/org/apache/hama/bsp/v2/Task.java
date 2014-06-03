@@ -448,11 +448,15 @@ public final class Task implements Writable {
 
   @Override
   public String toString() {
-    return "TaskId: "+id.toString()+" startTime: "+getStartTime()+
-           " finishTime: "+getFinishTime()+" partition: "+
-           getPartition()+" state: "+getState().toString()+" phase: "+
-           getPhase().toString()+" completed: "+isCompleted()+ " marker:"+ 
-           marker.toString()+" totalBSPTasks: "+getTotalBSPTasks();
+    return "Task("+id.toString() + "," +
+                   getStartTime() + "," +
+                   getFinishTime() + "," +
+                   getPartition() + "," +
+                   getState().toString() + "," +
+                   getPhase().toString() + "," + 
+                   isCompleted() + "," + 
+                   marker.toString() + "," +
+                   getTotalBSPTasks()+")";
   }
 }
 

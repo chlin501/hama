@@ -42,6 +42,7 @@ public class TestTaskTable extends TestCase {
 
   /**
    * Create a task table with tasks in the first slots initialized.
+   * TaskTable's row length is numBSPTasks and max column length is 2.
    */
   TaskTable createTaskTable(final BSPJobID jobId, final int numBSPTasks, 
                             final int maxTaskAttempts) throws Exception {
@@ -100,6 +101,8 @@ public class TestTaskTable extends TestCase {
       createTaskTable(createBSPJobId(), numBSPTasks, maxTaskAttempts);
     final byte[] bytes = serialize(table);
     final TaskTable forVerification = deserialize(bytes);
+    LOG.info("Table table row length is "+forVerification.rowLength());
+    LOG.info("Table table column length is "+forVerification.columnLength());
     final Task[] tasks = forVerification.get(1);
     assertEquals("The 2th row's size should be 1.", 1, tasks.length); 
     final Task assignedTask  = tasks[0];
@@ -176,7 +179,7 @@ public class TestTaskTable extends TestCase {
     //   1 [(2,1)]  
     //   2 [(3,1)]
     table.remove(1); 
-    for(int row = 0; row < numBSPTasks; row++) {
+    for(int row = 0; row < table.rowLength(); row++) {
       final Task[] tasks = table.get(0);
       assertNotNull("Task array at row "+row+" can't be null.", tasks);
       LOG.info("Task length for row "+row+" is "+tasks.length);

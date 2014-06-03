@@ -27,6 +27,8 @@ public final class KillTask implements Writable {
 
   private TaskAttemptID taskAttemptId;
 
+  public KillTask() {}
+
   public KillTask(final TaskAttemptID taskAttemptId) {
     if(null == taskAttemptId)
       throw new IllegalArgumentException("TaskAttemptID is missing!");
@@ -46,6 +48,11 @@ public final class KillTask implements Writable {
   public void readFields(DataInput in) throws IOException {
     this.taskAttemptId = new TaskAttemptID();
     this.taskAttemptId.readFields(in);
+  }
+
+  @Override
+  public String toString() {
+    return "KillTask("+taskAttemptId().toString()+")";
   }
 
 }

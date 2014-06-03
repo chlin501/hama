@@ -123,7 +123,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   val fileSeparator = System.getProperty("file.separator")
   val javaHome = System.getProperty("java.home")
   val hamaHome = System.getProperty("hama.home.dir")
-  val javacp: String  = "./:"+System.getProperty("java.class.path")
+  val javacp: String  = System.getProperty("java.class.path")
   val logPath: String = System.getProperty("hama.log.dir")
   val taskManagerName = conf.get("bsp.groom.taskmanager.name", "taskManager") 
   val operation = Operation.create(conf)
@@ -182,7 +182,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   def classpath(hamaHome: String, parentClasspath: String): String = {
     if(null == hamaHome) 
       throw new RuntimeException("Variable hama.home.dir is not set!")
-    var cp = "./:%s/conf:%s".format(hamaHome, parentClasspath)
+    var cp = "./:%s:%s/conf".format(parentClasspath, hamaHome)
     val lib = new File(hamaHome, "lib")
     lib.listFiles(new FilenameFilter {
       def accept(dir: File, name: String): Boolean = true

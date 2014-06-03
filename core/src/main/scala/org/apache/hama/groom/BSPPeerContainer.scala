@@ -220,15 +220,16 @@ object BSPPeerContainer {
     (system, defaultConf, arguments.seq)
   }
 
-  def launch(system: ActorSystem, conf: HamaConfiguration, seq: Int) {
-    system.actorOf(Props(classOf[BSPPeerContainer], conf), 
+  def launch(system: ActorSystem, containerClass: Class[_], 
+             conf: HamaConfiguration, seq: Int) {
+    system.actorOf(Props(containerClass, conf), 
                    "bspPeerContainer%s".format(seq))
   }
 
   @throws(classOf[Throwable])
   def main(args: Array[String]) = {
     val (sys, conf, seq)= initialize(args)
-    launch(sys, conf, seq)
+    launch(sys, classOf[BSPPeerContainer], conf, seq)
   }
 }
 
@@ -241,25 +242,22 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
  
   val logger = TaskLogging(context, conf, slotSeq)
 
-  val groomName = configuration.get("bsp.groom.name", "groomServer")
   protected var executor: ActorRef = _
+
+  val groomName = configuration.get("bsp.groom.name", "groomServer")
   override def configuration: HamaConfiguration = conf
   def executorName: String = groomName+"_executor_"+slotSeq
   def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", 1)
 
-  // TODO: refactor for proxy lookup by test!
-  protected def executorInfo: ProxyInfo = { 
-    val proxy = new ProxyInfo.Builder().withConfiguration(configuration).
-                             withActorName(executorName).
-                             appendRootPath(groomName). 
-                             appendChildPath("taskManager"). 
-                             appendChildPath(executorName). 
-                             buildProxyAtGroom
-    LOG.info("xxxx executor proxy is at {}", proxy.getPath)
-    proxy
+  protected def executorPath: String = {
+   new ProxyInfo.Builder().withConfiguration(configuration).
+                           withActorName(executorName).
+                           appendRootPath(groomName). 
+                           appendChildPath("taskManager"). 
+                           appendChildPath(executorName). 
+                           buildProxyAtGroom.
+                           getPath 
   }
-
-  protected def executorPath: String = executorInfo.getPath
 
   override def name: String = "bspPeerContainer%s".format(slotSeq)
  
@@ -290,8 +288,10 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     LOG.info("function doLaunch is not yet implemented!") // TODO:
   }
 
-  def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) =
+  def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
     from ! new LaunchAck(slotSeq, taskAttemptId)
+    LOG.info("LaunchAck is sent back!")
+  }
     
 
   /**
@@ -310,8 +310,10 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     LOG.info("function doResume is not yet implemented!") // TODO:
   }
 
-  def postResume(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) =
+  def postResume(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
     from ! new ResumeAck(slotSeq, taskAttemptId)
+    LOG.info("ResumeAck is sent back!")
+  }
     
 
   /**

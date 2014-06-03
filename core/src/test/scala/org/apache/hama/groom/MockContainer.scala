@@ -17,33 +17,25 @@
  */
 package org.apache.hama.groom
 
-import akka.actor.ActorContext
-import akka.actor.ActorSystem
-import akka.actor.Props
-import akka.actor.Actor
-import akka.actor.ActorRef
-import akka.actor.Cancellable
-import akka.event.Logging
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
-import java.io.File
-import java.io.FileWriter
-import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
 
 object MockContainer {
 
-  def main(args: Array[String]) = BSPPeerContainer.main(args)
-
+  def main(args: Array[String]) = {
+    val (sys, conf, seq)= BSPPeerContainer.initialize(args)
+    BSPPeerContainer.launch(sys, classOf[MockContainer], conf, seq)
+  }
 }
 
 class MockContainer(conf: HamaConfiguration) extends BSPPeerContainer(conf) {
 
   override def executorPath: String = {
-    val addr = "akka.tcp://TestExecutor@127.0.0.1:50000/user/taskManager/" +
-               "groomServer_executor_1"
+    val port = conf.getInt("bsp.groom.actor-system.port", 50000)
+    val host = conf.get("bsp.groom.actor-system.host", "127.0.0.1")
+    val actorSystemName = conf.get("bsp.groom.actor-system.name", 
+                                   "TestExecutor")
+    val addr = ("akka.tcp://%1$s@%2$s:%3$d/user/taskManager/" +
+               "groomServer_executor_1").format(actorSystemName, host, port)
     LOG.info("Mock executor path is at {}", addr)
     addr
   }

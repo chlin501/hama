@@ -61,65 +61,6 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
   }
 
 /*
-  var e1_notified = false
-  var e2_notified = false
-  var e3_notified = false
-
-  var executors = Set.empty[ActorRef]
-
-
-  def add: Receive = {
-    case Add(e) => {
-      executors += e
-      LOG.info("{} is added. Now executors size is {}", 
-               e.path.name, executors.size)
-    }
-  }
-
-  def fork: Receive = {
-    case "fork" => {
-      executors.foreach( e => e.path.name match {
-        case "groomServer_executor_1" => { 
-          e ! Fork(1, configuration); Thread.sleep(3*1000)
-        }
-        case "groomServer_executor_2" => {
-          e ! Fork(2, configuration); Thread.sleep(3*1000)
-        }
-        case "groomServer_executor_3" => {
-          e ! Fork(3, configuration); Thread.sleep(3*1000)
-        }
-        case rest@_ => 
-          throw new RuntimeException("Unknown executor "+rest) 
-      })
-    }
-  }
-
-  def readyx: Receive = {
-    case ContainerReady => {
-      LOG.info("Container {} replies it's ready!", sender.path.name)
-      tester ! sender.path.name+"_ready"
-    }
-  }
-*/
-
-/*
-  def tasksx: Receive = {
-    case tasks: Array[Task] => { 
-      var idx = 0
-      executors.foreach( e => { 
-        idx match {
-          case 0 => e ! LaunchTask(tasks(idx))
-          case 1 => e ! ResumeTask(tasks(idx))
-          case 2 => e ! KillTask(tasks(idx).getId)
-          case i@_ => throw new Exception("Out of expected size: "+i)
-        }
-        idx+=1
-      })
-    }
-  }
-*/
-
-/*
   def stopAll: Receive = {
     case "stopAll" => {
       executors.foreach( e =>  e ! StopProcess)
@@ -203,16 +144,6 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
     val aggregator = createWithTester(taskManagerName, classOf[Aggregator]) 
 
 /*
-    val e1 = createProcess("groomServer_executor_1", aggregator)
-    val e2 = createProcess("groomServer_executor_2", aggregator)
-    val e3 = createProcess("groomServer_executor_3", aggregator)
-    aggregator ! Add(e1) 
-    aggregator ! Add(e2) 
-    aggregator ! Add(e3) 
-    aggregator ! "fork"
-    LOG.info("Wait 20 seconds for child process being started up.")
-    sleep(20.seconds)
-  
     expectAnyOf("groomServer_executor_1_ready", "groomServer_executor_2_ready",
                 "groomServer_executor_3_ready")
 
@@ -236,7 +167,7 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
     //val directive3 = createDirective(Kill, task3)
     //aggregator ! directive3
 
-    sleep(10.seconds)
+    sleep(20.seconds)
 
     expectAnyOf(new LaunchAck(1, task1.getId), new ResumeAck(2, task2.getId))
                 //new KillAck(3, task3.getId))

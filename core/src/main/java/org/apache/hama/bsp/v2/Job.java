@@ -608,27 +608,27 @@ public final class Job implements Writable {
 
   @Override 
   public String toString() {
-    return "Job id: "+ id.toString()+ 
-           " name: "+ getName() +
-           " user: "+ getUser()+
-           " localJobFile: "+localJobFilePath.toString()+
-           " localJarFile: "+localJarFilePath.toString()+
-           " lastCheckpoint: " +lastCheckpoint.toString()+
-           " numBSPTasks: "+ getNumBSPTasks()+
-           " master: "+getMaster()+
-           " maxTaskAttempts: "+getMaxTaskAttempts()+
-           " inputPath: "+getInputPath()+
-           " outputPath: "+getOutputPath()+
-           " state: "+ state.toString()+
-           " progress: "+progress.toString()+
-           " setupProgress: "+setupProgress.toString()+
-           " cleanupProgress: "+cleanupProgress.toString()+
-           " startTime: "+ startTime.toString()+
-           " finishTime: "+finishTime.toString()+
-           " superstepCount: " +superstepCount.toString()+
-           " conf: "+conf.toString()+
-           " taskTable: "+taskTable.toString()+
-           " targets: "+ getTargetStrings();  
+    return "Job("+ id.toString()+ "," +
+                   getName() + "," +
+                   getUser() + "," + 
+                   localJobFilePath.toString() + "," +
+                   localJarFilePath.toString() + "," +
+                   lastCheckpoint.toString() + "," +
+                   getNumBSPTasks() + "," +
+                   getMaster() + "," +
+                   getMaxTaskAttempts() + "," +
+                   getInputPath() + "," +
+                   getOutputPath() + "," +
+                   state.toString() + "," +
+                   progress.toString() + "," +
+                   setupProgress.toString() + "," +
+                   cleanupProgress.toString() + "," +
+                   startTime.toString() + "," +
+                   finishTime.toString() + "," +
+                   superstepCount.toString() + "," +
+                   conf.toString() + "," +
+                   taskTable.toString() + "," +
+                   getTargetStrings() +")";  
   }
 
 }

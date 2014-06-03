@@ -181,6 +181,9 @@ public final class TaskTable implements Writable {
    *                row parameter is passed in.
    */ 
   public Task[] get(final int row) {
+    if(0 > row || rowLength() <= row) 
+      throw new IllegalArgumentException("Invalid row value: "+row +". Total "+
+                                         "row length is "+rowLength());
     return (Task[])this.tasks[row].get();
   }
 
@@ -190,10 +193,16 @@ public final class TaskTable implements Writable {
    * @param tasks are the entire tasks to be retried, including the init task.
    */
   public void set(final int row, final Task[] tasks) {
+    if(0 > row || rowLength() <= row) 
+      throw new IllegalArgumentException("Invalid row value: "+row +". Total "+
+                                         "row length is "+rowLength());
     this.tasks[row].set(tasks);
   }
 
   public void set(final int row, final int column, final Task task) {
+    if(0 > row || rowLength() <= row) 
+      throw new IllegalArgumentException("Invalid row value: "+row +". Total "+
+                                         "row length is "+rowLength());
     final Task[] tasks = get(row);
     tasks[column] = task;
   }
@@ -346,7 +355,8 @@ public final class TaskTable implements Writable {
   @Override
   public void write(DataOutput out) throws IOException {
     this.jobId.write(out);
-    out.writeInt(tasks.length); // numBSPTasks                  
+    out.writeInt(maxTaskAttempts); // maxTaskAttempts
+    out.writeInt(tasks.length); // numBSPTasks 
     for (int row = 0; row < tasks.length; row++) {
       final int columnLength = sizeAt(row);
       if(-1 == columnLength) 
@@ -366,7 +376,10 @@ public final class TaskTable implements Writable {
   public void readFields(DataInput in) throws IOException {
     this.jobId = new BSPJobID();
     this.jobId.readFields(in);
+    final int column = in.readInt();
+    this.maxTaskAttempts = column;
     final int row = in.readInt();
+    this.numBSPTasks = row;
     this.tasks = new ArrayWritable[row];
     for (int rowIdx = 0; rowIdx < tasks.length; rowIdx++) {
       final int columnLength = in.readInt();
@@ -375,10 +388,10 @@ public final class TaskTable implements Writable {
     }
 
     for (int rowIdx = 0; rowIdx < tasks.length; rowIdx++) {
-      for (int column = 0; column < tasks[rowIdx].get().length; column++) {
+      for (int colIdx = 0; colIdx < tasks[rowIdx].get().length; colIdx++) {
         final Task task = new Task();
         task.readFields(in);
-        this.tasks[rowIdx].get()[column] = task; 
+        this.tasks[rowIdx].get()[colIdx] = task; 
       }
     }
   }
@@ -386,14 +399,18 @@ public final class TaskTable implements Writable {
   @Override
   public String toString() {
     if(null != this.tasks) {
-      final StringBuilder sb = new StringBuilder();
+      final StringBuilder sb = new StringBuilder("TaskTable(");
+      int idx = 0;
       for(final ArrayWritable taskArray: this.tasks) {
         final Writable[] retryTasks = taskArray.get();
         if(null != retryTasks && 0 < retryTasks.length) {
-          sb.append(((Task)retryTasks[0]).getId()+" ");
-        }
+          sb.append(((Task)retryTasks[retryTasks.length-1]).getId());
+          if(idx < rowLength()) sb.append(",");
+        } 
+        idx++;
       }
+      sb.append(")");
       return sb.toString();
-    } else return "<empty tasks>";
+    } else return "TaskTable(<empty tasks>)";
   }
 }

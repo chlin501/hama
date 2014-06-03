@@ -237,7 +237,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   def initializeExecutor(master: String) {
     pickUp match {
       case Some(slot) => { 
-        LOG.info("Initialize executor for slot seq {}", slot.seq)
+        LOG.debug("Initialize executor for slot seq {}", slot.seq)
         val executorName = configuration.get("bsp.groom.name", "groomServer") +
                            "_executor_" + slot.seq 
         // TODO: move to spawn()
@@ -341,8 +341,10 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    * @return Receive is partial function.
    */
   def launchAck: Receive = {
-    case action: LaunchAck => 
+    case action: LaunchAck => {
+      LOG.info("xxxxxxxxxxxxxxxxx Receive LaunchAck ... "+action)
       doAck(action.slotSeq, action.taskAttemptId, sender)
+    }
   }
 
   /**
@@ -350,8 +352,10 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    * @return Receive is partial function.
    */
   def resumeAck: Receive = {
-    case action: ResumeAck => 
+    case action: ResumeAck => {
+      LOG.info("yyyyyyyyyyyyyyyyyy Receive ResumeAck ... "+action)
       doAck(action.slotSeq, action.taskAttemptId, sender)
+    }
   }
 
   /**
