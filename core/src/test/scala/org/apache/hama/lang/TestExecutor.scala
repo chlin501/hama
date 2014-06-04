@@ -169,8 +169,7 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")
 
-    // TODO: 1. issue kill action, then verify
-    //       2. stop/ shutdown the system
+    // TODO: stop/ shutdown the system
 /*
 
     LOG.info("Wait 3 seconds before calling stopAll.")
