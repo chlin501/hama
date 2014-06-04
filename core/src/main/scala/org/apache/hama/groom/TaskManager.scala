@@ -77,7 +77,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   /**
    * The max size of slots can't exceed configured maxTasks.
    */
-  private var slots = Set.empty[Slot]
+  protected var slots = Set.empty[Slot]
 
   /**
    * All {@link Directive}s are stored in this queue. 
@@ -328,12 +328,13 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
           }
           case Some(found) => 
             throw new RuntimeException(("Task %1$s can't run on slot %2$s "+  
-                                       "because %3%s exists").
+                                       "because %3%s is running.").
                                        format(task.getId, slotSeq, found.getId))
         }
       }
-      case None => throw new RuntimeException("Slot with seq "+slotSeq+" not "+
-                                              "found")
+      case None => throw new RuntimeException(("Slot with seq %1$s not found "+
+                                              "for task %2$s!").format(slotSeq, 
+                                              task.getId))
     }
   }
 
@@ -345,10 +346,12 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     case action: LaunchAck => {
       preLaunchAck(action)
       doAck(action.slotSeq, action.taskAttemptId, sender)
+      postLaunchAck(action)
     }
   }
 
-  def preLaunchAck(ack: LaunchAck) {}
+  def preLaunchAck(ack: LaunchAck) { }
+  def postLaunchAck(ack: LaunchAck) { }
 
   /**
    * Executor ack for Resume action.
@@ -358,10 +361,12 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     case action: ResumeAck => {
       preResumeAck(action)
       doAck(action.slotSeq, action.taskAttemptId, sender)
+      postResumeAck(action)
     }
   }
 
-  def preResumeAck(ack: ResumeAck) {}
+  def preResumeAck(ack: ResumeAck) { }
+  def postResumeAck(ack: ResumeAck) { }
 
   /**
    * Executor ack for Kill action.
@@ -370,23 +375,39 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    */
   def killAck: Receive = {
     case action: KillAck => {
-      slots.find( slot => {
-        val seqEquals = (slot.seq == action.slotSeq)  
-        val idEquals = slot.task match {
-          case Some(found) => found.getId.equals(action.taskAttemptId)
-          case None => false
-        }
-        seqEquals && idEquals
-      }) match {
-        case Some(slot) => {
-          val newSlot = Slot(slot.seq, None, slot.master, slot.executor)
-          slots -= slot 
-          slots += newSlot 
-          // TODO: inform reporter!! 
-        } 
-        case None => LOG.warning("Killed task {} not found.", 
-                                 action.taskAttemptId)
+      preKillAck(action)
+      doKillAck(action)
+      postKillAck(action)
+    }
+  }
+
+  def preKillAck(ack: KillAck) { }
+  def postKillAck(ack: KillAck) { }
+
+  /**
+   * - Find corresponded slot seq and task attempt id replied from 
+   * {@link BSPPeerContainer}.
+   * - Update information by removing task recorded in {@link Slot}.
+   * @param action is the KillAck that contains {@link TaskAttemptID} and slot
+   *               seq. 
+   */
+  def doKillAck(action: KillAck) {
+    slots.find( slot => {
+      val seqEquals = (slot.seq == action.slotSeq)  
+      val idEquals = slot.task match {
+        case Some(found) => found.getId.equals(action.taskAttemptId)
+        case None => false
       }
+      seqEquals && idEquals
+    }) match {
+      case Some(slot) => {
+        val newSlot = Slot(slot.seq, None, slot.master, slot.executor)
+        slots -= slot 
+        slots += newSlot 
+        // TODO: inform reporter!! 
+      } 
+      case None => LOG.warning("Killed task {} not found for slot seq {}.", 
+                               action.taskAttemptId, action.slotSeq)
     }
   }
 
@@ -419,6 +440,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   /**
    * Executor on behalf of BSPPeerContainer requests for task execution.
    * - dequeue a directive from queue.
+   * - perform function accoding to {@link Directive#action}.
    * @return Receive is partial function.
    */
   def pullForExecution: Receive = {

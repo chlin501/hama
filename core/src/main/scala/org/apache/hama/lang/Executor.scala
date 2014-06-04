@@ -67,9 +67,9 @@ trait TaskLog {
       logPath match {
         case null | "" => error("'hama.log.dir' is not set!")
         case _ => {
-          val logDir = new File(logPath)
-          if(!logDir.exists) logDir.mkdirs
           if(!conf.getBoolean("bsp.tasks.log.console", false)) {
+            val logDir = new File(logPath)
+            if(!logDir.exists) logDir.mkdirs
             val out = new FileOutputStream(new File(logDir, 
                                            "%s.log".format(executor.path.name)))
             Iterator.continually(input.read).takeWhile(-1!=).foreach(out.write) 
@@ -385,7 +385,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
     case Terminated(target) => LOG.info("{} is offline.", target.path.name)
   }
 
-  def receive = launchAck orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownSystem orElse unknown
+  def receive = launchAck orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownSystem orElse unknown
      
 }
 

@@ -17,10 +17,7 @@
  */
 package org.apache.hama.lang
 
-import akka.actor.Actor
 import akka.actor.ActorRef
-import akka.actor.Props
-import akka.event.Logging
 import akka.actor.ActorSystem
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -63,6 +60,11 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
 
   // ResumeAck(1,attempt_test_0003_000001_1)
   override def preResumeAck(ack: ResumeAck) {
+    LOG.info("{} receives {}", name, ack)
+    tester ! ack.taskAttemptId.toString
+  }
+
+  override def preKillAck(ack: KillAck) {
     LOG.info("{} receives {}", name, ack)
     tester ! ack.taskAttemptId.toString
   }
@@ -146,19 +148,25 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
   
     /* jobid, taskId, taskAttemptId, partition */
     val task1 = createTask("test", 1, 7, 2, 7) 
-    val directive1 = createDirective(Launch, task1)
+    val directive1 = createDirective(Launch, task1)  // launch task
     aggregator ! directive1
 
     val task2 = createTask("test", 3, 1, 1, 9) 
-    val directive2 = createDirective(Resume, task2)
+    val directive2 = createDirective(Resume, task2) // resume task
     aggregator ! directive2
-
-    //val task3 = createTask("test", 1, 4, 3, 2) 
-    //val directive3 = createDirective(Kill, task3)
-    //aggregator ! directive3
 
     sleep(5.seconds)
 
+    expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")
+    expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")
+
+    // kill previous actions.
+    val directive3 = createDirective(Kill, task1)
+    aggregator ! directive3
+    val directive4 = createDirective(Kill, task2)
+    aggregator ! directive4
+
+    expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")
 
     // TODO: 1. issue kill action, then verify
