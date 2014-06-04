@@ -217,17 +217,13 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    *                          None is returned.
    */
   def findTargetToKill(task: Task): Option[ActorRef] = { 
-    LOG.info("findTargetToKill: Slots {}", slots, task.getId)
     slots.find( slot => { 
       slot.task match {
         case Some(found) => found.getId.equals(task.getId)
         case None => false
       }
     }) match {
-      case Some(slot) => {
-        LOG.info("Task id {}. Slot found to be killed is {}", task.getId, slot.task)
-        slot.executor 
-      }
+      case Some(slot) => slot.executor 
       case None => None
     }
   }
@@ -241,7 +237,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   def initializeExecutor(master: String) {
     pickUp match {
       case Some(slot) => { 
-        LOG.info("Initialize executor for slot seq {}, slot {}", slot.seq, slot)
+        LOG.debug("Initialize executor for slot seq {}, slot {}", slot.seq)
         val executorName = configuration.get("bsp.groom.name", "groomServer") +
                            "_executor_" + slot.seq 
         // TODO: move to spawn()
@@ -253,7 +249,6 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         val newSlot = Slot(slot.seq, None, master, Some(executor))
         slots -= slot
         slots += newSlot
-        LOG.info("Slots after updated {}", slots)
       }
       case None => {// all slots are in use 
         LOG.debug("All slots are in use! {}", slots.mkString("\n"))

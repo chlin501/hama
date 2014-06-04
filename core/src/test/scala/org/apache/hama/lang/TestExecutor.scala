@@ -64,7 +64,7 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
     tester ! ack.taskAttemptId.toString
   }
 
-  override def preKillAck(ack: KillAck) {
+  override def postKillAck(ack: KillAck) {
     LOG.info("{} receives {}. <KillAck> Slots {}", name, ack, slots)
     tester ! ack.taskAttemptId.toString
   }
