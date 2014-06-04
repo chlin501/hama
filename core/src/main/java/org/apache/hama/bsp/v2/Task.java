@@ -125,8 +125,8 @@ public final class Task implements Writable {
 
     @Override
     public String toString() {
-      return "task is assigned: "+assigned.toString()+" task is assigned to: "+
-             groomServerName.toString();
+      return "Marker("+assigned.toString()+","+
+             groomServerName.toString()+")";
     }
   }
 

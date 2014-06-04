@@ -53,19 +53,19 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
   }
 
   // LaunchAck(2,attempt_test_0001_000007_2)
-  override def preLaunchAck(ack: LaunchAck) {
-    LOG.info("{} receives {}", name, ack)
+  override def postLaunchAck(ack: LaunchAck) {
+    LOG.info("{} receives {}. <LaunchAck> Slots {}.", name, ack, slots)
     tester ! ack.taskAttemptId.toString
   }
 
   // ResumeAck(1,attempt_test_0003_000001_1)
-  override def preResumeAck(ack: ResumeAck) {
-    LOG.info("{} receives {}", name, ack)
+  override def postResumeAck(ack: ResumeAck) {
+    LOG.info("{} receives {}. <ResumeAck> Slots {}.", name, ack, slots)
     tester ! ack.taskAttemptId.toString
   }
 
   override def preKillAck(ack: KillAck) {
-    LOG.info("{} receives {}", name, ack)
+    LOG.info("{} receives {}. <KillAck> Slots {}", name, ack, slots)
     tester ! ack.taskAttemptId.toString
   }
 
@@ -155,7 +155,7 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
     val directive2 = createDirective(Resume, task2) // resume task
     aggregator ! directive2
 
-    sleep(5.seconds)
+    sleep(10.seconds)
 
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")

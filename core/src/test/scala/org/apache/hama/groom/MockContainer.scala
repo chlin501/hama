@@ -30,13 +30,17 @@ object MockContainer {
 class MockContainer(conf: HamaConfiguration) extends BSPPeerContainer(conf) {
 
   override def executorPath: String = {
-    val port = conf.getInt("bsp.groom.actor-system.port", 50000)
-    val host = conf.get("bsp.groom.actor-system.host", "127.0.0.1")
     val actorSystemName = conf.get("bsp.groom.actor-system.name", 
                                    "TestExecutor")
+    val port = conf.getInt("bsp.groom.actor-system.port", 50000)
+    val host = conf.get("bsp.groom.actor-system.host", "127.0.0.1")
+    val seq = conf.getInt("bsp.child.slot.seq", 1)
     val addr = ("akka.tcp://%1$s@%2$s:%3$d/user/taskManager/" +
-               "groomServer_executor_1").format(actorSystemName, host, port)
-    LOG.info("Mock executor path is at {}", addr)
+               "groomServer_executor_%4$s").format(actorSystemName, 
+                                                   host, 
+                                                   port,
+                                                   seq)
+    LOG.info("Mock executor path to be looked up is at {}", addr)
     addr
   }
  

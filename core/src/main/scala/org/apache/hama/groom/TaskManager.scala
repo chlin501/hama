@@ -217,13 +217,17 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    *                          None is returned.
    */
   def findTargetToKill(task: Task): Option[ActorRef] = { 
+    LOG.info("findTargetToKill: Slots {}", slots, task.getId)
     slots.find( slot => { 
       slot.task match {
         case Some(found) => found.getId.equals(task.getId)
         case None => false
       }
     }) match {
-      case Some(slot) => slot.executor 
+      case Some(slot) => {
+        LOG.info("Task id {}. Slot found to be killed is {}", task.getId, slot.task)
+        slot.executor 
+      }
       case None => None
     }
   }
@@ -237,7 +241,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   def initializeExecutor(master: String) {
     pickUp match {
       case Some(slot) => { 
-        LOG.debug("Initialize executor for slot seq {}", slot.seq)
+        LOG.info("Initialize executor for slot seq {}, slot {}", slot.seq, slot)
         val executorName = configuration.get("bsp.groom.name", "groomServer") +
                            "_executor_" + slot.seq 
         // TODO: move to spawn()
@@ -249,6 +253,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         val newSlot = Slot(slot.seq, None, master, Some(executor))
         slots -= slot
         slots += newSlot
+        LOG.info("Slots after updated {}", slots)
       }
       case None => {// all slots are in use 
         LOG.debug("All slots are in use! {}", slots.mkString("\n"))
@@ -264,7 +269,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     var free: Slot = null
     var flag = true
     slots.takeWhile( slot => {
-      val isEmpty = None.equals(slot.task)
+      val isEmpty = None.equals(slot.task) //TODO: it is also necessary to check if executor is None!!! Otherwise the slot picked up may be (task == None) but executor is already occupied (executor != None).
       if(isEmpty) {
         free = slot
         flag = false
@@ -406,8 +411,9 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         slots += newSlot 
         // TODO: inform reporter!! 
       } 
-      case None => LOG.warning("Killed task {} not found for slot seq {}.", 
-                               action.taskAttemptId, action.slotSeq)
+      case None => LOG.warning("Killed task {} not found for slot seq {}. "+
+                               "Slots contains {}", 
+                               action.taskAttemptId, action.slotSeq, slots)
     }
   }
 
@@ -426,6 +432,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         directive.task.getId.equals(taskAttemptId) 
       ) match {
         case Some(directive) => { 
+          LOG.info("doAck action: {} task: {} executor: {}", 
+                   directive.action, directive.task.getId, from)
           book(slotSeq, directive.task, from)
           pendingQueue = pendingQueue diff Queue(directive)
           // TODO: inform reporter!!
@@ -449,12 +457,14 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         val (directive, rest) = directiveQueue.dequeue 
         directive.action match {
           case Launch => {
+            LOG.info("who is request for LaunchTask? {}", sender)
             sender ! new LaunchTask(directive.task)
             pendingQueue = pendingQueue.enqueue(directive)
             directiveQueue = rest 
           }
           case Kill => // Kill will be issued when receiveDirective, not here.
           case Resume => {
+            LOG.info("who is request for ResumeTask? {}", sender)
             sender ! new ResumeTask(directive.task)
             pendingQueue = pendingQueue.enqueue(directive)
             directiveQueue = rest  
