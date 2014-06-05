@@ -102,7 +102,11 @@ public class TestTaskTable extends TestCase {
     final byte[] bytes = serialize(table);
     final TaskTable forVerification = deserialize(bytes);
     LOG.info("Table table row length is "+forVerification.rowLength());
+    assertEquals("TaskTable row length should be "+numBSPTasks, 
+                 numBSPTasks, forVerification.rowLength());
     LOG.info("Table table column length is "+forVerification.columnLength());
+    assertEquals("TaskTable column length should be "+maxTaskAttempts,  
+                 maxTaskAttempts, forVerification.columnLength());
     final Task[] tasks = forVerification.get(1);
     assertEquals("The 2th row's size should be 1.", 1, tasks.length); 
     final Task assignedTask  = tasks[0];

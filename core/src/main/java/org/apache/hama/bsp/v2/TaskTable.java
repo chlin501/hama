@@ -355,7 +355,7 @@ public final class TaskTable implements Writable {
   @Override
   public void write(DataOutput out) throws IOException {
     this.jobId.write(out);
-    out.writeInt(maxTaskAttempts); // maxTaskAttempts
+    out.writeInt(getMaxTaskAttempts()); // maxTaskAttempts
     out.writeInt(tasks.length); // numBSPTasks 
     for (int row = 0; row < tasks.length; row++) {
       final int columnLength = sizeAt(row);
