@@ -18,6 +18,6 @@
 package org.apache.hama.groom
 
 /**
- * {@link Executor} notifies {@link BSPPeerContainer} to stop. 
+ * Client notifies {@link TaskManager} to stop {@link Executor}. 
  */
-final case object StopContainer
+final case class StopExecutor(slotSeq: Int)

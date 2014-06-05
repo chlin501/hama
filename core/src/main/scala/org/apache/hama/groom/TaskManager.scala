@@ -32,6 +32,7 @@ import org.apache.hama.RemoteService
 import org.apache.hama.ProxyInfo
 import org.apache.hama.lang.Executor
 import org.apache.hama.lang.Fork
+import org.apache.hama.lang.StopProcess
 import org.apache.hama.master._
 import org.apache.hama.master.Directive._
 import org.apache.hama.master.Directive.Action._
@@ -427,7 +428,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         directive.task.getId.equals(taskAttemptId) 
       ) match {
         case Some(directive) => { 
-          LOG.info("doAck action: {} task: {} executor: {}", 
+          LOG.debug("doAck action: {} task: {} executor: {}", 
                    directive.action, directive.task.getId, from)
           book(slotSeq, directive.task, from)
           pendingQueue = pendingQueue diff Queue(directive)
@@ -452,14 +453,14 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
         val (directive, rest) = directiveQueue.dequeue 
         directive.action match {
           case Launch => {
-            LOG.info("who is request for LaunchTask? {}", sender)
+            LOG.debug("{} requests for LaunchTask.", sender)
             sender ! new LaunchTask(directive.task)
             pendingQueue = pendingQueue.enqueue(directive)
             directiveQueue = rest 
           }
           case Kill => // Kill will be issued when receiveDirective, not here.
           case Resume => {
-            LOG.info("who is request for ResumeTask? {}", sender)
+            LOG.debug("{} requests for ResumeTask.", sender)
             sender ! new ResumeTask(directive.task)
             pendingQueue = pendingQueue.enqueue(directive)
             directiveQueue = rest  
@@ -475,7 +476,51 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
     }
   }
 
-  override def receive = launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse taskRequest orElse receiveDirective orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+  def stopExecutor: Receive = {
+    case StopExecutor(slotSeq) => slots.find( slot => 
+      slot.seq == slotSeq && !None.equals(slot.executor)
+    ) match { 
+      case Some(found) => found.executor match { 
+        case Some(executor) => executor ! StopProcess
+        case None => throw new RuntimeException("Impossible! slot "+slotSeq+
+                                                "no executor exists!")
+      }
+      case None => LOG.info("Executor may not be initialized for slot seq {}.",
+                            slotSeq)
+    }
+  }
 
+  def containerStopped: Receive = {
+    case ContainerStopped => {
+      preContainerStopped(sender)
+      slots.find( slot => slot.executor match {
+        case Some(found) => found.path.name.equals(sender.path.name)
+        case None => false
+      }) match { 
+        case Some(found) => found.executor match {
+          case Some(executor) => {
+            LOG.debug("Send shutdown container message to {} ...", executor)
+            executor ! ShutdownContainer
+            if(!None.equals(found.task)) 
+              throw new RuntimeException("Task at slot seq "+found.seq+
+                                         " is not"+ "empty! task: "+found.task)
+            val newSlot = Slot(found.seq, found.task, found.master, None)
+            slots -= found
+            slots += newSlot
+          }
+          case None => throw new RuntimeException("Impossible! Executor not "+
+                                                "found for "+sender.path.name)
+        }
+        case None => throw new RuntimeException("No executor found for "+
+                                                sender.path.name)
+      }
+      postContainerStopped(sender)
+    }
+  }
+ 
+  def preContainerStopped(executor: ActorRef) {}
+  def postContainerStopped(executor: ActorRef) {}
+
+  override def receive = launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse taskRequest orElse receiveDirective orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 
 }

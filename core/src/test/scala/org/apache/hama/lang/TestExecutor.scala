@@ -32,7 +32,7 @@ import org.apache.hama.groom.KillAck
 import org.apache.hama.groom.LaunchAck
 import org.apache.hama.groom.MockContainer
 import org.apache.hama.groom.ResumeAck
-import org.apache.hama.groom.ShutdownSystem
+import org.apache.hama.groom.StopExecutor
 import org.apache.hama.groom.TaskManager
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
@@ -45,7 +45,13 @@ import scala.concurrent.duration.FiniteDuration
 class Aggregator(conf: HamaConfiguration, tester: ActorRef) 
       extends TaskManager(conf) {
 
-  override def name: String = "mockTaskManager"
+  var command: Int = _
+
+  private def increament = command += 1
+  private def decrement = command -= 1
+  private def isZero: Boolean = (command == 0)
+
+  override def name: String = "MockTaskManager"
 
   override def initializeServices {
     initializeSlots(getMaxTasks)
@@ -54,39 +60,34 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
 
   // LaunchAck(2,attempt_test_0001_000007_2)
   override def postLaunchAck(ack: LaunchAck) {
-    LOG.info("{} receives {}. <LaunchAck> Slots {}.", name, ack, slots)
+    LOG.debug("<LaunchAck> {} receives {}.\nCurrent slots {}.", name, ack, slots)
     tester ! ack.taskAttemptId.toString
+    increament
   }
 
   // ResumeAck(1,attempt_test_0003_000001_1)
   override def postResumeAck(ack: ResumeAck) {
-    LOG.info("{} receives {}. <ResumeAck> Slots {}.", name, ack, slots)
+    LOG.debug("<ResumeAck> {} receives {}.\nCurrent slots {}.", name, ack, slots)
     tester ! ack.taskAttemptId.toString
+    increament
   }
 
   override def postKillAck(ack: KillAck) {
-    LOG.info("{} receives {}. <KillAck> Slots {}", name, ack, slots)
+    LOG.debug("<KillAck> {} receives {}.\nCurrent slots {}", name, ack, slots)
     tester ! ack.taskAttemptId.toString
   }
 
-/*
-  def stopAll: Receive = {
-    case "stopAll" => {
-      executors.foreach( e =>  e ! StopProcess)
-      LOG.info("Send StopProcess message to all BSPPeerCotnainer ...")
-    }  
-  }
-
-  def stopped: Receive = {
-    case ContainerStopped => tester ! sender.path.name+"_container_stopped"
-  }
-
-  def shut: Receive = {
-    case "shutdown" => {
-      executors.foreach( e => e ! ShutdownSystem)
+  override def postContainerStopped(executor: ActorRef) {
+    LOG.info("Executor {} is stopped.\nCurrent slots {}", 
+              executor.path.name, slots)
+    tester ! executor.path.name
+    decrement
+    if(isZero) {
+      slots.foreach( slot => 
+        tester ! slot.task
+      )
     }
   }
-*/
 
   override def receive = super.receive
 } 
@@ -138,8 +139,8 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
   def createDirective(action: Directive.Action, task: Task): Directive = 
     new Directive(action, task, "testMaster")
 
-  it("test forking a process") {
-    LOG.info("Test forking a process...")
+  it("test forking processes") {
+    LOG.info("Test forking processes...")
 
     val taskManagerName = 
       testConfiguration.get("bsp.groom.taskmanager.name", "taskManager")
@@ -155,7 +156,7 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
     val directive2 = createDirective(Resume, task2) // resume task
     aggregator ! directive2
 
-    sleep(10.seconds)
+    sleep(15.seconds)
 
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")
@@ -169,33 +170,17 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_1")
 
-    // TODO: stop/ shutdown the system
-/*
+    aggregator ! StopExecutor(1)
+    aggregator ! StopExecutor(2)
+    aggregator ! StopExecutor(3)
 
-    LOG.info("Wait 3 seconds before calling stopAll.")
-    sleep(3.seconds)
+    sleep(20.seconds)
 
-    aggregator ! "stopAll"
-
-    LOG.info("Wait 10 seconds for child process to be stopped.")
-    sleep(10.seconds)
-
-    expectAnyOf("groomServer_executor_1_container_stopped", 
-                "groomServer_executor_2_container_stopped", 
-                "groomServer_executor_3_container_stopped")
-
-    expectAnyOf("groomServer_executor_1_container_stopped", 
-                "groomServer_executor_2_container_stopped", 
-                "groomServer_executor_3_container_stopped")
-
-    expectAnyOf("groomServer_executor_1_container_stopped", 
-                "groomServer_executor_2_container_stopped", 
-                "groomServer_executor_3_container_stopped")
-
-    aggregator ! "shutdown"
-
-    sleep(10.seconds)
-*/
+    expectAnyOf("groomServer_executor_1", "groomServer_executor_2") 
+    expectAnyOf("groomServer_executor_1", "groomServer_executor_2") 
+    expect(None)
+    expect(None)
+    expect(None)
 
     LOG.info("Done!")
   }

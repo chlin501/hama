@@ -46,7 +46,7 @@ import org.apache.hama.groom.PullForExecution
 import org.apache.hama.groom.ResumeAck
 import org.apache.hama.groom.ResumeTask
 import org.apache.hama.groom.StopContainer
-import org.apache.hama.groom.ShutdownSystem
+import org.apache.hama.groom.ShutdownContainer
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.fs.Operation
 import org.apache.hama.util.BSPNetUtils
@@ -55,12 +55,11 @@ import scala.collection.JavaConversions._
 
 final case class Command(msg: Any, recipient: ActorRef)
 final case object StreamClosed
-final case object StopProcess
 
 trait TaskLog {
 
   def log(name: String, input: InputStream, conf: HamaConfiguration, 
-          executor: ActorRef, error: (String, Any*) => Unit) {
+          executor: ActorRef, ext: String, error: (String, Any*) => Unit) {
     import scala.language.postfixOps
     try { 
       val logPath = System.getProperty("hama.log.dir")
@@ -71,7 +70,7 @@ trait TaskLog {
             val logDir = new File(logPath)
             if(!logDir.exists) logDir.mkdirs
             val out = new FileOutputStream(new File(logDir, 
-                                           "%s.log".format(executor.path.name)))
+              "%s.%s".format(executor.path.name, ext)))
             Iterator.continually(input.read).takeWhile(-1!=).foreach(out.write) 
           } else {
             Iterator.continually(input.read).takeWhile(-1!=).foreach(println) 
@@ -93,7 +92,8 @@ class StdOut(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
 
   val LOG = Logging(context.system, this)
   
-  override def preStart = log(self.path.name, input, conf, executor, LOG.error)
+  override def preStart = 
+    log(self.path.name, input, conf, executor, "log", LOG.error)
 
   override def receive = { 
     case msg@_ => LOG.warning("Unknown stdout message {}", msg)
@@ -104,7 +104,8 @@ class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
       extends Actor with TaskLog {
   val LOG = Logging(context.system, this)
 
-  override def preStart = log(self.path.name, input, conf, executor, LOG.error)
+  override def preStart = 
+    log(self.path.name, input, conf, executor, "err", LOG.error)
 
   override def receive = { 
     case msg@_ => LOG.warning("Unknown stderr message {}", msg)
@@ -367,12 +368,15 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    * child process.
    * @param Receive is partial function.
    */
-  def shutdownSystem: Receive = {
-    case ShutdownSystem => {
+  def shutdownContainer: Receive = {
+    case ShutdownContainer => {
       bspPeerContainer match {
-        case null => 
-          commandQueue = commandQueue.enqueue(Command(StopContainer, sender)) 
-        case _ => bspPeerContainer ! ShutdownSystem 
+        case null => commandQueue = 
+          commandQueue.enqueue(Command(ShutdownContainer, sender)) 
+        case _ => {
+          LOG.debug("Shutdown container {}", bspPeerContainer)
+          bspPeerContainer ! ShutdownContainer 
+        }
       }
     }
   }
@@ -382,10 +386,10 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   }
 
   def terminated: Receive = {
-    case Terminated(target) => LOG.info("{} is offline.", target.path.name)
+    case Terminated(target) => LOG.warning("{} is offline.", target.path.name)
   }
 
-  def receive = launchAck orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownSystem orElse unknown
+  def receive = launchAck orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownContainer orElse unknown
      
 }
 

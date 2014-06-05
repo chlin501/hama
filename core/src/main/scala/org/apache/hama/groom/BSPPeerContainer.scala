@@ -379,21 +379,25 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * Shutdown the system. The spawned process will be stopped as well.
    * @return Receive is partial function.
    */
-  def shutdownSystem: Receive = {
-    case ShutdownSystem => {
+  def shutdownContainer: Receive = {
+    case ShutdownContainer => {
+      LOG.info("Unwatch remote executro {} ...", executor)
+      context.unwatch(executor) 
+      LOG.info("Stop {} itself ...", self.path.name)
+      context.stop(self)
       LOG.info("Completely shutdown BSPContainer system ...")
       context.system.shutdown
     }
   }
 
   /**
-   * 
+   * {@link BSPPeerContainer} is notified when executor is offline.
+   * @param target actor is {@link Executor}
    */
   override def offline(target: ActorRef) {
-    LOG.info("{} is unwatched.", target.path.name)
-    context.unwatch(target)
-    // TODO: shutdown the BSPPeerContainer system if GroomServer is down. 
+    LOG.info("{} is offline. So we are going to shutdown itself ...", target)
+    self ! ShutdownContainer
   }
 
-  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownSystem orElse stopContainer /*orElse processTask*/ orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer /*orElse processTask*/ orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
 }

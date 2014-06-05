@@ -15,6 +15,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama.lang
 
-final case object ShutdownSystem
+/**
+ * {@link TaskManager} notifies {@link Executor} to stop 
+ * {@link BSPPeerContainer}.
+ */
+final case object StopProcess

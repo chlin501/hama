@@ -18,6 +18,6 @@
 package org.apache.hama.groom
 
 /**
- * {@link Executor} notifies {@link BSPPeerContainer} to stop. 
+ * Shutdown {@link BSPPeerContainer}
  */
-final case object StopContainer
+final case object ShutdownContainer
