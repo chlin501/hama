@@ -31,9 +31,8 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
 import org.apache.hama.HamaConfiguration;
-import org.apache.hama.bsp.BSPJobClient;
-import org.apache.hama.bsp.BSPJobClient.RawSplit;
 import org.apache.hama.bsp.BSPJobID;
+import org.apache.hama.io.PartitionedSplit;
 
 /**
  * Read only informaion for a job.
@@ -264,7 +263,7 @@ public final class Job implements Writable {
       return this;
     }
 
-    public Builder withTaskTable(final BSPJobClient.RawSplit[] splits) {
+    public Builder withTaskTable(final PartitionedSplit[] splits) {
       assertParameters();
       if(null == splits) {
         return withTaskTable();

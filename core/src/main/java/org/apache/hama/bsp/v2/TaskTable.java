@@ -29,10 +29,9 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
 
-import org.apache.hama.bsp.BSPJobClient;
-import org.apache.hama.bsp.BSPJobClient.RawSplit;
 import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.HamaConfiguration;
+import org.apache.hama.io.PartitionedSplit;
 
 public final class TaskTable implements Writable {
 
@@ -75,7 +74,7 @@ public final class TaskTable implements Writable {
   public TaskTable(final BSPJobID jobId, 
                    final int numBSPTasks, 
                    final int maxTaskAttempts, 
-                   final BSPJobClient.RawSplit[] splits) {
+                   final PartitionedSplit[] splits) {
     this.jobId = jobId;
     if(null == this.jobId)
       throw new IllegalArgumentException("TaskTable's BSPJobID is missing!");
@@ -91,7 +90,7 @@ public final class TaskTable implements Writable {
     if(0 >= this.maxTaskAttempts) 
       throw new IllegalArgumentException("maxTaskAttempts is not valid.");
 
-    final BSPJobClient.RawSplit[] rawSplits = splits;
+    final PartitionedSplit[] rawSplits = splits;
     // we can't assert numBSPTasks value against splits length because
     // there may not have splits provided (meaning null == splits)!
     // and each task is assigned with null split. 
@@ -104,7 +103,7 @@ public final class TaskTable implements Writable {
     this.tasks = new ArrayWritable[numBSPTasks];
     for(int row = 0; row < numBSPTasks; row++) {
       this.tasks[row] = new ArrayWritable(Task.class);
-      final BSPJobClient.RawSplit split = (null != rawSplits && 
+      final PartitionedSplit split = (null != rawSplits && 
                                            0 < rawSplits.length)?
                                            rawSplits[row]:null;
       set(row, new Task[] {

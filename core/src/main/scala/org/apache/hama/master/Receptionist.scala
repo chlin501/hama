@@ -26,6 +26,7 @@ import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.io.PartitionedSplit
 import org.apache.hama.LocalService
 import org.apache.hama.Request
 import scala.collection.immutable.Queue
@@ -119,7 +120,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
                              setConf(config).
                              setLocalJobFile(localJobFilePath).
                              setLocalJarFile(localJarFilePath).
-                             withTaskTable(splits.getOrElse(null)).
+                             withTaskTable(splits.getOrElse(null)). 
                              build)
     }
   }
@@ -215,11 +216,17 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    * Actual create splits according to job id and configuration provided.  
    * @param jobId denotes for which job the splits will be created.
    * @param config contains user supplied information.
-   * @return Option[Array[BSPJobClient.RawSplit]] are splits files; or None if
-   *                                              no splits.
+   * @return Option[Array[PartitionedSplit]] are splits files; or None if
+   *                                         no splits.
    */
   def createSplits(jobId: BSPJobID, config: HamaConfiguration): 
-      Option[Array[BSPJobClient.RawSplit]] = {
+      Option[Array[PartitionedSplit]] = {
+//TODO: 1. Create org.apache.hama.io.?Split? interface that only stores metadata
+//         info such as file path, file length, hosts (no actual content e.g. 
+//         bytes[])
+//      2. replace readSplitFile with a function that only read meata data into
+//         split object, that will be set in tasktable.
+
     val jobSplitPath = jobSplitFilePath(config) 
     val splitsCreated = jobSplitPath match {
       case Some(path) => {
@@ -227,16 +234,28 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
         val splitFile = op(operation.getSystemDirectory).open(new Path(path))
         var splits: Array[BSPJobClient.RawSplit] = null
         try {
-          splits = BSPJobClient.readSplitFile(new DataInputStream(splitFile))
+          //splits = BSPJobClient.readSplitFile(new DataInputStream(splitFile))
+          splits = BSPJobClient.readSplitFileWithoutBytesField(
+                   new DataInputStream(splitFile))
         } finally {
           splitFile.close()
         }
-        Some(splits)
+        
+        Some(toPartitionedSplit(splits))
       }
       case None => None
     }
     LOG.debug("Split created for {} is {}", jobId, splitsCreated)
     splitsCreated
+  }
+
+  def toPartitionedSplit(splits: Array[RawSplit]): Array[PartitionedSplit] = {
+    splits.map{ split => {
+        val partitioned = new PartitionedSplit()
+        partitioned.merge(split) 
+        partitioned
+      }
+    }
   }
 
   /**

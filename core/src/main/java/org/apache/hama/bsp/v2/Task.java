@@ -32,9 +32,8 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
 
-import org.apache.hama.bsp.BSPJobClient;
-import org.apache.hama.bsp.BSPJobClient.RawSplit;
 import org.apache.hama.bsp.TaskAttemptID;
+import org.apache.hama.io.PartitionedSplit;
 
 /**
  * A view to task information. 
@@ -58,7 +57,7 @@ public final class Task implements Writable {
   private IntWritable partition = new IntWritable(1);
 
   /* The input data for this task. */
-  private BSPJobClient.RawSplit split; // TODO: neutral split interface in the future.
+  private PartitionedSplit split; 
 
   private IntWritable currentSuperstep = new IntWritable(1);
 
@@ -156,7 +155,7 @@ public final class Task implements Writable {
     private long startTime = 0;
     private long finishTime = 0;
     private int partition = 1;
-    private BSPJobClient.RawSplit split = null;
+    private PartitionedSplit split = null;
     private int currentSuperstep = 1;
     private State state = State.WAITING;
     private Phase phase = Phase.SETUP;
@@ -184,7 +183,7 @@ public final class Task implements Writable {
       return this;
     }
 
-    public Builder setSplit(final BSPJobClient.RawSplit split) {
+    public Builder setSplit(final PartitionedSplit split) {
       this.split = split;
       return this;
     }
@@ -243,7 +242,7 @@ public final class Task implements Writable {
               final long startTime, 
               final long finishTime, 
               final int partition, 
-              final BSPJobClient.RawSplit split, 
+              final PartitionedSplit split, 
               final int currentSuperstep,
               final State state, 
               final Phase phase, 
@@ -257,8 +256,9 @@ public final class Task implements Writable {
     this.finishTime = new LongWritable(finishTime);
     this.partition = new IntWritable(partition);
     this.split = split;
-    if(null == this.split)  // it's reasonable that a split is null
-      LOG.warn("Split for "+this.id.toString()+" is null.");
+    if(null == this.split)  
+      LOG.warn("Split for task "+this.id.toString()+" is null. This might "+
+               "indicate no input is required.");
     if(0 >= currentSuperstep)
       throw new IllegalArgumentException("Invalid superstep "+currentSuperstep+
                                          " value!");
@@ -306,7 +306,15 @@ public final class Task implements Writable {
     return this.partition.get();
   }
 
-  public BSPJobClient.RawSplit getSplit() {
+  /**
+   * Store split infomration, including:
+   * - file path
+   * - start position
+   * - file length
+   * - a list of hosts
+   * @return 
+   */
+  public PartitionedSplit getSplit() {
     return this.split;
   }
 
@@ -342,27 +350,28 @@ public final class Task implements Writable {
     throw new UnsupportedOperationException();
   }
 
+  /**
+   * Denote if this task is completed.
+   * @return boolean denotes complete if true; otherwise false.
+   */
   public boolean isCompleted() {
     return this.completed.get();
   }
 
+  /**
+   * Tell if this task is assigned to a particular {@link GroomServer}.
+   */
   public boolean isAssigned() {
     return this.marker.isAssigned();
   }
 
   /**
-   * Tell to which GroomServer this task is dispatched.
-   * @return String of the target GroomServer.
+   * Tell to which {@link GroomServer} this task is dispatched.
+   * @return String of the target {@link GroomServer}.
    */
   public String getAssignedTarget() {
     return this.marker.getAssignedTarget();
   } 
-
-/*
-  public void markAsAssigned() {
-    this.marker = new Marker(true, "");
-  }
-*/
 
   public void markWithTarget(final String name) {
     this.marker = new Marker(true, name);
