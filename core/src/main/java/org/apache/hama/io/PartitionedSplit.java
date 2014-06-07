@@ -21,6 +21,8 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.IntWritable;
@@ -28,14 +30,16 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hama.bsp.BSPJobClient.RawSplit;
 
+
 /**
  * An object that contains partitioned information without holding actual data.
  */
 public class PartitionedSplit extends Split {
+
+  public static final Log LOG = LogFactory.getLog(PartitionedSplit.class);
  
-  private static final String local = "file:///";
   private Text splitClassName = new Text("");
-  private Text path = new Text(local);
+  private Text path = new Text("");
   private ArrayWritable hosts = new ArrayWritable(Text.class);
   private IntWritable partitionId = new IntWritable(1);
   private LongWritable length = new LongWritable(0);
@@ -57,6 +61,8 @@ public class PartitionedSplit extends Split {
     if(null == splitClass)
       throw new IllegalArgumentException("Split class not provided.");
     this.splitClassName = new Text(splitClass.getName());
+    if(LOG.isDebugEnabled())
+      LOG.debug("Split class name is "+splitClassName.toString());
     if(null == partitionDir || partitionDir.isEmpty())
       throw new IllegalArgumentException("Partition directory is not set.");
     if(!partitionDir.startsWith("/"))
@@ -64,18 +70,27 @@ public class PartitionedSplit extends Split {
                                          "sarting from '/'.");
     if(0 > partitionId)
       throw new IllegalArgumentException("Invalid partition id: "+partitionId);
+    this.partitionId.set(partitionId);
+    if(LOG.isDebugEnabled()) 
+      LOG.debug("Partition id is "+this.partitionId.get());
     if(0 > peerIndex)
       throw new IllegalArgumentException("Invalid peer index: "+peerIndex);
-    this.path = new Text("%s%s/part-%s/file-%s".format(local, 
-                                                       partitionDir, 
-                                                       partitionId,
-                                                       peerIndex));
+    this.path = new Text(partitionDir+"/part-"+partitionId+"/file-"+
+                         peerIndex);
+    if(LOG.isDebugEnabled()) LOG.debug("Path is pointed to "+path.toString());
     if(null == hosts || 0 == hosts.length) 
       throw new IllegalArgumentException("Invalid hosts setting.");
-    this.hosts = new ArrayWritable(hosts); 
+    final Text[] texts = new Text[hosts.length];
+    for(int idx = 0; idx < hosts.length; idx++) {
+      texts[idx] = new Text(hosts[idx]); 
+      if(LOG.isDebugEnabled()) 
+        LOG.debug("host["+idx+"]:"+texts[idx].toString());
+    }
+    this.hosts.set(texts);
     if(0 >= length)
       throw new IllegalArgumentException("Invalid length: "+length);
     this.length.set(length);
+    if(LOG.isDebugEnabled()) LOG.debug("length value is "+this.length.get());
   }
 
   /**
@@ -119,7 +134,7 @@ public class PartitionedSplit extends Split {
     this.splitClassName.write(out);
     this.path.write(out);
     this.hosts.write(out);
-    this.partitionId.write(out); 
+    this.partitionId.write(out);
     this.length.write(out);
   }
 
@@ -128,7 +143,7 @@ public class PartitionedSplit extends Split {
     this.splitClassName.readFields(in);
     this.path.readFields(in);
     this.hosts.readFields(in);
-    this.partitionId.readFields(in); 
+    this.partitionId.readFields(in);
     this.length.readFields(in);
   }
 
