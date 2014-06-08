@@ -147,12 +147,12 @@ class TestExecutor extends TestEnv(ActorSystem("TestExecutor",
 
     val aggregator = createWithTester(taskManagerName, classOf[Aggregator]) 
   
-    /* jobid, taskId, taskAttemptId, partition */
-    val task1 = createTask("test", 1, 7, 2, 7) 
+    /* jobid, taskId, taskAttemptId */
+    val task1 = createTask("test", 1, 7, 2) 
     val directive1 = createDirective(Launch, task1)  // launch task
     aggregator ! directive1
 
-    val task2 = createTask("test", 3, 1, 1, 9) 
+    val task2 = createTask("test", 3, 1, 1) 
     val directive2 = createDirective(Resume, task2) // resume task
     aggregator ! directive2
 

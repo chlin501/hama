@@ -53,9 +53,6 @@ public final class Task implements Writable {
   /* Time this task finishes. */  
   private LongWritable finishTime = new LongWritable(0);
 
-  /* The partition of this task. */
-  private IntWritable partition = new IntWritable(1);
-
   /* The input data for this task. */
   private PartitionedSplit split; 
 
@@ -154,7 +151,6 @@ public final class Task implements Writable {
     private TaskAttemptID id;
     private long startTime = 0;
     private long finishTime = 0;
-    private int partition = 1;
     private PartitionedSplit split = null;
     private int currentSuperstep = 1;
     private State state = State.WAITING;
@@ -178,11 +174,14 @@ public final class Task implements Writable {
       return this;
     }
 
-    public Builder setPartition(final int partition) {
-      this.partition = partition;
-      return this;
-    }
-
+    /**
+     * Split contains metadata pointed to the original dataset, including:
+     * - split class.
+     * - path of this split.
+     * - hosts.
+     * - partition id.
+     * - data length.
+     */
     public Builder setSplit(final PartitionedSplit split) {
       this.split = split;
       return this;
@@ -225,7 +224,6 @@ public final class Task implements Writable {
       return new Task(id, 
                       startTime, 
                       finishTime, 
-                      partition, 
                       split, 
                       currentSuperstep,
                       state, 
@@ -241,7 +239,6 @@ public final class Task implements Writable {
   public Task(final TaskAttemptID id, 
               final long startTime, 
               final long finishTime, 
-              final int partition, 
               final PartitionedSplit split, 
               final int currentSuperstep,
               final State state, 
@@ -254,7 +251,6 @@ public final class Task implements Writable {
       throw new IllegalArgumentException("TaskAttemptID not provided.");
     this.startTime = new LongWritable(startTime);
     this.finishTime = new LongWritable(finishTime);
-    this.partition = new IntWritable(partition);
     this.split = split;
     if(null == this.split)  
       LOG.warn("Split for task "+this.id.toString()+" is null. This might "+
@@ -302,16 +298,13 @@ public final class Task implements Writable {
     this.finishTime = new LongWritable(System.currentTimeMillis());
   }
 
-  public int getPartition() {
-    return this.partition.get();
-  }
-
   /**
    * Store split infomration, including:
-   * - file path
-   * - start position
-   * - file length
-   * - a list of hosts
+   * - split class. 
+   * - path of this split.
+   * - a list of hosts.
+   * - partition id.
+   * - file length.
    * @return 
    */
   public PartitionedSplit getSplit() {
@@ -391,7 +384,6 @@ public final class Task implements Writable {
     this.id.write(out);
     this.startTime.write(out);
     this.finishTime.write(out);
-    this.partition.write(out);
     if(null != this.split) {
       out.writeBoolean(true);
       this.split.write(out);
@@ -414,8 +406,6 @@ public final class Task implements Writable {
     this.startTime.readFields(in);
     this.finishTime = new LongWritable(0);
     this.finishTime.readFields(in);
-    this.partition = new IntWritable(1);
-    this.partition.readFields(in);
     if(in.readBoolean()) {
       this.split.readFields(in);
     } else {
@@ -460,7 +450,6 @@ public final class Task implements Writable {
     return "Task("+id.toString() + "," +
                    getStartTime() + "," +
                    getFinishTime() + "," +
-                   getPartition() + "," +
                    getState().toString() + "," +
                    getPhase().toString() + "," + 
                    isCompleted() + "," + 

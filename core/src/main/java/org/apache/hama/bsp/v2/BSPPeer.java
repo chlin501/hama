@@ -60,38 +60,42 @@ public interface BSPPeer {
    * remote peers.
    * 
    * @throws IOException
-   * @throws SyncException
-   * @throws InterruptedException
    */
-  public void sync() throws IOException, SyncException, InterruptedException;
+  public void sync() throws IOException;
 
   /**
+   * Superstep count at the moment this execution has.  
    * @return the count of current super-step
    */
   public long getSuperstepCount();
 
   /**
+   * The name of the peer.
    * @return the name of this peer in the format "hostname:port".
    */
   public String getPeerName();
 
   /**
+   * The <i>N</i>th peer name among all peers involved in computation.
    * @return the name of n-th peer from sorted array by name.
    */
   public String getPeerName(int index);
 
   /**
+   * The index for this bsp peer.
    * @return the index of this peer from sorted array by name.
    */
   public int getPeerIndex();
 
   /**
+   * All peers' name.
    * @return the names of all the peers executing tasks from the same job
    *         (including this peer).
    */
   public String[] getAllPeerNames();
 
   /**
+   * The number of peers involved in computation.
    * @return the number of peers
    */
   public int getNumPeers();
@@ -136,7 +140,8 @@ public interface BSPPeer {
    */
 
   /**
-   * @return the jobs configuration
+   * The configuration for this job.
+   * @return the job's configuration.
    */
   public HamaConfiguration getConfiguration();
 
@@ -145,8 +150,8 @@ public interface BSPPeer {
    * 
    * @param name counter name
    * @return the <code>Counter</code> of the given group/name.
-   */
   public Counter getCounter(Enum<?> name);
+   */
 
   /**
    * Get the {@link Counter} of the given group with the given name.
@@ -154,8 +159,8 @@ public interface BSPPeer {
    * @param group counter group
    * @param name counter name
    * @return the <code>Counter</code> of the given group/name.
-   */
   public Counter getCounter(String group, String name);
+   */
 
   /**
    * Increments the counter identified by the key, which can be of any
@@ -165,8 +170,8 @@ public interface BSPPeer {
    *          any <code>Enum</code>.
    * @param amount A non-negative amount by which the counter is to be
    *          incremented.
-   */
   public void incrementCounter(Enum<?> key, long amount);
+   */
 
   /**
    * Increments the counter identified by the group and counter name by the
@@ -176,8 +181,8 @@ public interface BSPPeer {
    * @param counter name to identify the counter within the group.
    * @param amount A non-negative amount by which the counter is to be
    *          incremented.
-   */
   public void incrementCounter(String group, String counter, long amount);
+   */
 
   /**
    * @return the size of assigned split
@@ -191,6 +196,7 @@ public interface BSPPeer {
    */
 
   /**
+   * The task attempt id this execution holds.
    * @return the task id of this task.
    */
   public TaskAttemptID getTaskAttemptId();

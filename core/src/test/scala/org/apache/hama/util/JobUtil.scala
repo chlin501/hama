@@ -185,8 +185,7 @@ trait JobUtil extends Logger {
   }
 
   def createTask(jobIdentifier: String = "test", jobId: Int = 1,
-                 taskId: Int = 1, taskAttemptId: Int = 1, 
-                 partition: Int = 7): Task = {
+                 taskId: Int = 1, taskAttemptId: Int = 1): Task = {
     val attemptId = IDCreator.newBSPJobID.withId(jobIdentifier)
                                          .withId(jobId)
                                          .getTaskIDBuilder
@@ -201,7 +200,6 @@ trait JobUtil extends Logger {
     new Task.Builder().setId(attemptId)
                       .setStartTime(startTime)
                       .setFinishTime(finishTime)
-                      .setPartition(partition)
                       .setState(state)
                       .setPhase(phase)
                       .setCompleted(true)

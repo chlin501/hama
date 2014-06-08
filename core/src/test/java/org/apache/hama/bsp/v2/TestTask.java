@@ -54,7 +54,6 @@ public class TestTask extends TestCase {
     final Task task = new Task.Builder().setId(attemptId)
                                         .setStartTime(startTime)
                                         .setFinishTime(finishTime)
-                                        .setPartition(7)
                                         .setState(state)
                                         .setPhase(phase)
                                         .setCompleted(true)
@@ -101,10 +100,6 @@ public class TestTask extends TestCase {
     LOG.info("Restored finishTime is "+forVerification.getFinishTime());
     assertEquals("Finish time should be "+task.getFinishTime(), 
                  task.getFinishTime(), forVerification.getFinishTime());
-
-    LOG.info("Restored partition is "+forVerification.getPartition());
-    assertEquals("Partition should be "+task.getPartition(), 
-                 task.getPartition(), forVerification.getPartition());
 
     assertEquals("State should be "+task.getState().toString(), 
                  task.getState(), forVerification.getState()); 

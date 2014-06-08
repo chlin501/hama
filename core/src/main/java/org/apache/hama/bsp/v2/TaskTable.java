@@ -113,7 +113,6 @@ public final class TaskTable implements Writable {
                                           .getTaskAttemptIDBuilder()
                                           .withId(1) // TaskAttemptID's id
                                           .build())
-                          .setPartition((row+1))
                           .setSplit(split)
                           .setTotalBSPTasks(this.numBSPTasks)
                           .build()

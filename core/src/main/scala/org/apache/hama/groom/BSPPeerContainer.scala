@@ -284,13 +284,19 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     }
   }
 
-  def doLaunch(task: Task) {
-    LOG.info("function doLaunch is not yet implemented!") // TODO:
-  }
+  def doLaunch(task: Task) { /* ... */ }
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
     from ! new LaunchAck(slotSeq, taskAttemptId)
     LOG.debug("LaunchAck is sent back!")
+  }
+
+  /** 
+   * Prepare necessary information and data before actually executing a bsp 
+   * task.
+   */
+  def setupTask(task: Task) {
+
   }
     
 
