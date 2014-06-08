@@ -213,7 +213,8 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
   }
 
   /**
-   * Actual create splits according to job id and configuration provided.  
+   * Create splits according to job id and configuration provided. Split files
+   * generated only contains related information without actual bytes content.
    * @param jobId denotes for which job the splits will be created.
    * @param config contains user supplied information.
    * @return Option[Array[PartitionedSplit]] are splits files; or None if
@@ -221,11 +222,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    */
   def createSplits(jobId: BSPJobID, config: HamaConfiguration): 
       Option[Array[PartitionedSplit]] = {
-//TODO: 1. Create org.apache.hama.io.?Split? interface that only stores metadata
-//         info such as file path, file length, hosts (no actual content e.g. 
-//         bytes[])
-//      2. replace readSplitFile with a function that only read meata data into
-//         split object, that will be set in tasktable.
 
     val jobSplitPath = jobSplitFilePath(config) 
     val splitsCreated = jobSplitPath match {
@@ -234,9 +230,9 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
         val splitFile = op(operation.getSystemDirectory).open(new Path(path))
         var splits: Array[BSPJobClient.RawSplit] = null
         try {
-          //splits = BSPJobClient.readSplitFile(new DataInputStream(splitFile))
+          // TODO: change to readToPartitionedSplit
           splits = BSPJobClient.readSplitFileWithoutBytesField(
-                   new DataInputStream(splitFile))
+                   new DataInputStream(splitFile)) 
         } finally {
           splitFile.close()
         }

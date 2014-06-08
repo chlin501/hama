@@ -64,7 +64,7 @@ trait TaskLog {
     try { 
       val logPath = System.getProperty("hama.log.dir")
       logPath match {
-        case null | "" => error("'hama.log.dir' is not set!")
+        case null | "" => error("{} is not set!", "hama.log.dir")
         case _ => {
           if(!conf.getBoolean("bsp.tasks.log.console", false)) {
             val logDir = new File(logPath)

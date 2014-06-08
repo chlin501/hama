@@ -165,6 +165,7 @@ public final class Job implements Writable {
     public Builder setNumBSPTasks(final int numBSPTasks) {
       if(1 < numBSPTasks)
         conf.setInt("bsp.peers.num", numBSPTasks);
+      adjustNumBSPTasks();
       return this;
     }
 
@@ -253,9 +254,21 @@ public final class Job implements Writable {
         throw new IllegalStateException("BSPJobID is missing when creating "+
                                         "TaskTable.");
     }
+    
+    private void adjustNumBSPTasks() {
+      final String[] targetGrooms = conf.getStrings("bsp.sched.targets.grooms");
+      final int numbsptasks = conf.getInt("bsp.peers.num", 1);
+      if(null != targetGrooms && targetGrooms.length > numbsptasks) { 
+        LOG.info("Adjust numBSPTasks "+numbsptasks+" to "+targetGrooms.length+
+                 " because target grooms to be scheduled is larger than "+
+                 "num bsp tasks.");
+        conf.setInt("bsp.peers.num", targetGrooms.length);  
+      }
+    }
 
     public Builder withTaskTable() {
       assertParameters();
+      adjustNumBSPTasks();
       this.taskTable = new TaskTable(this.id, 
                                      conf.getInt("bsp.peers.num", 1), 
                                      conf.getInt("bsp.tasks.max.attempts", 3), 
@@ -265,6 +278,7 @@ public final class Job implements Writable {
 
     public Builder withTaskTable(final PartitionedSplit[] splits) {
       assertParameters();
+      adjustNumBSPTasks();
       if(null == splits) {
         return withTaskTable();
       } else {
@@ -363,13 +377,14 @@ public final class Job implements Writable {
 
     // align numBSPTasks to # of splits calculated in TaskTable.
     final int actualNumBSPTasks = this.taskTable.getNumBSPTasks();
-    LOG.info("Adjust numBSPTasks to "+actualNumBSPTasks);
+    LOG.info("NumBSPTasks is set to "+actualNumBSPTasks+" according to "+
+             "\"bsp.sched.targets.grooms\" and \"bsp.peers.num\" defined.");
     conf.setInt("bsp.peers.num", actualNumBSPTasks); 
 
     if(getNumBSPTasks() < getTargets().length) 
-      throw new RuntimeException("Target value "+getTargets().length +
+      throw new RuntimeException("Target GroomServer "+getTargets().length +
                                  " is larger than "+getNumBSPTasks() +
-                                 " total tasks allowed.");
+                                 " tasks allowed to run.");
   }
 
   /**
