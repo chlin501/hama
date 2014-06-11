@@ -24,7 +24,7 @@ import java.io.DataOutput;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import junit.framework.TestCase;
-import org.apache.hadoop.fs.Path;
+import org.apache.hama.bsp.BSPJobClient.RawSplit;
 import org.apache.hama.bsp.FileSplit;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -33,9 +33,7 @@ public class TestPartitionedSplit extends TestCase {
 
   public static final Log LOG = LogFactory.getLog(TestPartitionedSplit.class);
  
-  static final Path partitionDir = new Path("/tmp/hama/io/");
   static final int partitionId = 9;
-  static final int peerIndex = 7;
   static final String[] hosts = new String[]{ "host4", "host2", "host9" };
   static final long length = 64*1024*1024;
 
@@ -55,6 +53,12 @@ public class TestPartitionedSplit extends TestCase {
     final PartitionedSplit forVerification = new PartitionedSplit();
     forVerification.readFields(in);
     in.close();
+    assertSplit(forVerification, partitionId, hosts, length);
+  }
+
+  void assertSplit(final PartitionedSplit forVerification,
+                   final int partitionId, final String[] hosts,
+                   final long length) throws Exception {
     final String className = forVerification.splitClassName();
     assertEquals("Split class name should be "+FileSplit.class.getName(), 
                  FileSplit.class.getName(), className);
@@ -71,7 +75,7 @@ public class TestPartitionedSplit extends TestCase {
     assertEquals("Split length should be "+length, length, len);
   }
 
-  public String hostsString() {
+  String hostsString() {
     final StringBuilder builder = new StringBuilder();
     for(String host: hosts) {
       builder.append(host+" "); 
@@ -79,7 +83,25 @@ public class TestPartitionedSplit extends TestCase {
     return builder.toString();
   }
 
+  RawSplit createRawSplit() throws Exception {
+    final String content = "FakeFileSplitInBytes";
+    byte[] bytes = content.getBytes();
+    int len = bytes.length;
+    final RawSplit split =  new RawSplit();
+    split.setClassName(FileSplit.class.getName());
+    split.setPartitionID(6);
+    split.setBytes(bytes, 0, len);
+    split.setLocations(new String[]{ "host5", "host8", "host1" });
+    split.setDataLength(len);
+    return split;
+  }
+
   public void testMerge() throws Exception {
+    final RawSplit rawSplit = createRawSplit(); 
+    final PartitionedSplit split = createSplit(); 
+    split.merge(rawSplit);
+    assertSplit(split, rawSplit.getPartitionID(), rawSplit.getLocations(), 
+                rawSplit.getDataLength()); 
   }
   
 }
