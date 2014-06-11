@@ -58,6 +58,7 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.apache.hama.Constants;
 import org.apache.hama.HamaConfiguration;
+import org.apache.hama.io.PartitionedSplit;
 import org.apache.hama.ipc.HamaRPCProtocolVersion;
 import org.apache.hama.ipc.JobSubmissionProtocol;
 import org.apache.hama.ipc.RPC;
@@ -554,7 +555,6 @@ public class BSPJobClient extends Configured implements Tool {
           String[] extractPartitionID = ((FileSplit) split).getPath().getName()
               .split("[-]");
           rawSplit.setPartitionID(Integer.parseInt(extractPartitionID[1]));
-          rawSplit.setPath(((FileSplit) split).getPath());
         }
 
         rawSplit.setClassName(split.getClass().getName());
@@ -587,35 +587,29 @@ public class BSPJobClient extends Configured implements Tool {
   }
 
   /**
-   * Identifical to readSplitFile function except RawSplit BytesWritable fields
-   * is skipped for reducing space.
+   * Read split file into {@link PartitionedSplit}. It's possible that split
+   * file is <b>null</b>.
    * @param in contains split information.
    */
-  public final static RawSplit[] readSplitFileWithoutBytesField(DataInput in) 
+  public final static PartitionedSplit[] asPartitionedSplit(DataInput in) 
       throws IOException {
-    byte[] header = new byte[SPLIT_FILE_HEADER.length];
-    in.readFully(header);
-    if (!Arrays.equals(SPLIT_FILE_HEADER, header)) {
-      throw new IOException("Invalid header on split file");
-    }
-    int vers = WritableUtils.readVInt(in);
-    if (vers != CURRENT_SPLIT_FILE_VERSION) {
-      throw new IOException("Unsupported split version " + vers);
-    }
-    int len = WritableUtils.readVInt(in);
-    RawSplit[] result = new RawSplit[len];
-    for (int i = 0; i < len; ++i) {
-      RawSplit split = new RawSplit();
-      split.readFieldsWithBytesSkipped(in);  // omit bytes field.
-      if (split.getPartitionID() != Integer.MIN_VALUE)
-        result[split.getPartitionID()] = split;
-      else
-        result[i] = split;
+    final RawSplit[] splits = readSplitFile(in);
+    PartitionedSplit[] result = null;
+    if(null != splits && 0 < splits.length) {
+      result = new PartitionedSplit[splits.length];
+      int idx = 0;
+      for(RawSplit split: splits) {
+        final PartitionedSplit partitioned = new PartitionedSplit();
+        partitioned.merge(split);
+        result[idx] = partitioned;
+        idx++;
+      }
     }
     return result;
   }
+
   /**
-   * Read a splits file into a list of raw splits
+   * Read a splits file into a list of raw splits.
    * 
    * @param in the stream to read from
    * @return the complete list of splits
@@ -1081,16 +1075,13 @@ public class BSPJobClient extends Configured implements Tool {
   }
 
   public static class RawSplit implements Writable {
+    /* This represents InputSplit object, generally FileSplit. */
     private String splitClass;
+    /* During writeSplits, FileSplit is serialized and saved as `bytes' */
     private BytesWritable bytes = new BytesWritable();
     private String[] locations;
     private int partitionID = Integer.MIN_VALUE;
     long dataLength;
-    /** 
-     * for new split class org.apache.hama.io.PartitionedSplit.
-     * This is set during writeSplits() function if input is available.
-     */
-    private Text path = new Text("file:///");
 
     public void setBytes(byte[] data, int offset, int length) {
       bytes.set(data, offset, length);
@@ -1128,41 +1119,6 @@ public class BSPJobClient extends Configured implements Tool {
       return locations;
     }
 
-    /**
-     * Set path where this split is stored.
-     * @param path pointed to the place where this split is stored.
-     */
-    public void setPath(Path path) { 
-      this.path = new Text(path.toString());
-    }
-
-    /**
-     * Retrieve the path this split is stored.
-     * @return path pointed to the place this split is stored.
-     */
-    public Path getPath() { 
-      return new Path(this.path.toString());
-    }
-
-    /**
-     * Reconstruct RawSplit object from serialized stream by skipping 
-     * BytesWritable object.
-     * @param in contains serialized split data.
-     */
-    public void readFieldsWithBytesSkipped(DataInput in) throws IOException {
-      splitClass = Text.readString(in);
-      dataLength = in.readLong();
-      partitionID = in.readInt();
-      int sizeOfByteArray = in.readInt();
-      int skipped = in.skipBytes(sizeOfByteArray);
-      int len = WritableUtils.readVInt(in);
-      locations = new String[len];
-      for (int i = 0; i < len; ++i) {
-        locations[i] = Text.readString(in);
-      }
-      path.readFields(in);      
-    }
-
     @Override
     public void readFields(DataInput in) throws IOException {
       splitClass = Text.readString(in);
@@ -1174,7 +1130,6 @@ public class BSPJobClient extends Configured implements Tool {
       for (int i = 0; i < len; ++i) {
         locations[i] = Text.readString(in);
       }
-      path.readFields(in);
     }
 
     @Override
@@ -1187,7 +1142,6 @@ public class BSPJobClient extends Configured implements Tool {
       for (String location : locations) {
         Text.writeString(out, location);
       }
-      path.write(out);
     }
 
 

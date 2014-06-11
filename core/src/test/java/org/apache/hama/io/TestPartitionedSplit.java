@@ -23,10 +23,9 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-
 import junit.framework.TestCase;
 import org.apache.hadoop.fs.Path;
-
+import org.apache.hama.bsp.FileSplit;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -34,7 +33,6 @@ public class TestPartitionedSplit extends TestCase {
 
   public static final Log LOG = LogFactory.getLog(TestPartitionedSplit.class);
  
-  public static final class DummySplitter { }
   static final Path partitionDir = new Path("/tmp/hama/io/");
   static final int partitionId = 9;
   static final int peerIndex = 7;
@@ -42,12 +40,7 @@ public class TestPartitionedSplit extends TestCase {
   static final long length = 64*1024*1024;
 
   PartitionedSplit createSplit() throws Exception {
-    return new PartitionedSplit(DummySplitter.class,
-                              partitionDir.toString(),
-                              partitionId, 
-                              peerIndex, 
-                              hosts, 
-                              length);
+    return new PartitionedSplit(FileSplit.class, partitionId, hosts, length);
   }
 
   public void testSerialization() throws Exception {
@@ -63,13 +56,10 @@ public class TestPartitionedSplit extends TestCase {
     forVerification.readFields(in);
     in.close();
     final String className = forVerification.splitClassName();
-    assertEquals("Split class name should be "+DummySplitter.class.getName(), 
-                 DummySplitter.class.getName(), className);
+    assertEquals("Split class name should be "+FileSplit.class.getName(), 
+                 FileSplit.class.getName(), className);
     final int pId = forVerification.partitionId();
     assertEquals("PartitionId should be "+partitionId, partitionId, pId);
-    final Path path = forVerification.path();
-    LOG.info("PartitionedSplit path is "+path.toString());
-    assertEquals("Path should be "+pathString(), pathString(), path.toString());
     final String[] locations = forVerification.hosts();
     int idx = 0;
     for(String location: locations) {
@@ -79,11 +69,6 @@ public class TestPartitionedSplit extends TestCase {
     }
     final long len = forVerification.length();
     assertEquals("Split length should be "+length, length, len);
-  }
-
-  public String pathString() {
-    return new Path(partitionDir+"/part-"+partitionId+"/file-"+peerIndex).
-           toString();
   }
 
   public String hostsString() {

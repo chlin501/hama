@@ -228,30 +228,20 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
       case Some(path) => {
         LOG.info("Create split file from {}", path)
         val splitFile = op(operation.getSystemDirectory).open(new Path(path))
-        var splits: Array[BSPJobClient.RawSplit] = null
+        var splits: Array[PartitionedSplit] = null
         try {
-          // TODO: change to readToPartitionedSplit
-          splits = BSPJobClient.readSplitFileWithoutBytesField(
-                   new DataInputStream(splitFile)) 
+          splits = BSPJobClient.asPartitionedSplit(new DataInputStream(
+                   splitFile)) 
         } finally {
           splitFile.close()
         }
         
-        Some(toPartitionedSplit(splits))
+        Some(splits)
       }
       case None => None
     }
     LOG.debug("Split created for {} is {}", jobId, splitsCreated)
     splitsCreated
-  }
-
-  def toPartitionedSplit(splits: Array[RawSplit]): Array[PartitionedSplit] = {
-    splits.map{ split => {
-        val partitioned = new PartitionedSplit()
-        partitioned.merge(split) 
-        partitioned
-      }
-    }
   }
 
   /**
