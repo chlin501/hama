@@ -42,6 +42,7 @@ import org.apache.hadoop.net.Node;
 import org.apache.hadoop.net.NodeBase;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hadoop.util.StringUtils;
+import org.apache.hama.HamaConfiguration;
 
 public abstract class FileInputFormat<K, V> implements InputFormat<K, V> {
   public static final Log LOG = LogFactory.getLog(FileInputFormat.class);
@@ -82,6 +83,12 @@ public abstract class FileInputFormat<K, V> implements InputFormat<K, V> {
   @Override
   public abstract RecordReader<K, V> getRecordReader(InputSplit split,
       BSPJob job) throws IOException;
+
+  /**
+   * The purpose of this function is as transition method. 
+   */
+  public abstract RecordReader<K, V> recordReader(HamaConfiguration conf,
+      InputSplit split) throws IOException;  // HAMA V2
 
   /**
    * Set a PathFilter to be applied to the input paths for the BSP job.

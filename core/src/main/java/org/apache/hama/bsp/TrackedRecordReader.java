@@ -26,7 +26,7 @@ public class TrackedRecordReader<K, V> implements RecordReader<K, V> {
   private long beforePos = -1;
   private long afterPos = -1;
 
-  TrackedRecordReader(RecordReader<K, V> raw,
+  public TrackedRecordReader(RecordReader<K, V> raw,
       Counters.Counter inputRecordCounter, Counters.Counter inputByteCounter)
       throws IOException {
     rawIn = raw;

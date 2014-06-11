@@ -24,6 +24,7 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.MapFile;
 import org.apache.hadoop.io.SequenceFile;
+import org.apache.hama.HamaConfiguration;
 
 public class SequenceFileInputFormat<K, V> extends FileInputFormat<K, V> {
 
@@ -32,6 +33,13 @@ public class SequenceFileInputFormat<K, V> extends FileInputFormat<K, V> {
       throws IOException {
     return new SequenceFileRecordReader<K, V>(job.getConfiguration(),
         (FileSplit) split);
+  }
+
+  @Override // HAMA V2
+  public RecordReader<K, V> recordReader(HamaConfiguration conf,
+                                            InputSplit split)
+      throws IOException {
+    return new SequenceFileRecordReader<K, V>(conf, (FileSplit) split);
   }
 
   @Override

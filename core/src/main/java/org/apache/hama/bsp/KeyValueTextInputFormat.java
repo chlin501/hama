@@ -21,6 +21,7 @@ package org.apache.hama.bsp;
 import java.io.IOException;
 
 import org.apache.hadoop.io.Text;
+import org.apache.hama.HamaConfiguration;
 
 /**
  * An {@link InputFormat} for plain text files. Files are broken into lines.
@@ -36,4 +37,9 @@ public class KeyValueTextInputFormat extends FileInputFormat<Text, Text> {
     return new KeyValueLineRecordReader(job.conf, (FileSplit) genericSplit);
   }
 
+  @Override // HAMA V2
+  public RecordReader<Text, Text> recordReader(HamaConfiguration conf,
+      InputSplit genericSplit) throws IOException {
+    return new KeyValueLineRecordReader(conf, (FileSplit) genericSplit);
+  }
 }

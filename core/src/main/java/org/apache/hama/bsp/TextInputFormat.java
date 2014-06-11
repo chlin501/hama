@@ -24,6 +24,7 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.compress.CompressionCodec;
 import org.apache.hadoop.io.compress.CompressionCodecFactory;
+import org.apache.hama.HamaConfiguration;
 
 public class TextInputFormat extends FileInputFormat<LongWritable, Text> {
 
@@ -31,6 +32,13 @@ public class TextInputFormat extends FileInputFormat<LongWritable, Text> {
   public RecordReader<LongWritable, Text> getRecordReader(InputSplit split,
       BSPJob job) throws IOException {
     return new LineRecordReader(job.getConfiguration(), (FileSplit) split);
+  }
+
+  // HAMA V2
+  @Override
+  public RecordReader<LongWritable, Text> recordReader(HamaConfiguration conf, 
+      InputSplit split) throws IOException {
+    return new LineRecordReader(conf, (FileSplit) split);
   }
 
   @Override

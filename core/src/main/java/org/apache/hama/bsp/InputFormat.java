@@ -18,6 +18,7 @@
 package org.apache.hama.bsp;
 
 import java.io.IOException;
+import org.apache.hama.HamaConfiguration;
 
 public interface InputFormat<K, V> {
 

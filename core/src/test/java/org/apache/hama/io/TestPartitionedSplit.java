@@ -38,7 +38,9 @@ public class TestPartitionedSplit extends TestCase {
   static final long length = 64*1024*1024;
 
   PartitionedSplit createSplit() throws Exception {
-    return new PartitionedSplit(FileSplit.class, partitionId, hosts, length);
+    byte[] bytes = "FakeFileSplitInBytes".getBytes();
+    return new PartitionedSplit(FileSplit.class, partitionId, hosts, length,
+                                bytes, 0, bytes.length);
   }
 
   public void testSerialization() throws Exception {

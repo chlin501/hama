@@ -24,6 +24,7 @@ import java.io.IOException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
@@ -41,6 +42,7 @@ public class PartitionedSplit extends Split {
   private ArrayWritable hosts = new ArrayWritable(Text.class);
   private IntWritable partitionId = new IntWritable(1);
   private LongWritable length = new LongWritable(0);
+  private BytesWritable bytes = new BytesWritable();
 
   public PartitionedSplit() {} // for Writable
 
@@ -51,9 +53,13 @@ public class PartitionedSplit extends Split {
    * @param partitionId denotes the id of partition for this split holds.
    * @param hosts denotes the places where the split is stored.
    * @param length denotes the length of this split.
+   * @param bytes is the binary data representation of InputSplit, generally
+   *              it's FileSplit.
    */
   public PartitionedSplit(final Class<?> splitClass, final int partitionId, 
-                          final String[] hosts, final long length) {
+                          final String[] hosts, final long length, 
+                          final byte[] bytes, final int offset, 
+                          int bytesLength) {
     if(null == splitClass)
       throw new IllegalArgumentException("Split class not provided.");
     this.splitClassName = new Text(splitClass.getName());
@@ -79,6 +85,12 @@ public class PartitionedSplit extends Split {
       throw new IllegalArgumentException("Invalid length: "+length);
     this.length.set(length);
     if(LOG.isDebugEnabled()) LOG.debug("length value is "+this.length.get());
+
+    if(null == bytes)
+      throw new IllegalArgumentException("InputSplit binary data not found!");
+    this.bytes.set(bytes, offset, bytesLength);
+    if(LOG.isDebugEnabled()) 
+      LOG.debug("bytes length is "+this.bytes.get().length);
   }
 
   /**
@@ -108,12 +120,17 @@ public class PartitionedSplit extends Split {
     return this.hosts.toStrings();
   }
 
+  public byte[] bytes() {
+    return this.bytes.get();
+  }
+
   @Override 
   public void write(DataOutput out) throws IOException {
     this.splitClassName.write(out);
     this.hosts.write(out);
     this.partitionId.write(out);
     this.length.write(out);
+    this.bytes.write(out);
   }
 
   @Override 
@@ -122,6 +139,7 @@ public class PartitionedSplit extends Split {
     this.hosts.readFields(in);
     this.partitionId.readFields(in);
     this.length.readFields(in);
+    this.bytes.readFields(in);
   }
 
   /**
@@ -135,5 +153,6 @@ public class PartitionedSplit extends Split {
     this.hosts = new ArrayWritable(split.getLocations()); 
     this.partitionId = new IntWritable(split.getPartitionID());
     this.length = new LongWritable(split.getDataLength());
+    this.bytes = split.getBytes();
   }
 }
