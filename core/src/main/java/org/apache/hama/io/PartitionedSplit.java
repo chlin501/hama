@@ -41,9 +41,9 @@ public class PartitionedSplit extends Split {
   private Text splitClassName = new Text("");
   private ArrayWritable hosts = new ArrayWritable(Text.class);
   private IntWritable partitionId = new IntWritable(1);
-  private LongWritable length = new LongWritable(0);
+  private LongWritable splitLength = new LongWritable(0);
   /* This represents the split binary data, generally be FileSplit. */
-  private BytesWritable bytes = new BytesWritable();
+  private BytesWritable fileSplitBytes = new BytesWritable();
 
   public PartitionedSplit() {} // for Writable
 
@@ -53,13 +53,18 @@ public class PartitionedSplit extends Split {
    * @param splitClass tells which {@link InputSplit} class it represents.
    * @param partitionId denotes the id of partition for this split holds.
    * @param hosts denotes the places where the split is stored.
-   * @param length denotes the length of this split.
+   * @param splitLength denotes the length of the file split. It's often to be
+   *                    FileSplit.getLength(), meaning "the number of bytes in 
+   *                    the file to process".
    * @param bytes is the binary data representation of InputSplit, generally
-   *              it's FileSplit.
+   *              be FileSplit.
+   * @param start indicates the start position of the InputSplit, generally be 
+   *              FileSplit.
+   * @param bytesLength denotes the length of the InputSplit as byte array.
    */
   public PartitionedSplit(final Class<?> splitClass, final int partitionId, 
-                          final String[] hosts, final long length, 
-                          final byte[] bytes, final int offset, 
+                          final String[] hosts, final long splitLength, 
+                          final byte[] bytes, final int start, 
                           int bytesLength) {
     if(null == splitClass)
       throw new IllegalArgumentException("Split class not provided.");
@@ -79,19 +84,20 @@ public class PartitionedSplit extends Split {
     for(int idx = 0; idx < hosts.length; idx++) {
       texts[idx] = new Text(hosts[idx]); 
       if(LOG.isDebugEnabled()) 
-        LOG.debug("host["+idx+"]:"+texts[idx].toString());
+        LOG.debug("host["+idx+"] is "+texts[idx].toString());
     }
     this.hosts.set(texts);
-    if(0 >= length)
-      throw new IllegalArgumentException("Invalid length: "+length);
-    this.length.set(length);
-    if(LOG.isDebugEnabled()) LOG.debug("length value is "+this.length.get());
+    if(0 >= splitLength)
+      throw new IllegalArgumentException("Invalid split length: "+splitLength);
+    this.splitLength.set(splitLength);
+    if(LOG.isDebugEnabled()) 
+      LOG.debug("Split length value is "+this.splitLength.get());
 
     if(null == bytes)
       throw new IllegalArgumentException("InputSplit binary data not found!");
-    this.bytes.set(bytes, offset, bytesLength);
+    this.fileSplitBytes = new BytesWritable(bytes);
     if(LOG.isDebugEnabled()) 
-      LOG.debug("bytes length is "+this.bytes.get().length);
+      LOG.debug("FileSplit bytes length is "+bytes().length);
   }
 
   /**
@@ -113,7 +119,7 @@ public class PartitionedSplit extends Split {
 
   @Override
   public long length() {
-    return this.length.get();
+    return this.splitLength.get();
   }
 
   @Override
@@ -122,7 +128,7 @@ public class PartitionedSplit extends Split {
   }
 
   public byte[] bytes() {
-    return this.bytes.get();
+    return this.fileSplitBytes.getBytes();
   }
 
   @Override 
@@ -130,8 +136,8 @@ public class PartitionedSplit extends Split {
     this.splitClassName.write(out);
     this.hosts.write(out);
     this.partitionId.write(out);
-    this.length.write(out);
-    this.bytes.write(out);
+    this.splitLength.write(out);
+    this.fileSplitBytes.write(out);
   }
 
   @Override 
@@ -139,8 +145,8 @@ public class PartitionedSplit extends Split {
     this.splitClassName.readFields(in);
     this.hosts.readFields(in);
     this.partitionId.readFields(in);
-    this.length.readFields(in);
-    this.bytes.readFields(in);
+    this.splitLength.readFields(in);
+    this.fileSplitBytes.readFields(in);
   }
 
   /**
@@ -153,7 +159,7 @@ public class PartitionedSplit extends Split {
     this.splitClassName = new Text(split.getClassName());
     this.hosts = new ArrayWritable(split.getLocations()); 
     this.partitionId = new IntWritable(split.getPartitionID());
-    this.length = new LongWritable(split.getDataLength());
-    this.bytes = split.getBytes();
+    this.splitLength = new LongWritable(split.getDataLength());
+    this.fileSplitBytes = split.getBytes();
   }
 }

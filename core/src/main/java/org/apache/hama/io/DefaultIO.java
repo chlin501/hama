@@ -17,8 +17,12 @@
  */
 package org.apache.hama.io;
 
+import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.text.NumberFormat;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DataInputBuffer;
 import org.apache.hadoop.util.ReflectionUtils;
@@ -44,11 +48,13 @@ import org.apache.hama.HamaConfiguration;
 // TODO: counter should be moved to monitor stats and recorded in zk.
 public class DefaultIO implements IO<RecordReader, OutputCollector> {
 
+  static final Log LOG = LogFactory.getLog(DefaultIO.class);
+
   private static final NumberFormat formatter = NumberFormat.getInstance();
   private final HamaConfiguration configuration;
 
   /** contains split information. */
-  private final PartitionedSplit split;
+  protected final PartitionedSplit split;
   
   private final Counters counters;  // TODO: move to monitor stats in the future
 
@@ -94,15 +100,28 @@ public class DefaultIO implements IO<RecordReader, OutputCollector> {
                      configuration());     
       }
     } catch (ClassNotFoundException cnfe) {
-      throw new RuntimeException("Split class "+split.splitClassName()+
+      throw new IOException("Split class "+split.splitClassName()+
                                  " not found!", cnfe);
     }
+
     RecordReader reader = null;
     if (null != inputSplit) {
-      final DataInputBuffer splitBuffer = new DataInputBuffer();
-      splitBuffer.reset(split.bytes(), 0, (int)split.length());
-      inputSplit.readFields(splitBuffer);
-      reader = createRecordReader(inputSplit);
+      if(LOG.isDebugEnabled())
+        LOG.debug(split.getClass().getName()+" stores "+split.bytes().length+
+                  " as FileSplit.");
+      DataInputStream splitBuffer  = null;
+      try {
+        final ByteArrayInputStream bin = 
+          new ByteArrayInputStream(split.bytes());
+        splitBuffer = new DataInputStream(bin);
+        inputSplit.readFields(splitBuffer);
+        reader = createRecordReader(inputSplit);
+      } catch (Exception e) {
+        throw new IOException("Fail restoring "+inputSplit.getClass().getName()+
+                              "from "+split.getClass().getName(), e);
+      } finally {
+        splitBuffer.close();
+      }
     }
     return reader;
   }
