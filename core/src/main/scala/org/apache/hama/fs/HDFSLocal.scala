@@ -52,7 +52,7 @@ class HDFSLocal extends Operation {
   @throws(classOf[IOException])
   protected def validate() {
     if(null == localfs)
-      throw new IOException("Unable to instantiate hadoop FileSystem.")
+      throw new IOException("Local FileSystem is not instantiated.")
   }
 
   @throws(classOf[IOException])
@@ -126,4 +126,10 @@ class HDFSLocal extends Operation {
     //HDFSLocal(path.getFileSystem(configuration)) 
     null
   }
+
+  override def makeQualified(path: Path): String = {
+    validate()
+    path.makeQualified(localfs).toString
+  }
+
 }

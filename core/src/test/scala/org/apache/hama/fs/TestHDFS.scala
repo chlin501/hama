@@ -41,7 +41,7 @@ class TestHDFS extends TestEnv(ActorSystem("TestHDFS")) {
   override def beforeAll {
     super.beforeAll
     testConfiguration.set("bsp.test.fs.root", "/tmp/hama/hdfs")
-    operation = Operation.create(testConfiguration)
+    operation = OperationFactory.get(testConfiguration)
     assert(null != operation)
     LOG.info("Create test root path at %s".format(testRootDir))
     createIfAbsent(new Path(testRootDir))

@@ -144,4 +144,7 @@ class HDFS extends Operation {
   override def operationFor(path: Path): Operation = {
     HDFS(path.getFileSystem(configuration))
   }
+
+  override def makeQualified(path: Path): String = 
+    path.makeQualified(hdfs).toString
 }

@@ -42,6 +42,7 @@ public class PartitionedSplit extends Split {
   private ArrayWritable hosts = new ArrayWritable(Text.class);
   private IntWritable partitionId = new IntWritable(1);
   private LongWritable length = new LongWritable(0);
+  /* This represents the split binary data, generally be FileSplit. */
   private BytesWritable bytes = new BytesWritable();
 
   public PartitionedSplit() {} // for Writable

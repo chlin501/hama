@@ -85,12 +85,6 @@ public abstract class FileInputFormat<K, V> implements InputFormat<K, V> {
       BSPJob job) throws IOException;
 
   /**
-   * The purpose of this function is as transition method. 
-   */
-  public abstract RecordReader<K, V> recordReader(HamaConfiguration conf,
-      InputSplit split) throws IOException;  // HAMA V2
-
-  /**
    * Set a PathFilter to be applied to the input paths for the BSP job.
    * 
    * @param filter the PathFilter class use for filtering the input paths.

@@ -36,4 +36,10 @@ public interface IO<I, O> {
    */
   <O> O writer() throws IOException;
 
+  /**
+   * This denotes the split size to be processed.
+   * @return long value of the split data size.
+   */
+  long splitSize();
+
 }

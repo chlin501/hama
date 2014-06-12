@@ -25,11 +25,12 @@ import java.io.OutputStream
 import org.apache.hadoop.fs.Path
 import org.apache.hama.HamaConfiguration
 
+/*
 object Operation {
 
   val seperator: String = "/"
 
-  def create(conf: HamaConfiguration): Operation = {
+  def get(conf: HamaConfiguration): Operation = {
     val clazz = conf.getClass("bsp.fs.class", classOf[HDFS])
     var op: Operation = null
     if(classOf[HDFS].equals(clazz)) {
@@ -43,6 +44,7 @@ object Operation {
   }
 
 }
+*/
 
 trait Operation {
 
@@ -141,4 +143,11 @@ trait Operation {
    * @return Operation for a particular path supplied.
    */
   def operationFor(path: Path): Operation
+
+  /**
+   * Return a qualified path object, same as Path.makeQualified(FileSystem).
+   * @param path to be normalized.
+   */
+  def makeQualified(path: Path): String
+  
 }

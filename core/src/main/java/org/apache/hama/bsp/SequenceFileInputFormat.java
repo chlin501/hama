@@ -35,13 +35,6 @@ public class SequenceFileInputFormat<K, V> extends FileInputFormat<K, V> {
         (FileSplit) split);
   }
 
-  @Override // HAMA V2
-  public RecordReader<K, V> recordReader(HamaConfiguration conf,
-                                            InputSplit split)
-      throws IOException {
-    return new SequenceFileRecordReader<K, V>(conf, (FileSplit) split);
-  }
-
   @Override
   protected long getFormatMinSplitSize() {
     return SequenceFile.SYNC_INTERVAL;

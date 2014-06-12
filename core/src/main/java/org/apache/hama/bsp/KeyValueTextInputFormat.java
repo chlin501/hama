@@ -36,10 +36,5 @@ public class KeyValueTextInputFormat extends FileInputFormat<Text, Text> {
       BSPJob job) throws IOException {
     return new KeyValueLineRecordReader(job.conf, (FileSplit) genericSplit);
   }
-
-  @Override // HAMA V2
-  public RecordReader<Text, Text> recordReader(HamaConfiguration conf,
-      InputSplit genericSplit) throws IOException {
-    return new KeyValueLineRecordReader(conf, (FileSplit) genericSplit);
-  }
+  
 }

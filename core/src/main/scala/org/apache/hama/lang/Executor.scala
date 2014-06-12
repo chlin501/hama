@@ -49,6 +49,7 @@ import org.apache.hama.groom.StopContainer
 import org.apache.hama.groom.ShutdownContainer
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.fs.Operation
+import org.apache.hama.fs.OperationFactory
 import org.apache.hama.util.BSPNetUtils
 import scala.collection.immutable.Queue
 import scala.collection.JavaConversions._
@@ -127,7 +128,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   val javacp: String  = System.getProperty("java.class.path")
   val logPath: String = System.getProperty("hama.log.dir")
   val taskManagerName = conf.get("bsp.groom.taskmanager.name", "taskManager") 
-  val operation = Operation.create(conf)
+  val operation = OperationFactory.get(conf)
   var commandQueue = Queue[Command]()
   protected var bspPeerContainer: ActorRef =_
   protected var stdout: ActorRef = _

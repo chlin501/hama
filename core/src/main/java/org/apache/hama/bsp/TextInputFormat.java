@@ -34,13 +34,6 @@ public class TextInputFormat extends FileInputFormat<LongWritable, Text> {
     return new LineRecordReader(job.getConfiguration(), (FileSplit) split);
   }
 
-  // HAMA V2
-  @Override
-  public RecordReader<LongWritable, Text> recordReader(HamaConfiguration conf, 
-      InputSplit split) throws IOException {
-    return new LineRecordReader(conf, (FileSplit) split);
-  }
-
   @Override
   protected boolean isSplitable(BSPJob job, Path path) {
     CompressionCodec codec = new CompressionCodecFactory(job.getConfiguration())
