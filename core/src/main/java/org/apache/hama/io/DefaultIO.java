@@ -159,13 +159,15 @@ public class DefaultIO implements IO<RecordReader, OutputCollector> {
     return ReflectionUtils.newInstance(inputClass(), configuration());
   }
   
-  String outputChildPath(final int partition) {
+  String childPath(final int partition) {
     return "part-" + formatter.format(partition);
   }
 
-  Path outputPath(final long timestamp, final int partitionId) {
-    return new Path(configuration().get("bsp.output.dir", "tmp-" + timestamp), 
-                                        outputChildPath(partitionId));
+  Path outputPath(long timestamp, final int partitionId) {
+    final String parentPath = configuration().get("bsp.output.dir", 
+                                                  "tmp-" + timestamp);
+    if(LOG.isDebugEnabled()) LOG.debug("Output parent path is "+parentPath);
+    return new Path(parentPath, childPath(partitionId));
   }
 
   Class<? extends OutputFormat> outputClass() {
@@ -179,17 +181,17 @@ public class DefaultIO implements IO<RecordReader, OutputCollector> {
     return ReflectionUtils.newInstance(outputClass(), configuration());
   }
 
-  <K2, V2> RecordWriter<K2, V2> lineRecordWriter(final String outputPath) 
+  <K2, V2> RecordWriter<K2, V2> lineRecordWriter(final String outPath) 
       throws IOException { 
     return defaultOutputFormat().getRecordWriter(null, 
                                                 new BSPJob(configuration()),
-                                                outputPath);
+                                                outPath);
   } 
 
   @SuppressWarnings("rawtypes")
-  <K2, V2> OutputCollector<K2, V2> outputCollector(final String outputPath) 
+  <K2, V2> OutputCollector<K2, V2> outputCollector(final String outPath) 
       throws IOException {
-    final RecordWriter<K2, V2> writer = lineRecordWriter(outputPath);
+    final RecordWriter<K2, V2> writer = lineRecordWriter(outPath);
     return new OutputCollector<K2, V2>() {
       @Override
       public void collect(K2 key, V2 value) throws IOException {
@@ -201,12 +203,11 @@ public class DefaultIO implements IO<RecordReader, OutputCollector> {
   @Override
   @SuppressWarnings("rawtypes") 
   public OutputCollector writer() throws IOException {
-    String output = null;
-    if (null != configuration().get("bsp.output.dir")) {
-      final long timestamp = System.currentTimeMillis();
-      final Path dir = outputPath(timestamp, split.partitionId());
-      output = OperationFactory.get(configuration()).makeQualified(dir);
-    }
+    final long timestamp = System.currentTimeMillis();
+    final Path dir = outputPath(timestamp, split.partitionId());
+    final String output = OperationFactory.get(configuration()).
+                                           makeQualified(dir);
+    if(LOG.isDebugEnabled()) LOG.debug("Writer's output path "+output);
     return outputCollector(output); 
   }
 }

@@ -17,26 +17,37 @@
  */
 package org.apache.hama.fs;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hama.HamaConfiguration;
 
-public final class OperationFactory {
+public class OperationFactory {
+
+  static final Log LOG = LogFactory.getLog(OperationFactory.class);
 
   public static final String seperator = "/";
 
   @SuppressWarnings("rawtypes")
-  public static final Operation get(final HamaConfiguration conf) {
+  public static Operation get(final HamaConfiguration conf) {
     final Class<?> clazz = 
       conf.getClass("bsp.fs.class", HDFS.class);
     Operation op = null;
     if(HDFS.class.equals(clazz)) {
+      if(LOG.isDebugEnabled()) LOG.debug("Instantiate "+clazz.getName()+"...");
       final HDFS hdfs = new HDFS();
       hdfs.setConfiguration(conf);
       op = hdfs;
+    } else if(HDFSLocal.class.equals(clazz)) {
+      if(LOG.isDebugEnabled()) LOG.info("Instantiate "+clazz.getName()+"...");
+      final HDFS hdfs = new HDFS();
+      hdfs.setConfiguration(conf);
+      op = hdfs.local();
     } else {
       throw new UnsupportedOperationException("Operation for underlying "+
-                                              clazz.getSimpleName()+" not "+
-                                              " yet supported.");
+                                              clazz.getName()+" not yet "+
+                                              "supported.");
     }
+    if(LOG.isDebugEnabled()) LOG.debug("Operation is configured to "+op);
     return op;
   }
 }
