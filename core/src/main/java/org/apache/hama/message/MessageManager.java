@@ -34,6 +34,8 @@ public interface MessageManager<M extends Writable> {
 
   /**
    * Initialize message manager.
+   * @param configuration that contains necessary setting for initialize 
+   *                      message manager.
    */
   void initialize(HamaConfiguration configuration);
 
@@ -46,22 +48,22 @@ public interface MessageManager<M extends Writable> {
    * Get the current message.
    * @throws IOException
    */
-  M getCurrentMessage() throws IOException;
+  M currentMessage() throws IOException;
 
   /**
-   * Send a message to a specific {@link BSPPeer}.
+   * Send a message to a specific {@link BSPPeer}, denoted by peerName.
    * @throws IOException
    */
   void send(String peerName, M msg) throws IOException;
 
   /**
-   * Returns an bundle of messages grouped by {@link BSPPeer}.
+   * Returns an bundle of messages grouped by {@link BSPPeer}. 
    * @return an iterator that contains messages associated with a peer address.
    */
-  Iterator<Entry<InetSocketAddress, BSPMessageBundle<M>>> getOutgoingBundles();
+  Iterator<Entry<InetSocketAddress, BSPMessageBundle<M>>> outgoingBundles();
 
   /**
-   * Transfer message bundle to a specific {@link BSPPeer}.
+   * Start transferring message bundle to a specific {@link BSPPeer}.
    * @param addr denotes the target address.  
    * @param bundle are message to be tranferred. 
    */
@@ -69,7 +71,7 @@ public interface MessageManager<M extends Writable> {
       throws IOException;
 
   /**
-   * Clears the outgoing queue. 
+   * Clears the outgoing message queue. 
    */
   void clearOutgoingMessages();
 
@@ -77,7 +79,7 @@ public interface MessageManager<M extends Writable> {
    * Gets the number of messages in the current queue.
    * @return the number of messages in the current queue.
    */
-  int getNumCurrentMessages();
+  int numCurrentMessages();
 
   /**
    * Send the messages to self to receive in the next superstep.
@@ -95,5 +97,6 @@ public interface MessageManager<M extends Writable> {
    * Returns the server address on which the incoming connections are listening.
    * @param InetSocketAddress to which this server listens.
    */
-  public InetSocketAddress getListenerAddress();
+  InetSocketAddress listenerAddress();
+
 }

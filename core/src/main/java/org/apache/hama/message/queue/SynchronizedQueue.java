@@ -15,23 +15,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.bsp.v2;
+package org.apache.hama.message.queue;
 
-import akka.actor.Actor
-import akka.event.Logging
-import org.apache.hama.HamaConfiguration
+/**
+ * Synchronized Queue interface. Can be used to implement better synchronized
+ * datastructures.
+ */
+public interface SynchronizedQueue<T> extends MessageQueue<T> {
 
-class BSPPeerWorker(conf: HamaConfiguration, peer: BSPPeer) extends Actor {
-  
-  val LOG = Logging(context.system, this)
-  var task: Task = _
-
-  def unknown: Receive = {
-    case msg@ _ => 
-      LOG.warning("Unknown message {} sent to "+getClass().getName(), msg)
-  }
-
-  override def receive = unknown
-  
+  abstract MessageQueue<T> getMessageQueue();
 
 }
