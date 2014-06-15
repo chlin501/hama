@@ -15,10 +15,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.message
+package org.apache.hama.message;
 
-import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.HamaConfiguration
+import java.net.InetSocketAddress;
+import java.util.Iterator;
+import java.util.Map.Entry;
 
-final case class Initialize(conf: HamaConfiguration, 
-                            taskAttemptId: TaskAttemptID)
+import org.apache.hadoop.io.Writable;
+import org.apache.hama.HamaConfiguration;
+import org.apache.hama.message.compress.BSPMessageCompressor;
+
+public interface OutgoingMessageManager<M extends Writable> {
+
+  public void init(HamaConfiguration conf, BSPMessageCompressor<M> compressor);
+
+  public void addMessage(String peerName, M msg);
+
+  public void clear();
+
+  public Iterator<Entry<InetSocketAddress, BSPMessageBundle<M>>> getBundleIterator();
+
+}

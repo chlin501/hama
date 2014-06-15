@@ -29,10 +29,14 @@ import java.util.Map.Entry
 
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
+import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.bsp.BSPMessageBundle
-import org.apache.hama.message.queue.MessageQueue
+import org.apache.hama.message.compress.BSPMessageCompressor
+import org.apache.hama.message.compress.BSPMessageCompressorFactory
 import org.apache.hama.message.queue.MemoryQueue
+import org.apache.hama.message.queue.MessageQueue
+import org.apache.hama.message.queue.SingleLockQueue
+import org.apache.hama.message.queue.SynchronizedQueue
 
 /**
  * Provide default functionality of {@link MessageManager}.
@@ -43,14 +47,22 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   val LOG = Logging(context.system, this)
  
   private var configuration: HamaConfiguration = _
+  protected var taskAttemptId: TaskAttemptID = _
+  protected var compressor: BSPMessageCompressor[M] = _
+  protected var outgoingMessageManager: OutgoingMessageManager[M] = _
   protected var localQueue: MessageQueue[M] = _
+  protected var localQueueForNextIteration: SynchronizedQueue[M] = _
 
-  override def initialize(conf: HamaConfiguration) = {
+  // TODO: create znodes so that we know where messages to go
+  //       e.g. /bsp/messages/...
+  override def init(conf: HamaConfiguration, taskAttemptId: TaskAttemptID) {
+    this.taskAttemptId = taskAttemptId
     this.configuration = configuration
-    this.localQueue = getReceiverQueue
     //initializeCurator(configuration)
-    // TODO: initialize with task attempt id? 
-    //       create znode path /bsp/superstep/<job_id>/<superstep>/<task_attemptId> for communication?
+    this.localQueue = getReceiverQueue
+    this.localQueueForNextIteration = getSynchronizedReceiverQueue
+    this.compressor = BSPMessageCompressorFactory.getCompressor(configuration)
+    this.outgoingMessageManager = getOutgoingMessageManager(compressor)
   }
 
   /**
@@ -64,22 +76,39 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
                              classOf[MemoryQueue[M]], classOf[MessageQueue[M]]),
       configuration
     ) 
-    queue.initialize(configuration) 
+    queue.init(configuration, taskAttemptId) 
     queue
   }
 
+  def getSynchronizedReceiverQueue: SynchronizedQueue[M] = 
+    SingleLockQueue.synchronize(getReceiverQueue)
 
-  override def close() {}
+  def getOutgoingMessageManager(compressor: BSPMessageCompressor[M]): 
+      OutgoingMessageManager[M] = {
+    val out = ReflectionUtils.newInstance(configuration.getClass(
+                "hama.messenger.outgoing.message.manager.class",
+                classOf[OutgoingPOJOMessageBundle[M]], 
+                classOf[OutgoingMessageManager[M]]), configuration)
+    out.init(configuration, compressor)
+    out
+  }
+
+  override def close() {
+    outgoingMessageManager.clear
+    localQueue.close
+    // delete disk queue based on task attempt id
+  }
 
   @throws(classOf[IOException])
-  override def currentMessage(): M = null.asInstanceOf[M]
+  override def currentMessage(): M = localQueue.poll
+  
 
   @throws(classOf[IOException])
   override def send(peerName: String, msg: M) = null.asInstanceOf[M]
 
   override def outgoingBundles(): 
       Iter[Entry[InetSocketAddress, BSPMessageBundle[M]]] = 
-    null.asInstanceOf[Iter[Entry[InetSocketAddress, BSPMessageBundle[M]]]] 
+    outgoingMessageManager.getBundleIterator
 
   @throws(classOf[IOException])
   override def transfer(addr: InetSocketAddress, bundle: BSPMessageBundle[M]) {
@@ -87,7 +116,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
 
   override def clearOutgoingMessages() {}
 
-  override def numCurrentMessages(): Int = -1
+  override def numCurrentMessages(): Int = localQueue.size
 
   @throws(classOf[IOException])
   override def loopBackMessages(bundle: BSPMessageBundle[M]) {}
@@ -107,7 +136,10 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
    * @return Receive is partial function.
    */
   def setup: Receive = {
-    case Initialize(conf) => initialize(conf)
+    case Initialize(conf, taskAttemptId) => {
+      throw new IllegalArgumentException("HamaConfiguration is missing!")
+      init(conf, taskAttemptId)
+    }
   }
 
   override def receive = setup orElse unknown

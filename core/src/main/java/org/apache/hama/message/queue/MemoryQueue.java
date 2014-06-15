@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Writable;
+import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
 
 /**
@@ -84,7 +85,7 @@ public final class MemoryQueue<M extends Writable>
 
   // not doing much here
   @Override
-  public void initialize(HamaConfiguration conf) { }
+  public void init(HamaConfiguration conf, TaskAttemptID id) { }
 
   @Override
   public void close() {

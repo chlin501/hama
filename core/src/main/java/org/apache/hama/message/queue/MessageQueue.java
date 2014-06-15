@@ -17,6 +17,7 @@
  */
 package org.apache.hama.message.queue;
 
+import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hama.HamaConfiguration;
 
@@ -29,7 +30,7 @@ public interface MessageQueue<M> extends Iterable<M>, Configurable {
    * Used to initialize the queue.
    * @param conf contains necessary setting to initialize queue.
    */
-  void initialize(HamaConfiguration conf);
+  void init(HamaConfiguration conf, TaskAttemptID id);
 
   /**
    * Finally close the queue. Commonly used to free resources.

@@ -15,10 +15,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.message
+package org.apache.hama.message.compress;
 
-import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.HamaConfiguration
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.io.Writable;
 
-final case class Initialize(conf: HamaConfiguration, 
-                            taskAttemptId: TaskAttemptID)
+/**
+ * Provides utilities for compressing and decompressing byte array.
+ * 
+ */
+public abstract class BSPMessageCompressor<M extends Writable> {
+
+  public static final Log LOG = LogFactory.getLog(BSPMessageCompressor.class);
+
+  public abstract byte[] compress(byte[] bytes);
+
+  public abstract byte[] decompress(byte[] compressedBytes);
+}

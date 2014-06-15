@@ -23,9 +23,9 @@ import java.util.Iterator;
 import java.util.Map.Entry;
 
 import org.apache.hadoop.io.Writable;
+import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
-import org.apache.hama.bsp.BSPMessageBundle;
-import org.apache.hama.bsp.BSPPeer;
+import org.apache.hama.message.MessageManager;
 
 /**
  * Communication between {@link BSPPeer}s.
@@ -33,11 +33,12 @@ import org.apache.hama.bsp.BSPPeer;
 public interface MessageManager<M extends Writable> {
 
   /**
-   * Initialize message manager.
+   * Initialize message manager with specific {@link TaskAttemptID} and setting.
    * @param configuration that contains necessary setting for initialize 
    *                      message manager.
+   * @param id denotes which task attempt id this message manager will manage.
    */
-  void initialize(HamaConfiguration configuration);
+  void init(HamaConfiguration configuration, TaskAttemptID id);
 
   /**
    * Close the communication between {@link BSPPeer}s.
