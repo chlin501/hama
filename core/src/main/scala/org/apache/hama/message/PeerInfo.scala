@@ -17,8 +17,26 @@
  */
 package org.apache.hama.message
 
-import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.HamaConfiguration
+import java.net.InetSocketAddress
 
-final case class Initialize(conf: HamaConfiguration, 
-                            taskAttemptId: TaskAttemptID)
+/**
+ * Store actor system information, including 
+ * - actor system name
+ * - address
+ * - port 
+ * for {@link BSPPeer} that runs on it.
+ * @param actorSystenName denotes the name of the actor system on which the 
+ *                        peer runs.
+ * @param socket conains {@link InetAddress} and port information.
+ */
+final case class PeerInfo(actorSystemName: String, socket: InetSocketAddress) {
+
+  if(null == actorSystemName || actorSystemName.isEmpty)
+    throw new IllegalArgumentException("Actor system name is missing!")
+
+  if(null == socket) 
+    throw new IllegalArgumentException("Ip and port is not provided!")
+
+  def address: String = socket.getAddress.getHostAddress
+
+}

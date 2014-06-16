@@ -17,11 +17,10 @@
  */
 package org.apache.hama.message
 
-import akka.actor.Actor
-import akka.event.Logging
+import akka.actor.ActorRef
 
 import java.io.IOException
-import java.net.BindException
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.util.ArrayList
 import java.util.{ Iterator => Iter }
@@ -37,21 +36,22 @@ import org.apache.hama.message.queue.MemoryQueue
 import org.apache.hama.message.queue.MessageQueue
 import org.apache.hama.message.queue.SingleLockQueue
 import org.apache.hama.message.queue.SynchronizedQueue
+import org.apache.hama.util.LRUCache
 
 /**
  * Provide default functionality of {@link MessageManager}.
  */
-class DefaultMessageManager[M <: Writable] extends MessageManager[M]
-                                           with Actor /*with Curator*/ {
+class DefaultMessageManager[M <: Writable] extends MessageManager[M] {
 
-  val LOG = Logging(context.system, this)
- 
   private var configuration: HamaConfiguration = _
   protected var taskAttemptId: TaskAttemptID = _
   protected var compressor: BSPMessageCompressor[M] = _
   protected var outgoingMessageManager: OutgoingMessageManager[M] = _
   protected var localQueue: MessageQueue[M] = _
   protected var localQueueForNextIteration: SynchronizedQueue[M] = _
+  protected var maxCachedConnections: Int = 100
+  /* This holds the reference to BSPPeer actors. */
+  protected var peersLRUCache: LRUCache[PeerInfo, ActorRef] = _
 
   // TODO: create znodes so that we know where messages to go
   //       e.g. /bsp/messages/...
@@ -63,6 +63,24 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     this.localQueueForNextIteration = getSynchronizedReceiverQueue
     this.compressor = BSPMessageCompressorFactory.getCompressor(configuration)
     this.outgoingMessageManager = getOutgoingMessageManager(compressor)
+    this.maxCachedConnections = 
+      conf.getInt("hama.messenger.max.cached.connections", 100) 
+    this.peersLRUCache = initializeLRUCache(maxCachedConnections)
+  }
+
+  def initializeLRUCache(maxCachedConnections: Int): 
+      LRUCache[PeerInfo,ActorRef] = {
+    new LRUCache[PeerInfo, ActorRef](maxCachedConnections) {
+      override def removeEldestEntry(eldest: Entry[PeerInfo, ActorRef]): 
+          Boolean = {
+        if (size() > this.capacity) {
+          val peer = eldest.getKey
+          remove(peer)
+          return true
+        }
+        return false
+      }
+    }
   }
 
   /**
@@ -125,23 +143,5 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   override def loopBackMessage(message: Writable) {} 
 
   override def listenerAddress(): InetSocketAddress = null
-
-  def unknown: Receive = {
-    case msg@ _ => LOG.warning("Unknown message {} received by {}", 
-                               getClass.getName, msg);
-  }
-
-  /**
-   * Initialize necessary steps for exchaning messages between {@link BSPPeer}.
-   * @return Receive is partial function.
-   */
-  def setup: Receive = {
-    case Initialize(conf, taskAttemptId) => {
-      throw new IllegalArgumentException("HamaConfiguration is missing!")
-      init(conf, taskAttemptId)
-    }
-  }
-
-  override def receive = setup orElse unknown
 
 }
