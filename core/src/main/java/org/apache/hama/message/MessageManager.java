@@ -49,7 +49,7 @@ public interface MessageManager<M extends Writable> {
    * Get the current message.
    * @throws IOException
    */
-  M currentMessage() throws IOException;
+  M getCurrentMessage() throws IOException;
 
   /**
    * Send a message to a specific {@link BSPPeer}, denoted by peerName.
@@ -61,7 +61,7 @@ public interface MessageManager<M extends Writable> {
    * Returns an bundle of messages grouped by {@link BSPPeer}. 
    * @return an iterator that contains messages associated with a peer address.
    */
-  Iterator<Entry<InetSocketAddress, BSPMessageBundle<M>>> outgoingBundles();
+  Iterator<Entry<InetSocketAddress, BSPMessageBundle<M>>> getOutgoingBundles();
 
   /**
    * Start transferring message bundle to a specific {@link BSPPeer}.
@@ -80,7 +80,7 @@ public interface MessageManager<M extends Writable> {
    * Gets the number of messages in the current queue.
    * @return the number of messages in the current queue.
    */
-  int numCurrentMessages();
+  int getNumCurrentMessages();
 
   /**
    * Send the messages to self to receive in the next superstep.

@@ -100,13 +100,13 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   }
 
   @throws(classOf[IOException])
-  override def currentMessage(): M = localQueue.poll
+  override def getCurrentMessage(): M = localQueue.poll
   
 
   @throws(classOf[IOException])
   override def send(peerName: String, msg: M) = null.asInstanceOf[M]
 
-  override def outgoingBundles(): 
+  override def getOutgoingBundles(): 
       Iter[Entry[InetSocketAddress, BSPMessageBundle[M]]] = 
     outgoingMessageManager.getBundleIterator
 
@@ -116,7 +116,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
 
   override def clearOutgoingMessages() {}
 
-  override def numCurrentMessages(): Int = localQueue.size
+  override def getNumCurrentMessages(): Int = localQueue.size
 
   @throws(classOf[IOException])
   override def loopBackMessages(bundle: BSPMessageBundle[M]) {}
