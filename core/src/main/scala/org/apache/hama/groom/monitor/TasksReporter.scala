@@ -18,21 +18,24 @@
 package org.apache.hama.groom.monitor
 
 import akka.actor.ActorRef
-import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
-import org.apache.hama.ProxyInfo
-import org.apache.hama.RemoteService
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.RemoteService
+import org.apache.hama.util.ActorLocator
+import org.apache.hama.util.JobTasksTrackerLocator
 
 /**
  * Report tasks status to JobTasksReporter.
  */
 final class TasksReporter(conf: HamaConfiguration) extends LocalService 
-                                                   with RemoteService {
+                                                   with RemoteService 
+                                                   with ActorLocator {
 
   var tracker: ActorRef = _
 
+/*
   val jobTasksTrackerInfo =
     new ProxyInfo.Builder().withConfiguration(conf).
                             withActorName("jobTasksTracker").
@@ -41,13 +44,15 @@ final class TasksReporter(conf: HamaConfiguration) extends LocalService
                             appendChildPath("jobTasksTracker").
                             buildProxyAtMaster
   val jobTasksTrackerPath = jobTasksTrackerInfo.getPath
+*/
 
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "tasksReporter"
 
   override def initializeServices {
-    lookup("jobTasksTracker", jobTasksTrackerPath)
+    //lookup("jobTasksTracker", jobTasksTrackerPath)
+    lookup("jobTasksTracker", locate(JobTasksTrackerLocator(configuration)))
   }
 
   override def afterLinked(proxy: ActorRef) = tracker = proxy

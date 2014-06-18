@@ -67,8 +67,16 @@ public interface MessageManager<M extends Writable> {
    * Start transferring message bundle to a specific {@link BSPPeer}.
    * @param addr denotes the target address.  
    * @param bundle are message to be tranferred. 
-   */
   void transfer(InetSocketAddress addr, BSPMessageBundle<M> bundle)
+      throws IOException;
+   */
+
+  /**
+   * Wrap peer into an object which should contain all necessary information.
+   * @param peer info is stored inside this object.
+   * @param bundle are message to be sent.
+   */
+  void transfer(PeerInfo peer, BSPMessageBundle<M> bundle)
       throws IOException;
 
   /**

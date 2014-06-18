@@ -28,13 +28,12 @@ public class TestProxyInfo extends TestCase {
 
   public void testBuilder() throws Exception {
     final HamaConfiguration conf = new HamaConfiguration();
-    final ProxyInfo info = 
-      new ProxyInfo.Builder().withConfiguration(conf).
-                              withActorName("testActor").
-                              appendRootPath("bspmaster").
-                              appendChildPath("monitor").
-                              appendChildPath("testActor").
-                              buildProxyAtMaster();
+    final ProxyInfo info = new ProxyInfo.MasterBuilder("testActor", conf).
+                                         createActorPath().
+                                         appendRootPath("bspmaster").
+                                         appendChildPath("monitor").
+                                         appendChildPath("testActor").
+                                         build();
     assertNotNull("Proxy shouldn't be null.", info);
 
     final String actorSystemName = info.getActorSystemName();

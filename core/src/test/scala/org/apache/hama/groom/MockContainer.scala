@@ -18,6 +18,8 @@
 package org.apache.hama.groom
 
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.util.ActorLocator
+import org.apache.hama.util.ActorPathMagnet
 
 object MockContainer {
 
@@ -27,8 +29,37 @@ object MockContainer {
   }
 }
 
-class MockContainer(conf: HamaConfiguration) extends BSPPeerContainer(conf) {
+final case class MockExecutorLocator(conf: HamaConfiguration)
 
+class MockContainer(conf: HamaConfiguration) extends BSPPeerContainer(conf) 
+                                             with ActorLocator {
+  import scala.language.implicitConversions
+
+  implicit def locateMockExecutor(mock: MockExecutorLocator) = 
+      new ActorPathMagnet {
+    type Path = String
+    def apply(): Path = {
+      val actorSystemName = mock.conf.get("bsp.groom.actor-system.name", 
+                                     "TestExecutor")
+      val port = mock.conf.getInt("bsp.groom.actor-system.port", 50000)
+      val host = mock.conf.get("bsp.groom.actor-system.host", "127.0.0.1")
+      val seq = mock.conf.getInt("bsp.child.slot.seq", 1)
+      val addr = ("akka.tcp://%1$s@%2$s:%3$d/user/taskManager/" +
+                  "groomServer_executor_%4$s").format(actorSystemName, 
+                                                      host, 
+                                                      port,
+                                                      seq)
+      LOG.info("Mock executor path to be looked up is at {}", addr)
+      addr  
+    }
+  }
+
+  override def initializeServices {
+    lookup(executorName, locate(MockExecutorLocator(configuration)))
+  }
+
+
+/*
   override def executorPath: String = {
     val actorSystemName = conf.get("bsp.groom.actor-system.name", 
                                    "TestExecutor")
@@ -43,6 +74,7 @@ class MockContainer(conf: HamaConfiguration) extends BSPPeerContainer(conf) {
     LOG.info("Mock executor path to be looked up is at {}", addr)
     addr
   }
+*/
  
   override def receive = super.receive
 }

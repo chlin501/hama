@@ -30,11 +30,12 @@ import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.LongWritable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
-import org.apache.hama.ProxyInfo
-import org.apache.hama.RemoteService
 import org.apache.hama.monitor.metrics.Metric
 import org.apache.hama.monitor.metrics.MetricsRecord
 import org.apache.hama.monitor.metrics.Metrics._
+import org.apache.hama.RemoteService
+import org.apache.hama.util.ActorLocator
+import org.apache.hama.util.SysMetricsTrackerLocator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.Breaks
@@ -44,18 +45,22 @@ import scala.util.control.Breaks
  * Report sys metrics information.
  */
 final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService 
-                                                        with RemoteService {
+                                                        with RemoteService 
+                                                        with ActorLocator {
   private var tracker: ActorRef = _
   private var cancellable: Cancellable = _
 
-  val sysMetricsTrackerInfo =
-    new ProxyInfo.Builder().withConfiguration(conf). 
-                            withActorName("sysMetricsTracker").
-                            appendRootPath("bspmaster").
-                            appendChildPath("monitor").
-                            appendChildPath("sysMetricsTracker").
-                            buildProxyAtMaster
+/*
+  def sysMetricsTrackerInfo: ProxyInfo =
+    new ProxyInfo.MasterBuilder("sysMetricsTracker", configuration). 
+                  createActorPath.
+                  appendRootPath("bspmaster").
+                  appendChildPath("monitor").
+                  appendChildPath("sysMetricsTracker").
+                  build
+  
   val sysMetricsTrackerPath = sysMetricsTrackerInfo.getPath
+*/
 
   val groomServerHost = conf.get("bsp.groom.address", "127.0.0.1")
   val groomServerPort = conf.getInt("bsp.groom.port", 50000)
@@ -74,7 +79,9 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
   override def name: String = "sysMetricsReporter"
 
   override def initializeServices {
-    lookup("sysMetricsTracker", sysMetricsTrackerPath)
+    //lookup("sysMetricsTracker", sysMetricsTrackerPath)
+    lookup("sysMetricsTracker", 
+           locate(SysMetricsTrackerLocator(configuration)))
   }
 
   override def afterLinked(proxy: ActorRef) = {

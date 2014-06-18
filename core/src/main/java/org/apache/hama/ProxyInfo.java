@@ -35,13 +35,121 @@ public final class ProxyInfo extends SystemInfo implements Writable {
   private Text actorName = new Text();
   private Text actorPath = new Text();
 
-  public final static class Builder {
-    private String actorName;
-    private String actorSystemName;
-    private String host;
-    private int port;
+  public final static class MasterBuilder extends Builder {
+    
+    public MasterBuilder(final String actorName, final HamaConfiguration conf) {
+      super.protocol = Protocol.Remote;
+      if(null == actorName)
+        throw new IllegalArgumentException("Master actor name is missing!");
+      super.actorName = actorName;
+
+      if(null == conf) 
+        throw new IllegalArgumentException("HamaConfiguration is missing!"); 
+      super.conf = conf;
+
+      actorSystemName = conf.get("bsp.master.actor-system.name", 
+                                 "MasterSystem");
+      host = conf.get("bsp.master.address", "127.0.0.1");
+      port = conf.getInt("bsp.master.port", 40000);
+      LOG.debug("Master proxy "+actorName+" is at "+host+":"+port+" with path "+
+                actorPathBuilder.toString());
+    } 
+
+  } 
+
+  public final static class GroomBuilder extends Builder {
+
+    public GroomBuilder(final String actorName, final HamaConfiguration conf) {
+      super.protocol = Protocol.Remote;
+      if(null == actorName || actorName.isEmpty())
+        throw new IllegalArgumentException("Groom actor name is missing!");
+      super.actorName = actorName;
+
+      if(null == this.conf) 
+        throw new NullPointerException("HamaConfiguration not found.");
+      super.conf = conf;
+
+      actorSystemName = conf.get("bsp.groom.actor-system.name", 
+                                 "GroomSystem");
+      host = conf.get("bsp.groom.address", "127.0.0.1");
+      port = conf.getInt("bsp.groom.port", 50000);
+      LOG.debug("Groom proxy "+actorName+" is at "+host+":"+port+" with path "+ 
+                actorPathBuilder.toString());
+    }
+
+  }
+
+  public final static class ActorPathBuilder {
+
+    private final Builder builder;
     private StringBuilder actorPath = new StringBuilder();
-    private HamaConfiguration conf;
+
+    public ActorPathBuilder(final Builder builder) {
+      if(null == builder)
+        throw new IllegalArgumentException("Builder is missing!");
+      this.builder = builder;
+    }
+
+    private void assertPath(final String fullPath) {
+      if(null == fullPath || fullPath.isEmpty() || fullPath.endsWith("/"))
+        throw new IllegalArgumentException("Invalid actorPath! "+fullPath);
+    }
+
+    public ActorPathBuilder withActorPath(final String fullPath) {
+      assertPath(fullPath);
+      this.actorPath = new StringBuilder(actorPath);
+      return this;
+    }
+
+    public ActorPathBuilder appendRootPath(final String root) {
+      if(null == root || root.isEmpty() || root.endsWith("/"))
+        throw new IllegalArgumentException("Malformed root path: "+root);
+      if(!this.actorPath.toString().isEmpty())
+        throw new RuntimeException("Actor path is already defind: "+
+                                   this.actorPath.toString());
+      this.actorPath.append(root);
+      return this;
+    }
+
+    public ActorPathBuilder appendChildPath(final String child) {
+      if(null == child || child.startsWith("/"))
+        throw new IllegalArgumentException("Child actor path can't be null or"+
+                                           " started with '/'");
+      if(this.actorPath.toString().isEmpty()) 
+        throw new RuntimeException("Root actor path is missing!");
+      this.actorPath.append("/"+child);
+      return this;
+    } 
+
+    public String toString() {
+      return actorPath.toString();
+    }
+
+    public ProxyInfo build() {
+      return new ProxyInfo(builder.protocol, builder.actorName, 
+                           builder.actorSystemName, builder.host, 
+                           builder.port, toString());
+    }
+  }
+
+  static class Builder {
+    HamaConfiguration conf = new HamaConfiguration();
+    Protocol protocol = Protocol.Local; 
+    String actorName;
+    String actorSystemName;
+    String host;
+    int port;
+    ActorPathBuilder actorPathBuilder = new ActorPathBuilder(this); 
+
+    public Builder withLocalActor() {
+      this.protocol = Protocol.Local; 
+      return this;
+    }
+
+    public Builder withRemoteActor() {
+      this.protocol = Protocol.Remote; 
+      return this;
+    }
 
     public Builder withActorName(final String actorName) {
       this.actorName = actorName;      
@@ -63,45 +171,31 @@ public final class ProxyInfo extends SystemInfo implements Writable {
       return this;
     }
 
-    private void assertPath(final String fullPath) {
-      if(null == fullPath || fullPath.isEmpty() || fullPath.endsWith("/"))
-        throw new IllegalArgumentException("Invalid actorPath! "+fullPath);
+    public ActorPathBuilder createActorPath() {
+      final ActorPathBuilder actorPathBuilder = new ActorPathBuilder(this);
+      return actorPathBuilder; 
     }
 
-    public Builder withActorPath(final String fullPath) {
-      assertPath(fullPath);
-      this.actorPath = new StringBuilder(actorPath);
-      return this;
-    }
-
-    public Builder appendRootPath(final String root) {
-      if(!this.actorPath.toString().isEmpty())
-        throw new RuntimeException("Actro path is already defind: "+
-                                   this.actorPath.toString());
-      this.actorPath.append(root);
-      return this;
-    }
-
-    public Builder appendChildPath(final String child) {
-      if(this.actorPath.toString().isEmpty()) 
-        throw new RuntimeException("Root actor path is missing!");
-      if(null == child || child.startsWith("/"))
-        throw new IllegalArgumentException("Child actor path can't be null or"+
-                                           " started with '/'");
-      this.actorPath.append("/"+child);
+    public Builder withActorPath(final ActorPathBuilder actorPathBuilder) {
+      if(null == actorPathBuilder)
+        throw new IllegalArgumentException("Actor path builder is missing!");
+      this.actorPathBuilder = actorPathBuilder;
       return this;
     }
 
     public Builder withConfiguration(final HamaConfiguration conf) {
+      if(null == conf)
+        throw new IllegalArgumentException("HamaConfiguration is missing!");
       this.conf = conf;
       return this;
     }
    
     public ProxyInfo build() {
-      return new ProxyInfo(this.actorName, this.actorSystemName, this.host, 
-                           this.port, this.actorPath.toString());
+      return new ProxyInfo(this.protocol, this.actorName, this.actorSystemName,
+                           this.host, this.port, actorPathBuilder.toString());
     } 
 
+/*
     public ProxyInfo buildProxyAtMaster() {
       if(null == this.conf) 
         throw new NullPointerException("HamaConfiguration not found.");
@@ -127,15 +221,17 @@ public final class ProxyInfo extends SystemInfo implements Writable {
       assertPath(fullPath);
       return new ProxyInfo(this.actorName, sysName, hostV, portV, fullPath); 
     }
+*/
   }
   
-  public ProxyInfo(final String actorName,
+  public ProxyInfo(final Protocol protocol,
+                   final String actorName,
                    final String actorSystemName, 
                    final String host,
                    final int port, 
                    final String actorPath) {
 
-    super(actorSystemName, host, port);
+    super(protocol, actorSystemName, host, port);
 
     if(null == actorName) 
       throw new IllegalArgumentException("Actor name not provided.");
@@ -151,10 +247,10 @@ public final class ProxyInfo extends SystemInfo implements Writable {
   public String getActorName() {
     return this.actorName.toString();
   }
-  
+
   public String getPath() {
-    final String path = "akka.tcp://"+getActorSystemName()+"@"+getHost()+":"+
-                        getPort()+"/user/"+getActorPath();
+    final String path = getProtocol()+"://"+getActorSystemName()+"@"+
+                        getHost()+":"+getPort()+"/user/"+getActorPath();
     return path;
   }
 

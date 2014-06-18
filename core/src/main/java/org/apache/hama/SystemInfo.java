@@ -27,13 +27,34 @@ import org.apache.hadoop.io.Writable;
 
 public class SystemInfo implements Writable {
 
+  private Text protocol = new Text(Protocol.Local.toString());
   private Text actorSystemName = new Text();
   private Text host = new Text();
   private IntWritable port = new IntWritable();
 
+  static enum Protocol {
+    Local("akka"), Remote("akka.tcp");
+    final String p;
+    Protocol(final String v) {
+      this.p = v;
+    }
+    public String toString() { return this.p; }
+  }
+
   public SystemInfo(final String actorSystemName,
-                   final String host,
-                   final int port) {
+                    final String host,
+                    final int port) {
+    this(Protocol.Local, actorSystemName, host, port);
+  }
+
+  public SystemInfo(final Protocol protocol,
+                    final String actorSystemName,
+                    final String host,
+                    final int port) {
+    if(null == protocol)
+      throw new IllegalArgumentException("Protocol is missing!");
+    this.protocol = new Text(protocol.toString());
+
     if(null == actorSystemName)
       throw new IllegalArgumentException("Actor system name not provided.");
 
@@ -48,6 +69,14 @@ public class SystemInfo implements Writable {
       throw new IllegalArgumentException("Illegal port value.");
 
     this.port = new IntWritable(port);
+  }
+
+  public Protocol getProtocol() {
+    Protocol p = Protocol.Local;
+    if(this.protocol.toString().equals(Protocol.Remote.toString())) {
+      p = Protocol.Remote;
+    }
+    return p; 
   }
   
   public String getActorSystemName() {
@@ -64,6 +93,7 @@ public class SystemInfo implements Writable {
 
   @Override 
   public void write(DataOutput out) throws IOException {
+    this.protocol.write(out);     
     this.actorSystemName.write(out);     
     this.host.write(out);
     this.port.write(out);
@@ -71,9 +101,9 @@ public class SystemInfo implements Writable {
 
   @Override 
   public void readFields(DataInput in) throws IOException {
+    this.protocol.readFields(in);
     this.actorSystemName.readFields(in);
     this.host.readFields(in);
     this.port.readFields(in);
   }
-
 }

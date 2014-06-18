@@ -29,22 +29,26 @@ import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
-import org.apache.hama.ProxyInfo
 import org.apache.hama.lang.Executor
 import org.apache.hama.lang.Fork
 import org.apache.hama.lang.StopProcess
 import org.apache.hama.master._
 import org.apache.hama.master.Directive._
 import org.apache.hama.master.Directive.Action._
+import org.apache.hama.util.ActorLocator
+import org.apache.hama.util.GroomManagerLocator
+import org.apache.hama.util.SchedulerLocator
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
 class TaskManager(conf: HamaConfiguration) extends LocalService 
-                                           with RemoteService {
+                                           with RemoteService 
+                                           with ActorLocator {
 
   type ForkedChild = String
 
+/*
   def schedInfo: ProxyInfo = 
     new ProxyInfo.Builder().withConfiguration(configuration).
                             withActorName("sched").
@@ -62,6 +66,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
                             buildProxyAtMaster
 
   val groomManagerPath = groomManagerInfo.getPath
+*/
 
   val groomServerHost = configuration.get("bsp.groom.address", "127.0.0.1")
   val groomServerPort = configuration.getInt("bsp.groom.port", 50000)
@@ -96,7 +101,9 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   protected def getGroomServerHost(): String = groomServerHost
   protected def getGroomServerPort(): Int = groomServerPort
   protected def getMaxTasks(): Int = maxTasks
-  protected def getSchedulerPath: String = schedPath
+  //protected def getSchedulerPath: String = schedPath
+  protected def getSchedulerPath: String = 
+    locate(SchedulerLocator(configuration))
 
   override def configuration: HamaConfiguration = conf
 
@@ -116,8 +123,9 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   override def initializeServices {
     initializeSlots(getMaxTasks)
-    lookup("sched", schedPath)
-    lookup("groomManager", groomManagerPath)
+    //lookup("sched", schedPath)
+    lookup("sched", locate(SchedulerLocator(configuration)))
+    lookup("groomManager", locate(GroomManagerLocator(configuration)))
   }
 
   def hasTaskInQueue: Boolean = !directiveQueue.isEmpty
@@ -154,7 +162,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   override def offline(target: ActorRef) {
     // TODO: if only groomManager actor fails, simply re-"lookup" will fail.
-    lookup("groomManager", groomManagerPath)
+    //lookup("groomManager", groomManagerPath)
+    lookup("groomManager", locate(GroomManagerLocator(configuration)))
   }
 
   /**

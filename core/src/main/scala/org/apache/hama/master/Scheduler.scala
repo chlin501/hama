@@ -28,7 +28,6 @@ import org.apache.hama.LocalService
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.master.monitor.AskGroomServerStat
-import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.Request
 import scala.collection.immutable.Queue
@@ -59,12 +58,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
   type MaxTasksAllowed = Int
   type TaskAssignQueue = Queue[Job]
   type ProcessingQueue = Queue[Job]
-
-  val taskManagerInfo = new ProxyInfo.Builder().withConfiguration(conf).
-                                                withActorName("taskManager").
-                                                appendRootPath("groomServer").
-                                                appendChildPath("taskManager").
-                                                buildProxyAtGroom
 
   /**
    * A queue that holds jobs with tasks left unassigning to GroomServers.
@@ -321,18 +314,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
        // TODO: 1. check if job.getTargets is empty or not.
        //       2. if targets has values, call schedule(); otherwise 
        //          put into assign task queue, waiting for groom request.
-    }
-  }
-
-  def lookupTaskManager(spec: GroomServerSpec) {
-    LOG.info("Lookup {} at {}", spec.getName, taskManagerInfo.getPath)
-    lookup(spec.getName, taskManagerInfo.getPath)
-  }
-
-  from GroomManager for looking up registered TaskManager at GroomServer.
-  def locate: Receive = {
-    case Locate(spec) => {
-      lookupTaskManager(spec)
     }
   }
 */

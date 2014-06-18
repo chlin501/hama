@@ -31,9 +31,11 @@ import java.io.FileWriter
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.lang.Executor
 import org.apache.hama.LocalService
-import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
+import org.apache.hama.util.ActorLocator
+import org.apache.hama.util.ExecutorLocator
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
@@ -190,7 +192,7 @@ object BSPPeerContainer {
           }
           remote {
             netty.tcp {
-              hostname = "127.0.0.1" 
+              hostname = "127.0.0.1" # change to read from InetAddress?
               port = $port 
             }
           }
@@ -238,17 +240,22 @@ object BSPPeerContainer {
  * @param conf contains setting sepcific to this service.
  */
 class BSPPeerContainer(conf: HamaConfiguration) extends LocalService 
-                                                with RemoteService {
+                                                with RemoteService 
+                                                with ActorLocator {
  
   val logger = TaskLogging(context, conf, slotSeq)
 
   protected var executor: ActorRef = _
 
   val groomName = configuration.get("bsp.groom.name", "groomServer")
+
   override def configuration: HamaConfiguration = conf
-  def executorName: String = groomName+"_executor_"+slotSeq
+
   def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", 1)
 
+  def executorName: String = groomName+"_executor_"+slotSeq
+
+/*
   protected def executorPath: String = {
    new ProxyInfo.Builder().withConfiguration(configuration).
                            withActorName(executorName).
@@ -258,11 +265,13 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
                            buildProxyAtGroom.
                            getPath 
   }
+*/
 
   override def name: String = "bspPeerContainer%s".format(slotSeq)
  
   override def initializeServices {
-    lookup(executorName, executorPath)
+    //lookup(executorName, executorPath)
+    lookup(executorName, locate(ExecutorLocator(configuration)))
   }
 
   override def afterLinked(proxy: ActorRef) {

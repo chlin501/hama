@@ -26,9 +26,14 @@ import java.util.ArrayList
 import java.util.{ Iterator => Iter }
 import java.util.Map.Entry
 
+import org.apache.commons.logging.Log
+import org.apache.commons.logging.LogFactory
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
+import org.apache.hama.bsp.message.queue.DiskQueue
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.fs.Operation
+import org.apache.hama.fs.OperationFactory
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.compress.BSPMessageCompressor
 import org.apache.hama.message.compress.BSPMessageCompressorFactory
@@ -37,11 +42,14 @@ import org.apache.hama.message.queue.MessageQueue
 import org.apache.hama.message.queue.SingleLockQueue
 import org.apache.hama.message.queue.SynchronizedQueue
 import org.apache.hama.util.LRUCache
+import scala.collection.JavaConversions._
 
 /**
  * Provide default functionality of {@link MessageManager}.
  */
 class DefaultMessageManager[M <: Writable] extends MessageManager[M] {
+
+  val LOG = LogFactory.getLog(classOf[DefaultMessageManager[M]])
 
   private var configuration: HamaConfiguration = _
   protected var taskAttemptId: TaskAttemptID = _
@@ -114,27 +122,98 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M] {
   override def close() {
     outgoingMessageManager.clear
     localQueue.close
-    // delete disk queue based on task attempt id
+    cleanupDiskQueue
+  }
+
+  def cleanupDiskQueue() {
+    try {
+      val operation = OperationFactory.get(this.configuration)
+      val diskQueueDir = configuration.get("bsp.disk.queue.dir")
+      operation.remove(DiskQueue.getQueueDir(configuration, 
+                                             taskAttemptId,
+                                             diskQueueDir))
+    } catch {
+      case e: IOException => 
+        LOG.warn("Can't remove disk queue for "+taskAttemptId, e) 
+    }
   }
 
   @throws(classOf[IOException])
   override def getCurrentMessage(): M = localQueue.poll
   
+  override def getNumCurrentMessages(): Int = localQueue.size
+
+  override def clearOutgoingMessages() {
+    outgoingMessageManager.clear
+    if (configuration.getBoolean("hama.queue.behaviour.persistent", false) && 
+        localQueue.size > 0) { 
+      if (localQueue.isMemoryBasedQueue &&
+          localQueueForNextIteration.isMemoryBasedQueue) {
+        // To reduce the number of element additions
+        if (localQueue.size > localQueueForNextIteration.size) {
+          localQueue.addAll(localQueueForNextIteration)
+        } else {
+          localQueueForNextIteration.addAll(localQueue)
+          localQueue = localQueueForNextIteration.getMessageQueue
+        }
+      } else {
+        // TODO find the way to switch disk-based queue efficiently.
+        localQueueForNextIteration.addAll(localQueue)
+        if (null != localQueue) {
+          localQueue.close
+        }
+        localQueue = localQueueForNextIteration.getMessageQueue
+      }
+    } else {
+      if (null != localQueue) {
+        localQueue.close
+      }
+      localQueue = localQueueForNextIteration.getMessageQueue
+    }
+    localQueue.prepareRead
+    localQueueForNextIteration = getSynchronizedReceiverQueue
+  }
 
   @throws(classOf[IOException])
-  override def send(peerName: String, msg: M) = null.asInstanceOf[M]
+  override def send(peerName: String, msg: M) = {
+    outgoingMessageManager.addMessage(peerName, msg);
+    // TODO: increment counter by 1
+    // peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_SENT, 1L)
+  }
 
   override def getOutgoingBundles(): 
       Iter[Entry[InetSocketAddress, BSPMessageBundle[M]]] = 
     outgoingMessageManager.getBundleIterator
 
-  @throws(classOf[IOException])
+/*
+  @throws(classOf[IOException]) // TODO: remove this method?
   override def transfer(addr: InetSocketAddress, bundle: BSPMessageBundle[M]) {
+    throw new UnsupportedOperationException("Not supported operation.")
+  }
+*/
+
+  @throws(classOf[IOException])
+  override def transfer(peer: PeerInfo, bundle: BSPMessageBundle[M]) {
+/*
+    mapAsScalaMap(peersLRUCache).find( entry => entry._1.equals(peer)) match { 
+      case Some(found) => {
+        peersLRUCache.get(found._2)
+      }
+      case None => {
+        context.actorOf(Props())
+        peersLRUCache.put(peer, )
+      }
+    }
+*/
   }
 
-  override def clearOutgoingMessages() {}
-
-  override def getNumCurrentMessages(): Int = localQueue.size
+/*
+  // TODO: need util to help create actor path
+  def actorPath(peer: PeerInfo): String = {
+    //"akka.tcp://%s@%s:%d".format()
+//peer.actorSystemName  
+  }
+*/
 
   @throws(classOf[IOException])
   override def loopBackMessages(bundle: BSPMessageBundle[M]) {}
