@@ -27,12 +27,15 @@ import org.apache.hadoop.io.Writable;
 
 public class SystemInfo implements Writable {
 
-  private Text protocol = new Text(Protocol.Local.toString());
+  private Text protocol = new Text(Protocol.Remote.toString());
   private Text actorSystemName = new Text();
   private Text host = new Text();
   private IntWritable port = new IntWritable();
 
-  static enum Protocol {
+  // TODO: may need to provide a uniform way for remote and local lookup.
+  //       proxy should only be remote.
+  //       local lookup shouldn't use proxy.
+  static enum Protocol { 
     Local("akka"), Remote("akka.tcp");
     final String p;
     Protocol(final String v) {
@@ -44,7 +47,7 @@ public class SystemInfo implements Writable {
   public SystemInfo(final String actorSystemName,
                     final String host,
                     final int port) {
-    this(Protocol.Local, actorSystemName, host, port);
+    this(Protocol.Remote, actorSystemName, host, port);
   }
 
   public SystemInfo(final Protocol protocol,
@@ -72,8 +75,8 @@ public class SystemInfo implements Writable {
   }
 
   public Protocol getProtocol() {
-    Protocol p = Protocol.Local;
-    if(this.protocol.toString().equals(Protocol.Remote.toString())) {
+    Protocol p = Protocol.Remote;
+    if(this.protocol.toString().equals(Protocol.Local.toString())) {
       p = Protocol.Remote;
     }
     return p; 

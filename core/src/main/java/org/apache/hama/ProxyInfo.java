@@ -134,7 +134,7 @@ public final class ProxyInfo extends SystemInfo implements Writable {
 
   static class Builder {
     HamaConfiguration conf = new HamaConfiguration();
-    Protocol protocol = Protocol.Local; 
+    Protocol protocol = Protocol.Remote; 
     String actorName;
     String actorSystemName;
     String host;

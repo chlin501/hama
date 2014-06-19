@@ -60,11 +60,5 @@ public class HamaConfiguration extends Configuration {
     Configuration.addDefaultResource("hama-default.xml");
     Configuration.addDefaultResource("hama-site.xml");
   }
-
-  /**
-   * TODO: xml to configuration.
-  public void fromXml(String xml) {
-  }
-   */
  
 }
