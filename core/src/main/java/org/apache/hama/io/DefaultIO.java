@@ -27,9 +27,9 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DataInputBuffer;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.hama.bsp.BSPJob; // TODO: refactor io to get rid of this 
-import org.apache.hama.bsp.BSPPeerImpl; // TODO: move to monitor stats
-import org.apache.hama.bsp.Counters; // TODO: move to monitor stats 
-import org.apache.hama.bsp.Counters.Counter; // TODO: move to monitor stats
+import org.apache.hama.bsp.BSPPeerImpl; 
+import org.apache.hama.bsp.Counters; 
+import org.apache.hama.bsp.Counters.Counter; 
 import org.apache.hama.bsp.FileSplit;
 import org.apache.hama.bsp.InputFormat;
 import org.apache.hama.bsp.InputSplit;
@@ -46,6 +46,7 @@ import org.apache.hama.io.IO;
 import org.apache.hama.HamaConfiguration;
 
 // TODO: counter should be moved to monitor stats and recorded in zk.
+//       bsp peer interface provides getStat which has access to counter.
 public class DefaultIO implements IO<RecordReader, OutputCollector> {
 
   static final Log LOG = LogFactory.getLog(DefaultIO.class);
@@ -56,11 +57,11 @@ public class DefaultIO implements IO<RecordReader, OutputCollector> {
   /** contains split information. */
   protected final PartitionedSplit split;
   
-  private final Counters counters;  // TODO: move to monitor stats in the future
+  private final Counters counters;  
 
   public DefaultIO(final HamaConfiguration conf, 
                    final PartitionedSplit split, 
-                   final Counters counters) {
+                   final Counters counters) { 
     if(null == conf) 
       throw new IllegalArgumentException("HamaConfiguration not provided!");
     this.configuration = conf;

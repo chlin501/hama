@@ -24,8 +24,14 @@ import org.apache.hama.HamaConfiguration
  */
 trait Participant {
 
+  /**
+   * Enter the barrier sync.
+   */
   def enter
 
+  /**
+   * Leave the barrier sync.
+   */
   def leave
 
 }

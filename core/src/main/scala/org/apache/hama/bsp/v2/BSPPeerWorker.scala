@@ -17,21 +17,51 @@
  */
 package org.apache.hama.bsp.v2;
 
-import akka.actor.Actor
-import akka.event.Logging
+import java.io.IOException
+import org.apache.hadoop.io.Writable
+import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.bsp.RecordReader
+import org.apache.hama.bsp.OutputCollector
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.io.IO
 
-class BSPPeerWorker(conf: HamaConfiguration, peer: BSPPeer) extends Actor {
-  
-  val LOG = Logging(context.system, this)
-  var task: Task = _
+/**
+ * This class purely implements BSPPeer interface. With a separated 
+ * @{link BSPPeerExecutor} serves for executing worker logic.
+ */
+class BSPPeerWorker(conf: HamaConfiguration, task: Task) extends BSPPeer {
 
-  def unknown: Receive = {
-    case msg@ _ => 
-      LOG.warning("Unknown message {} sent to "+getClass().getName(), msg)
-  }
+  override def getIO(): IO[RecordReader[_,_], OutputCollector[_,_]] = 
+    null.asInstanceOf[IO[RecordReader[_,_], OutputCollector[_,_]]]
 
-  override def receive = unknown
+  @throws(classOf[IOException])
+  override def send(peerName: String, msg: Writable) {}
+
+  override def getCurrentMessage(): Writable = null.asInstanceOf[Writable]
+
+  override def getNumCurrentMessages(): Int = -1
+
+  @throws(classOf[IOException])
+  override def sync() {}
+
+  override def getSuperstepCount(): Long = -1
+
+  override def getPeerName(): String  = null 
+
+  override def getPeerName(index: Int): String = null 
+
+  override def getPeerIndex(): Int = -1
+
+  override def getAllPeerNames(): Array[String] = null
+
+  override def getNumPeers(): Int = -1
+
+  override def clear() {}
+
+  override def getConfiguration(): HamaConfiguration = conf
+
+  override def getTaskAttemptId(): TaskAttemptID = 
+    null.asInstanceOf[TaskAttemptID]
   
 
 }
