@@ -49,7 +49,6 @@ import org.apache.hama.HamaConfiguration;
 
 // TODO: counter should be moved to monitor stats and recorded in zk.
 //       bsp peer interface provides getStat which has access to counter.
-//       reader() must be able to reopen!
 public class DefaultIO implements IO<RecordReader, OutputCollector>,
                                   Configurable {
 
@@ -142,6 +141,7 @@ public class DefaultIO implements IO<RecordReader, OutputCollector>,
           new ByteArrayInputStream(split.bytes());
         splitBuffer = new DataInputStream(bin);
         inputSplit.readFields(splitBuffer);
+        if(null != reader) reader.close();
         reader = createRecordReader(inputSplit);
       } catch (Exception e) {
         throw new IOException("Fail restoring "+inputSplit.getClass().getName()+
