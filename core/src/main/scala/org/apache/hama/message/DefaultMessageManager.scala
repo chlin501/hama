@@ -28,6 +28,8 @@ import java.util.Map.Entry
 
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
+import org.apache.hadoop.conf.Configurable
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.bsp.message.queue.DiskQueue
@@ -47,11 +49,12 @@ import scala.collection.JavaConversions._
 /**
  * Provide default functionality of {@link MessageManager}.
  */
-class DefaultMessageManager[M <: Writable] extends MessageManager[M] {
+class DefaultMessageManager[M <: Writable] extends MessageManager[M] 
+                                           with Configurable {
 
   val LOG = LogFactory.getLog(classOf[DefaultMessageManager[M]])
 
-  private var configuration: HamaConfiguration = _
+  protected var configuration: HamaConfiguration = _
   protected var taskAttemptId: TaskAttemptID = _
   protected var compressor: BSPMessageCompressor[M] = _
   protected var outgoingMessageManager: OutgoingMessageManager[M] = _
@@ -61,11 +64,20 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M] {
   /* This holds the reference to BSPPeer actors. */
   protected var peersLRUCache: LRUCache[PeerInfo, ActorRef] = _
 
+  override def setConf(conf: Configuration) = 
+    this.configuration = conf.asInstanceOf[HamaConfiguration]
+  
+  override def getConf(): Configuration = this.configuration
+
   // TODO: create znodes so that we know where messages to go
   //       e.g. /bsp/messages/...
   override def init(conf: HamaConfiguration, taskAttemptId: TaskAttemptID) {
     this.taskAttemptId = taskAttemptId
-    this.configuration = configuration
+    if(null == this.taskAttemptId)
+      throw new IllegalArgumentException("TaskAttemptID is missing!")
+    this.configuration = conf
+    if(null == this.configuration)
+      throw new IllegalArgumentException("HamaConfiguration is missing!")
     //initializeCurator(configuration)
     this.localQueue = getReceiverQueue
     this.localQueueForNextIteration = getSynchronizedReceiverQueue

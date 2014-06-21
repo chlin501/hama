@@ -26,6 +26,8 @@ import org.apache.hama.bsp.OutputCollector
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.io.IO
 import org.apache.hama.io.DefaultIO
+import org.apache.hama.message.MessageManager
+import org.apache.hama.message.MessageManagerFactory
 
 /**
  * This class purely implements BSPPeer interface. With a separated 
@@ -34,8 +36,9 @@ import org.apache.hama.io.DefaultIO
 class BSPPeerCoordinator extends BSPPeer {
 
   protected var configuration: HamaConfiguration = _
-  protected var io: IO[RecordReader[_,_], OutputCollector[_,_]] = _
   protected var task: Task = _
+  protected var io: IO[RecordReader[_,_], OutputCollector[_,_]] = _
+  protected var messenger: MessageManager[_] = _
 
   /**
    * Initialize necessary services, including
@@ -51,6 +54,8 @@ class BSPPeerCoordinator extends BSPPeer {
       conf.getClassByName(conf.get("bsp.io.class",
                                    classOf[DefaultIO].getCanonicalName)), 
       conf).asInstanceOf[IO[RecordReader[_,_], OutputCollector[_,_]]]
+    this.messenger = MessageManagerFactory.getMessageManager(conf)
+    this.messenger.init(configuration, getTaskAttemptId)
   }
 
   override def getIO(): IO[RecordReader[_,_], OutputCollector[_,_]] = io
