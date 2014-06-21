@@ -31,7 +31,7 @@ import org.apache.hama.io.DefaultIO
  * This class purely implements BSPPeer interface. With a separated 
  * @{link BSPPeerExecutor} serves for executing worker logic.
  */
-class BSPPeerWorker extends BSPPeer {
+class BSPPeerCoordinator extends BSPPeer {
 
   protected var configuration: HamaConfiguration = _
   protected var io: IO[RecordReader[_,_], OutputCollector[_,_]] = _
