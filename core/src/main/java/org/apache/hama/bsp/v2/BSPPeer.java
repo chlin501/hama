@@ -31,6 +31,15 @@ import org.apache.hama.io.IO;
 public interface BSPPeer {
 
   /**
+   * Initialize necessary services, including 
+   * - io 
+   * - sync 
+   * - messaging
+   * @param conf contains related setting to startup related services.
+  void initialize(conf: HamaConfiguration, task: Task)
+   */
+
+  /**
    * An interface that links to input and output.
    * @return IO interface that has accesses to the resource.
    */

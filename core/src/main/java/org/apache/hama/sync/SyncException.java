@@ -15,23 +15,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.sync
+package org.apache.hama.sync;
 
-import org.apache.hama.HamaConfiguration
+public class SyncException extends Exception {
 
-/**
- * An interface that provide barrier sync methods.
- */
-trait Participant {
+  private static final long serialVersionUID = 1L;
 
-  /**
-   * Enter the barrier sync.
-   */
-  def enter
+  String info;
 
-  /**
-   * Leave the barrier sync.
-   */
-  def leave
+  public SyncException(String info) {
+    super(); // call superclass constructor
+    this.info = info;
+  }
+
+  public String getError() {
+    return info;
+  }
 
 }

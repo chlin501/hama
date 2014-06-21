@@ -19,20 +19,41 @@ package org.apache.hama.bsp.v2;
 
 import java.io.IOException
 import org.apache.hadoop.io.Writable
+import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.RecordReader
 import org.apache.hama.bsp.OutputCollector
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.io.IO
+import org.apache.hama.io.DefaultIO
 
 /**
  * This class purely implements BSPPeer interface. With a separated 
  * @{link BSPPeerExecutor} serves for executing worker logic.
  */
-class BSPPeerWorker(conf: HamaConfiguration, task: Task) extends BSPPeer {
+class BSPPeerWorker extends BSPPeer {
 
-  override def getIO(): IO[RecordReader[_,_], OutputCollector[_,_]] = 
-    null.asInstanceOf[IO[RecordReader[_,_], OutputCollector[_,_]]]
+  protected var configuration: HamaConfiguration = _
+  protected var io: IO[RecordReader[_,_], OutputCollector[_,_]] = _
+  protected var task: Task = _
+
+  /**
+   * Initialize necessary services, including
+   * - io
+   * - sync
+   * - messaging
+   * @param conf contains related setting to startup related services.
+   */
+  def initialize(conf: HamaConfiguration, task: Task) {
+    this.configuration = conf
+    this.task = task
+    this.io = ReflectionUtils.newInstance(
+      conf.getClassByName(conf.get("bsp.io.class",
+                                   classOf[DefaultIO].getCanonicalName)), 
+      conf).asInstanceOf[IO[RecordReader[_,_], OutputCollector[_,_]]]
+  }
+
+  override def getIO(): IO[RecordReader[_,_], OutputCollector[_,_]] = io
 
   @throws(classOf[IOException])
   override def send(peerName: String, msg: Writable) {}
@@ -58,10 +79,9 @@ class BSPPeerWorker(conf: HamaConfiguration, task: Task) extends BSPPeer {
 
   override def clear() {}
 
-  override def getConfiguration(): HamaConfiguration = conf
+  override def getConfiguration(): HamaConfiguration = configuration
 
-  override def getTaskAttemptId(): TaskAttemptID = 
-    null.asInstanceOf[TaskAttemptID]
+  override def getTaskAttemptId(): TaskAttemptID = task.getId
   
 
 }

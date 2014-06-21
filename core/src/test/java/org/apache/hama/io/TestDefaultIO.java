@@ -51,6 +51,7 @@ public class TestDefaultIO extends TestCase {
   
   class MockDefaultIO extends DefaultIO {
 
+/*
     MockDefaultIO(final HamaConfiguration conf,  
                   final PartitionedSplit split) {
       super(conf, split, new Counters());
@@ -59,6 +60,7 @@ public class TestDefaultIO extends TestCase {
     MockDefaultIO(final PartitionedSplit split) {
       super(conf, split, new Counters());
     }
+*/
 
     // writer
     @Override 
@@ -168,7 +170,10 @@ public class TestDefaultIO extends TestCase {
   public void testReader() throws Exception {
     final List<PartitionedSplit> splits = createSplits();
     assertEquals("Split size should be 1!", 1, splits.size());
-    final MockDefaultIO io = new MockDefaultIO(splits.get(0));
+    //final MockDefaultIO io = new MockDefaultIO(splits.get(0));
+    final MockDefaultIO io = new MockDefaultIO();
+    io.setConf(conf);
+    io.initialize(splits.get(0), new Counters());
     io.reader();
   }  
 
@@ -177,7 +182,9 @@ public class TestDefaultIO extends TestCase {
     conf.setClass("bsp.fs.class", HDFSLocal.class, Operation.class);
     final List<PartitionedSplit>  splits = createSplits();
     assertEquals("Split size should be 1!", 1, splits.size());
-    final MockDefaultIO io = new MockDefaultIO(conf, splits.get(0));
+    final MockDefaultIO io = new MockDefaultIO();
+    io.setConf(conf);
+    io.initialize(splits.get(0), new Counters());
     io.writer();
   }  
 

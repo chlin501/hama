@@ -27,7 +27,19 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
-
+/**
+ * Remote actor location information, including
+ * - Protocol 
+ * - ActorSystemName
+ * - Host
+ * - Port
+ * - ActorPath
+ * This class will provide Builder, MasterBuilder and GroomBuilder, for 
+ * constructing the proxy information.
+ * 
+ * TODO: 1. group with ActorLocator
+ *       2. perhaps remove Protocol.Local because Proxy mainly used for remote.
+ */
 public final class ProxyInfo extends SystemInfo implements Writable {
 
   public static final Log LOG = LogFactory.getLog(ProxyInfo.class);

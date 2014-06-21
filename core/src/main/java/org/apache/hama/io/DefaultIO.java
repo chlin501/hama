@@ -23,6 +23,8 @@ import java.io.IOException;
 import java.text.NumberFormat;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.conf.Configurable;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.DataInputBuffer;
 import org.apache.hadoop.util.ReflectionUtils;
@@ -47,18 +49,21 @@ import org.apache.hama.HamaConfiguration;
 
 // TODO: counter should be moved to monitor stats and recorded in zk.
 //       bsp peer interface provides getStat which has access to counter.
-public class DefaultIO implements IO<RecordReader, OutputCollector> {
+//       reader() must be able to reopen!
+public class DefaultIO implements IO<RecordReader, OutputCollector>,
+                                  Configurable {
 
   static final Log LOG = LogFactory.getLog(DefaultIO.class);
 
   private static final NumberFormat formatter = NumberFormat.getInstance();
-  private final HamaConfiguration configuration;
+  private HamaConfiguration configuration;
 
   /** contains split information. */
-  protected final PartitionedSplit split;
+  protected PartitionedSplit split;
   
-  private final Counters counters;  
+  private Counters counters;  
 
+/*
   public DefaultIO(final HamaConfiguration conf, 
                    final PartitionedSplit split, 
                    final Counters counters) { 
@@ -71,6 +76,27 @@ public class DefaultIO implements IO<RecordReader, OutputCollector> {
     if(null == counters) 
       throw new IllegalArgumentException("Counter is missing!");
     this.counters = counters;
+  }
+*/
+
+  public void initialize(final PartitionedSplit split, 
+                         final Counters counters) {
+    if(null == split) 
+      throw new IllegalArgumentException("No split found!");
+    this.split = split;
+    if(null == counters) 
+      throw new IllegalArgumentException("Counter is missing!");
+    this.counters = counters;
+  }
+
+  @Override
+  public void setConf(Configuration conf) {
+    this.configuration = (HamaConfiguration)conf;
+  }
+
+  @Override
+  public Configuration getConf() {
+    return this.configuration;
   }
 
   /**
