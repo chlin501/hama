@@ -106,6 +106,6 @@ public interface MessageManager<M extends Writable> {
    * Returns the server address on which the incoming connections are listening.
    * @param InetSocketAddress to which this server listens.
    */
-  InetSocketAddress listenerAddress();
+  InetSocketAddress getListenerAddress();
 
 }

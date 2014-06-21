@@ -233,6 +233,6 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   @throws(classOf[IOException])
   override def loopBackMessage(message: Writable) {} 
 
-  override def listenerAddress(): InetSocketAddress = null
+  override def getListenerAddress(): InetSocketAddress = null
 
 }
