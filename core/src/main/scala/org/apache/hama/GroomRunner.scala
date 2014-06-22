@@ -27,7 +27,7 @@ import com.typesafe.config.ConfigFactory
 import org.apache.hama.groom.GroomServer
 
 object GroomConfig {
-  def toConfig(): Config =
+  def toConfig(): Config = // TODO: post to zk
     ConfigFactory.parseString("""
       groom {
         akka {

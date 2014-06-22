@@ -28,6 +28,8 @@ import org.apache.hama.io.IO
 import org.apache.hama.io.DefaultIO
 import org.apache.hama.message.MessageManager
 import org.apache.hama.message.MessageManagerFactory
+import org.apache.hama.sync.PeerSyncClient
+import org.apache.hama.sync.SyncServiceFactory
 
 /**
  * This class purely implements BSPPeer interface. With a separated 
@@ -37,8 +39,9 @@ class BSPPeerCoordinator extends BSPPeer {
 
   protected var configuration: HamaConfiguration = _
   protected var task: Task = _
-  protected var io: IO[RecordReader[_,_], OutputCollector[_,_]] = _
   protected var messenger: MessageManager[_] = _
+  protected var io: IO[RecordReader[_,_], OutputCollector[_,_]] = _
+  protected var syncClient: PeerSyncClient = _ 
 
   /**
    * Initialize necessary services, including
@@ -47,15 +50,21 @@ class BSPPeerCoordinator extends BSPPeer {
    * - messaging
    * @param conf contains related setting to startup related services.
    */
-  def initialize(conf: HamaConfiguration, task: Task) {
+  protected[this] def initialize(conf: HamaConfiguration, task: Task) {
     this.configuration = conf
     this.task = task
-    this.io = ReflectionUtils.newInstance(
+    // messaging
+    this.messenger = MessageManagerFactory.getMessageManager(conf) 
+    this.messenger.init(configuration, getTaskAttemptId)
+    // io
+    this.io = ReflectionUtils.newInstance( 
       conf.getClassByName(conf.get("bsp.io.class",
                                    classOf[DefaultIO].getCanonicalName)), 
       conf).asInstanceOf[IO[RecordReader[_,_], OutputCollector[_,_]]]
-    this.messenger = MessageManagerFactory.getMessageManager(conf)
-    this.messenger.init(configuration, getTaskAttemptId)
+    // sync
+    this.syncClient = SyncServiceFactory.getPeerSyncClient(conf)
+    syncClient.init(conf, task.getId.getJobID, task.getId)
+    // get address:port and register by syncClient xxxx
   }
 
   override def getIO(): IO[RecordReader[_,_], OutputCollector[_,_]] = io

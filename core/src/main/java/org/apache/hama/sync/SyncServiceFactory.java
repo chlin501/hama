@@ -17,8 +17,8 @@
  */
 package org.apache.hama.sync;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.util.ReflectionUtils;
+import org.apache.hama.HamaConfiguration;
 
 public class SyncServiceFactory {
   public static final String SYNC_SERVER_CLASS = "hama.sync.server.class";
@@ -29,7 +29,7 @@ public class SyncServiceFactory {
    * Returns a sync client via reflection based on what was configured.
    * @param conf contains setting for initializing sync client.
    */
-  public static PeerSyncClient getPeerSyncClient(Configuration conf)
+  public static PeerSyncClient getPeerSyncClient(HamaConfiguration conf)
       throws ClassNotFoundException {
     return (PeerSyncClient) ReflectionUtils.newInstance(conf
         .getClassByName(conf.get(SYNC_PEER_CLASS,

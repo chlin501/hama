@@ -31,8 +31,7 @@ import org.apache.hama.master.Master
  */
 object MasterConfig {
 
-  // TODO: read from HamaConfiguration 
-  def toConfig(): Config = 
+  def toConfig(): Config =   // TODO: post to zk
     ConfigFactory.parseString("""
       master {
         akka {

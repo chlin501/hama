@@ -27,10 +27,10 @@ import java.util.TreeMap;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hama.Constants;
 import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.bsp.TaskAttemptID;
+import org.apache.hama.Constants;
+import org.apache.hama.HamaConfiguration;
 import org.apache.hama.zookeeper.QuorumPeer;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
@@ -67,7 +67,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
   private String[] allPeers;
 
   @Override
-  public void init(Configuration conf, BSPJobID jobId, TaskAttemptID taskId)
+  public void init(HamaConfiguration conf, BSPJobID jobId, TaskAttemptID taskId)
       throws Exception {
     quorumServers = QuorumPeer.getZKQuorumServersString(conf);
     this.zk = new ZooKeeper(quorumServers, conf.getInt(

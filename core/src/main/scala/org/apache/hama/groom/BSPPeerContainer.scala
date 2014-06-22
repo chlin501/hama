@@ -39,8 +39,8 @@ import org.apache.hama.util.ExecutorLocator
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
-final case class Args(actorSystemName: String, port: Int, seq: Int, 
-                      config: Config)
+final case class Args(actorSystemName: String, host: String, port: Int, 
+                      seq: Int, config: Config)
 
 private final case class Initialize(taskAttemptId: TaskAttemptID)
 private final case class Info(message: String)
@@ -174,9 +174,10 @@ private[groom] object TaskLogging {
 
 object BSPPeerContainer {
 
-  def toConfig(port: Int): Config = {
+  // TODO: all config need to post to zk
+  def toConfig(host: String, port: Int): Config = {
     ConfigFactory.parseString(s"""
-      peer {
+      peerContainer {
         akka {
           actor {
             provider = "akka.remote.RemoteActorRefProvider"
@@ -192,7 +193,7 @@ object BSPPeerContainer {
           }
           remote {
             netty.tcp {
-              hostname = "127.0.0.1" # change to read from InetAddress?
+              hostname = "$host"
               port = $port 
             }
           }
@@ -206,18 +207,21 @@ object BSPPeerContainer {
       throw new IllegalArgumentException("No arguments supplied when "+
                                          "BSPPeerContainer is forked.")
     val actorSystemName = args(0)
-    val port = args(1).toInt
-    val seq = args(2).toInt
-    val config = toConfig(port) 
-    Args(actorSystemName, port, seq, config)
+    val host = args(1)
+    val port = args(2).toInt
+    val seq = args(3).toInt
+    val config = toConfig(host, port) 
+    Args(actorSystemName, host, port, seq, config)
   }
 
   def initialize(args: Array[String]): (ActorSystem, HamaConfiguration, Int) = {
     val defaultConf = new HamaConfiguration()
     val arguments = toArgs(args)
     val system = ActorSystem("BSPPeerSystem%s".format(arguments.seq), 
-                             arguments.config.getConfig("peer"))
+                             arguments.config.getConfig("peerContainer"))
     defaultConf.set("bsp.groom.actor-system.name", arguments.actorSystemName)
+    defaultConf.set("bsp.peer.hostname", arguments.host)
+    defaultConf.setInt("bsp.peer.port", arguments.port)
     defaultConf.setInt("bsp.child.slot.seq", arguments.seq)
     (system, defaultConf, arguments.seq)
   }

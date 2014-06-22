@@ -17,15 +17,14 @@
  */
 package org.apache.hama.sync;
 
-import org.apache.hadoop.conf.Configuration;
 import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.bsp.TaskAttemptID;
+import org.apache.hama.HamaConfiguration;
 
 /**
  * PeerSyncClient defines the behavior that a BSPPeer performs to maintain
  * synchronized global state as it progresses.
  */
-
 public interface PeerSyncClient extends SyncClient {
 
   /**
@@ -35,7 +34,7 @@ public interface PeerSyncClient extends SyncClient {
    * 
    * @throws Exception
    */
-  void init(Configuration conf, BSPJobID jobId, TaskAttemptID taskId)
+  void init(HamaConfiguration conf, BSPJobID jobId, TaskAttemptID taskId)
       throws Exception;
 
   /**
