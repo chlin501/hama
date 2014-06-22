@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.bsp.v2;
+package org.apache.hama.bsp.v2
 
 import java.io.IOException
 import org.apache.hadoop.io.Writable
@@ -64,7 +64,9 @@ class BSPPeerCoordinator extends BSPPeer {
     // sync
     this.syncClient = SyncServiceFactory.getPeerSyncClient(conf)
     syncClient.init(conf, task.getId.getJobID, task.getId)
-    // get address:port and register by syncClient xxxx
+    syncClient.register(task.getId.getJobID, task.getId,  
+                        this.configuration.get("bsp.peer.hostname", "0.0.0.0"),
+                        this.configuration.getInt("bsp.peer.port", 61000))
   }
 
   override def getIO(): IO[RecordReader[_,_], OutputCollector[_,_]] = io

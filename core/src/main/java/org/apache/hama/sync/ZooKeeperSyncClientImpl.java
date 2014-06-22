@@ -42,7 +42,9 @@ import org.apache.zookeeper.data.Stat;
 
 /**
  * This client class abstracts the use of our zookeeper sync code.
- * 
+ * TODO: refactor by replacing with Curator framework. 
+ *       DistributedDoubleBarrier can't sync according to task id and
+ *       no way to retrive peer names, etc.
  */
 public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
     PeerSyncClient {
