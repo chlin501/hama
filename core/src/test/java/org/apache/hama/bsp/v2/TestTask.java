@@ -26,10 +26,10 @@ import junit.framework.TestCase;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
-import org.apache.hama.bsp.TaskAttemptID;
-
 import org.apache.hadoop.io.Writable;
+import org.apache.hama.bsp.TaskAttemptID;
+import org.apache.hama.HamaConfiguration;
+
 
 /**
  * Test (De)Serialize functions.
@@ -39,25 +39,27 @@ public class TestTask extends TestCase {
   final Log LOG = LogFactory.getLog(TestTask.class);
 
   Task createTask(final int id) throws Exception {
-    final TaskAttemptID attemptId = IDCreator.newBSPJobID()
-                                             .withId("test")
-                                             .withId(id)
-                                             .getTaskIDBuilder()
-                                             .withId(id)
-                                             .getTaskAttemptIDBuilder()
-                                             .withId(id)
-                                             .build();
+    final TaskAttemptID attemptId = IDCreator.newBSPJobID().
+                                              withId("test").
+                                              withId(id).
+                                              getTaskIDBuilder().
+                                              withId(id).
+                                              getTaskAttemptIDBuilder().
+                                              withId(id).
+                                              build();
+    final HamaConfiguration conf = new HamaConfiguration();
     final long startTime = System.currentTimeMillis();
     final long finishTime = startTime + 1000*10;
     final Task.State state = Task.State.RUNNING;
     final Task.Phase phase = Task.Phase.SETUP;
-    final Task task = new Task.Builder().setId(attemptId)
-                                        .setStartTime(startTime)
-                                        .setFinishTime(finishTime)
-                                        .setState(state)
-                                        .setPhase(phase)
-                                        .setCompleted(true)
-                                        .build();
+    final Task task = new Task.Builder().setId(attemptId). 
+                                         setConfiguration(conf).
+                                         setStartTime(startTime).
+                                         setFinishTime(finishTime).
+                                         setState(state).
+                                         setPhase(phase).
+                                         setCompleted(true).
+                                         build();
     return task;
   } 
 

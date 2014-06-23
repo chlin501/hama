@@ -241,9 +241,9 @@ public final class Job implements Writable {
       if(0 >= taskTable.rowLength())
         throw new IllegalArgumentException("Invalid TableTable numBSPTasks "+
                                            this.taskTable.rowLength());
-      if(0 >= taskTable.columnLength())
+      if(0 >= taskTable.getMaxTaskAttempts())
         throw new IllegalArgumentException("Invalid TableTable maxTaskAttempts"+
-                                           this.taskTable.columnLength());
+                                           this.taskTable.getMaxTaskAttempts());
 
       this.taskTable = taskTable;
       return this;
@@ -269,10 +269,7 @@ public final class Job implements Writable {
     public Builder withTaskTable() {
       assertParameters();
       adjustNumBSPTasks();
-      this.taskTable = new TaskTable(this.id, 
-                                     conf.getInt("bsp.peers.num", 1), 
-                                     conf.getInt("bsp.tasks.max.attempts", 3), 
-                                     null);
+      this.taskTable = new TaskTable(this.id, conf, null);
       return this;
     }
 
@@ -282,10 +279,7 @@ public final class Job implements Writable {
       if(null == splits) {
         return withTaskTable();
       } else {
-        taskTable = new TaskTable(this.id, 
-                                  conf.getInt("bsp.peers.num", 1), 
-                                  conf.getInt("bsp.tasks.max.attempts", 3), 
-                                  splits);  
+        taskTable = new TaskTable(this.id, conf, splits);  
         return this;
       }
     }

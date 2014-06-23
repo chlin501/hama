@@ -21,35 +21,35 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-
 import junit.framework.TestCase;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
 import org.apache.hadoop.io.Writable;
-
 import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.bsp.TaskAttemptID;
+import org.apache.hama.HamaConfiguration;
 
 
 public class TestTaskTable extends TestCase {
 
   final Log LOG = LogFactory.getLog(TestTaskTable.class);
 
+  final HamaConfiguration conf = new HamaConfiguration();
   final int numBSPTasks = 3;
   final int maxTaskAttempts = 2;
+
+  public void setUp() throws Exception {
+    conf.setInt("bsp.peers.num", numBSPTasks);
+    conf.setInt("bsp.tasks.max.attempts", maxTaskAttempts); 
+  } 
 
   /**
    * Create a task table with tasks in the first slots initialized.
    * TaskTable's row length is numBSPTasks and max column length is 2.
    */
-  TaskTable createTaskTable(final BSPJobID jobId, final int numBSPTasks, 
-                            final int maxTaskAttempts) throws Exception {
-    final TaskTable table = new TaskTable(jobId, 
-                                          numBSPTasks, 
-                                          maxTaskAttempts, 
-                                          null);
+  TaskTable createTaskTable(final BSPJobID jobId, 
+                            final HamaConfiguration conf) throws Exception {
+    final TaskTable table = new TaskTable(jobId, conf, null);
     // assert init
     for(int row = 0; row < numBSPTasks; row++) {
       final Task[] taskArray = table.get(row);
@@ -97,16 +97,16 @@ public class TestTaskTable extends TestCase {
   }
 
   public void testSerialization() throws Exception {
-    final TaskTable table = 
-      createTaskTable(createBSPJobId(), numBSPTasks, maxTaskAttempts);
+    final TaskTable table = createTaskTable(createBSPJobId(), conf);
     final byte[] bytes = serialize(table);
     final TaskTable forVerification = deserialize(bytes);
     LOG.info("Table table row length is "+forVerification.rowLength());
     assertEquals("TaskTable row length should be "+numBSPTasks, 
                  numBSPTasks, forVerification.rowLength());
-    LOG.info("Table table column length is "+forVerification.columnLength());
-    assertEquals("TaskTable column length should be "+maxTaskAttempts,  
-                 maxTaskAttempts, forVerification.columnLength());
+    LOG.info("Table table's max task attempts is "+
+             forVerification.getMaxTaskAttempts());
+    assertEquals("TaskTable's max task attempts should be "+maxTaskAttempts,  
+                 maxTaskAttempts, forVerification.getMaxTaskAttempts());
     final Task[] tasks = forVerification.get(1);
     assertEquals("The 2th row's size should be 1.", 1, tasks.length); 
     final Task assignedTask  = tasks[0];
@@ -121,8 +121,7 @@ public class TestTaskTable extends TestCase {
 
   public void testTaskManagement() throws Exception {
     final BSPJobID jobId = createBSPJobId();
-    final TaskTable table = 
-      createTaskTable(jobId, numBSPTasks, maxTaskAttempts);
+    final TaskTable table = createTaskTable(jobId, conf);
    
     // add a (restart) task.
     // task table should look like 
@@ -136,11 +135,11 @@ public class TestTaskTable extends TestCase {
                                               getTaskAttemptIDBuilder().
                                               withId(2).
                                               build();
-    final Task task = new Task.Builder()
-                              .setId(attemptId) 
-                              .setPhase(Task.Phase.COMPUTE)
-                              .setState(Task.State.RUNNING)
-                              .build();
+    final Task task = new Task.Builder().setId(attemptId).
+                                         setConfiguration(conf).
+                                         setPhase(Task.Phase.COMPUTE).
+                                         setState(Task.State.RUNNING).
+                                         build();
     table.add(1, task);
 
     final Task[] tasks0 = table.get(0);

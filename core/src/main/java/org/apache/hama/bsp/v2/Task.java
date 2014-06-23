@@ -20,10 +20,8 @@ package org.apache.hama.bsp.v2;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
 import org.apache.hadoop.io.BooleanWritable;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.IntWritable;
@@ -31,8 +29,8 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
-
 import org.apache.hama.bsp.TaskAttemptID;
+import org.apache.hama.HamaConfiguration;
 import org.apache.hama.io.PartitionedSplit;
 
 /**
@@ -45,6 +43,11 @@ public final class Task implements Writable {
 
   /* The unique id for this task, including BSPJobID. */
   private TaskAttemptID id;
+
+  /** 
+   * This variable, derived from v2.Job, contains specific setting to this task.
+   */
+  private HamaConfiguration configuration = new HamaConfiguration();
 
   // TODO: maybe we need record time when the task in queue?
   /* Time this task begins. */
@@ -72,14 +75,6 @@ public final class Task implements Writable {
    * belongs. 
    */
   private Marker marker = new Marker(false, ""); 
-
-  /**
-   * Denote the total tasks a job would have. This value won't hanged once a
-   * job finishes initialization. Default value is aligned to 
-   * <b>bsp.peer.num</b>, which is 1.
-   * N.B.: This value should be read-only once initialized.
-   */
-  private IntWritable totalBSPTasks = new IntWritable(1);
  
   public final static class Marker implements Writable {
     private BooleanWritable assigned = new BooleanWritable(false);
@@ -149,6 +144,7 @@ public final class Task implements Writable {
   public static final class Builder {
 
     private TaskAttemptID id;
+    private HamaConfiguration conf = new HamaConfiguration();
     private long startTime = 0;
     private long finishTime = 0;
     private PartitionedSplit split = null;
@@ -157,10 +153,17 @@ public final class Task implements Writable {
     private Phase phase = Phase.SETUP;
     private boolean completed = false;
     private Marker marker = new Marker(false, ""); 
-    private int totalBSPTasks = 1;
 
     public Builder setId(final TaskAttemptID id) {
       this.id = id;
+      return this;
+    }
+
+    public Builder setConfiguration(final HamaConfiguration conf) {
+      this.conf = conf;
+      if(null == this.conf) 
+        throw new IllegalArgumentException("HamaConfiguration not provided "+
+                                           "when building the task.");
       return this;
     }
 
@@ -215,13 +218,9 @@ public final class Task implements Writable {
       return this;
     }
 
-    public Builder setTotalBSPTasks(final int totalBSPTasks) {
-      this.totalBSPTasks = totalBSPTasks;
-      return this;
-    }
-
     public Task build() {
       return new Task(id, 
+                      conf,
                       startTime, 
                       finishTime, 
                       split, 
@@ -229,14 +228,14 @@ public final class Task implements Writable {
                       state, 
                       phase,
                       completed, 
-                      marker,
-                      totalBSPTasks);
+                      marker);
     }
   }
 
   public Task() {} // for Writable
 
   public Task(final TaskAttemptID id, 
+              final HamaConfiguration conf,
               final long startTime, 
               final long finishTime, 
               final PartitionedSplit split, 
@@ -244,11 +243,13 @@ public final class Task implements Writable {
               final State state, 
               final Phase phase, 
               final boolean completed, 
-              final Marker marker,
-              final int totalBSPTasks) {
+              final Marker marker){
     this.id = id;
     if(null == this.id) 
       throw new IllegalArgumentException("TaskAttemptID not provided.");
+    this.configuration = conf;
+    if(null == this.configuration) 
+      throw new IllegalArgumentException("HamaConfiguration is missing!");
     this.startTime = new LongWritable(startTime);
     this.finishTime = new LongWritable(finishTime);
     this.split = split;
@@ -267,9 +268,6 @@ public final class Task implements Writable {
       throw new NullPointerException("Task's Phase is missing!");
     this.completed = new BooleanWritable(completed);
     this.marker = marker;
-    if(0 >= totalBSPTasks)
-      throw new IllegalArgumentException("Invalid total bsp tasks value.");
-    this.totalBSPTasks = new IntWritable(totalBSPTasks);
   }
 
   public TaskAttemptID getId() {
@@ -376,12 +374,13 @@ public final class Task implements Writable {
    * @return int for the number of bsp tasks will be ran across the cluster.
    */
   public int getTotalBSPTasks() {
-    return this.totalBSPTasks.get();
+    return configuration.getInt("bsp.peers.num", 1);
   }
 
   @Override
   public void write(DataOutput out) throws IOException {
     this.id.write(out);
+    this.configuration.write(out);
     this.startTime.write(out);
     this.finishTime.write(out);
     if(null != this.split) {
@@ -395,13 +394,14 @@ public final class Task implements Writable {
     WritableUtils.writeEnum(out, phase);
     this.completed.write(out);
     this.marker.write(out);
-    this.totalBSPTasks.write(out);
   }
 
   @Override
   public void readFields(DataInput in) throws IOException {
     this.id = new TaskAttemptID();
     this.id.readFields(in);
+    this.configuration = new HamaConfiguration();
+    this.configuration.readFields(in);
     this.startTime = new LongWritable(0);
     this.startTime.readFields(in);
     this.finishTime = new LongWritable(0);
@@ -419,8 +419,6 @@ public final class Task implements Writable {
     this.completed.readFields(in);
     this.marker = new Marker(false, "");
     this.marker.readFields(in);
-    this.totalBSPTasks = new IntWritable(1);
-    this.totalBSPTasks.readFields(in);
   }
 
   @Override

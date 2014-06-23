@@ -22,13 +22,10 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Map;
 import java.util.HashMap;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
-
 import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.io.PartitionedSplit;
@@ -40,11 +37,11 @@ public final class TaskTable implements Writable {
   /* Indicate to which job id this task table belongs. */
   private BSPJobID jobId; 
 
-  /* Hard bound check for task restart; default to 3. */
-  private int maxTaskAttempts = 3;
+  /* This variable, derived from v2.Job, contains specific setting for a job. */
+  private HamaConfiguration configuration = new HamaConfiguration();
 
-  /* The number of tasks allowed for a job; default to 1. */
-  private int numBSPTasks = 1;
+//conf.getInt("bsp.peers.num", 1), 
+//conf.getInt("bsp.tasks.max.attempts", 3), 
 
   /* An array of tasks, reprenting the task table. */
   private ArrayWritable[] tasks;
@@ -52,83 +49,82 @@ public final class TaskTable implements Writable {
   TaskTable() {} // for Writable
 
   public TaskTable(final BSPJobID jobId, final HamaConfiguration conf) {
-    this(jobId, conf.getInt("bsp.peers.num", 1), 
-         conf.getInt("bsp.tasks.max.attempts", 3), null); 
+    this(jobId, conf, null); 
   }
 
   /**
    * Initialize a 2d task array with numBSPTasks rows, and a task in column.
    *
-   * Retried Task will not be created at the initialization stage in reducing
-   * object created. 
+   * Retried Task will not be created during initialization in reducing objects
+   * created. 
    *
    * When a task fails, that task may attempt to re-execute several times, with 
    * max retry up to <b>maxTaskAttempts</b>.  
    *
    * @pram BSPJobID indicates to which job this table belongs.
-   * @param numBSPTasks specifies the row or the number of tasks this table can
-   *                    have.
-   * @param maxTaskAttempts denotes the max retry that a task can have.
    * @param splits denotes the data splits to be consumed by each task.
    */ 
+  // TODO: perhaps use other way to record tasks for efficiency. 
   public TaskTable(final BSPJobID jobId, 
-                   final int numBSPTasks, 
-                   final int maxTaskAttempts, 
+                   final HamaConfiguration conf,
                    final PartitionedSplit[] splits) {
     this.jobId = jobId;
     if(null == this.jobId)
       throw new IllegalArgumentException("TaskTable's BSPJobID is missing!");
-
-    this.numBSPTasks = numBSPTasks;
-    if(0 >= this.numBSPTasks) 
-      throw new IllegalArgumentException("numBSPTasks is not valid.");
-
-    // TODO: restrict the numBSPTasks value so that the task array allocated
-    //       won't explode!
-
-    this.maxTaskAttempts = maxTaskAttempts;
-    if(0 >= this.maxTaskAttempts) 
-      throw new IllegalArgumentException("maxTaskAttempts is not valid.");
+   
+    this.configuration = conf;
+    if(null == this.configuration)
+      throw new IllegalArgumentException("HamaConfiguration for job id "+
+                                         this.jobId.toString()+" is missing!");
 
     final PartitionedSplit[] rawSplits = splits;
     // we can't assert numBSPTasks value against splits length because
     // there may not have splits provided (meaning null == splits)!
     // and each task is assigned with null split. 
-    if(null != rawSplits && 0 < rawSplits.length) {
-      this.numBSPTasks = rawSplits.length;
-      LOG.info("Adjusting numBSPTasks to "+numBSPTasks);
+    if(hasSplit(rawSplits)) {
+      this.configuration.setInt("bsp.peers.num", rawSplits.length);
+      LOG.info("Adjusting numBSPTasks to "+rawSplits.length);
     }  
 
     // init tasks
+    final int numBSPTasks = getNumBSPTasks();
     this.tasks = new ArrayWritable[numBSPTasks];
     for(int row = 0; row < numBSPTasks; row++) {
       this.tasks[row] = new ArrayWritable(Task.class);
-      final PartitionedSplit split = (null != rawSplits && 
-                                           0 < rawSplits.length)?
-                                           rawSplits[row]:null;
+      final PartitionedSplit split = hasSplit(rawSplits)? rawSplits[row]:null;
       set(row, new Task[] {
         new Task.Builder().setId(IDCreator.newTaskID()
                                           .withId(getJobId())
                                           .withId((row+1)) // TaskID's id
                                           .getTaskAttemptIDBuilder()
                                           .withId(1) // TaskAttemptID's id
-                                          .build())
-                          .setSplit(split)
-                          .setTotalBSPTasks(this.numBSPTasks)
-                          .build()
+                                          .build()).
+                          setConfiguration(conf).
+                          setSplit(split).
+                          build()
       }); 
     }
-    LOG.info("TaskTable for "+numBSPTasks+" tasks is initialized.");
+    LOG.info("TaskTable for "+jobId.toString()+" has "+numBSPTasks+
+             " tasks initialized.");
+  }
+
+  /**
+   * Check if there are splits.
+   * @param rawSplits are data to be consumed as input.
+   * @return boolean will either returns true if having splits; false otherwise.
+   */
+  boolean hasSplit(final PartitionedSplit[] rawSplits) {
+    return (null != rawSplits && 0 < rawSplits.length);
   }
 
   /* Row index is started from 0. */
   boolean isValidRow(final int row) {
-    if(row >= numBSPTasks) return false; else return true;
+    if(row >= getNumBSPTasks()) return false; else return true;
   }
 
   /* Column index is started from 0. */
   boolean isValidColumn(final int column) {
-    if(column >= maxTaskAttempts) return false; else return true;
+    if(column >= getMaxTaskAttempts()) return false; else return true; 
   }
 
   boolean isValidPosition(final int row, final int column) {
@@ -156,20 +152,21 @@ public final class TaskTable implements Writable {
    * @return int denotes the number of the BSP tasks.
    */
   public int getNumBSPTasks() {
-    return this.numBSPTasks;
+    return this.configuration.getInt("bsp.peers.num", 1);
   }
   
   /**
    * This value denotes the max retry a task can have. Not all task will use
    * up all retry.
+   * @param row denotes the N-th row, started from 0, in the task table. 
    * @return int denotes the max value of a task retry.
    */
-  public int columnLength() {
-    return getMaxTaskAttempts();
+  public int columnLength(final int row) {
+    return sizeAt(row);
   }
 
-  public int getMaxTaskAttempts() {
-    return this.maxTaskAttempts;
+  public int getMaxTaskAttempts() { 
+    return this.configuration.getInt("bsp.tasks.max.attempts", 3);
   }
 
   /** 
@@ -353,14 +350,13 @@ public final class TaskTable implements Writable {
   @Override
   public void write(DataOutput out) throws IOException {
     this.jobId.write(out);
-    out.writeInt(getMaxTaskAttempts()); // maxTaskAttempts
+    this.configuration.write(out); // conf
     out.writeInt(tasks.length); // numBSPTasks 
     for (int row = 0; row < tasks.length; row++) {
       final int columnLength = sizeAt(row);
-      if(-1 == columnLength) 
-        throw new IOException("Fail retrieving column length for the "+row+
-                              "-th row.");
-      out.writeInt(columnLength); // maxTaskAttempts
+      if(0 >= columnLength)  // at least 1 task during init.
+        throw new IOException("Invalid column length for the "+row+"-th row.");
+      out.writeInt(columnLength); // actual task attempts
     }
     for (int row = 0; row < tasks.length; row++) {
       for (int column = 0; column < sizeAt(row); column++) {
@@ -373,18 +369,16 @@ public final class TaskTable implements Writable {
   @Override
   public void readFields(DataInput in) throws IOException {
     this.jobId = new BSPJobID();
-    this.jobId.readFields(in);
-    final int column = in.readInt();
-    this.maxTaskAttempts = column;
-    final int row = in.readInt();
-    this.numBSPTasks = row;
+    this.jobId.readFields(in); // restore job id
+    this.configuration = new HamaConfiguration();
+    this.configuration.readFields(in); // restore conf
+    final int row = in.readInt(); // restore numBSPTasks
     this.tasks = new ArrayWritable[row];
     for (int rowIdx = 0; rowIdx < tasks.length; rowIdx++) {
       final int columnLength = in.readInt();
       this.tasks[rowIdx] = new ArrayWritable(Task.class);
       this.tasks[rowIdx].set(new Task[columnLength]);
     }
-
     for (int rowIdx = 0; rowIdx < tasks.length; rowIdx++) {
       for (int colIdx = 0; colIdx < tasks[rowIdx].get().length; colIdx++) {
         final Task task = new Task();

@@ -241,7 +241,8 @@ object BSPPeerContainer {
 
 /**
  * Launched BSP actor in forked process.
- * @param conf contains setting sepcific to this service.
+ * @param conf contains setting sepcific to the forked process instead of tasks
+ *             to be exected later on.
  */
 class BSPPeerContainer(conf: HamaConfiguration) extends LocalService 
                                                 with RemoteService 
@@ -251,6 +252,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
   protected var executor: ActorRef = _
 
+  // TODO: read from zk?
   val groomName = configuration.get("bsp.groom.name", "groomServer")
 
   override def configuration: HamaConfiguration = conf
@@ -259,22 +261,9 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
   def executorName: String = groomName+"_executor_"+slotSeq
 
-/*
-  protected def executorPath: String = {
-   new ProxyInfo.Builder().withConfiguration(configuration).
-                           withActorName(executorName).
-                           appendRootPath(groomName). 
-                           appendChildPath("taskManager"). 
-                           appendChildPath(executorName). 
-                           buildProxyAtGroom.
-                           getPath 
-  }
-*/
-
   override def name: String = "bspPeerContainer%s".format(slotSeq)
  
   override def initializeServices {
-    //lookup(executorName, executorPath)
     lookup(executorName, locate(ExecutorLocator(configuration)))
   }
 
