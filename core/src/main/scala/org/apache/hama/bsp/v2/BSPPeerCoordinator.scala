@@ -20,9 +20,11 @@ package org.apache.hama.bsp.v2
 import java.io.IOException
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
+import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.RecordReader
 import org.apache.hama.bsp.OutputCollector
+import org.apache.hama.fs.CacheService
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.io.IO
 import org.apache.hama.io.DefaultIO
@@ -50,24 +52,51 @@ class BSPPeerCoordinator extends BSPPeer {
    * - messaging
    * @param conf contains related setting to startup related services.
    */
-  protected[this] def initialize(conf: HamaConfiguration, task: Task) {
+  protected[v2] def initialize(conf: HamaConfiguration, task: Task) {
     this.configuration = conf
     this.task = task
-    // messaging
-    this.messenger = MessageManagerFactory.getMessageManager(conf) 
-    this.messenger.init(configuration, getTaskAttemptId)
-    // io
-    this.io = ReflectionUtils.newInstance( 
+    this.messenger = messengingService(conf, getTaskAttemptId) 
+    this.io = ioService(conf) 
+    localize(conf)
+    this.syncClient = syncService(conf, task.getId.getJobID, getTaskAttemptId)
+    configureStatus(conf)
+  }
+  
+  def messengingService(conf: HamaConfiguration, taskAttemptId: TaskAttemptID): 
+      MessageManager[_] = {
+    val msgr = MessageManagerFactory.getMessageManager(conf) 
+    msgr.init(conf, taskAttemptId)
+    msgr
+  }
+
+  def ioService(conf: HamaConfiguration): 
+      IO[RecordReader[_,_], OutputCollector[_,_]] = 
+    ReflectionUtils.newInstance( 
       conf.getClassByName(conf.get("bsp.io.class",
                                    classOf[DefaultIO].getCanonicalName)), 
       conf).asInstanceOf[IO[RecordReader[_,_], OutputCollector[_,_]]]
-    // sync
-    this.syncClient = SyncServiceFactory.getPeerSyncClient(conf)
-    syncClient.init(conf, task.getId.getJobID, task.getId)
-    syncClient.register(task.getId.getJobID, task.getId,  
-                        this.configuration.get("bsp.peer.hostname", "0.0.0.0"),
-                        this.configuration.getInt("bsp.peer.port", 61000))
+
+  /**
+   * Copy necessary files to local (file) system so to speed up computation.
+   * @param conf should contain related cache files if any.
+   */
+  def localize(conf: HamaConfiguration) = CacheService.moveCacheToLocal(conf)
+
+  def syncService(conf: HamaConfiguration, jobId : BSPJobID, 
+                  taskAttemptId: TaskAttemptID): PeerSyncClient =  {
+    val client = SyncServiceFactory.getPeerSyncClient(conf)
+    client.init(conf, jobId, taskAttemptId)
+    client.register(jobId, taskAttemptId, host, port)
+    client
   }
+
+  def host(): String = configuration.get("bsp.peer.hostname", "0.0.0.0") 
+
+  def port(): Int = configuration.getInt("bsp.peer.port", 61000)
+
+  def socketAddress(): String = "%s:%s".format(host, port)
+
+  def configureStatus(conf: HamaConfiguration) {}
 
   override def getIO(): IO[RecordReader[_,_], OutputCollector[_,_]] = io
 

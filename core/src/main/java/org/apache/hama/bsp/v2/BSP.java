@@ -27,10 +27,24 @@ import org.apache.hama.sync.SyncException;
  */
 public abstract class BSP {
 
-  public abstract void bsp(BSPPeer peer) throws IOException, SyncException;
-
+  /**
+   * This function is executed before bsp().
+   * @throws IOException is thrown when io fails.
+   * @throws SyncException is thrown when barrier sync fails.
+   */
   public void setup(BSPPeer peer) throws IOException, SyncException { }
 
+  /**
+   * The main function that performs bsp computation.
+   * @throws IOException when io not functions correctly.
+   * @throws SyncException is thrown when barrier sync fails.
+   */
+  public abstract void bsp(BSPPeer peer) throws IOException, SyncException;
+
+  /**
+   * This function is executed after bsp(). 
+   * @throws IOException is thrown when io fails.
+   */
   public void cleanup(BSPPeer peer) throws IOException { }
 
 }
