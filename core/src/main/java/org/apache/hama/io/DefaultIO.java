@@ -55,47 +55,50 @@ public class DefaultIO implements IO<RecordReader, OutputCollector>,
   static final Log LOG = LogFactory.getLog(DefaultIO.class);
 
   private static final NumberFormat formatter = NumberFormat.getInstance();
-  private HamaConfiguration configuration;
+ 
+  /* This stores common configuration from BSPPeerContainer. */
+  protected HamaConfiguration configuration;
+
+  /* This contains setting sepficit to a v2.Task. */
+  protected HamaConfiguration taskConfiguration;
 
   /** contains split information. */
   protected PartitionedSplit split;
   
-  private Counters counters;  
+  protected Counters counters;  
 
-/*
-  public DefaultIO(final HamaConfiguration conf, 
-                   final PartitionedSplit split, 
-                   final Counters counters) { 
-    if(null == conf) 
-      throw new IllegalArgumentException("HamaConfiguration not provided!");
-    this.configuration = conf;
-    if(null == split) 
-      throw new IllegalArgumentException("No split found!");
+  /**
+   * Initialize IO by tighting reader and writer to a specific task setting,
+   * including:
+   * - task configuration
+   * - split
+   * - counters
+   */
+  public void initialize(final HamaConfiguration taskConf,
+                         final PartitionedSplit split, 
+                         final Counters counters) {
+    this.taskConfiguration = taskConf;
     this.split = split;
-    if(null == counters) 
-      throw new IllegalArgumentException("Counter is missing!");
     this.counters = counters;
   }
-*/
 
-  public void initialize(final PartitionedSplit split, 
-                         final Counters counters) {
-    if(null == split) 
-      throw new IllegalArgumentException("No split found!");
-    this.split = split;
-    if(null == counters) 
-      throw new IllegalArgumentException("Counter is missing!");
-    this.counters = counters;
+  void validate() {
+    if(null == taskConfiguration())
+      throw new RuntimeException("Task specific configuration not found!");
+    if(null == this.split) 
+      throw new RuntimeException("No split is specified!");
+    if(null == this.counters) 
+      throw new RuntimeException("Counter is missing!");
   }
 
   @Override
   public void setConf(Configuration conf) {
-    this.configuration = (HamaConfiguration)conf;
+    this.configuration = (HamaConfiguration)conf; // common conf
   }
 
   @Override
   public Configuration getConf() {
-    return this.configuration;
+    return this.configuration; // common conf
   }
 
   /**
@@ -107,6 +110,18 @@ public class DefaultIO implements IO<RecordReader, OutputCollector>,
     return this.split.length();
   }
 
+  /**
+   * Configuration specific for a v2.Task.
+   * @return HamaConfiguration tight to a particular task.
+   */
+  public HamaConfiguration taskConfiguration() {
+    return this.taskConfiguration;
+  }
+
+  /**
+   * Common cofiguration from {@link BSPPeerContainer}.
+   * @return HamaConfiguration from container.
+   */
   public HamaConfiguration configuration() {
     return this.configuration;
   }
@@ -115,9 +130,15 @@ public class DefaultIO implements IO<RecordReader, OutputCollector>,
     return counters.findCounter(name);
   }
 
+  /**
+   * 1. Restore {@link InputSplit} from common configuration.
+   * 2. Obtain record reader from a specific task configuration. 
+   * @return RecordReader contains setting for a specific task.
+   */
   @Override
   @SuppressWarnings({ "rawtypes" }) 
   public RecordReader reader() throws IOException {
+    validate();
     InputSplit inputSplit = null;
     try {
       if(null != split.splitClassName()) {
@@ -153,10 +174,10 @@ public class DefaultIO implements IO<RecordReader, OutputCollector>,
     return reader;
   }
 
-  RecordReader lineRecordReader(final InputSplit inputSplit) 
+  RecordReader taskLineRecordReader(final InputSplit inputSplit) 
       throws IOException { 
-    return defaultInputFormat().getRecordReader(inputSplit, 
-                                                new BSPJob(configuration()));
+    return taskInputFormat().getRecordReader(inputSplit, 
+                                             new BSPJob(taskConfiguration()));
   }
 
   Counter taskInputRecordCounter() {
@@ -169,56 +190,77 @@ public class DefaultIO implements IO<RecordReader, OutputCollector>,
 
   RecordReader createRecordReader(final InputSplit inputSplit) 
       throws IOException {
-    return new TrackedRecordReader(lineRecordReader(inputSplit),
+    return new TrackedRecordReader(taskLineRecordReader(inputSplit),
                                    taskInputRecordCounter(),
                                    ioBytesReadCounter());
   }
 
   @SuppressWarnings("rawtypes")
-  Class<? extends InputFormat> inputClass() {
-    return configuration().getClass("bsp.input.format.class", 
-                                    TextInputFormat.class,
-                                    InputFormat.class);
+  Class<? extends InputFormat> taskInputClass() {
+    return taskConfiguration().getClass("bsp.input.format.class", 
+                                        TextInputFormat.class,
+                                        InputFormat.class);
   }
   
   @SuppressWarnings({ "rawtypes" })
-  InputFormat defaultInputFormat() {
-    return ReflectionUtils.newInstance(inputClass(), configuration());
+  InputFormat taskInputFormat() {
+    return ReflectionUtils.newInstance(taskInputClass(), taskConfiguration());
   }
   
   String childPath(final int partition) {
     return "part-" + formatter.format(partition);
   }
 
+  /**
+   * Obtain output directory "bsp.output.dir" from common configuration; 
+   * and setup child path tight to a partition id derived from a particular 
+   * task.
+   * @param timestamp as default temp directory if not output directory found. 
+   * @param partitionId is for a particular task.
+   */
   Path outputPath(long timestamp, final int partitionId) {
     final String parentPath = configuration().get("bsp.output.dir", 
                                                   "tmp-" + timestamp);
     if(LOG.isDebugEnabled()) LOG.debug("Output parent path is "+parentPath);
     return new Path(parentPath, childPath(partitionId));
   }
-
-  Class<? extends OutputFormat> outputClass() {
-    return configuration().getClass("bsp.output.format.class",
-                                    TextOutputFormat.class,
-                                    OutputFormat.class);
+ 
+  /**
+   * Output class is tight to a specific task.
+   */
+  Class<? extends OutputFormat> taskOutputClass() {
+    return taskConfiguration().getClass("bsp.output.format.class",
+                                       TextOutputFormat.class,
+                                       OutputFormat.class);
   }
 
+  /**
+   * OutputFormat is tight to a particular {@link Task}.
+   * @return OutputFormat configured for a sepcific task.
+   */
   @SuppressWarnings("rawtypes")
-  OutputFormat defaultOutputFormat() {
-    return ReflectionUtils.newInstance(outputClass(), configuration());
+  OutputFormat taskOutputFormat() {
+    return ReflectionUtils.newInstance(taskOutputClass(), taskConfiguration());
   }
 
-  <K2, V2> RecordWriter<K2, V2> lineRecordWriter(final String outPath) 
+  /**
+   * Line record writer is tight to a special task.
+   * N.B.: taskOutputClass() also needs to define "bsp.output.dir" as well.
+   *       otherwise NPE will be thrown because no default is configured in
+   *       <b>taskConfiguration</b> variable.
+   * @param outPath is the output directory to be used by the writer.
+   */
+  <K2, V2> RecordWriter<K2, V2> taskLineRecordWriter(final String outPath) 
       throws IOException { 
-    return defaultOutputFormat().getRecordWriter(null, 
-                                                new BSPJob(configuration()),
-                                                outPath);
+    return taskOutputFormat().getRecordWriter(null, 
+                                              new BSPJob(taskConfiguration()),
+                                              outPath);
   } 
 
   @SuppressWarnings("rawtypes")
   <K2, V2> OutputCollector<K2, V2> outputCollector(final String outPath) 
       throws IOException {
-    final RecordWriter<K2, V2> writer = lineRecordWriter(outPath);
+    final RecordWriter<K2, V2> writer = taskLineRecordWriter(outPath); 
     return new OutputCollector<K2, V2>() {
       @Override
       public void collect(K2 key, V2 value) throws IOException {
@@ -227,12 +269,18 @@ public class DefaultIO implements IO<RecordReader, OutputCollector>,
     };
   }
 
+  /**
+   * 1. Obtain output path String from common configuration.
+   * 2. Obtain output collector from specific task configuration.
+   * @return OutputCollector for a specific task.
+   */
   @Override
   @SuppressWarnings("rawtypes") 
   public OutputCollector writer() throws IOException {
+    validate();
     final long timestamp = System.currentTimeMillis();
     final Path dir = outputPath(timestamp, split.partitionId());
-    final String output = OperationFactory.get(configuration()).
+    final String output = OperationFactory.get(configuration()). // common conf
                                            makeQualified(dir);
     if(LOG.isDebugEnabled()) LOG.debug("Writer's output path "+output);
     return outputCollector(output); 

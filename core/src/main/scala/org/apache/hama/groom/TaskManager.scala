@@ -48,26 +48,6 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   type ForkedChild = String
 
-/*
-  def schedInfo: ProxyInfo = 
-    new ProxyInfo.Builder().withConfiguration(configuration).
-                            withActorName("sched").
-                            appendRootPath("bspmaster").
-                            appendChildPath("sched").
-                            buildProxyAtMaster
-
-  val schedPath = schedInfo.getPath
-
-  def groomManagerInfo: ProxyInfo = 
-    new ProxyInfo.Builder().withConfiguration(configuration).
-                            withActorName("groomManager").
-                            appendRootPath("bspmaster").
-                            appendChildPath("groomManager").
-                            buildProxyAtMaster
-
-  val groomManagerPath = groomManagerInfo.getPath
-*/
-
   val groomServerHost = configuration.get("bsp.groom.address", "127.0.0.1")
   val groomServerPort = configuration.getInt("bsp.groom.port", 50000)
   val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort

@@ -274,6 +274,10 @@ public final class Task implements Writable {
     return this.id;
   }
 
+  public HamaConfiguration getConfiguration() {
+    return this.configuration;
+  }
+
   public long getStartTime() {
     return this.startTime.get();
   }

@@ -47,26 +47,17 @@ public class TestDefaultIO extends TestCase {
   private static final String[] fileSplitLocation1 = new String[]{ "host1", 
                                                                    "host5", 
                                                                    "host3" };
+  final String rootPath = "/tmp/hama";
   final HamaConfiguration conf = new HamaConfiguration();
+  final HamaConfiguration taskConf = new HamaConfiguration();
   
   class MockDefaultIO extends DefaultIO {
-
-/*
-    MockDefaultIO(final HamaConfiguration conf,  
-                  final PartitionedSplit split) {
-      super(conf, split, new Counters());
-    }
-
-    MockDefaultIO(final PartitionedSplit split) {
-      super(conf, split, new Counters());
-    }
-*/
 
     // writer
     @Override 
     public Path outputPath(final long timestamp, final int partitionId) {
       final Path out = super.outputPath(timestamp, partitionId);
-      final Path expected = new Path("/tmp/hama/io/defaultio/", 
+      final Path expected = new Path(rootPath+"/io/defaultio/", 
                                      childPath(partitionId));
       assertEquals("Ouptut path should be "+expected.toString(), 
                    expected.toString(), out.toString()); 
@@ -124,6 +115,11 @@ public class TestDefaultIO extends TestCase {
     }
   }
 
+  public void setUp() throws Exception {
+    LOG.info("Setting up \"bsp.output.dir\" for taskConf.");
+    taskConf.set("bsp.output.dir", rootPath);
+  }
+
   List<PartitionedSplit> createSplits() throws Exception {
     final List<InputSplit> inputSplits = createMockFileSplits();
     final int splitSize = inputSplits.size();
@@ -173,24 +169,24 @@ public class TestDefaultIO extends TestCase {
     //final MockDefaultIO io = new MockDefaultIO(splits.get(0));
     final MockDefaultIO io = new MockDefaultIO();
     io.setConf(conf);
-    io.initialize(splits.get(0), new Counters());
+    io.initialize(taskConf, splits.get(0), new Counters());
     io.reader();
   }  
 
   public void testWriter() throws Exception {
-    conf.set("bsp.output.dir", "/tmp/hama/io/defaultio/");
+    conf.set("bsp.output.dir", rootPath+"/io/defaultio/");
     conf.setClass("bsp.fs.class", HDFSLocal.class, Operation.class);
     final List<PartitionedSplit>  splits = createSplits();
     assertEquals("Split size should be 1!", 1, splits.size());
     final MockDefaultIO io = new MockDefaultIO();
     io.setConf(conf);
-    io.initialize(splits.get(0), new Counters());
+    io.initialize(taskConf, splits.get(0), new Counters());
     io.writer();
   }  
 
   @Override
   public void tearDown() throws Exception {
-    final java.io.File dir = new java.io.File("/tmp/hama");
+    final java.io.File dir = new java.io.File(rootPath);
     if(dir.exists()) {
       LOG.info("Delete test folder "+dir);
       FileUtils.deleteDirectory(dir);

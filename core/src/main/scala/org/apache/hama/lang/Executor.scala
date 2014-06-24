@@ -209,7 +209,10 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   /**
    * Configure working directory, either be configuration's key 
    * "bsp.working.dir" or file system's working directory.
-   * @param conf will store working directory configuration.
+   * @param conf will store working directory configuration. The content of
+   *             this variable comes from {@link GroomServerRunner} because the 
+   *             process needs to be reused. So it shouldn't be a specific 
+   *             task's working directory as bsp.GroomServer#BSPPeerChild.
    * @return String of working directory.
    */  
   def defaultWorkingDirectory(conf: HamaConfiguration): String = {

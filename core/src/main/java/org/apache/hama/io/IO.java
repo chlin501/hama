@@ -18,6 +18,8 @@
 package org.apache.hama.io;
 
 import java.io.IOException;
+import org.apache.hama.bsp.Counters;
+import org.apache.hama.HamaConfiguration;
 
 /**
  * A interface for input and output.
@@ -41,5 +43,8 @@ public interface IO<I, O> {
    * @return long value of the split data size.
    */
   long splitSize();
+
+  void initialize(HamaConfiguration taskConf, PartitionedSplit split, 
+                  Counters counters);
 
 }
