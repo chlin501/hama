@@ -67,6 +67,9 @@ public class DefaultIO implements IO<RecordReader, OutputCollector>,
   
   protected Counters counters;  
 
+  /* this will only available after reader() gets called. */
+  private long splitSize = -1;
+
   /**
    * Initialize IO by tighting reader and writer to a specific task setting,
    * including:
@@ -91,23 +94,33 @@ public class DefaultIO implements IO<RecordReader, OutputCollector>,
       throw new RuntimeException("Counter is missing!");
   }
 
+  /**
+   * This passes in common configuration, equivalent to configuration().
+   * @param conf is the common configuration 
+   */
   @Override
   public void setConf(Configuration conf) {
-    this.configuration = (HamaConfiguration)conf; // common conf
-  }
-
-  @Override
-  public Configuration getConf() {
-    return this.configuration; // common conf
+    this.configuration = (HamaConfiguration)conf; 
   }
 
   /**
-   * This denotes the split size to be processed.
+   * This returns common configuration, equivalent to configuration().
+   * @return Configuration content is the same as configuration().
+   */
+  @Override
+  public Configuration getConf() {
+    return this.configuration; 
+  }
+
+  /**
+   * This denotes the split content size to be processed. 
+   * <b>-1</b> indicates the reader() is not yet initialized.
+   * Note this value will only available after reader() gets called.
    * @return long value for the split data to be processed.
    */
   @Override
   public long splitSize() {
-    return this.split.length();
+    return this.splitSize;
   }
 
   /**
@@ -164,6 +177,7 @@ public class DefaultIO implements IO<RecordReader, OutputCollector>,
         inputSplit.readFields(splitBuffer);
         if(null != reader) reader.close();
         reader = createRecordReader(inputSplit);
+        this.splitSize = inputSplit.getLength();
       } catch (Exception e) {
         throw new IOException("Fail restoring "+inputSplit.getClass().getName()+
                               "from "+split.getClass().getName(), e);
