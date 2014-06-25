@@ -17,6 +17,7 @@
  */
 package org.apache.hama.fs
 
+import java.net.URL
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.pipes.util.DistributedCacheUtil
 
@@ -36,7 +37,18 @@ trait CacheService {
 
 object CacheService {
 
+  /**
+   * Move cached files to local file system.
+   * @param conf contains setting in cache.
+   */
   def moveCacheToLocal(conf: HamaConfiguration) = 
     DistributedCacheUtil.moveLocalFiles(conf)
-  
+
+  /**
+   * Move jars found in "tmpjars" to local file system; 
+   * and returns a new classpath.
+   * @param conf contains related jars information.
+   */
+  def moveJarsAndGetClasspath(conf: HamaConfiguration): Array[URL] = 
+    DistributedCacheUtil.addJarsToJobClasspath(conf) 
 }

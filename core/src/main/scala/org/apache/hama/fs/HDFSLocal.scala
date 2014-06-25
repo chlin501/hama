@@ -118,7 +118,10 @@ class HDFSLocal extends Operation {
     localfs.makeQualified(new Path(sysDir))
   }
 
-  override def getWorkingDirectory: Path = localfs.getWorkingDirectory
+  override def getWorkingDirectory: Path = {
+    validate()
+    localfs.getWorkingDirectory
+  }
   
   override def local: Operation = this 
 
@@ -130,6 +133,11 @@ class HDFSLocal extends Operation {
   override def makeQualified(path: Path): String = {
     validate()
     path.makeQualified(localfs).toString
+  }
+
+  override def setWorkingDirectory(path: Path) = {
+    validate()
+    localfs.setWorkingDirectory(path)
   }
 
 }

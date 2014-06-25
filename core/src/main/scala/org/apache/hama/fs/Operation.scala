@@ -25,11 +25,11 @@ import java.io.OutputStream
 import org.apache.hadoop.fs.Path
 import org.apache.hama.HamaConfiguration
 
-/*
 object Operation {
 
   val seperator: String = "/"
 
+/*
   def get(conf: HamaConfiguration): Operation = {
     val clazz = conf.getClass("bsp.fs.class", classOf[HDFS])
     var op: Operation = null
@@ -42,9 +42,26 @@ object Operation {
     }
     op
   }
+*/
+
+  /**
+   * Obtain default working directory provided with configuration.
+   * @param conf contains setting for particular file system operation.
+   */ 
+  def defaultWorkingDirectory(conf: HamaConfiguration): String = {
+    var workDir = conf.get("bsp.working.dir")
+    workDir match {
+      case null => {
+        val fsDir = OperationFactory.get(conf).getWorkingDirectory
+        conf.set("bsp.working.dir", fsDir.toString)
+        workDir = fsDir.toString
+      }
+      case _ =>
+    }
+    workDir
+  }
 
 }
-*/
 
 trait Operation {
 
@@ -149,5 +166,11 @@ trait Operation {
    * @param path to be normalized.
    */
   def makeQualified(path: Path): String
+
+  /**
+   * Change file system operation based on a particular working directory.
+   * @param path is the working directory to be used.
+   */
+  def setWorkingDirectory(path: Path)
   
 }

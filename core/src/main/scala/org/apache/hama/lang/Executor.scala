@@ -214,7 +214,6 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    *             process needs to be reused. So it shouldn't be a specific 
    *             task's working directory as bsp.GroomServer#BSPPeerChild.
    * @return String of working directory.
-   */  
   def defaultWorkingDirectory(conf: HamaConfiguration): String = {
     var workDir = conf.get("bsp.working.dir")
     workDir match {
@@ -229,6 +228,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
     LOG.debug("Working directory for slot {} is set to {}", slotSeq, workDir)
     workDir
   }
+   */  
 
   /**
    * Fork a child process as container.
@@ -237,7 +237,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    */
   def createProcess(cmd: Seq[String], conf: HamaConfiguration) {
     val builder = new ProcessBuilder(asJavaList(cmd))
-    builder.directory(new File(defaultWorkingDirectory(conf)))
+    builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
     try {
       process = builder.start
       stdout = context.actorOf(Props(classOf[StdOut], 

@@ -18,6 +18,8 @@
 package org.apache.hama.bsp.v2
 
 import java.io.IOException
+import java.net.URLClassLoader
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.bsp.BSPJobID
@@ -26,6 +28,8 @@ import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.RecordReader
 import org.apache.hama.bsp.OutputCollector
 import org.apache.hama.fs.CacheService
+import org.apache.hama.fs.Operation
+import org.apache.hama.fs.OperationFactory
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.io.IO
 import org.apache.hama.io.DefaultIO
@@ -33,6 +37,13 @@ import org.apache.hama.message.MessageManager
 import org.apache.hama.message.MessageManagerFactory
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncServiceFactory
+
+private[v2] final case class TaskWithStats(task: Task, counters: Counters) {
+  if(null == task)
+    throw new IllegalArgumentException("Task is not provided.")
+  if(null == counters) 
+    throw new IllegalArgumentException("Counters is not provided!")
+}
 
 /**
  * This class purely implements BSPPeer interface. With a separated 
@@ -49,18 +60,18 @@ import org.apache.hama.sync.SyncServiceFactory
  * - progress 
  * when necessary.
  */
-class BSPPeerCoordinator extends BSPPeer {
+trait BSPPeerCoordinator extends BSPPeer {
 
   /* common setting for the entire BSPPeer. */
   protected var configuration: HamaConfiguration = _
-  /* specific to a particular v2.Job. */
-  protected var task: Task = _ 
-  /* counters and task is a pair. 1 to 1 relation. */ 
-  protected var counters: Counters = _  // TODO: tmp. need to refactor.
+  /* task and counters specific to a particular v2.Job. */
+  protected var taskWithStats: TaskWithStats = _
   /* services for a particular v2.Task. */
   protected var messenger: MessageManager[_] = _
   protected var io: IO[RecordReader[_,_], OutputCollector[_,_]] = _
   protected var syncClient: PeerSyncClient = _ 
+
+  def log(msg: String)
 
   /**
    * Initialize necessary services, including
@@ -75,23 +86,34 @@ class BSPPeerCoordinator extends BSPPeer {
    */
   protected[v2] def initialize(conf: HamaConfiguration, task: Task) {
     this.configuration = conf
-    this.task = task
-    this.counters = new Counters() // TODO: tmp. need to refator. 
-    setupOperation(conf, task)
-    this.messenger = messengingService(conf, task) 
-    this.io = ioService(conf, task) 
-    localize(conf, task)
-    this.syncClient = syncService(conf, task)
-    //updateStatus(conf, task)
+    this.taskWithStats = TaskWithStats(task, new Counters())
+    settingForTask(conf, taskWithStats.task)
+    this.messenger = messengingService(conf, taskWithStats.task) 
+    this.io = ioService(conf, taskWithStats) 
+    localize(conf, taskWithStats.task)
+    this.syncClient = syncService(conf, taskWithStats.task)
+    //updateStatus(conf, taskWithStats.task)
   }
 
   /** 
-   * Configure FileSystem's working directory with corresponded 
+   * - Configure FileSystem's working directory with corresponded 
    * <b>task.getConfiguration()</b>.
+   * - And add additional classpath to task's configuration.
+   * @param conf is the common setting from bsp peer container.
+   * @param task is contains setting for particular job computation.
    */
-  protected def setupOperation(conf: HamaConfiguration, task: Task) {
-   
+  protected def settingForTask(conf: HamaConfiguration, task: Task) {
+    val taskConf = task.getConfiguration
+    OperationFactory.get(taskConf).setWorkingDirectory(
+      new Path(Operation.defaultWorkingDirectory(taskConf))
+    )
+    val libjars = CacheService.moveJarsAndGetClasspath(conf) 
+    if(null != libjars) 
+      log("Classpath to be included are %s".format(libjars.mkString(", ")))
+    taskConf.setClassLoader(new URLClassLoader(libjars, 
+                                               taskConf.getClassLoader))
   }
+
   
   /**
    * Setup message service according to a specific task.
@@ -103,13 +125,16 @@ class BSPPeerCoordinator extends BSPPeer {
     msgr
   }
 
-  protected def ioService(conf: HamaConfiguration, task: Task): 
+  protected def ioService(conf: HamaConfiguration, 
+                          taskWithStats: TaskWithStats): 
       IO[RecordReader[_,_], OutputCollector[_,_]] = {
     val readerWriter = ReflectionUtils.newInstance( 
       conf.getClassByName(conf.get("bsp.io.class",
                                    classOf[DefaultIO].getCanonicalName)), 
       conf).asInstanceOf[IO[RecordReader[_,_], OutputCollector[_,_]]]
-    readerWriter.initialize(task.getConfiguration, task.getSplit, counters) 
+    readerWriter.initialize(taskWithStats.task.getConfiguration, 
+                            taskWithStats.task.getSplit, 
+                            taskWithStats.counters) 
     readerWriter
   }
 
@@ -165,7 +190,7 @@ class BSPPeerCoordinator extends BSPPeer {
 
   override def getConfiguration(): HamaConfiguration = configuration
 
-  override def getTaskAttemptId(): TaskAttemptID = task.getId
+  override def getTaskAttemptId(): TaskAttemptID = taskWithStats.task.getId
   
 
 }
