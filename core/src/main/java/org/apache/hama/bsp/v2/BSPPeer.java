@@ -46,13 +46,13 @@ public interface BSPPeer {
   IO getIO();
 
   /**
-   * Send a data with a tag to another BSPSlave corresponding to hostname.
+   * Send a data with a tag to another BSPPeer corresponding to hostname.
    * Messages sent by this method are not guaranteed to be received in a sent
    * order.
    * 
-   * @param peerName
-   * @param msg
-   * @throws IOException
+   * @param peerName will be in a form of ${actor-system-name}@${host}:${port}.
+   * @param msg is the type wriable that can be serialized over wire.
+   * @throws IOException is thrown when io goes wrong.
    */
   void send(String peerName, Writable msg) throws IOException;
 
@@ -102,7 +102,11 @@ public interface BSPPeer {
   int getPeerIndex();
 
   /**
-   * All peers' name.
+   * An array of all peers' name.
+   * Each peer will has a name in a form of 
+   *    <pre>${$actor-system-name}@${host}:${port}</pre>
+   * where actor system name is the bsp peer's system name; host the host 
+   * machine name; port the machine port used by the peer.
    * @return the names of all the peers executing tasks from the same job
    *         (including this peer).
    */

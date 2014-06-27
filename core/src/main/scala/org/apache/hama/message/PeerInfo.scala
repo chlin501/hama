@@ -19,10 +19,28 @@ package org.apache.hama.message
 
 import java.net.InetSocketAddress
 
+object PeerInfo {
+
+  def apply(actorSystemName: String, host: String, port: Int): PeerInfo = 
+    new PeerInfo(actorSystemName, new InetSocket(host, port))
+
+  def fromString(info: String): PeerInfo = {
+    if(null == info || info.isEmpty) 
+      throw new IllegalArgumentException("PeerInfo string do not have data.")
+    val ary = info.split("@")
+    if(2 != ary.length) 
+      throw new RuntimeException("Invalid PeerInfo string format: "+info)
+    val hostPort = ary(1).split(":")
+    if(2 != hostPort.length)
+      throw new RuntimeException("Invalid host:port string format: "+info)
+    new PeerInfo(ary(0), hostPort(0), hostPort(1))
+  }
+}
+
 /**
  * Store actor system information, including 
  * - actor system name
- * - address
+ * - host
  * - port 
  * for {@link BSPPeer} that runs on it.
  * @param actorSystenName denotes the name of the actor system on which the 
@@ -31,12 +49,17 @@ import java.net.InetSocketAddress
  */
 final case class PeerInfo(actorSystemName: String, socket: InetSocketAddress) {
 
+  def this(actorSystemName: String, host: String, port: Int) = 
+    this(actorSystemName, new InetSocketAddress(host, port))
+
   if(null == actorSystemName || actorSystemName.isEmpty)
     throw new IllegalArgumentException("Actor system name is missing!")
 
   if(null == socket) 
     throw new IllegalArgumentException("Ip and port is not provided!")
 
-  def address: String = socket.getAddress.getHostAddress
+  def host: String = socket.getAddress.getHostAddress
+
+  def port: Int = socket.getPort
 
 }

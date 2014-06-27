@@ -23,26 +23,24 @@ import java.io.InputStream
 import java.io.OutputStream
 
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.HamaConfiguration
 
 object Operation {
 
   val seperator: String = "/"
 
-/*
+  /**
+   * Obtain file system Operation object.
+   * @param conf is common configuration.
+   * @return Operation for a specific file system, usually HDFS.
+   */
   def get(conf: HamaConfiguration): Operation = {
-    val clazz = conf.getClass("bsp.fs.class", classOf[HDFS])
-    var op: Operation = null
-    if(classOf[HDFS].equals(clazz)) {
-      op = HDFS(conf)
-    } else {
-      throw new UnsupportedOperationException("Operation for underlying "+
-                                              clazz.getSimpleName+" not "+
-                                              " yet supported.")
-    }
+    val clazz = conf.getClass("bsp.fs.class", classOf[HDFS], classOf[Operation])
+    val op = ReflectionUtils.newInstance(clazz, conf)
+    op.initialize(conf)
     op
   }
-*/
 
   /**
    * Obtain default working directory provided with configuration.

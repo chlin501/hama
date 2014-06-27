@@ -29,34 +29,20 @@ import org.apache.hadoop.fs.FileStatus
 import org.apache.hadoop.fs.Path
 import org.apache.hama.HamaConfiguration
 
-object HDFS {
-
-  def apply(conf: HamaConfiguration): HDFS = {
-    val op = new HDFS()
-    op.setConfiguration(conf) 
-    op
-  }
-
-  def apply(fs: FileSystem): HDFS = {
-    val op = new HDFS()
-    op.setFileSystem(fs)
-    op.setConfiguration(fs.getConf.asInstanceOf[HamaConfiguration]) 
-    op
-  }
-
-}
-
 class HDFS extends Operation {
 
-  private var conf = new HamaConfiguration() // var conf must sit before var hdfs in case NPE
-  protected var hdfs: FileSystem = FileSystem.get(configuration)
-  private val localfs = HDFSLocal(FileSystem.getLocal(configuration))
-
-  private[fs] def setConfiguration(conf: HamaConfiguration) = this.conf = conf
+  private var conf = new HamaConfiguration() 
+  protected var hdfs: FileSystem = _
 
   override def configuration: HamaConfiguration = this.conf
 
-  private[fs] def setFileSystem(fs: FileSystem) = this.hdfs = fs
+  override def initialize(conf: HamaConfiguration) {
+    this.conf = conf
+    if(null == configuration)
+      throw new IllegalArgumentException("HamaConfiguration is missing for "+)
+                                         "HDFS!")
+    this.hdfs = FileSystem.get(configuration)
+  } 
  
   @throws(classOf[IOException])
   protected def validate() {
@@ -107,20 +93,6 @@ class HDFS extends Operation {
   override def list[FileStatus](path: Path): java.util.List[FileStatus] = 
     Arrays.asList(hdfs.listStatus(path).asInstanceOf[Array[FileStatus]]:_*)
 
-/*
-  TODO: scheme must be known beforehand so to decide which method to use.
-  override def copy(from: Path)(to: Path) {
-    val fromScheme = from.toUri.getScheme
-    if(null == fromScheme) 
-      throw new IllegalArgumentException("Unknown scheme for from: "+from)
-    val toScheme = to.toUri.getScheme
-    if(null == toScheme) 
-      throw new IllegalArgumentException("Unknown scheme for to: "+to)
-
-    //hdfs.copytToLocalFile(from, to)
-  }
-*/
-
   override def copyToLocal(from: Path)(to: Path) {
     hdfs.copyToLocalFile(from, to)
   }
@@ -139,7 +111,7 @@ class HDFS extends Operation {
 
   override def getWorkingDirectory: Path = hdfs.getWorkingDirectory
   
-  override def local: Operation = localfs
+  override def local: Operation = FileSystem.getLocal(configuration)
 
   override def operationFor(path: Path): Operation = {
     HDFS(path.getFileSystem(configuration))

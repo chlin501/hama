@@ -15,83 +15,103 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.message.queue;
+package org.apache.hama.message.queue
 
-import org.apache.hama.bsp.TaskAttemptID;
-import org.apache.hadoop.conf.Configurable;
-import org.apache.hama.HamaConfiguration;
+import org.apache.hadoop.conf.Configurable
+import org.apache.hadoop.util.ReflectionUtils
+import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.HamaConfiguration
+
+object MessageQueue {
+
+  /**
+   * Obtain message queue without initialized to a specific task attempt id.
+   * Note that binding MessageQueue to a specific task one needs to call 
+   * <pre>MessageQueue.init(HamaConfiguration, TaskAttemptID)</pre> method
+   * for related setting to be initialized.
+   * @param conf is commons setting not specific to a task configuration.
+   * @return MessageQueue[M] without calling init() method.
+   */
+  def get(conf: HamaConfiguration): MessageQueue[M] = {
+    val clazz = conf.getClass("hama.messenger.receive.queue.class",
+                              classOf[MemoryQueue[M]], 
+                              classOf[MessageQueue[M]]),
+    ReflectionUtils.newInstance(clazz, conf)
+  }
+
+}
 
 /**
  * Message queue interface.
  */
-public interface MessageQueue<M> extends Iterable<M>, Configurable {
+trait MessageQueue[M] extends Iterable[M], Configurable {
 
   /**
-   * Used to initialize the queue.
+   * Initialize the queue and bind to a specific task id.
    * @param conf contains necessary setting to initialize queue.
    */
-  void init(HamaConfiguration conf, TaskAttemptID id);
+  def init(conf: HamaConfiguration, id: TaskAttemptID)
 
   /**
    * Finally close the queue. Commonly used to free resources.
    */
-  void close();
+  def close()
 
   /**
    * Called to prepare a queue for reading.
    */
-  void prepareRead();
+  def prepareRead()
 
   /**
    * Called to prepare a queue for writing.
    */
-  void prepareWrite();
+  def prepareWrite()
 
   /**
    * Adds a whole Java Collection to the implementing queue.
    * @param col to be added to this queue.
    */
-  void addAll(Iterable<M> col);
+  def addAll(collection: Iterable[M])
 
   /**
    * Adds the other queue to this queue.
    * @param otherqueue is another message queue.
    */
-  void addAll(MessageQueue<M> otherqueue);
+  def addAll(otherqueue: MessageQueue[M]);
 
   /**
    * Adds a single item to the implementing queue.
    * @param item to be added to this queue.
    */
-  void add(M item);
+  def add(item: M)
 
   /**
    * Clears all entries in the given queue.
    */
-  void clear();
+  def clear()
 
   /**
    * Polls for the next item in the queue (FIFO).
    * @return a new item or null if none are present.
    */
-  M poll();
+  def poll(): M
 
   /**
    * The size of this queue, indicating how many items in this queue.
    * @return how many items are in the queue.
    */
-  int size();
+  def size(): Int
 
   /**
    * Denote if the messages are serialized to byte buffers.
    * @return boolean true if yes; otherwise false.
    */
-  boolean isMessageSerialized();
+  def isMessageSerialized(): Boolean
   
   /**
    * Denote if this queue is memory based.
    * @return boolean true if yes; otherwise false.
    */
-  boolean isMemoryBasedQueue();
+  def isMemoryBasedQueue(): Boolean
 
 }

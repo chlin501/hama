@@ -15,91 +15,84 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.message;
+package org.apache.hama.message
 
-import java.net.InetSocketAddress;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map.Entry;
+import java.util.HashMap
+import java.util.Iterator
+import java.util.Map.Entry
 
-import org.apache.hadoop.io.Writable;
-import org.apache.hama.Constants;
-import org.apache.hama.HamaConfiguration;
-import org.apache.hama.bsp.Combiner;
-import org.apache.hama.message.compress.BSPMessageCompressor;
-import org.apache.hama.util.BSPNetUtils;
-import org.apache.hama.util.ReflectionUtils;
+import org.apache.hadoop.io.Writable
+import org.apache.hama.Constants
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.bsp.Combiner
+import org.apache.hama.message.compress.BSPMessageCompressor
+import org.apache.hama.util.ReflectionUtils
 
-public class OutgoingPOJOMessageBundle<M extends Writable> implements
-    OutgoingMessageManager<M> {
+class OutgoingPOJOMessageBundle[M <: Writable] 
+      extends OutgoingMessageManager[M] {
 
-  private HamaConfiguration conf;
-  private BSPMessageCompressor<M> compressor;
-  private Combiner<M> combiner;
-  private final HashMap<String, InetSocketAddress> peerSocketCache = new HashMap<String, InetSocketAddress>();
-  private HashMap<InetSocketAddress, BSPMessageBundle<M>> outgoingBundles = new HashMap<InetSocketAddress, BSPMessageBundle<M>>();
+  type PeerAndBundleIter = Iterator[Entry[PeerInfo, BSPMessageBundle[M]]] 
+
+  private var conf: HamaConfiguration
+  private var compressor: BSPMessageCompressor[M]
+  private var combiner: Combiner[M] 
+  private val peerSocketCache = new HashMap[String, PeerInfo]()
+  private val outgoingBundles = new HashMap[PeerInfo, BSPMessageBundle[M]]()
 
   @SuppressWarnings("unchecked")
-  @Override
-  public void init(HamaConfiguration conf, BSPMessageCompressor<M> compressor) {
-    this.conf = conf;
-    this.compressor = compressor;
-    final String combinerName = conf.get(Constants.COMBINER_CLASS);
-    if (combinerName != null) {
+  overirde def init(conf: HamaConfiguration, 
+                    compressor: BSPMessageCompressor[M]) {
+    this.conf = conf
+    this.compressor = compressor
+    val combinerName = conf.get(Constants.COMBINER_CLASS)
+    if (null != combinerName) {
       try {
-        this.combiner = (Combiner<M>) ReflectionUtils.newInstance(conf
-            .getClassByName(combinerName));
-      } catch (ClassNotFoundException e) {
-        // TODO Auto-generated catch block
-        e.printStackTrace();
+        this.combiner = ReflectionUtils.newInstance(conf
+            .getClassByName(combinerName)).asInstanceOf[Combiner[M]]
+      } catch {
+       case cnfe: ClassNotFoundException => e.printStackTrace()
       }
     }
   }
 
-  @Override
-  public void addMessage(String peerName, M msg) {
-    InetSocketAddress targetPeerAddress = getSocketAddress(peerName);
+  override def addMessage(String peerName, M msg) {
+    val peer = getPeerInfo(peerName)
 
-    if (combiner != null) {
-      BSPMessageBundle<M> bundle = outgoingBundles.get(targetPeerAddress);
-      bundle.addMessage(msg);
-      BSPMessageBundle<M> combined = new BSPMessageBundle<M>();
-      combined.setCompressor(compressor,
-          conf.getLong("hama.messenger.compression.threshold", 128));
-      combined.addMessage(combiner.combine(bundle));
-      outgoingBundles.put(targetPeerAddress, combined);
+    if (null != combiner) {
+      valbundle = outgoingBundles.get(peer)
+      bundle.addMessage(msg)
+      val combined = new BSPMessageBundle[M]()
+      combined.setCompressor(compressor, conf.getLong(
+        "hama.messenger.compression.threshold", 128)
+      )
+      combined.addMessage(combiner.combine(bundle))
+      outgoingBundles.put(peer, combined)
     } else {
-      outgoingBundles.get(targetPeerAddress).addMessage(msg);
+      outgoingBundles.get(peer).addMessage(msg)
     }
   }
 
-  private InetSocketAddress getSocketAddress(String peerName) {
-    InetSocketAddress targetPeerAddress = null;
-    // Get socket for target peer.
+  def PeerInfo getPeerInfo(peerName: String) {
+    val peer: PeerInfo = null
     if (peerSocketCache.containsKey(peerName)) {
-      targetPeerAddress = peerSocketCache.get(peerName);
+      peer = peerSocketCache.get(peerName)
     } else {
-      targetPeerAddress = BSPNetUtils.getAddress(peerName);
-      peerSocketCache.put(peerName, targetPeerAddress);
+      peer = PeerInfo.fromString(peerName)
+      peerSocketCache.put(peerName, peer) 
     }
 
-    if (!outgoingBundles.containsKey(targetPeerAddress)) {
-      BSPMessageBundle<M> bundle = new BSPMessageBundle<M>();
+    if (!outgoingBundles.containsKey(peer)) {
+      BSPMessageBundle[M] bundle = new BSPMessageBundle[M]()
       bundle.setCompressor(compressor,
-          conf.getLong("hama.messenger.compression.threshold", 128));
-      outgoingBundles.put(targetPeerAddress, bundle);
+          conf.getLong("hama.messenger.compression.threshold", 128))
+      outgoingBundles.put(peer, bundle)
     }
-    return targetPeerAddress;
+    peer 
   }
 
-  @Override
-  public void clear() {
-    outgoingBundles.clear();
-  }
+  override def clear() = outgoingBundles.clear
 
-  @Override
-  public Iterator<Entry<InetSocketAddress, BSPMessageBundle<M>>> getBundleIterator() {
-    return outgoingBundles.entrySet().iterator();
-  }
+  override def getBundleIterator(): PeerAndBundleIter = 
+    outgoingBundles.entrySet.iterator
 
 }

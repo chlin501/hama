@@ -33,7 +33,7 @@ final case object MediatorIsUp
  */
 trait LocalService extends Service {
 
-  protected var mediator: ActorRef = _ // Change to Option[ActorRef]?
+  protected var mediator: ActorRef = _ // TODO: Change to Option[ActorRef]?
 
   /**
    * A variable indicates whether to notify subservices.

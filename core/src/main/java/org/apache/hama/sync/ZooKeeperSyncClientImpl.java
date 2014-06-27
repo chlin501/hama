@@ -64,6 +64,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
   private ZooKeeper zk;
   private String bspRoot;
   private InetSocketAddress peerAddress;
+  private String peerActorSystem;
   private int numBSPTasks;
   // allPeers is lazily initialized
   private String[] allPeers;
@@ -83,8 +84,13 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
 
     initialize(this.zk, bspRoot);
 
-    peerAddress = new InetSocketAddress(bindAddress, bindPort);
-    LOG.info("Start connecting to Zookeeper! At " + peerAddress);
+    peerAddress = new InetSocketAddress(bindAddress, bindPort);  
+    final int peerSeq = conf.get("bsp.child.slot.seq", -1);
+    if(-1 == peerSeq)
+      throw new RuntimeException("Invalid slot seq -1 for BSPPeerSystem!");
+    peerActorSystem = "BSPPeerSystem%s".format(peerSeq)
+    LOG.info("Start connecting to Zookeeper! At " + peerActorSystem+ "@"+
+             peerAddress);
     numBSPTasks = conf.getInt("bsp.peers.num", 1);
   }
 
@@ -268,8 +274,8 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
       TaskAttemptID taskId) {
 
     // byte[] taskIdBytes = serializeTaskId(taskId);
-    String taskRegisterKey = constructKey(jobId, "peers", hostAddress + ":"
-        + port);
+    String taskRegisterKey = 
+      constructKey(jobId, "peers", peerActorSystem+"@"+hostAddress+":"+port);
     writeNode(taskRegisterKey, taskId, false, null);
 
   }

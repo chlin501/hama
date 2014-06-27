@@ -17,6 +17,9 @@
  */
 package org.apache.hama.bsp.v2
 
+import akka.actor.Actor
+import akka.actor.ActorRef
+import akka.event.Logging
 import java.io.IOException
 import java.net.URLClassLoader
 import org.apache.hadoop.fs.Path
@@ -60,18 +63,28 @@ private[v2] final case class TaskWithStats(task: Task, counters: Counters) {
  * - progress 
  * when necessary.
  */
-trait BSPPeerCoordinator extends BSPPeer {
+trait BSPPeerCoordinator(container: ActorRef) extends BSPPeer 
+                                              with BSPPeerService 
+                                              with Actor {
+
+  val LOG = Logging(context.system, this)
 
   /* common setting for the entire BSPPeer. */
   protected var configuration: HamaConfiguration = _
   /* task and counters specific to a particular v2.Job. */
   protected var taskWithStats: TaskWithStats = _
-  /* services for a particular v2.Task. */
-  protected var messenger: MessageManager[_] = _
-  protected var io: IO[RecordReader[_,_], OutputCollector[_,_]] = _
-  protected var syncClient: PeerSyncClient = _ 
 
-  def log(msg: String)
+/*
+  /* services for a particular v2.Task. */
+  //protected var messenger: MessageManager[Writable] = _
+  protected var messenger: ActorRef = _
+  protected var io: IO[RecordReader[_,_], OutputCollector[_,_]] = _ // ActorRef
+  protected var syncClient: PeerSyncClient = _  // ActorRef
+*/
+  /* is responsible for register and maintain all PeerInfo. */
+  protected var peerRegistrator: ActorRef = _
+
+  private var allPeers: Array[String] = _
 
   /**
    * Initialize necessary services, including
@@ -80,19 +93,22 @@ trait BSPPeerCoordinator extends BSPPeer {
    * - messaging
    * Note: <pre>conf != task.getConfiguration(). </pre>
    *       The formor comes from process startup, the later from task.
-   * @param conf contains related setting to startup related services.
+   * @param conf contains common setting for starting up related services.
    * @param task contains setting for a specific job; its configuration differs
    *             from conf provided by {@link BSPPeerContainer}.
    */
   protected[v2] def initialize(conf: HamaConfiguration, task: Task) {
     this.configuration = conf
     this.taskWithStats = TaskWithStats(task, new Counters())
-    settingForTask(conf, taskWithStats.task)
+    // TODO: peer registerator regist to zk and maintain all peers (PeerInfo)
+/*
     this.messenger = messengingService(conf, taskWithStats.task) 
     this.io = ioService(conf, taskWithStats) 
     localize(conf, taskWithStats.task)
+    settingForTask(conf, taskWithStats.task)
     this.syncClient = syncService(conf, taskWithStats.task)
     //updateStatus(conf, taskWithStats.task)
+*/
   }
 
   /** 
@@ -109,7 +125,7 @@ trait BSPPeerCoordinator extends BSPPeer {
     )
     val libjars = CacheService.moveJarsAndGetClasspath(conf) 
     if(null != libjars) 
-      log("Classpath to be included are %s".format(libjars.mkString(", ")))
+      LOG.info("Classpath to be included are {}", libjars.mkString(", "))
     taskConf.setClassLoader(new URLClassLoader(libjars, 
                                                taskConf.getClassLoader))
   }
@@ -119,10 +135,13 @@ trait BSPPeerCoordinator extends BSPPeer {
    * Setup message service according to a specific task.
    */
   protected def messengingService(conf: HamaConfiguration, task: Task): 
-      MessageManager[_] = {
-    val msgr = MessageManagerFactory.getMessageManager(conf) 
+      MessageManager[Writable] = {
+    getOrCreate("messenging", classOf[DefaultMessageManager], container, conf) 
+/*
+    val msgr = MessageManagerFactory.getMessageManager[Writable](conf) 
     msgr.init(conf, task.getId)
     msgr
+*/
   }
 
   protected def ioService(conf: HamaConfiguration, 
@@ -165,28 +184,55 @@ trait BSPPeerCoordinator extends BSPPeer {
   override def getIO(): IO[RecordReader[_,_], OutputCollector[_,_]] = io
 
   @throws(classOf[IOException])
-  override def send(peerName: String, msg: Writable) {}
+  override def send(peerName: String, msg: Writable) = 
+    messenger.send(peerName, msg.asInstanceOf[Writable])
 
-  override def getCurrentMessage(): Writable = null.asInstanceOf[Writable]
+  override def getCurrentMessage(): Writable = 
+    messenger.getCurrentMessage.asInstanceOf[Writable]
 
-  override def getNumCurrentMessages(): Int = -1
+  override def getNumCurrentMessages(): Int = messenger.getNumCurrentMessages
 
   @throws(classOf[IOException])
-  override def sync() {}
+  override def sync() {
+    val it = messenger.getOutgoingBundles
+    while(it.hasNext) {
+      val entry = it.next
+      val addr = entry.getKey
+      val bundle = entry.getValue
+      it.remove
+      // actual send message out 
+    }
+  } 
 
-  override def getSuperstepCount(): Long = -1
+  override def getSuperstepCount(): Long = 
+    taskWithStats.task.getCurrentSuperstep
 
-  override def getPeerName(): String  = null 
+  private def initPeerNames() {
+    if (null == allPeers) {
+      allPeers = syncClient.getAllPeerNames(taskWithStats.task.getId);
+    }
+  }
 
-  override def getPeerName(index: Int): String = null 
+  override def getPeerName(): String = socketAddress
 
-  override def getPeerIndex(): Int = -1
+  override def getPeerName(index: Int): String = {
+    initPeerNames
+    allPeers(index)
+  }
 
-  override def getAllPeerNames(): Array[String] = null
+  override def getPeerIndex(): Int = taskWithStats.task.getId.getTaskID.getId
 
-  override def getNumPeers(): Int = -1
+  override def getAllPeerNames(): Array[String] = {
+    initPeerNames
+    allPeers
+  }
 
-  override def clear() {}
+  override def getNumPeers(): Int = {
+    initPeerNames
+    allPeers.length
+  }
+
+  override def clear() = messenger.clearOutgoingMessages 
 
   override def getConfiguration(): HamaConfiguration = configuration
 

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.fs;
-
+/*
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hama.HamaConfiguration;
@@ -51,3 +51,4 @@ public class OperationFactory {
     return op;
   }
 }
+*/

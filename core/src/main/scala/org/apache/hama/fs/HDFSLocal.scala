@@ -28,26 +28,20 @@ import org.apache.hadoop.fs.FileStatus
 import org.apache.hadoop.fs.Path
 import org.apache.hama.HamaConfiguration
 
-object HDFSLocal {
-
-  def apply(fs: FileSystem): Operation = {
-    val op = new HDFSLocal()
-    op.setFileSystem(fs)
-    op.setConfiguration(fs.getConf.asInstanceOf[HamaConfiguration])
-    op
-  }
-}
-
 class HDFSLocal extends Operation {
 
-  private var localfs: FileSystem = _
   private var conf = new HamaConfiguration()
+  private var localfs: FileSystem = _
 
-  private[fs] def setConfiguration(conf: HamaConfiguration) = this.conf = conf
+  def initialize(conf: HamaConfiguration) {
+    this.conf = conf
+    if(null == conf) 
+      throw new IllegalArgumentException("HamaConfiguration for HDFSLocal is"+
+                                         "missing!")
+    this.localfs = FileSystem.get(conf)
+  }
 
   override def configuration: HamaConfiguration = this.conf
-
-  private[fs] def setFileSystem(fs: FileSystem) = { this.localfs = fs }
  
   @throws(classOf[IOException])
   protected def validate() {

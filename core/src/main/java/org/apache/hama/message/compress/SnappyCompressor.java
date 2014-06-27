@@ -24,12 +24,10 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 
 import org.apache.commons.io.IOUtils;
-import org.apache.hadoop.io.Writable;
 import org.xerial.snappy.SnappyInputStream;
 import org.xerial.snappy.SnappyOutputStream;
 
-public class SnappyCompressor<M extends Writable> extends
-    BSPMessageCompressor<M> {
+public class SnappyCompressor extends BSPMessageCompressor {
 
   @Override
   public byte[] compress(byte[] bytes) {

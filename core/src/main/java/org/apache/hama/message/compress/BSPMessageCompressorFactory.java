@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.message.compress;
-
+/**
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Writable;
@@ -27,12 +27,10 @@ public class BSPMessageCompressorFactory {
 
   static final Log LOG = LogFactory.getLog(BSPMessageCompressorFactory.class);
 
-  /**
    * Returns a compressor via reflection based on what was configured.
    * 
    * @param conf
    * @return
-   */
   @SuppressWarnings("unchecked")
   public static <M extends Writable> BSPMessageCompressor<M> 
       getCompressor(HamaConfiguration conf) {
@@ -48,3 +46,5 @@ public class BSPMessageCompressorFactory {
     return null;
   }
 }
+*/
+

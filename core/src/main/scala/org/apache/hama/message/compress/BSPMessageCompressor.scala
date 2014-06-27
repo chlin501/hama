@@ -17,19 +17,44 @@
  */
 package org.apache.hama.message.compress;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.hadoop.io.Writable;
+import org.apache.hama.HamaConfiguration
+
+object BSPMessageCompressor {
+
+  def get(conf: HamaConfiguration): BSPMessageCompressor = {
+    var compressor: BSPMessageCompressor = null
+    conf.get("hama.messenger.compression.class") match {
+      case null =>
+      case _ => {
+       val name = conf.get("hama.messenger.compression.class", 
+                           classOf[SnappyCompressor].getCanonicalName())
+        val clazz = conf.getClassByName(name)
+        compressor = ReflectionUtils.newInstance(clazz, conf)
+      }
+    }
+    compressor
+  }
+}
 
 /**
  * Provides utilities for compressing and decompressing byte array.
- * 
  */
-public abstract class BSPMessageCompressor<M extends Writable> {
+trait BSPMessageCompressor {
 
-  public static final Log LOG = LogFactory.getLog(BSPMessageCompressor.class);
+  type Compressed = Array[Byte]
+  type Uncompressed = Array[Byte]
 
-  public abstract byte[] compress(byte[] bytes);
+  /**
+   * Compress raw bytes to compressed ones.
+   * @param uncompressed byte array is the original data in the form of bytes.
+   * @return bytes as array with data compressed.
+   */
+  def compress(uncompressed: Uncompressed): Compressed 
 
-  public abstract byte[] decompress(byte[] compressedBytes);
+  /**
+   * Decompress data into original (uncompressed state) bytes array.
+   * @param compressed byte array is the compressed data.
+   * @return bytes as array with data decompressed.
+   */
+  def decompress(compressed: Compressed): Uncompressed
 }

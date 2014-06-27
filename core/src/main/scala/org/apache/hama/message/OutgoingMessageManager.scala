@@ -15,24 +15,54 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.message;
+package org.apache.hama.message
 
-import java.net.InetSocketAddress;
-import java.util.Iterator;
-import java.util.Map.Entry;
+import java.util.Iterator
+import java.util.Map.Entry
 
-import org.apache.hadoop.io.Writable;
-import org.apache.hama.HamaConfiguration;
-import org.apache.hama.message.compress.BSPMessageCompressor;
+import org.apache.hadoop.io.Writable
+import org.apache.hadoop.util.ReflectionUtils
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.message.compress.BSPMessageCompressor
 
-public interface OutgoingMessageManager<M extends Writable> {
+object OutgoingMessageManager {
 
-  public void init(HamaConfiguration conf, BSPMessageCompressor<M> compressor);
+  def get(conf: HamaConfiguration): OutgoingMessageManager = {
+    val clazz = conf.getClass("hama.messenger.outgoing.message.manager.class",
+                              classOf[OutgoingPOJOMessageBundle[M]],
+                              classOf[OutgoingMessageManager[M]])
+    val out = ReflectionUtils.newInstance(clazz, conf)
+    out.init(conf, BSPMessageCompressor.get(conf))
+    out
+  }
 
-  public void addMessage(String peerName, M msg);
+}
 
-  public void clear();
+trait OutgoingMessageManager[M <: Writable] {
 
-  public Iterator<Entry<InetSocketAddress, BSPMessageBundle<M>>> getBundleIterator();
+  /**
+   * Initialize outgoing message manager.
+   * @param conf is common configuration, not specific for task.
+   * @param compressor tells how messages to be compressed.
+   */
+  def init(conf: HamaConfiguration, compressor: BSPMessageCompressor[M])
+
+  /**
+   * Add a message, classified by the peer info, to outgoing queue.
+   * @param peerInfo is consisted of ${actor-system-name}@${host}:${port}
+   * @param msg is a writable message to be sent.
+   */
+  def addMessage(peerInfo PeerInfo, msg: M)
+
+  /**
+   * Clear the outgoing queue.
+   */
+  def clear()
+
+  /**
+   * Iterator of the entire messages.
+   * @return Iterator contains peer info associated with message bundles.
+   */
+  def getBundleIterator(): Iterator[Entry[PeerInfo, BSPMessageBundle[M]]] 
 
 }
