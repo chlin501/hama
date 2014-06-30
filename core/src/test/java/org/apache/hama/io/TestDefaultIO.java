@@ -55,7 +55,7 @@ public class TestDefaultIO extends TestCase {
     // writer
     @Override 
     public Path outputPath(final long timestamp, final int partitionId) {
-      final Path out = outputPath(timestamp, partitionId);
+      final Path out = super.outputPath(timestamp, partitionId);
       final Path expected = new Path(rootPath+"/io/defaultio/", 
                                      childPath(partitionId));
       assertEquals("Ouptut path should be "+expected.toString(), 
