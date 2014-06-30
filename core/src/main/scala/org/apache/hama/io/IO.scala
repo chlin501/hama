@@ -19,8 +19,6 @@ package org.apache.hama.io
 
 import java.io.IOException
 import org.apache.hadoop.util.ReflectionUtils
-import org.apache.hama.bsp.RecordReader
-import org.apache.hama.bsp.OutputCollector
 import org.apache.hama.bsp.Counters
 import org.apache.hama.HamaConfiguration
 
@@ -33,12 +31,9 @@ object IO {
    * @return IO is default to DefaultIO class.
    */
   def get[I, O](conf: HamaConfiguration): IO[I, O] = {
-null
-/*
     val clazz = conf.getClassByName(conf.get("bsp.io.class",
                                     classOf[DefaultIO].getCanonicalName))
     ReflectionUtils.newInstance(clazz, conf).asInstanceOf[IO[I, O]]
-*/
   }
 
 }

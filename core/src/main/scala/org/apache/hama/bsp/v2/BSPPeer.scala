@@ -34,7 +34,7 @@ trait BSPPeer {
    * An interface that links to input and output.
    * @return IO interface that has accesses to the resource.
    */
-  //def getIO[I, O](): IO[I, O]
+  def getIO[I, O](): IO[I, O]
 
   /**
    * Send a data with a tag to another BSPPeer corresponding to hostname.

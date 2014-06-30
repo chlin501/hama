@@ -70,7 +70,7 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
 
   /* services for a particular v2.Task. */
   protected var messenger: MessageManager[Writable] = _
-  //protected var io: IO[org.apache.hama.bsp.RecordReader[_,_], org.apache.hama.bsp.OutputCollector[_, _]] = _
+  protected var io: IO[RecordReader[_,_], OutputCollector[_, _]] = _
   protected var syncClient: PeerSyncClient = _  
 
   private var allPeers: Array[String] = _
@@ -90,7 +90,7 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
     this.configuration = conf
     this.taskWithStats = TaskWithStats(task, new Counters())
     this.messenger = messengingService(conf, taskWithStats.task) 
-    //this.io = ioService(conf, taskWithStats) 
+    this.io = ioService(conf, taskWithStats) 
     localize(conf, taskWithStats.task)
     settingForTask(conf, taskWithStats.task)
     this.syncClient = syncService(conf, taskWithStats.task)
@@ -100,6 +100,8 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
 
   /**
    * Internal sync to ensure all peers is registered/ ready.
+   * TODO: need to sperate syncClient.init and syncClient.register
+   *       for aync operation.
    */
   protected def doSync() {
 //TODO: 
@@ -137,16 +139,16 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
 
   /**
    * Setup io service according to a specific task.
+   */
   protected def ioService(conf: HamaConfiguration, 
                           taskWithStats: TaskWithStats): 
       IO[RecordReader[_,_], OutputCollector[_,_]] = {
-    val io = IO.get[RecordReader[_,_], OutputCollector[_,_]](conf)
-    io.initialize(taskWithStats.task.getConfiguration, // tight to a task 
+    val rw = IO.get[RecordReader[_, _], OutputCollector[_, _]](conf)
+    rw.initialize(taskWithStats.task.getConfiguration, // tight to a task 
                   taskWithStats.task.getSplit, 
                   taskWithStats.counters)
-    io
+    rw 
   }
-   */
 
   /**
    * Copy necessary files to local (file) system so to speed up computation.
@@ -179,7 +181,7 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
 
   //def updateStatus(conf: HamaConfiguration) {}
 
-  //override def getIO[org.apache.hama.bsp.RecordReader[_,_], org.apache.hama.bsp.OutputCollector[_,_]](): IO[org.apache.hama.bsp.RecordReader[_,_], org.apache.hama.bsp.OutputCollector[_,_]] = this.io
+  override def getIO[I, O](): IO[I, O] = this.io.asInstanceOf[IO[I, O]]
 
   @throws(classOf[IOException])
   override def send(peerName: String, msg: Writable) = 
