@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.io;
-/*
+
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -34,7 +34,6 @@ import org.apache.hama.bsp.OutputCollector;
 import org.apache.hama.bsp.RecordReader;
 import org.apache.hama.fs.HDFSLocal;
 import org.apache.hama.fs.Operation;
-import org.apache.hama.fs.OperationFactory;
 import org.apache.hama.HamaConfiguration;
 
 public class TestDefaultIO extends TestCase {
@@ -56,7 +55,7 @@ public class TestDefaultIO extends TestCase {
     // writer
     @Override 
     public Path outputPath(final long timestamp, final int partitionId) {
-      final Path out = super.outputPath(timestamp, partitionId);
+      final Path out = outputPath(timestamp, partitionId);
       final Path expected = new Path(rootPath+"/io/defaultio/", 
                                      childPath(partitionId));
       assertEquals("Ouptut path should be "+expected.toString(), 
@@ -71,19 +70,19 @@ public class TestDefaultIO extends TestCase {
       assertNotNull("InputSplit supplied can't be null!", split);
       final FileSplit fileSplit = (FileSplit) split;
       assertEquals("Split class name should be "+FileSplit.class.getName(), 
-                   super.split.splitClassName(), 
+                   split().splitClassName(), 
                    FileSplit.class.getName());
       assertEquals("File size to be processed should equal.", 
-                   super.split.length(), fileSplit.getLength());
+                   split().length(), fileSplit.getLength());
       assertEquals("Partition id should be "+partitions[0],
-                   super.split.partitionId(), partitions[0]);
-      final String[] hosts = super.split.hosts();
+                   split().partitionId(), partitions[0]);
+      final String[] hosts = split().hosts();
       assertNotNull("Split hosts can't be null!", hosts);
       LOG.info("PartitionedSplit's hosts length is "+ hosts.length);
       final String[] locations = fileSplit.getLocations();
       assertNotNull("File split locations can't be null!", locations);
       LOG.info("FileSplit's locations length is "+ locations.length);
-      / N.B.: FileSplit.write() doesn't serialize hosts fields! /
+      // N.B.: FileSplit.write() doesn't serialize hosts fields! /
       assertEquals("File split's location length must be 0!", 
                    0, locations.length);
       for(int idx=0; idx < hosts.length; idx++) {
@@ -97,12 +96,12 @@ public class TestDefaultIO extends TestCase {
       byte[] splitBytes = bout.toByteArray();
       int dataLength = splitBytes.length;
       LOG.info(fileSplit.getClass().getName()+" has length: "+dataLength); 
-      LOG.info(super.split.getClass().getName()+" has "+ super.split.length()+
+      LOG.info(split().getClass().getName()+" has "+ split().length()+
                " bytes.");
       assertEquals("Split length value should be 1024L.", 
-                   1024L, super.split.length());
-      byte[] partitionedBytes = super.split.bytes();
-      LOG.info(super.split.getClass().getName()+" has "+partitionedBytes.length+
+                   1024L, split().length());
+      byte[] partitionedBytes = split().bytes();
+      LOG.info(split().getClass().getName()+" has "+partitionedBytes.length+
                " bytes.");
       assertEquals("Bytes length should equal!", 
                    partitionedBytes.length, splitBytes.length);
@@ -185,4 +184,4 @@ public class TestDefaultIO extends TestCase {
   }
   
 }
-*/
+
