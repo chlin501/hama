@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.io
-/*
+
 import java.io.ByteArrayInputStream
 import java.io.DataInputStream
 import java.io.IOException
@@ -58,28 +58,30 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
 
   import DefaultIO._
  
-  / This stores common configuration from BSPPeerContainer. /
-  protected var configuration: HamaConfiguration = _
+  // This stores common configuration from BSPPeerContainer. /
+  protected var commonConf: HamaConfiguration = _
 
-  / This contains setting sepficit to a v2.Task. /
-  protected var taskConfiguration: HamaConfiguration = _
+  // This contains setting sepficit to a v2.Task. /
+  protected var taskConf: HamaConfiguration = _
 
-  / contains split information./
+  // contains split information./
   protected var split: PartitionedSplit = _
   
   protected var counters: Counters = _
 
-  / this will only available after reader() gets called. /
-  private var splitSize: Long = -1
+  // this will only available after reader() gets called. /
+  private var splitLength: Long = -1
 
+  /**
    * Initialize IO by tighting reader and writer to a specific task setting,
    * including:
    * - task configuration
    * - split
    * - counters
+   */
   def initialize(taskConf: HamaConfiguration, split: PartitionedSplit, 
                  counters: Counters) {
-    this.taskConfiguration = taskConf
+    this.taskConf = taskConf
     this.split = split
     this.counters = counters
   }
@@ -93,37 +95,52 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
       throw new RuntimeException("Counter is missing!")
   }
 
+  /**
    * This passes in common configuration, equivalent to configuration().
    * @param conf is the common configuration 
+   */
   override def setConf(conf: Configuration) {
-    this.configuration = (HamaConfiguration)conf
+    if(null == conf) 
+      throw new IllegalArgumentException("Common HamaConfiguration is "+
+                                         "missing for "+getClass.getName+"!")
+    this.commonConf = conf.asInstanceOf[HamaConfiguration]
   }
 
+  /**
    * This returns common configuration, equivalent to configuration().
    * @return Configuration content is the same as configuration().
-  override def getConf(): Configuration = this.configuration
+   */
+  override def getConf(): Configuration = this.commonConf
 
+  /**
    * This denotes the split content size to be processed. 
    * <b>-1</b> indicates the reader() is not yet initialized.
    * Note this value will only available after reader() gets called.
    * @return long value for the split data to be processed.
-  override def splitSize(): Long = this.splitSize
+   */
+  override def splitSize(): Long = this.splitLength
 
+  /**
    * Configuration specific for a v2.Task.
    * @return HamaConfiguration tight to a particular task.
-  override def taskConfiguration(): HamaConfiguration = this.taskConfiguration
+   */
+  def taskConfiguration(): HamaConfiguration = this.taskConf
 
+  /**
    * Common cofiguration from {@link BSPPeerContainer}.
    * @return HamaConfiguration from container.
-  def configuration(): HamaConfiguration = this.configuration
+   */
+  def configuration(): HamaConfiguration = this.commonConf
 
   private def getCounter(name: Enum[_]): Counter = counters.findCounter(name)
 
+  /**
    * 1. Restore {@link InputSplit} from common configuration.
    * 2. Obtain record reader from a specific task configuration. 
    * @return RecordReader contains setting for a specific task.
+   */
   @throws(classOf[IOException])
-  override def reader(): RecordReader[_, _] = {
+  override def reader(): RecordReader[_,_] = {
     validate()
     var inputSplit: InputSplit = null
     try {
@@ -138,7 +155,7 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
                               " not found!", cnfe)
     }
 
-    var reader: RecordReader[_, _] = null
+    var reader: RecordReader[_,_] = null
     if (null != inputSplit) {
       if(LOG.isDebugEnabled())
         LOG.debug(split.getClass().getName()+" stores "+split.bytes().length+
@@ -150,7 +167,7 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
         inputSplit.readFields(splitBuffer)
         if(null != reader) reader.close()
         reader = createRecordReader(inputSplit)
-        this.splitSize = inputSplit.getLength()
+        this.splitLength = inputSplit.getLength()
       } catch {
         case e: Exception =>
           throw new IOException("Fail restoring "+inputSplit.getClass.getName+
@@ -163,7 +180,7 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
   }
 
   @throws(classOf[IOException])  
-  def taskLineRecordReader(inputSplit: InputSplit): RecordReader[_, _] = 
+  def taskLineRecordReader(inputSplit: InputSplit): RecordReader[_,_] = 
     taskInputFormat().getRecordReader(inputSplit, 
                                       new BSPJob(taskConfiguration()))
 
@@ -174,26 +191,29 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
     getCounter(BSPPeerImpl.PeerCounter.IO_BYTES_READ)
 
   @throws(classOf[IOException]) 
-  def createRecordReader(inputSplit: InputSplit): RecordReader[_, _] = 
+  def createRecordReader(inputSplit: InputSplit): RecordReader[_,_] = 
     new TrackedRecordReader(taskLineRecordReader(inputSplit),
                             taskInputRecordCounter(),
                             ioBytesReadCounter())
 
-  def taskInputClass[F <: InputFormat](): Class[F] = 
+  def taskInputClass(): Class[_] = 
     taskConfiguration().getClass("bsp.input.format.class", 
                                  classOf[TextInputFormat],
-                                 classOf[InputFormat])
+                                 classOf[InputFormat[_,_]])
   
   def taskInputFormat(): InputFormat[_, _] = 
-    ReflectionUtils.newInstance(taskInputClass(), taskConfiguration())
+    ReflectionUtils.newInstance(taskInputClass(), taskConfiguration()).
+                    asInstanceOf[InputFormat[_,_]]
   
   def childPath(partition: Int): String = "part-" + formatter.format(partition)
 
+  /**
    * Obtain output directory "bsp.output.dir" from common configuration; 
    * and setup child path tight to a partition id derived from a particular 
    * task.
    * @param timestamp as default temp directory if not output directory found. 
    * @param partitionId is for a particular task.
+   */
   def outputPath(timestamp: Long, partitionId: Int): Path = {
     val parentPath = configuration().get("bsp.output.dir", 
                                          "tmp-" + timestamp)
@@ -201,40 +221,51 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
     new Path(parentPath, childPath(partitionId))
   }
  
+  /**
    * Output class is tight to a specific task.
-  def taskOutputClass[F <: OutputFormat](): Class[F] = 
+   */
+  def taskOutputClass(): Class[_] = 
     taskConfiguration().getClass("bsp.output.format.class",
-                                 classOf[TextOutputFormat],
-                                 classOf[OutputFormat])
+                                 classOf[TextOutputFormat[_,_]],
+                                 classOf[OutputFormat[_,_]])
 
+  /**
    * OutputFormat is tight to a particular {@link Task}.
    * @return OutputFormat configured for a sepcific task.
-  def taskOutputFormat(): OutputFormat = 
-    ReflectionUtils.newInstance(taskOutputClass(), taskConfiguration())
+   */
+  def taskOutputFormat[K2, V2](): OutputFormat[K2, V2] = 
+    ReflectionUtils.newInstance(taskOutputClass(), taskConfiguration()).
+                    asInstanceOf[OutputFormat[K2, V2]]
 
+  /**
    * Line record writer is tight to a special task.
    * N.B.: taskOutputClass() also needs to define "bsp.output.dir" as well.
    *       otherwise NPE will be thrown because no default is configured in
    *       <b>taskConfiguration</b> variable.
    * @param outPath is the output directory to be used by the writer.
+   */
   @throws(classOf[IOException])  
-  def taskLineRecordWriter[_, _](outPath: String): RecordWriter[_, _] =  
-    taskOutputFormat().getRecordWriter(null, 
-                                       new BSPJob(taskConfiguration()),
-                                       outPath)
+  def taskLineRecordWriter[K2, V2](outPath: String): RecordWriter[K2, V2] =  
+    taskOutputFormat[K2, V2]().getRecordWriter(null, 
+                                               new BSPJob(taskConfiguration()),
+                                               outPath)
 
   @throws(classOf[IOException]) 
-  def outputCollector(outPath: String): OutputCollector[K2, V2] = {
-    val writer = taskLineRecordWriter(outPath)
+  def outputCollector[K2, V2](outPath: String): OutputCollector[K2, V2] = {
+    val writer = taskLineRecordWriter[K2, V2](outPath)
     new OutputCollector[K2, V2]() {
-      @throws(classOf[IOException])
-      override def collect(key: K2, value: V2) = writer.write(key, value)
+      @throws(classOf[IOException]) 
+      override def collect(key: K2, value: V2) {
+        writer.write(key, value)
+      }
     }
   }
 
+  /**
    * 1. Obtain output path String from common configuration.
    * 2. Obtain output collector from specific task configuration.
    * @return OutputCollector for a specific task.
+   */
   @throws(classOf[IOException]) 
   override def writer(): OutputCollector[_, _] = {
     validate()
@@ -245,4 +276,4 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
     outputCollector(output)
   }
 }
-*/
+
