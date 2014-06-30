@@ -17,7 +17,9 @@
  */
 package org.apache.hama.message.compress;
 
+import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.logging.Logger
 
 object BSPMessageCompressor {
 
@@ -29,7 +31,8 @@ object BSPMessageCompressor {
        val name = conf.get("hama.messenger.compression.class", 
                            classOf[SnappyCompressor].getCanonicalName())
         val clazz = conf.getClassByName(name)
-        compressor = ReflectionUtils.newInstance(clazz, conf)
+        compressor = ReflectionUtils.newInstance(clazz, conf).
+                                     asInstanceOf[BSPMessageCompressor]
       }
     }
     compressor
@@ -39,7 +42,7 @@ object BSPMessageCompressor {
 /**
  * Provides utilities for compressing and decompressing byte array.
  */
-trait BSPMessageCompressor {
+abstract class BSPMessageCompressor extends Logger {
 
   type Compressed = Array[Byte]
   type Uncompressed = Array[Byte]
@@ -56,5 +59,5 @@ trait BSPMessageCompressor {
    * @param compressed byte array is the compressed data.
    * @return bytes as array with data decompressed.
    */
-  def decompress(compressed: Compressed): Uncompressed
+  def decompress(compressed: Compressed): Uncompressed 
 }

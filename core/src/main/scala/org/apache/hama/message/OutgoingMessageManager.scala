@@ -27,7 +27,7 @@ import org.apache.hama.message.compress.BSPMessageCompressor
 
 object OutgoingMessageManager {
 
-  def get(conf: HamaConfiguration): OutgoingMessageManager = {
+  def get[M <: Writable](conf: HamaConfiguration): OutgoingMessageManager[M] = {
     val clazz = conf.getClass("hama.messenger.outgoing.message.manager.class",
                               classOf[OutgoingPOJOMessageBundle[M]],
                               classOf[OutgoingMessageManager[M]])
@@ -45,14 +45,14 @@ trait OutgoingMessageManager[M <: Writable] {
    * @param conf is common configuration, not specific for task.
    * @param compressor tells how messages to be compressed.
    */
-  def init(conf: HamaConfiguration, compressor: BSPMessageCompressor[M])
+  def init(conf: HamaConfiguration, compressor: BSPMessageCompressor)
 
   /**
    * Add a message, classified by the peer info, to outgoing queue.
    * @param peerInfo is consisted of ${actor-system-name}@${host}:${port}
    * @param msg is a writable message to be sent.
    */
-  def addMessage(peerInfo PeerInfo, msg: M)
+  def addMessage(peerInfo: PeerInfo, msg: M)
 
   /**
    * Clear the outgoing queue.
@@ -63,6 +63,6 @@ trait OutgoingMessageManager[M <: Writable] {
    * Iterator of the entire messages.
    * @return Iterator contains peer info associated with message bundles.
    */
-  def getBundleIterator(): Iterator[Entry[PeerInfo, BSPMessageBundle[M]]] 
+  def getBundleIterator(): java.util.Iterator[java.util.Map.Entry[PeerInfo, BSPMessageBundle[M]]] 
 
 }

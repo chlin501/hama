@@ -85,10 +85,10 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
     initialize(this.zk, bspRoot);
 
     peerAddress = new InetSocketAddress(bindAddress, bindPort);  
-    final int peerSeq = conf.get("bsp.child.slot.seq", -1);
-    if(-1 == peerSeq)
+    final int peerSeq = conf.getInt("bsp.child.slot.seq", -1);
+    if(0 >= peerSeq) 
       throw new RuntimeException("Invalid slot seq -1 for BSPPeerSystem!");
-    peerActorSystem = "BSPPeerSystem%s".format(peerSeq)
+    peerActorSystem = String.format("BSPPeerSystem%s", new Integer(peerSeq));
     LOG.info("Start connecting to Zookeeper! At " + peerActorSystem+ "@"+
              peerAddress);
     numBSPTasks = conf.getInt("bsp.peers.num", 1);

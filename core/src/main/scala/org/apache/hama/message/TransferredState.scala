@@ -15,36 +15,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.io;
-
-import java.io.IOException;
-import org.apache.hama.bsp.Counters;
-import org.apache.hama.HamaConfiguration;
+package org.apache.hama.message
 
 /**
- * A interface for input and output.
+ * Indicate all messages in {@link BSPMessageBundle} are sent out.
  */
-public interface IO<I, O> {
-
-  /**
-   * Access to the input resource.
-   * @return input resource to be accessed.
-   */
-  <I> I reader() throws IOException;
- 
-  /**
-   * Access to the underlying output resource.
-   * @return output resource to be accessed.
-   */
-  <O> O writer() throws IOException;
-
-  /**
-   * This denotes the split size to be processed.
-   * @return long value of the split data size.
-   */
-  long splitSize();
-
-  void initialize(HamaConfiguration taskConf, PartitionedSplit split, 
-                  Counters counters);
-
-}
+sealed trait TransferredState
+final case object TransferredCompleted extends TransferredState
+final case object TransferredFailure extends TransferredState

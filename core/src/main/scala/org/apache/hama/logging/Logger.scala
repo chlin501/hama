@@ -15,36 +15,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.bsp.v2
-/*
-import akka.actor.ActorContext
-import akka.actor.ActorRef
-import akka.actor.Props
-import akka.event.Logging
-import scala.collection.immutable.Set
+package org.apache.hama.logging
 
-/**
- * TODO: removed?
- * used by coordinator for init sub services e.g. messeging, etc.
- */
-trait BSPPeerService {
+import org.apache.commons.logging.Log
+import org.apache.commons.logging.LogFactory
 
-  type Service = ActorRef
+trait Logger {
+  
+  val LOG = LogFactory.getLog(getClass.getName)
 
-  protected var services = Set.empty[Service]
-
-  protected def actorConext: ActorConext 
-
-  /**
-   * Get or create ActorRef.
-   */
-  protected def getOrCreate(serviceName: String, clazz: Class[_], args: Any*): 
-      ActorRef = {
-    services.find(s => s.path.name.equals(serviceName)) match {
-      case Some(found) => found
-      case None => actorContext.actorOf(Props(clazz, args:_*))
-    }
-  }
+  def getLog(): Log = LOG
 
 }
-*/

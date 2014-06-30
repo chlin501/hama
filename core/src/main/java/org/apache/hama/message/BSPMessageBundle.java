@@ -42,7 +42,7 @@ public class BSPMessageBundle<M extends Writable> implements Writable,
 
   public static final Log LOG = LogFactory.getLog(BSPMessageBundle.class);
 
-  private BSPMessageCompressor<M> compressor = null;
+  private BSPMessageCompressor compressor = null;
   private long threshold = 128;
 
   private String className = null;
@@ -184,7 +184,7 @@ public class BSPMessageBundle<M extends Writable> implements Writable,
     return bundleSize;
   }
 
-  public void setCompressor(BSPMessageCompressor<M> compressor, long threshold) {
+  public void setCompressor(BSPMessageCompressor compressor, long threshold) {
     this.compressor = compressor;
     this.threshold = threshold;
   }

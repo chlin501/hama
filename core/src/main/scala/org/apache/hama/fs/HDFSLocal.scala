@@ -33,12 +33,14 @@ class HDFSLocal extends Operation {
   private var conf = new HamaConfiguration()
   private var localfs: FileSystem = _
 
-  def initialize(conf: HamaConfiguration) {
+  private def setFs(fs: FileSystem) = this.localfs = fs
+
+  override def initialize(conf: HamaConfiguration) {
     this.conf = conf
     if(null == conf) 
       throw new IllegalArgumentException("HamaConfiguration for HDFSLocal is"+
                                          "missing!")
-    this.localfs = FileSystem.get(conf)
+    this.localfs = FileSystem.getLocal(conf)
   }
 
   override def configuration: HamaConfiguration = this.conf
@@ -120,8 +122,9 @@ class HDFSLocal extends Operation {
   override def local: Operation = this 
 
   override def operationFor(path: Path): Operation = {
-    //HDFSLocal(path.getFileSystem(configuration)) 
-    null
+    val newLocalfs = Operation.get(configuration).asInstanceOf[HDFSLocal]
+    newLocalfs.setFs(path.getFileSystem(configuration))
+    newLocalfs
   }
 
   override def makeQualified(path: Path): String = {

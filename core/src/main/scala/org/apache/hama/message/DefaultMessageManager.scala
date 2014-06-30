@@ -17,9 +17,10 @@
  */
 package org.apache.hama.message
 
-import akka.actor.Actor
 import akka.actor.ActorRef
-import akka.event.Logging
+import akka.actor.ActorSystem
+import akka.actor.TypedActor
+import akka.actor.TypedProps
 import java.io.IOException
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -32,34 +33,50 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.message.queue.DiskQueue
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.Operation
-import org.apache.hama.fs.OperationFactory
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.message.compress.BSPMessageCompressor
-import org.apache.hama.message.compress.BSPMessageCompressorFactory
 import org.apache.hama.message.queue.MemoryQueue
 import org.apache.hama.message.queue.MessageQueue
 import org.apache.hama.message.queue.SingleLockQueue
 import org.apache.hama.message.queue.SynchronizedQueue
 import org.apache.hama.util.LRUCache
+import org.apache.hama.logging.Logger
 import scala.collection.JavaConversions._
 
 /**
+ * A bridge device enables bsp peers communication through TypedActor.
+ */
+trait PeerCommunicator {
+  
+  def initialize(sys: ActorSystem)
+
+}
+
+/**
  * Provide default functionality of {@link MessageManager}.
+ * It realizes message communication by java object, and send messages through
+ * actor via {@link akka.actor.TypedActor}.
  * @param conf is the common configuration, not specific for task.
  */
-class DefaultMessageManager[M <: Writable](conf: HamaConfiguration) 
-      extends MessageManager[M] with Actor {
-
-  val LOG = Logging(context.system, this)
+class DefaultMessageManager[M <: Writable] extends MessageManager[M] 
+                                           with PeerCommunicator
+                                           with Logger {
 
   protected var configuration: HamaConfiguration = _
   protected var taskAttemptId: TaskAttemptID = _
   protected var outgoingMessageManager: OutgoingMessageManager[M] = _
   protected var localQueue: MessageQueue[M] = _
   protected var localQueueForNextIteration: SynchronizedQueue[M] = _
-  protected var maxCachedConnections: Int = 100
-  /* This holds information to BSPPeer actors. */
-  protected var peersLRUCache: LRUCache[PeerInfo, ActorRef] = _
+  protected var hermes: Hermes = _
+
+  override def initialize(sys: ActorSystem) {
+    this.hermes = TypedActor(sys).typedActorOf(TypedProps[Iris]())
+    if(null == this.hermes)
+      throw new RuntimeException("Fail initializing bridge on behalf of "+
+                                 "DefaultMessageManager sends messages.")
+    if(null == this.configuration)
+      throw new RuntimeException("Common configuration is missing!")
+    this.hermes.initialize(configuration)
+  }
 
   /**
    * Initialize messaging service with common configuration provided by 
@@ -75,27 +92,10 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration)
     this.configuration = conf
     if(null == this.configuration)
       throw new IllegalArgumentException("HamaConfiguration is missing!")
+
     this.localQueue = getReceiverQueue
     this.localQueueForNextIteration = getSynchronizedReceiverQueue
-    this.outgoingMessageManager = OutgoingMessageManager.get(configuration)
-    this.maxCachedConnections = 
-      conf.getInt("hama.messenger.max.cached.connections", 100) 
-    this.peersLRUCache = initializeLRUCache(maxCachedConnections)
-  }
-
-  def initializeLRUCache(maxCachedConnections: Int): 
-      LRUCache[PeerInfo,ActorRef] = {
-    new LRUCache[PeerInfo, ActorRef](maxCachedConnections) {
-      override def removeEldestEntry(eldest: Entry[PeerInfo, ActorRef]): 
-          Boolean = {
-        if (size() > this.capacity) {
-          val peer = eldest.getKey
-          remove(peer)
-          return true
-        }
-        return false
-      }
-    }
+    this.outgoingMessageManager = OutgoingMessageManager.get[M](configuration)
   }
 
   /**
@@ -104,8 +104,8 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration)
    * @return MessageQueue type is backed with a particular queue implementation.
    */
   def getReceiverQueue: MessageQueue[M] = { 
-    val queue = MessageQueue.get(configuration)
-    queue.init(conf, taskAttemptId)
+    val queue = MessageQueue.get[M](configuration)
+    queue.init(configuration, taskAttemptId)
     queue
   }
 
@@ -120,7 +120,7 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration)
 
   def cleanupDiskQueue() {
     try {
-      val operation = OperationFactory.get(this.configuration)
+      val operation = Operation.get(this.configuration)
       val diskQueueDir = configuration.get("bsp.disk.queue.dir")
       operation.remove(DiskQueue.getQueueDir(configuration, 
                                              taskAttemptId,
@@ -174,14 +174,12 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration)
    */
   @throws(classOf[IOException])
   override def send(peerName: String, msg: M) = {
-    outgoingMessageManager.addMessage(peerName, msg); 
+    outgoingMessageManager.addMessage(PeerInfo.fromString(peerName), msg); 
     // TODO: increment counter by 1
     // peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_SENT, 1L)
   }
 
-  override def getOutgoingBundles(): 
-      Iter[Entry[PeerInfo, BSPMessageBundle[M]]] = 
-    outgoingMessageManager.getBundleIterator
+  override def getOutgoingBundles(): java.util.Iterator[java.util.Map.Entry[PeerInfo, BSPMessageBundle[M]]] = outgoingMessageManager.getBundleIterator
 
   /**
    * Actual transfer messsages over wire.
@@ -191,17 +189,7 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration)
    */
   @throws(classOf[IOException])
   override def transfer(peer: PeerInfo, bundle: BSPMessageBundle[M]) {
-/*
-    mapAsScalaMap(peersLRUCache).find( entry => entry._1.equals(peer)) match { 
-      case Some(found) => {
-        peersLRUCache.get(found._2)
-      }
-      case None => {
-        context.actorOf(Props())
-        peersLRUCache.put(peer, )
-      }
-    }
-*/
+// TODO: call hermes transfer and wait for its return!!!
   }
 
   @throws(classOf[IOException])
@@ -210,17 +198,6 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration)
   @throws(classOf[IOException])
   override def loopBackMessage(message: Writable) {} 
 
-  override def getListenerAddress(): InetSocketAddress = null
-
-  def initialize: Receive = {
-    case Initialize(conf, taskAttemptId) => init(conf, taskAttemptId)
-  }
-
-  def unknown: Receive = {
-    case msg@_ => LOG.warning("Unknown message for messenger "+self.path.name, msg)
-  }
-
- override def receive = initialize orElse unknown
-    
+  override def getListenerAddress(): PeerInfo = null
 
 }

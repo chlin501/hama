@@ -15,22 +15,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.message;
+package org.apache.hama.message
 
-import java.io.IOException;
-import java.net.InetSocketAddress;
-import java.util.Iterator;
-import java.util.Map.Entry;
+import java.io.IOException
+import java.util.Iterator
+import java.util.Map.Entry
+import org.apache.hadoop.util.ReflectionUtils
+import org.apache.hadoop.io.Writable
+import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.HamaConfiguration
 
-import org.apache.hadoop.io.Writable;
-import org.apache.hama.bsp.TaskAttemptID;
-import org.apache.hama.HamaConfiguration;
-import org.apache.hama.message.MessageManager;
+object MessageManager {
+
+  /**
+   * Only instantiate object without tighting to any specific tasks.
+   * Need to call init() explicitly for initialization.
+   * @param conf is common configuration.
+   * @return MessageMenager without tight to any tasks.
+   */
+  def get[M <: Writable](conf: HamaConfiguration): MessageManager[M] = {
+    val name = conf.get("hama.messenger.class", 
+                        classOf[DefaultMessageManager[M]].getCanonicalName())
+    ReflectionUtils.newInstance(conf.getClassByName(name), conf).
+                    asInstanceOf[MessageManager[M]] 
+  }
+
+}
 
 /**
  * Communication between {@link BSPPeer}s.
  */
-public interface MessageManager<M extends Writable> {
+trait MessageManager[M <: Writable] {
 
   /**
    * Initialize message manager with specific {@link TaskAttemptID} and setting.
@@ -38,74 +53,69 @@ public interface MessageManager<M extends Writable> {
    *                      message manager.
    * @param id denotes which task attempt id this message manager will manage.
    */
-  void init(HamaConfiguration configuration, TaskAttemptID id);
+  def init(conf: HamaConfiguration, id: TaskAttemptID)
 
   /**
    * Close the communication between {@link BSPPeer}s.
    */
-  void close();
+  def close()
 
   /**
    * Get the current message.
    * @throws IOException
    */
-  M getCurrentMessage() throws IOException;
+  @throws(classOf[IOException])
+  def getCurrentMessage(): M 
 
   /**
    * Send a message to a specific {@link BSPPeer}, denoted by peerName.
    * @throws IOException
    */
-  void send(String peerName, M msg) throws IOException;
+  @throws(classOf[IOException])
+  def send(peerName: String, msg: M) 
 
   /**
    * Returns an bundle of messages grouped by {@link BSPPeer}. 
    * @return an iterator that contains messages associated with a peer address.
    */
-  Iterator<Entry<InetSocketAddress, BSPMessageBundle<M>>> getOutgoingBundles();
-
-  /**
-   * Start transferring message bundle to a specific {@link BSPPeer}.
-   * @param addr denotes the target address.  
-   * @param bundle are message to be tranferred. 
-  void transfer(InetSocketAddress addr, BSPMessageBundle<M> bundle)
-      throws IOException;
-   */
+  def getOutgoingBundles(): Iterator[Entry[PeerInfo, BSPMessageBundle[M]]] 
 
   /**
    * Wrap peer into an object which should contain all necessary information.
    * @param peer info is stored inside this object.
    * @param bundle are message to be sent.
    */
-  void transfer(PeerInfo peer, BSPMessageBundle<M> bundle)
-      throws IOException;
+  @throws(classOf[IOException])
+  def transfer(peer: PeerInfo, bundle: BSPMessageBundle[M])
 
   /**
    * Clears the outgoing message queue. 
    */
-  void clearOutgoingMessages();
+  def clearOutgoingMessages()
 
   /**
    * Gets the number of messages in the current queue.
    * @return the number of messages in the current queue.
    */
-  int getNumCurrentMessages();
+  def getNumCurrentMessages(): Int
 
   /**
    * Send the messages to self to receive in the next superstep.
    * @param bundle contains messages to be sent to itself.
    */
-  void loopBackMessages(BSPMessageBundle<M> bundle) throws IOException;
+  @throws(classOf[IOException])
+  def loopBackMessages(bundle: BSPMessageBundle[M]) 
 
   /**
    * Send the message to self. Messages will be received at the next superstep.
    * @param message is what to be sent to itself.
    */
-  void loopBackMessage(Writable message) throws IOException;
+  @throws(classOf[IOException])
+  def loopBackMessage(message: Writable) 
 
   /**
    * Returns the server address on which the incoming connections are listening.
    * @param InetSocketAddress to which this server listens.
    */
-  InetSocketAddress getListenerAddress();
-
+  def getListenerAddress(): PeerInfo
 }

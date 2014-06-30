@@ -15,25 +15,43 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.message
+package org.apache.hama.message // TODO: move to org.apache.hama.bsp.v2?
 
 import java.net.InetSocketAddress
+import org.apache.hama.HamaConfiguration
 
 object PeerInfo {
 
   def apply(actorSystemName: String, host: String, port: Int): PeerInfo = 
-    new PeerInfo(actorSystemName, new InetSocket(host, port))
+    new PeerInfo(actorSystemName, new InetSocketAddress(host, port))
 
+  /**
+   * Info string should be in a form like ${actor-system-name}@${host}:${port}
+   */
   def fromString(info: String): PeerInfo = {
     if(null == info || info.isEmpty) 
       throw new IllegalArgumentException("PeerInfo string do not have data.")
+    if(!info.startsWith("BSPPeerSystem")) 
+      throw new IllegalArgumentException("Info string's actor system should "+
+                                         "start with BSPPeerSystem.")
     val ary = info.split("@")
     if(2 != ary.length) 
       throw new RuntimeException("Invalid PeerInfo string format: "+info)
     val hostPort = ary(1).split(":")
     if(2 != hostPort.length)
       throw new RuntimeException("Invalid host:port string format: "+info)
-    new PeerInfo(ary(0), hostPort(0), hostPort(1))
+    new PeerInfo(ary(0), hostPort(0), hostPort(1).toInt)
+  }
+
+  /**
+   * Peer's actor system should starts with BSPPeerSystemN where N is integer.
+   */
+  def fromConfiguration(conf: HamaConfiguration): PeerInfo = {
+    val host = conf.get("bsp.peer.hostname", "0.0.0.0")
+    val port = conf.getInt("bsp.peer.port", 61000)
+    val actorSys = 
+      "BSPPeerSystem%s".format(conf.getInt("bsp.child.slot.seq", 1))
+    PeerInfo(actorSys, host, port)
   }
 }
 
@@ -52,7 +70,7 @@ final case class PeerInfo(actorSystemName: String, socket: InetSocketAddress) {
   def this(actorSystemName: String, host: String, port: Int) = 
     this(actorSystemName, new InetSocketAddress(host, port))
 
-  if(null == actorSystemName || actorSystemName.isEmpty)
+  if(null == actorSystemName || actorSystemName.isEmpty) 
     throw new IllegalArgumentException("Actor system name is missing!")
 
   if(null == socket) 

@@ -15,35 +15,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.bsp.v2;
+package org.apache.hama.bsp.v2
 
-import java.io.IOException;
-import org.apache.hadoop.io.Writable;
-import org.apache.hama.bsp.TaskAttemptID;
-import org.apache.hama.bsp.Counters.Counter;
-import org.apache.hama.HamaConfiguration;
-import org.apache.hama.io.IO;
+import java.io.IOException
+import org.apache.hadoop.io.Writable
+import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.bsp.Counters.Counter
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.io.IO
 
 /**
  * BSP communication interface. 
  * Exchange messages with other {@link BSPPeer}s via Writable messages.
  */
-public interface BSPPeer {
-
-  /**
-   * Initialize necessary services, including 
-   * - io 
-   * - sync 
-   * - messaging
-   * @param conf contains related setting to startup related services.
-  void initialize(conf: HamaConfiguration, task: Task)
-   */
+trait BSPPeer {
 
   /**
    * An interface that links to input and output.
    * @return IO interface that has accesses to the resource.
    */
-  IO getIO();
+  //def getIO[I, O](): IO[I, O]
 
   /**
    * Send a data with a tag to another BSPPeer corresponding to hostname.
@@ -54,18 +45,20 @@ public interface BSPPeer {
    * @param msg is the type wriable that can be serialized over wire.
    * @throws IOException is thrown when io goes wrong.
    */
-  void send(String peerName, Writable msg) throws IOException;
+  @throws(classOf[IOException])
+  def send(peerName: String, msg: Writable) 
 
   /**
    * @return A message from the peer's received messages queue (a FIFO).
    * @throws IOException
    */
-  Writable getCurrentMessage() throws IOException;
+  @throws(classOf[IOException])
+  def getCurrentMessage(): Writable
 
   /**
    * @return The number of messages in the peer's received messages queue.
    */
-  int getNumCurrentMessages();
+  def getNumCurrentMessages(): Int
 
   /**
    * Barrier Synchronization.
@@ -75,31 +68,32 @@ public interface BSPPeer {
    * 
    * @throws IOException
    */
-  void sync() throws IOException;
+  @throws(classOf[IOException])
+  def sync() 
 
   /**
    * Superstep count at the moment this execution has.  
    * @return the count of current super-step
    */
-  long getSuperstepCount();
+  def getSuperstepCount(): Long
 
   /**
    * The name of the peer.
    * @return the name of this peer in the format "hostname:port".
    */
-  String getPeerName();
+  def getPeerName(): String
 
   /**
    * The <i>N</i>th peer name among all peers involved in computation.
    * @return the name of n-th peer from sorted array by name.
    */
-  String getPeerName(int index);
+  def getPeerName(index: Int): String
 
   /**
    * The index for this bsp peer.
    * @return the index of this peer from sorted array by name.
    */
-  int getPeerIndex();
+  def getPeerIndex(): Int
 
   /**
    * An array of all peers' name.
@@ -110,24 +104,24 @@ public interface BSPPeer {
    * @return the names of all the peers executing tasks from the same job
    *         (including this peer).
    */
-  String[] getAllPeerNames();
+  def getAllPeerNames(): Array[String] 
 
   /**
    * The number of peers involved in computation.
    * @return the number of peers
    */
-  int getNumPeers();
+  def getNumPeers(): Int
 
   /**
    * Clears all queues entries.
    */
-  void clear();
+  def clear()
 
   /**
    * The configuration for this job.
    * @return the job's configuration.
    */
-  HamaConfiguration getConfiguration();
+  def getConfiguration(): HamaConfiguration  
 
   /**
    * Get the {@link Counter} of the given group with the given name.
@@ -172,5 +166,5 @@ public interface BSPPeer {
    * The task attempt id this execution holds.
    * @return the task id of this task.
    */
-  TaskAttemptID getTaskAttemptId();
+  def getTaskAttemptId(): TaskAttemptID 
 }

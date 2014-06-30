@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.io;
-
+/*
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -83,7 +83,7 @@ public class TestDefaultIO extends TestCase {
       final String[] locations = fileSplit.getLocations();
       assertNotNull("File split locations can't be null!", locations);
       LOG.info("FileSplit's locations length is "+ locations.length);
-      /* N.B.: FileSplit.write() doesn't serialize hosts fields! */
+      / N.B.: FileSplit.write() doesn't serialize hosts fields! /
       assertEquals("File split's location length must be 0!", 
                    0, locations.length);
       for(int idx=0; idx < hosts.length; idx++) {
@@ -150,16 +150,7 @@ public class TestDefaultIO extends TestCase {
                                           "/part-"+peerIndexes[0]), 
                                  0L, 1024L, 
                                  fileSplitLocation1));
-/*
-    fileSplits.add(new FileSplit(new Path(outputDir+"part-"+partitions[1]+
-                                          "/part-"+peerIndexes[1]), 
-                                 1025L, 4096L, 
-                                 new String[]{ "host5", "host2", "host7" }));
-    fileSplits.add(new FileSplit(new Path(outputDir+"part-"+partitions[2]+
-                                          "/part-"+peerIndexes[2]), 
-                                 5121L, 2048L, 
-                                 new String[]{ "host10", "host11", "host2" }));
-*/
+
     return fileSplits;
   }
  
@@ -194,3 +185,4 @@ public class TestDefaultIO extends TestCase {
   }
   
 }
+*/

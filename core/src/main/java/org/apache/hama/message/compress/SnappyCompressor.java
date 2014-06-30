@@ -47,13 +47,13 @@ public class SnappyCompressor extends BSPMessageCompressor {
       compressedBytes = bos.toByteArray();
 
     } catch (IOException ioe) {
-      LOG.error("Unable to compress", ioe);
+      getLog().error("Unable to compress", ioe);
     } finally {
       try {
         sos.close();
         bos.close();
       } catch (IOException e) {
-        LOG.warn("Failed to close compression streams.", e);
+        getLog().warn("Failed to close compression streams.", e);
       }
     }
     return compressedBytes;
@@ -80,14 +80,14 @@ public class SnappyCompressor extends BSPMessageCompressor {
 
       bytes = IOUtils.toByteArray(dis);
     } catch (IOException ioe) {
-      LOG.error("Unable to decompress.", ioe);
+      getLog().error("Unable to decompress.", ioe);
     } finally {
       try {
         dis.close();
         sis.close();
         bis.close();
       } catch (IOException e) {
-        LOG.warn("Failed to close decompression streams.", e);
+        getLog().warn("Failed to close decompression streams.", e);
       }
     }
 

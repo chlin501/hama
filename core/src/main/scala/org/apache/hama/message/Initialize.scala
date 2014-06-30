@@ -17,6 +17,9 @@
  */
 package org.apache.hama.message
 
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.bsp.TaskAttemptID
+
 /**
  * Initialize message service with common configuration for a specific 
  * {@link TaskAttemptID}.

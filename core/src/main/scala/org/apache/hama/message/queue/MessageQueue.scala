@@ -32,10 +32,10 @@ object MessageQueue {
    * @param conf is commons setting not specific to a task configuration.
    * @return MessageQueue[M] without calling init() method.
    */
-  def get(conf: HamaConfiguration): MessageQueue[M] = {
+  def get[M](conf: HamaConfiguration): MessageQueue[M] = {
     val clazz = conf.getClass("hama.messenger.receive.queue.class",
                               classOf[MemoryQueue[M]], 
-                              classOf[MessageQueue[M]]),
+                              classOf[MessageQueue[M]])
     ReflectionUtils.newInstance(clazz, conf)
   }
 
@@ -44,7 +44,7 @@ object MessageQueue {
 /**
  * Message queue interface.
  */
-trait MessageQueue[M] extends Iterable[M], Configurable {
+trait MessageQueue[M] extends java.lang.Iterable[M] with Configurable {
 
   /**
    * Initialize the queue and bind to a specific task id.
@@ -71,7 +71,7 @@ trait MessageQueue[M] extends Iterable[M], Configurable {
    * Adds a whole Java Collection to the implementing queue.
    * @param col to be added to this queue.
    */
-  def addAll(collection: Iterable[M])
+  def addAll(collection: java.lang.Iterable[M])
 
   /**
    * Adds the other queue to this queue.

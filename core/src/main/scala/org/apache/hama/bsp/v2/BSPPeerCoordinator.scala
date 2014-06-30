@@ -17,14 +17,11 @@
  */
 package org.apache.hama.bsp.v2
 
-import akka.actor.Actor
-import akka.actor.ActorRef
-import akka.event.Logging
+import akka.actor.ActorSystem
 import java.io.IOException
 import java.net.URLClassLoader
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
-import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.Counters
 import org.apache.hama.bsp.TaskAttemptID
@@ -32,12 +29,12 @@ import org.apache.hama.bsp.RecordReader
 import org.apache.hama.bsp.OutputCollector
 import org.apache.hama.fs.CacheService
 import org.apache.hama.fs.Operation
-import org.apache.hama.fs.OperationFactory
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.logging.Logger
 import org.apache.hama.io.IO
-import org.apache.hama.io.DefaultIO
+//import org.apache.hama.io.DefaultIO
 import org.apache.hama.message.MessageManager
-import org.apache.hama.message.MessageManagerFactory
+import org.apache.hama.message.PeerInfo
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncServiceFactory
 
@@ -63,26 +60,18 @@ private[v2] final case class TaskWithStats(task: Task, counters: Counters) {
  * - progress 
  * when necessary.
  */
-trait BSPPeerCoordinator(container: ActorRef) extends BSPPeer 
-                                              with BSPPeerService 
-                                              with Actor {
-
-  val LOG = Logging(context.system, this)
+class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer 
+                                                      with Logger {
 
   /* common setting for the entire BSPPeer. */
   protected var configuration: HamaConfiguration = _
   /* task and counters specific to a particular v2.Job. */
   protected var taskWithStats: TaskWithStats = _
 
-/*
   /* services for a particular v2.Task. */
-  //protected var messenger: MessageManager[Writable] = _
-  protected var messenger: ActorRef = _
-  protected var io: IO[RecordReader[_,_], OutputCollector[_,_]] = _ // ActorRef
-  protected var syncClient: PeerSyncClient = _  // ActorRef
-*/
-  /* is responsible for register and maintain all PeerInfo. */
-  protected var peerRegistrator: ActorRef = _
+  protected var messenger: MessageManager[Writable] = _
+  //protected var io: IO[org.apache.hama.bsp.RecordReader[_,_], org.apache.hama.bsp.OutputCollector[_, _]] = _
+  protected var syncClient: PeerSyncClient = _  
 
   private var allPeers: Array[String] = _
 
@@ -100,15 +89,20 @@ trait BSPPeerCoordinator(container: ActorRef) extends BSPPeer
   protected[v2] def initialize(conf: HamaConfiguration, task: Task) {
     this.configuration = conf
     this.taskWithStats = TaskWithStats(task, new Counters())
-    // TODO: peer registerator regist to zk and maintain all peers (PeerInfo)
-/*
     this.messenger = messengingService(conf, taskWithStats.task) 
-    this.io = ioService(conf, taskWithStats) 
+    //this.io = ioService(conf, taskWithStats) 
     localize(conf, taskWithStats.task)
     settingForTask(conf, taskWithStats.task)
     this.syncClient = syncService(conf, taskWithStats.task)
     //updateStatus(conf, taskWithStats.task)
-*/
+    doSync()
+  }
+
+  /**
+   * Internal sync to ensure all peers is registered/ ready.
+   */
+  protected def doSync() {
+//TODO: 
   }
 
   /** 
@@ -120,12 +114,12 @@ trait BSPPeerCoordinator(container: ActorRef) extends BSPPeer
    */
   protected def settingForTask(conf: HamaConfiguration, task: Task) {
     val taskConf = task.getConfiguration
-    OperationFactory.get(taskConf).setWorkingDirectory(
+    Operation.get(taskConf).setWorkingDirectory(
       new Path(Operation.defaultWorkingDirectory(taskConf))
     )
     val libjars = CacheService.moveJarsAndGetClasspath(conf) 
     if(null != libjars) 
-      LOG.info("Classpath to be included are {}", libjars.mkString(", "))
+      LOG.info("Classpath to be included are "+libjars.mkString(", "))
     taskConf.setClassLoader(new URLClassLoader(libjars, 
                                                taskConf.getClassLoader))
   }
@@ -136,26 +130,23 @@ trait BSPPeerCoordinator(container: ActorRef) extends BSPPeer
    */
   protected def messengingService(conf: HamaConfiguration, task: Task): 
       MessageManager[Writable] = {
-    getOrCreate("messenging", classOf[DefaultMessageManager], container, conf) 
-/*
-    val msgr = MessageManagerFactory.getMessageManager[Writable](conf) 
-    msgr.init(conf, task.getId)
-    msgr
-*/
+    val mgr = MessageManager.get[Writable](conf)
+    mgr.init(conf, task.getId)
+    mgr
   }
 
+  /**
+   * Setup io service according to a specific task.
   protected def ioService(conf: HamaConfiguration, 
                           taskWithStats: TaskWithStats): 
       IO[RecordReader[_,_], OutputCollector[_,_]] = {
-    val readerWriter = ReflectionUtils.newInstance( 
-      conf.getClassByName(conf.get("bsp.io.class",
-                                   classOf[DefaultIO].getCanonicalName)), 
-      conf).asInstanceOf[IO[RecordReader[_,_], OutputCollector[_,_]]]
-    readerWriter.initialize(taskWithStats.task.getConfiguration, 
-                            taskWithStats.task.getSplit, 
-                            taskWithStats.counters) 
-    readerWriter
+    val io = IO.get[RecordReader[_,_], OutputCollector[_,_]](conf)
+    io.initialize(taskWithStats.task.getConfiguration, // tight to a task 
+                  taskWithStats.task.getSplit, 
+                  taskWithStats.counters)
+    io
   }
+   */
 
   /**
    * Copy necessary files to local (file) system so to speed up computation.
@@ -172,16 +163,23 @@ trait BSPPeerCoordinator(container: ActorRef) extends BSPPeer
     client
   }
 
+// beg TODO: move to PeerInfo
+  protected def peerInfo: PeerInfo = PeerInfo(peerActorSystem, host, port)
+
+  protected def peerActorSystem: String = 
+    "BSPPeerSystem%s".format(configuration.getInt("bsp.child.slot.seq", 1))
+
   protected def host(): String = 
     configuration.get("bsp.peer.hostname", "0.0.0.0") 
 
   protected def port(): Int = configuration.getInt("bsp.peer.port", 61000)
 
   protected def socketAddress(): String = "%s:%s".format(host, port)
+// end TODO: move to PeerInfo
 
   //def updateStatus(conf: HamaConfiguration) {}
 
-  override def getIO(): IO[RecordReader[_,_], OutputCollector[_,_]] = io
+  //override def getIO[org.apache.hama.bsp.RecordReader[_,_], org.apache.hama.bsp.OutputCollector[_,_]](): IO[org.apache.hama.bsp.RecordReader[_,_], org.apache.hama.bsp.OutputCollector[_,_]] = this.io
 
   @throws(classOf[IOException])
   override def send(peerName: String, msg: Writable) = 
@@ -237,6 +235,5 @@ trait BSPPeerCoordinator(container: ActorRef) extends BSPPeer
   override def getConfiguration(): HamaConfiguration = configuration
 
   override def getTaskAttemptId(): TaskAttemptID = taskWithStats.task.getId
-  
 
 }

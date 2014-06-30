@@ -50,7 +50,7 @@ object Operation {
     var workDir = conf.get("bsp.working.dir")
     workDir match {
       case null => {
-        val fsDir = OperationFactory.get(conf).getWorkingDirectory
+        val fsDir = Operation.get(conf).getWorkingDirectory
         conf.set("bsp.working.dir", fsDir.toString)
         workDir = fsDir.toString
       }
@@ -62,6 +62,8 @@ object Operation {
 }
 
 trait Operation {
+
+  def initialize(conf: HamaConfiguration) 
 
   def configuration: HamaConfiguration
 

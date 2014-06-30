@@ -33,15 +33,14 @@ class OutgoingPOJOMessageBundle[M <: Writable]
 
   type PeerAndBundleIter = Iterator[Entry[PeerInfo, BSPMessageBundle[M]]] 
 
-  private var conf: HamaConfiguration
-  private var compressor: BSPMessageCompressor[M]
-  private var combiner: Combiner[M] 
+  private var conf: HamaConfiguration = _
+  private var compressor: BSPMessageCompressor = _
+  private var combiner: Combiner[M] = _
   private val peerSocketCache = new HashMap[String, PeerInfo]()
   private val outgoingBundles = new HashMap[PeerInfo, BSPMessageBundle[M]]()
 
-  @SuppressWarnings("unchecked")
-  overirde def init(conf: HamaConfiguration, 
-                    compressor: BSPMessageCompressor[M]) {
+  override def init(conf: HamaConfiguration, 
+                    compressor: BSPMessageCompressor) {
     this.conf = conf
     this.compressor = compressor
     val combinerName = conf.get(Constants.COMBINER_CLASS)
@@ -50,16 +49,15 @@ class OutgoingPOJOMessageBundle[M <: Writable]
         this.combiner = ReflectionUtils.newInstance(conf
             .getClassByName(combinerName)).asInstanceOf[Combiner[M]]
       } catch {
-       case cnfe: ClassNotFoundException => e.printStackTrace()
+       case cnfe: ClassNotFoundException => cnfe.printStackTrace()
       }
     }
   }
 
-  override def addMessage(String peerName, M msg) {
-    val peer = getPeerInfo(peerName)
+  override def addMessage(peer: PeerInfo, msg: M) {
 
     if (null != combiner) {
-      valbundle = outgoingBundles.get(peer)
+      val bundle = outgoingBundles.get(peer)
       bundle.addMessage(msg)
       val combined = new BSPMessageBundle[M]()
       combined.setCompressor(compressor, conf.getLong(
@@ -72,8 +70,8 @@ class OutgoingPOJOMessageBundle[M <: Writable]
     }
   }
 
-  def PeerInfo getPeerInfo(peerName: String) {
-    val peer: PeerInfo = null
+  def getPeerInfo(peerName: String): PeerInfo = {
+    var peer: PeerInfo = null
     if (peerSocketCache.containsKey(peerName)) {
       peer = peerSocketCache.get(peerName)
     } else {
@@ -82,7 +80,7 @@ class OutgoingPOJOMessageBundle[M <: Writable]
     }
 
     if (!outgoingBundles.containsKey(peer)) {
-      BSPMessageBundle[M] bundle = new BSPMessageBundle[M]()
+      val bundle = new BSPMessageBundle[M]()
       bundle.setCompressor(compressor,
           conf.getLong("hama.messenger.compression.threshold", 128))
       outgoingBundles.put(peer, bundle)
@@ -90,9 +88,10 @@ class OutgoingPOJOMessageBundle[M <: Writable]
     peer 
   }
 
-  override def clear() = outgoingBundles.clear
+  override def clear() {
+    outgoingBundles.clear
+  }
 
-  override def getBundleIterator(): PeerAndBundleIter = 
-    outgoingBundles.entrySet.iterator
+  override def getBundleIterator(): java.util.Iterator[java.util.Map.Entry[PeerInfo, BSPMessageBundle[M]]] = { outgoingBundles.entrySet.iterator }
 
 }
