@@ -34,6 +34,7 @@ import org.apache.hama.bsp.message.queue.DiskQueue
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.message.compress.BSPMessageCompressor
 import org.apache.hama.message.queue.MemoryQueue
 import org.apache.hama.message.queue.MessageQueue
 import org.apache.hama.message.queue.SingleLockQueue
@@ -41,6 +42,10 @@ import org.apache.hama.message.queue.SynchronizedQueue
 import org.apache.hama.util.LRUCache
 import org.apache.hama.logging.Logger
 import scala.collection.JavaConversions._
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.util.{Failure, Success}
+
 
 /**
  * A bridge device enables bsp peers communication through TypedActor.
@@ -71,6 +76,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   protected var localQueue: MessageQueue[M] = _
   protected var localQueueForNextIteration: SynchronizedQueue[M] = _
   protected var hermes: Hermes = _
+  protected var currentPeer: PeerInfo = _
 
   override def initialize(sys: ActorSystem) {
     if(null == sys)
@@ -82,6 +88,13 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     if(null == this.configuration)
       throw new RuntimeException("Common configuration is not yet set!")
     this.hermes.initialize(configuration)
+  }
+
+  def currentPeerInfo(conf: HamaConfiguration): PeerInfo = {
+    val sys = conf.get("bsp.groom.actor-system.name", "GroomSystem")
+    val host = conf.get("bsp.peer.hostname", "0.0.0.0")
+    val port = conf.getInt("bsp.peer.port", 61000)
+    PeerInfo(sys, host, port)
   }
 
   /**
@@ -98,7 +111,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     this.configuration = conf
     if(null == this.configuration)
       throw new IllegalArgumentException("HamaConfiguration is missing!")
-
+    this.currentPeer = currentPeerInfo(configuration)
     this.localQueue = getReceiverQueue
     this.localQueueForNextIteration = getSynchronizedReceiverQueue
     this.outgoingMessageManager = OutgoingMessageManager.get[M](configuration)
@@ -179,7 +192,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
    * - once received reply, adding ActorRef to LRUCache.
    */
   @throws(classOf[IOException])
-  override def send(peerName: String, msg: M) = {
+  override def send(peerName: String, msg: M) {
     outgoingMessageManager.addMessage(PeerInfo.fromString(peerName), msg); 
     // TODO: increment counter by 1
     // peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_SENT, 1L)
@@ -196,15 +209,33 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
    * @param bundle are messages to be sent.
    */
   @throws(classOf[IOException])
-  override def transfer(peer: PeerInfo, bundle: BSPMessageBundle[M]) = 
-    this.hermes.transfer(peer, bundle) 
+  override def transfer(peer: PeerInfo, bundle: BSPMessageBundle[M]) {
+    import ExecutionContext.Implicits.global
+    this.hermes.transfer(peer, bundle) onComplete {
+      case Failure(failure) => 
+        LOG.error("["+failure+"] Fail transferring message to "+peer.path)
+      case Success(result) => 
+        LOG.info("Successful transferring message to "+peer.path)
+    }
+  }
 
   @throws(classOf[IOException])
-  override def loopBackMessages(bundle: BSPMessageBundle[M]) {}
+  override def loopBackMessages(bundle: BSPMessageBundle[M]) {
+    val threshold =
+      configuration.getLong("hama.messenger.compression.threshold", 128) 
+    bundle.setCompressor(BSPMessageCompressor.get(configuration), threshold)
+    val it: java.util.Iterator[_ <: Writable] = bundle.iterator
+    while (it.hasNext) {
+      loopBackMessage(it.next)
+    }
+  }
 
   @throws(classOf[IOException])
-  override def loopBackMessage(message: Writable) {} 
+  override def loopBackMessage(message: Writable) {
+    localQueueForNextIteration.add(message.asInstanceOf[M])
+    //TODO: stats peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_RECEIVED, 1L);
+  } 
 
-  override def getListenerAddress(): PeerInfo = null
+  override def getListenerAddress(): PeerInfo = this.currentPeer 
 
 }

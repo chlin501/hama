@@ -18,7 +18,6 @@
 package org.apache.hama.message
 
 import akka.actor.Actor
-import akka.actor.ActorContext
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
@@ -184,20 +183,24 @@ class PeerMessenger extends Actor with RemoteService {
    */
   def transfer: Receive = {
     case Transfer(peer, msg) => {
-      if(!initialized)  // TODO: change to either?
-        throw new IllegalStateException("PeerMessenger is not initialzied!")
-
-      mapAsScalaMap(peersLRUCache).find( entry => entry._1.equals(peer)) match {
-        case Some(found) => {
-          val proxy = peersLRUCache.get(found._2) 
-          proxy ! msg
-          val from = sender
-          confirm(from)
+      if(initialized) {
+        mapAsScalaMap(peersLRUCache).find( 
+          entry => entry._1.equals(peer)
+        ) match {
+          case Some(found) => {
+            val proxy = peersLRUCache.get(found._2) 
+            proxy ! msg
+            val from = sender
+            confirm(from)
+          }
+          case None => {
+            // seender is a bsp peer who sends transfer request
+            val from = sender 
+            findWith(peer, msg, from)
+          }
         }
-        case None => {
-          val from = sender // seender is a bsp peer who sends transfer request
-          findWith(peer, msg, from)
-        }
+      } else {
+        sender ! MessengerUninitialized 
       }
     }
   }
