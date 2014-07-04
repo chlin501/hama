@@ -74,10 +74,12 @@ final case class PeerInfo(actorSystemName: String, socket: InetSocketAddress) {
     throw new IllegalArgumentException("Actor system name is missing!")
 
   if(null == socket) 
-    throw new IllegalArgumentException("Ip and port is not provided!")
+    throw new IllegalArgumentException("Host and port is not provided!")
 
   def host: String = socket.getAddress.getHostAddress
 
   def port: Int = socket.getPort
+
+  def path(): String = "%s@%s:%d".format(actorSystemName, host, port)
 
 }

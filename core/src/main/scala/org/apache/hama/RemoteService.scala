@@ -110,6 +110,14 @@ trait RemoteService extends Service {
    */
   protected def afterLinked(proxy: ActorRef) {}
 
+  
+  /**
+   * Post process once the remote actor is linked.
+   * @param target is the name used in {@link #lookup}.
+   * @param proxy is the remote actor linked via {@link RemoteService#lookup}.
+   */
+  protected def afterLinked(target: String, proxy: ActorRef) {}
+
   /**
    * A reply from the remote actor indicating if the remote actor is ready to 
    * provide its service.
@@ -120,6 +128,7 @@ trait RemoteService extends Service {
       context.watch(remote) // TODO: watch proxy instead?
       val proxy = link(target.asInstanceOf[String], remote)//remote.path.name 
       afterLinked(remote) // TODO: need to switch using proxy
+      afterLinked(target.toString, remote)
     }
     case ActorIdentity(target, None) => 
       LOG.warning("Proxy {} is not yet available!", target)

@@ -47,6 +47,10 @@ import scala.collection.JavaConversions._
  */
 trait PeerCommunicator {
   
+  /**
+   * Initialize setting in allowing MessageManager to communicate with other 
+   * {BSPPeer}s through TypedActor.
+   */
   def initialize(sys: ActorSystem)
 
 }
@@ -69,12 +73,14 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   protected var hermes: Hermes = _
 
   override def initialize(sys: ActorSystem) {
+    if(null == sys)
+      throw new IllegalArgumentException("ActorSystem is missin!")
     this.hermes = TypedActor(sys).typedActorOf(TypedProps[Iris]())
     if(null == this.hermes)
       throw new RuntimeException("Fail initializing bridge on behalf of "+
                                  "DefaultMessageManager sends messages.")
     if(null == this.configuration)
-      throw new RuntimeException("Common configuration is missing!")
+      throw new RuntimeException("Common configuration is not yet set!")
     this.hermes.initialize(configuration)
   }
 
@@ -179,7 +185,9 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     // peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_SENT, 1L)
   }
 
-  override def getOutgoingBundles(): java.util.Iterator[java.util.Map.Entry[PeerInfo, BSPMessageBundle[M]]] = outgoingMessageManager.getBundleIterator
+  override def getOutgoingBundles(): 
+    java.util.Iterator[java.util.Map.Entry[PeerInfo, BSPMessageBundle[M]]] = 
+    outgoingMessageManager.getBundleIterator
 
   /**
    * Actual transfer messsages over wire.
@@ -188,9 +196,8 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
    * @param bundle are messages to be sent.
    */
   @throws(classOf[IOException])
-  override def transfer(peer: PeerInfo, bundle: BSPMessageBundle[M]) {
-// TODO: call hermes transfer and wait for its return!!!
-  }
+  override def transfer(peer: PeerInfo, bundle: BSPMessageBundle[M]) = 
+    this.hermes.transfer(peer, bundle) 
 
   @throws(classOf[IOException])
   override def loopBackMessages(bundle: BSPMessageBundle[M]) {}
