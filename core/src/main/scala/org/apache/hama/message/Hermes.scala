@@ -24,8 +24,9 @@ import akka.actor.Props
 import akka.actor.TypedActor
 import akka.event.Logging
 import akka.pattern.ask
-import akka.util.Timeout
+import java.util.concurrent.BlockingQueue
 import java.util.Map.Entry
+import akka.util.Timeout
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.RemoteService
@@ -39,7 +40,8 @@ import scala.concurrent.Future
  * Denote to initialize messenger's services for transfer messages over wire. 
  * @param conf is common configuration.
  */
-final case class Setup(conf: HamaConfiguration)
+final case class Setup[M <: Writable](conf: HamaConfiguration, 
+                                      q: BlockingQueue[BSPMessageBundle[M]])
 
 /**
  * An object that contains peer and message bundle. The bundle will be sent 
@@ -58,7 +60,8 @@ trait Hermes {
    * Initialize necessary services with common configuration.
    * @param conf is common setting from container.
    */
-  def initialize(conf: HamaConfiguration)
+  def initialize[M <: Writable](conf: HamaConfiguration, 
+                                q: BlockingQueue[BSPMessageBundle[M]])
 
   /**
    * A function transfer message bundle to another bsp peer.
@@ -82,7 +85,11 @@ class Iris extends Hermes {
     this.actor
   }
 
-  override def initialize(conf: HamaConfiguration) = getActor ! Setup(conf)
+  override def initialize[M <: Writable](conf: HamaConfiguration, 
+                                         q: BlockingQueue[BSPMessageBundle[M]]){
+
+    getActor ! Setup(conf, q)
+  }
 
   implicit val timeout = Timeout(30 seconds)
 
@@ -107,13 +114,17 @@ class PeerMessenger extends Actor with RemoteService {
   protected var peersLRUCache: LRUCache[PeerInfo, ActorRef] = _
   protected var initialized: Boolean = false
   protected var conf: HamaConfiguration = new HamaConfiguration() 
-
+  protected var loopbackQueue: BlockingQueue[BSPMessageBundle[_]] = _
   protected var waitingList = Map.empty[PeerInfo, MsgFrom]
 
   override def configuration(): HamaConfiguration = this.conf
 
-  def initializeService(conf: HamaConfiguration) {
+  def initializeService[M <: Writable](conf: HamaConfiguration, 
+                                       q: BlockingQueue[BSPMessageBundle[M]]) {
     this.conf = conf
+    if(null == q)
+      throw new RuntimeException("Loopback message queue is empty!") 
+    loopbackQueue = q.asInstanceOf[BlockingQueue[BSPMessageBundle[_]]]
     this.maxCachedConnections =
       this.conf.getInt("hama.messenger.max.cached.connections", 100)
     this.peersLRUCache = initializeLRUCache(maxCachedConnections)
@@ -136,7 +147,7 @@ class PeerMessenger extends Actor with RemoteService {
   }
 
   def initialize: Receive = {
-    case Setup(conf) => initializeService(conf)
+    case Setup(conf, q) => initializeService(conf, q)
   }
 
   def remotePeerAddress(peer: PeerInfo): String = 
@@ -182,29 +193,38 @@ class PeerMessenger extends Actor with RemoteService {
    * first, and transfer when remote peer is obtained.
    */
   def transfer: Receive = {
-    case Transfer(peer, msg) => {
-      if(initialized) {
-        mapAsScalaMap(peersLRUCache).find( 
-          entry => entry._1.equals(peer)
-        ) match {
-          case Some(found) => {
-            val proxy = peersLRUCache.get(found._2) 
-            proxy ! msg
-            val from = sender
-            confirm(from)
-          }
-          case None => {
-            // seender is a bsp peer who sends transfer request
-            val from = sender 
-            findWith(peer, msg, from)
-          }
+    case Transfer(peer, bundle) => doTransfer(peer, bundle, sender)
+  }
+
+  protected def doTransfer[M <: Writable](peer: PeerInfo, 
+                                          bundle: BSPMessageBundle[M], 
+                                          from: ActorRef) {
+    if(initialized) {
+      mapAsScalaMap(peersLRUCache).find( 
+        entry => entry._1.equals(peer)
+      ) match {
+        case Some(found) => {
+          val proxy = peersLRUCache.get(found._2) 
+          proxy ! bundle  
+          confirm(from)
         }
-      } else {
-        sender ! MessengerUninitialized 
+        case None => findWith(peer, bundle, from)
       }
+    } else {
+      from ! MessengerUninitialized 
     }
   }
 
-  override def receive = initialize orElse transfer orElse unknown
+  /**
+   * A {@link PeerMessenger} may receive messages bundle from remote peer 
+   * messenger. Once it receives a message bundle, this method gets called, and
+   * it puts the bundle to the queue that in another thread in turns retrieves
+   * by calling {@link MessageManager#loopBackMessages}.
+   */
+  def messageFromRemote: Receive = {
+    case bundle: BSPMessageBundle[_] => loopbackQueue.put(bundle)
+  }
+
+  override def receive = initialize orElse transfer orElse messageFromRemote orElse unknown
 
 }

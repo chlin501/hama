@@ -27,6 +27,10 @@ import java.net.InetSocketAddress
 import java.util.ArrayList
 import java.util.{ Iterator => Iter }
 import java.util.Map.Entry
+import java.util.concurrent.BlockingQueue
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
 import org.apache.hadoop.conf.Configurable
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.io.Writable
@@ -75,8 +79,37 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   protected var outgoingMessageManager: OutgoingMessageManager[M] = _
   protected var localQueue: MessageQueue[M] = _
   protected var localQueueForNextIteration: SynchronizedQueue[M] = _
+
+  /**
+   * An interface calls underlying PeerMessenger.
+   */
   protected var hermes: Hermes = _
+  
+  /**
+   * {@link PeerMessenger} address information.
+   */
   protected var currentPeer: PeerInfo = _
+
+  /**
+   * This is used for receiving loopback message {@link #loopBackMessages} 
+   */ 
+  protected var loopbackMessageQueue: BlockingQueue[BSPMessageBundle[M]] = _
+
+  protected val executor = Executors.newSingleThreadExecutor()
+
+  class Loopback[M <: Writable](receiver: DefaultMessageManager[M]) 
+      extends Callable[Boolean] {
+    
+    override def call(): Boolean = {
+      while(!Thread.currentThread().isInterrupted()) {
+        val bundle = loopbackMessageQueue.take
+        if(null == bundle) 
+          throw new RuntimeException("Fail ispatching local messages received.")
+        receiver.loopBackMessages(bundle.asInstanceOf[BSPMessageBundle[M]]) 
+      }
+      true
+    }
+  }
 
   override def initialize(sys: ActorSystem) {
     if(null == sys)
@@ -87,7 +120,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
                                  "DefaultMessageManager sends messages.")
     if(null == this.configuration)
       throw new RuntimeException("Common configuration is not yet set!")
-    this.hermes.initialize(configuration)
+    this.hermes.initialize[M](configuration, loopbackMessageQueue)
   }
 
   def currentPeerInfo(conf: HamaConfiguration): PeerInfo = {
@@ -115,6 +148,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     this.localQueue = getReceiverQueue
     this.localQueueForNextIteration = getSynchronizedReceiverQueue
     this.outgoingMessageManager = OutgoingMessageManager.get[M](configuration)
+    this.executor.submit(new Loopback[M](this))
   }
 
   /**
@@ -132,6 +166,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     SingleLockQueue.synchronize(getReceiverQueue)
 
   override def close() {
+    executor.shutdown
     outgoingMessageManager.clear
     localQueue.close
     cleanupDiskQueue
@@ -220,7 +255,8 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   }
 
   @throws(classOf[IOException])
-  override def loopBackMessages(bundle: BSPMessageBundle[M]) {
+  override def loopBackMessages(bundle: BSPMessageBundle[M]) = 
+    this.synchronized {
     val threshold =
       configuration.getLong("hama.messenger.compression.threshold", 128) 
     bundle.setCompressor(BSPMessageCompressor.get(configuration), threshold)
