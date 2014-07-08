@@ -97,9 +97,18 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   protected val loopbackMessageQueue = 
     new LinkedBlockingQueue[BSPMessageBundle[M]]() 
 
+  /**
+   * Only for receiving local messages purpose.
+   */
   protected val executor = Executors.newSingleThreadExecutor()
 
-  class Loopback[M <: Writable](receiver: DefaultMessageManager[M]) 
+  /**
+   * A class that is responsible for receiving BSPMessageBundle for local 
+   * use. It will call loppBackMessages once being notified new incoming 
+   * messages.
+   * @param receiver is the implementation of messenge manager.
+   */
+  class Loopback[M <: Writable](receiver: MessageManager[M]) 
       extends Callable[Boolean] {
     
     override def call(): Boolean = {
