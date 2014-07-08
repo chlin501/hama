@@ -28,6 +28,7 @@ import java.util.ArrayList
 import java.util.{ Iterator => Iter }
 import java.util.Map.Entry
 import java.util.concurrent.BlockingQueue
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.ExecutorService
@@ -93,7 +94,8 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   /**
    * This is used for receiving loopback message {@link #loopBackMessages} 
    */ 
-  protected var loopbackMessageQueue: BlockingQueue[BSPMessageBundle[M]] = _
+  protected val loopbackMessageQueue = 
+    new LinkedBlockingQueue[BSPMessageBundle[M]]() 
 
   protected val executor = Executors.newSingleThreadExecutor()
 

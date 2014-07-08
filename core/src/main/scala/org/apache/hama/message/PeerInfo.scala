@@ -82,4 +82,8 @@ final case class PeerInfo(actorSystemName: String, socket: InetSocketAddress) {
 
   def path(): String = "%s@%s:%d".format(actorSystemName, host, port)
 
+  def remotePath(): String = "akka.tcp://%s".format(path)
+
+  def localPath(): String = "akka://%s".format(actorSystemName)
+
 }

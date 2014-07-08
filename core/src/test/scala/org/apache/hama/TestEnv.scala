@@ -24,7 +24,7 @@ import akka.testkit.TestKit
 import akka.testkit.TestProbe
 import java.io.File
 import org.apache.commons.io.FileUtils
-import org.apache.hama.util.Logger
+import org.apache.hama.logging.Logger
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.FunSpecLike
 import org.scalatest.ShouldMatchers

@@ -31,6 +31,7 @@ import org.apache.hama.bsp.v2.IDCreator
 import org.apache.hama.bsp.v2.IDCreator._
 import org.apache.hama.fs.HDFS
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.logging.Logger
 
 class MockHDFS extends HDFS {
 

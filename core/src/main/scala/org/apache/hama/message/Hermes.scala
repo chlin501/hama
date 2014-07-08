@@ -100,7 +100,8 @@ class Iris extends Hermes {
 
 }
 
-final case class MsgFrom(msg: BSPMessageBundle[_ <: Writable], from: ActorRef)
+final case class MessageFrom(msg: BSPMessageBundle[_ <: Writable], 
+                             from: ActorRef)
 
 /**
  * An messenger on behalf of {@link BSPPeer} sends messages to other peers.
@@ -115,7 +116,7 @@ class PeerMessenger extends Actor with RemoteService {
   protected var initialized: Boolean = false
   protected var conf: HamaConfiguration = new HamaConfiguration() 
   protected var loopbackQueue: BlockingQueue[BSPMessageBundle[_]] = _
-  protected var waitingList = Map.empty[PeerInfo, MsgFrom]
+  protected var waitingList = Map.empty[PeerInfo, MessageFrom]
 
   override def configuration(): HamaConfiguration = this.conf
 
@@ -150,8 +151,8 @@ class PeerMessenger extends Actor with RemoteService {
     case Setup(conf, q) => initializeService(conf, q)
   }
 
-  def remotePeerAddress(peer: PeerInfo): String = 
-     peer.path()+"/user/peerMessenger"
+  def remotePeerPath(peer: PeerInfo): String = 
+     peer.remotePath()+"/user/peerMessenger"
  
   /**
    * Cache message bundle and {@link BSPPeer} in waiting list.
@@ -160,27 +161,44 @@ class PeerMessenger extends Actor with RemoteService {
    * @param msg is the message to be sent.
    * @param from is the bsp peer who issues the transfer request.
    */
-  def findWith[M <: Writable](peer: PeerInfo, msg: BSPMessageBundle[M],
-                              from: ActorRef) {
-    waitingList ++= Map(peer -> MsgFrom(msg, from)) 
+  protected def findWith[M <: Writable](peer: PeerInfo, 
+                                        msg: BSPMessageBundle[M],
+                                        from: ActorRef) {
+    if(null == msg || null == from)
+      throw new RuntimeException("Messeage bundle or remote PeerMessenger "+
+                                 " is missing!")
+    addToWaitingList(peer, MessageFrom(msg, from))
     LOG.info("Look up remote peer "+peer.path())
-    lookup(peer.path(), remotePeerAddress(peer)) 
+    lookupPeer(peer.path(), remotePeerPath(peer))
   }
 
+  protected def addToWaitingList(peer: PeerInfo, msgFrom: MessageFrom) =
+    waitingList ++= Map(peer -> msgFrom) 
+
+  protected def lookupPeer(name: String, addr: String) = lookup(name, addr) 
+
+  protected def cache(peer: PeerInfo, proxy: ActorRef) = 
+    peersLRUCache.put(peer, proxy)   
+
   override def afterLinked(target: String, proxy: ActorRef) {
+    findThenSend(target, proxy) 
+  } 
+
+  protected def findThenSend(target: String, proxy: ActorRef) {
     waitingList.find(entry => entry._1.path.equals(target)) match {
       case Some(found) => {
         val msgFrom = found._2
-        val msg = msgFrom.msg
+        val msg = msgFrom.msg 
         val from = msgFrom.from
-        LOG.debug("Transfer message to {} with size {}", 
-                  target, msg.size)
+        cache(found._1, proxy)
+        LOG.info("Transfer message to {} with size {}", target, msg.size)
         proxy ! msg
         confirm(from)
       }
-      case None => LOG.warning("No corresponded msg can be sent to {}", target)
+      case None => LOG.warning("No corresponded {} for sending message bundle.",
+                               target)
     }
-  } 
+  }
 
   /**
    * Confirm that message bundle is sent to remote {@link BSPPeer}s.
@@ -211,6 +229,7 @@ class PeerMessenger extends Actor with RemoteService {
         case None => findWith(peer, bundle, from)
       }
     } else {
+      LOG.warning("PeerMessenger is not initialized!") 
       from ! MessengerUninitialized 
     }
   }
@@ -222,9 +241,13 @@ class PeerMessenger extends Actor with RemoteService {
    * by calling {@link MessageManager#loopBackMessages}.
    */
   def messageFromRemote: Receive = {
-    case bundle: BSPMessageBundle[_] => loopbackQueue.put(bundle)
+    case bundle: BSPMessageBundle[_] => {
+      LOG.info("Message received from {} is putting to loopback queue!", 
+               sender)
+      loopbackQueue.put(bundle)
+    }
   }
 
-  override def receive = initialize orElse transfer orElse messageFromRemote orElse unknown
+  override def receive = initialize orElse transfer orElse messageFromRemote orElse isProxyReady orElse timeout orElse unknown
 
 }
