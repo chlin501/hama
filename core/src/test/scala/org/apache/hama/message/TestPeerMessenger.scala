@@ -41,12 +41,19 @@ class RemotePeerMessenger(tester: ActorRef) extends PeerMessenger {
 
 }
 
+object LocalPeerMessenger {
+
+  val dummyPeer = PeerInfo("TestPeerMessenger", "127.0.0.1", 1234)
+
+}
+
 class LocalPeerMessenger(tester: ActorRef) extends PeerMessenger {
+
+  import LocalPeerMessenger._
 
   val remoteName: String = "remotePeer"
   val remoteAddr: String = "akka://TestPeerMessenger/user/remotePeer"
   // this should be quals to the one in testing function.
-  val dummyPeer = PeerInfo("TestPeerMessenger", "127.0.0.1", 1234)
 
   override def link(target: String, ref: ActorRef): ActorRef = {
     LOG.info("[For test only] Link to remote target: {} ref: {}.", target, ref)
@@ -136,10 +143,8 @@ class TestPeerMessenger extends TestEnv(ActorSystem("TestPeerMessenger")) {
     val remotePeer = createPeer[Writable]("remotePeer", 
                                           localMsgQueue,
                                           classOf[RemotePeerMessenger])
-    // this should equals to the LocalPeerMessenger.dummyPeer
-    val dummyPeer = PeerInfo("TestPeerMessenger", "127.0.0.1", 1234)
     val bundle = createBundle[IntWritable](seq(0), seq(1), seq(2))
-    localPeer ! Transfer(dummyPeer, bundle)
+    localPeer ! Transfer(LocalPeerMessenger.dummyPeer, bundle)
     Thread.sleep(15*1000)
     LOG.info("Bundle "+forVerification+" size "+forVerification.size)
     assert(null != forVerification)
