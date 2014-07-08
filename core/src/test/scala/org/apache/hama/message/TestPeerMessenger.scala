@@ -83,7 +83,7 @@ class TestPeerMessenger extends TestEnv(ActorSystem("TestPeerMessenger")) {
   val executor = Executors.newSingleThreadExecutor()
   val seq = Seq[IntWritable](new IntWritable(1), new IntWritable(99), 
                              new IntWritable(23))
-  var forVerification: BSPMessageBundle[Writable] = _
+  var forVerification: BSPMessageBundle[IntWritable] = _
 
   class MessageConsumer extends Callable[Boolean] with Logger {
     override def call(): Boolean = {
@@ -93,7 +93,7 @@ class TestPeerMessenger extends TestEnv(ActorSystem("TestPeerMessenger")) {
         val bundle = localMsgQueue.take
         if(null == bundle) 
           throw new RuntimeException("Msg bundle in queue is null!")
-        forVerification = bundle
+        forVerification = bundle.asInstanceOf[BSPMessageBundle[IntWritable]]
         if(null != forVerification) flag = false
       }
       LOG.info("Escape while loop with flag set to "+flag)
@@ -138,7 +138,7 @@ class TestPeerMessenger extends TestEnv(ActorSystem("TestPeerMessenger")) {
                                           classOf[RemotePeerMessenger])
     // this should equals to the LocalPeerMessenger.dummyPeer
     val dummyPeer = PeerInfo("TestPeerMessenger", "127.0.0.1", 1234)
-    val bundle = createBundle[Writable](seq(0), seq(1), seq(2))
+    val bundle = createBundle[IntWritable](seq(0), seq(1), seq(2))
     localPeer ! Transfer(dummyPeer, bundle)
     Thread.sleep(15*1000)
     LOG.info("Bundle "+forVerification+" size "+forVerification.size)
@@ -146,11 +146,10 @@ class TestPeerMessenger extends TestEnv(ActorSystem("TestPeerMessenger")) {
     var idx = 0
     asScalaIterator(forVerification.iterator).foreach( e => {
       assert(null != e)
-      val value = e.asInstanceOf[IntWritable]
-      LOG.info("Found a message at index "+idx+" with value "+value.get)
-      assert(value.get == seq(idx).get)
+      LOG.info("Found a message at index "+idx+" with value "+e.get)
+      assert(e.get == seq(idx).get)
       idx+=1
     })
-    LOG.info("Messages received: "+idx+", Messages sent "+bundle.size)
+    LOG.info("Messages sent: "+bundle.size+". Messages received: "+idx)
   }
 }
