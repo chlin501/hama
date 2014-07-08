@@ -15,11 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.message // TODO: move to org.apache.hama.bsp.v2?
+package org.apache.hama.message 
 
 import java.net.InetSocketAddress
 import org.apache.hama.HamaConfiguration
 
+// TODO: remove PeerInfo, merging to ProxyInfo
 object PeerInfo {
 
   def apply(actorSystemName: String, host: String, port: Int): PeerInfo = 

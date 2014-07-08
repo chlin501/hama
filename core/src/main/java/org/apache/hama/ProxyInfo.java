@@ -28,7 +28,7 @@ import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
 /**
- * Remote actor location information, including
+ * Actor location information, including
  * - Protocol 
  * - ActorSystemName
  * - Host
@@ -38,7 +38,6 @@ import org.apache.hadoop.io.Writable;
  * constructing the proxy information.
  * 
  * TODO: 1. group with ActorLocator
- *       2. perhaps remove Protocol.Local because Proxy mainly used for remote.
  */
 public final class ProxyInfo extends SystemInfo implements Writable {
 
@@ -206,34 +205,6 @@ public final class ProxyInfo extends SystemInfo implements Writable {
       return new ProxyInfo(this.protocol, this.actorName, this.actorSystemName,
                            this.host, this.port, actorPathBuilder.toString());
     } 
-
-/*
-    public ProxyInfo buildProxyAtMaster() {
-      if(null == this.conf) 
-        throw new NullPointerException("HamaConfiguration not found.");
-      final String sysName = this.conf.get("bsp.master.actor-system.name", 
-                                           "MasterSystem");
-      final String hostV = this.conf.get("bsp.master.address", "127.0.0.1");
-      final int portV = this.conf.getInt("bsp.master.port", 40000);
-      final String fullPath = this.actorPath.toString();
-      LOG.debug("Proxy is at "+hostV+":"+portV+" with actor path "+fullPath);
-      assertPath(fullPath);
-      return new ProxyInfo(this.actorName, sysName, hostV, portV, fullPath);
-    }
-
-    public ProxyInfo buildProxyAtGroom() {
-      if(null == this.conf) 
-        throw new NullPointerException("HamaConfiguration not found.");
-      final String sysName = this.conf.get("bsp.groom.actor-system.name", 
-                                           "GroomSystem");
-      final String hostV = this.conf.get("bsp.groom.address", "127.0.0.1");
-      final int portV = this.conf.getInt("bsp.groom.port", 50000);
-      final String fullPath = this.actorPath.toString();
-      LOG.debug("Proxy is at "+hostV+":"+portV+" with actor path "+fullPath);
-      assertPath(fullPath);
-      return new ProxyInfo(this.actorName, sysName, hostV, portV, fullPath); 
-    }
-*/
   }
   
   public ProxyInfo(final Protocol protocol,
@@ -268,6 +239,45 @@ public final class ProxyInfo extends SystemInfo implements Writable {
 
   public String getActorPath() {
     return this.actorPath.toString();
+  }
+
+  /**
+   * Convert proxy address e.g.
+   * - remote
+   *   akka.tcp://${actor-system-name}@${host}:${port}/user/${actor-path} 
+   * - local
+   *   akka://${actor-system-name}/user/${actor-path}
+   * from String to ProxyInfo object.
+   */
+  public static ProxyInfo fromString(final String address) {
+    final String[] protoWithRest = address.split("://");
+    if(2 != protoWithRest.length) 
+      throw new RuntimeException("Invalid protocol format: "+address);
+    Protocol proto = Protocol.Remote;
+    if(!Protocol.Remote.toString().equals(protoWithRest[0])) 
+      proto = Protocol.Local;
+    final String[] actorSysWithRest = protoWithRest[1].split("@");
+    if(2 != actorSysWithRest.length)
+      throw new RuntimeException("Invalid actor system name format: "+
+                                      address);
+    final String actorSysName = actorSysWithRest[0]; 
+    final String[] hostWithRest = actorSysWithRest[1].split(":");
+    if(2 != hostWithRest.length)
+      throw new RuntimeException("Invalid host format: "+address);
+    final String host = hostWithRest[0];
+    final String[] portAndActorPath = hostWithRest[1].split("/user/");
+    if(2 != portAndActorPath.length)
+      throw new RuntimeException("Invalid port format: "+address);
+    final int port = new Integer(portAndActorPath[0]).intValue();
+    final String actorPath = portAndActorPath[1];
+    final String[] actors = actorPath.split("/");
+    final String actorName = actors[actors.length-1];
+    return new ProxyInfo(proto, 
+                         actorName,
+                         actorSysName,
+                         host,
+                         port,
+                         actorPath);
   }
 
   @Override 
