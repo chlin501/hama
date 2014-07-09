@@ -30,11 +30,10 @@ import org.apache.hama.bsp.OutputCollector
 import org.apache.hama.fs.CacheService
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.ProxyInfo
 import org.apache.hama.logging.Logger
 import org.apache.hama.io.IO
-//import org.apache.hama.io.DefaultIO
 import org.apache.hama.message.MessageManager
-import org.apache.hama.message.PeerInfo
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncServiceFactory
 
@@ -164,9 +163,6 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
     client.register(task.getId.getJobID, task.getId, host, port)
     client
   }
-
-// beg TODO: move to PeerInfo
-  protected def peerInfo: PeerInfo = PeerInfo(peerActorSystem, host, port)
 
   protected def peerActorSystem: String = 
     "BSPPeerSystem%s".format(configuration.getInt("bsp.child.slot.seq", 1))
