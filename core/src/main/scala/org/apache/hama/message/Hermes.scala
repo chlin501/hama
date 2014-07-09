@@ -29,6 +29,7 @@ import java.util.Map.Entry
 import akka.util.Timeout
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.util.LRUCache
 import scala.collection.JavaConversions._
@@ -49,7 +50,7 @@ final case class Setup[M <: Writable](conf: HamaConfiguration,
  * @param peer is the destination to which will be sent.
  * @param msg is the actual data.
  */
-final case class Transfer[M <: Writable](peer: PeerInfo, msg: BSPMessageBundle[M])
+final case class Transfer[M <: Writable](peer: ProxyInfo, msg: BSPMessageBundle[M])
 
 /**
  * A bridge for BSPPeer and message transfer actor.
@@ -68,7 +69,7 @@ trait Hermes {
    * @param is destination bsp peer.
    * @param msg contains messages to be transferred to the destination.
    */
-  def transfer[M <: Writable](peer: PeerInfo, msg: BSPMessageBundle[M]): 
+  def transfer[M <: Writable](peer: ProxyInfo, msg: BSPMessageBundle[M]): 
     Future[TransferredState]
 
 }
@@ -93,7 +94,7 @@ class Iris extends Hermes {
 
   implicit val timeout = Timeout(30 seconds)
 
-  override def transfer[M <: Writable](peer: PeerInfo, 
+  override def transfer[M <: Writable](peer: ProxyInfo, 
                                        msg: BSPMessageBundle[M]): 
       Future[TransferredState] = 
     (getActor ? Transfer[M](peer, msg)).mapTo[TransferredState]
@@ -112,11 +113,11 @@ class PeerMessenger extends Actor with RemoteService {
 
   /* This holds information to BSPPeer actors. */
   protected var maxCachedConnections: Int = 100
-  protected var peersLRUCache: LRUCache[PeerInfo, ActorRef] = _
+  protected var peersLRUCache: LRUCache[ProxyInfo, ActorRef] = _
   protected var initialized: Boolean = false
   protected var conf: HamaConfiguration = new HamaConfiguration() 
   protected var loopbackQueue: BlockingQueue[BSPMessageBundle[_]] = _
-  protected var waitingList = Map.empty[PeerInfo, MessageFrom]
+  protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
 
   override def configuration(): HamaConfiguration = this.conf
 
@@ -133,9 +134,9 @@ class PeerMessenger extends Actor with RemoteService {
   }
 
   protected def initializeLRUCache(maxCachedConnections: Int):
-      LRUCache[PeerInfo,ActorRef] = {
-    new LRUCache[PeerInfo, ActorRef](maxCachedConnections) {
-      override def removeEldestEntry(eldest: Entry[PeerInfo, ActorRef]):
+      LRUCache[ProxyInfo,ActorRef] = {
+    new LRUCache[ProxyInfo, ActorRef](maxCachedConnections) {
+      override def removeEldestEntry(eldest: Entry[ProxyInfo, ActorRef]):
           Boolean = {
         if (size() > this.capacity) {
           val peer = eldest.getKey
@@ -150,9 +151,6 @@ class PeerMessenger extends Actor with RemoteService {
   def initialize: Receive = {
     case Setup(conf, q) => initializeService(conf, q)
   }
-
-  def remotePeerPath(peer: PeerInfo): String = 
-     peer.remotePath()+"/user/peerMessenger"
  
   /**
    * Cache message bundle and {@link BSPPeer} in waiting list.
@@ -161,23 +159,23 @@ class PeerMessenger extends Actor with RemoteService {
    * @param msg is the message to be sent.
    * @param from is the bsp peer who issues the transfer request.
    */
-  protected def findWith[M <: Writable](peer: PeerInfo, 
+  protected def findWith[M <: Writable](peer: ProxyInfo, 
                                         msg: BSPMessageBundle[M],
                                         from: ActorRef) {
     if(null == msg || null == from)
       throw new RuntimeException("Messeage bundle or remote PeerMessenger "+
                                  " is missing!")
     addToWaitingList(peer, MessageFrom(msg, from))
-    LOG.info("Look up remote peer "+peer.path())
-    lookupPeer(peer.path(), remotePeerPath(peer))
+    LOG.info("Look up remote peer "+peer.getPath())
+    lookupPeer(peer.getActorName, peer.getPath)
   }
 
-  protected def addToWaitingList(peer: PeerInfo, msgFrom: MessageFrom) =
+  protected def addToWaitingList(peer: ProxyInfo, msgFrom: MessageFrom) =
     waitingList ++= Map(peer -> msgFrom) 
 
   protected def lookupPeer(name: String, addr: String) = lookup(name, addr) 
 
-  protected def cache(peer: PeerInfo, proxy: ActorRef) = 
+  protected def cache(peer: ProxyInfo, proxy: ActorRef) = 
     peersLRUCache.put(peer, proxy)   
 
   override def afterLinked(target: String, proxy: ActorRef) {
@@ -185,7 +183,7 @@ class PeerMessenger extends Actor with RemoteService {
   } 
 
   protected def findThenSend(target: String, proxy: ActorRef) {
-    waitingList.find(entry => entry._1.path.equals(target)) match {
+    waitingList.find(entry => entry._1.getPath.equals(target)) match {
       case Some(found) => {
         val msgFrom = found._2
         val msg = msgFrom.msg 
@@ -214,7 +212,7 @@ class PeerMessenger extends Actor with RemoteService {
     case Transfer(peer, bundle) => doTransfer(peer, bundle, sender)
   }
 
-  protected def doTransfer[M <: Writable](peer: PeerInfo, 
+  protected def doTransfer[M <: Writable](peer: ProxyInfo, 
                                           bundle: BSPMessageBundle[M], 
                                           from: ActorRef) {
     if(initialized) {

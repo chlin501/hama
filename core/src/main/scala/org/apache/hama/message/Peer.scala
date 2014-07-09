@@ -22,6 +22,9 @@ import org.apache.hama.ProxyInfo
 /**
  * This is used for constructing Peer information used in sending messages 
  * between {@link BSPPeer}.
+ * Lookup actor doesn't requires to distinguish local from remote actor remote
+ * module can correctly dispatch message to the ator as long as the peer 
+ * host:port matches the target.
  */
 object Peer {
 
@@ -36,7 +39,7 @@ object Peer {
     ProxyInfo.fromString("akka.tcp://"+actorSystemName+"@"+host+":"+port+
                          "/user/peerMessenger")  
 
-  def atRemote(peer: String): ProxyInfo = {
+  def at(peer: String): ProxyInfo = {
     if(-1 == peer.indexOf("@") || -1 != peer.indexOf(":"))
       throw new IllegalArgumentException("Invalid peer string format: "+peer)
     ProxyInfo.fromString("akka.tcp://"+peer+"/user/peerMessenger")
@@ -46,7 +49,8 @@ object Peer {
    * Create local Peer's ProxyInfo for MessageManager sending messages.
    * @param actorSystemName is the name of the actor system, found in zk client.
    * @return ProxyInfo contains related peer information.
-   */
   def at(actorSystemName: String): ProxyInfo = 
     ProxyInfo.fromString("akka://"+actorSystemName+"/user/peerMessenger") 
+   */
+
 }

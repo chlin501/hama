@@ -22,22 +22,23 @@ import java.util.Iterator
 import java.util.Map.Entry
 
 import org.apache.hadoop.io.Writable
+import org.apache.hama.bsp.Combiner
 import org.apache.hama.Constants
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.bsp.Combiner
 import org.apache.hama.message.compress.BSPMessageCompressor
+import org.apache.hama.ProxyInfo
 import org.apache.hama.util.ReflectionUtils
 
 class OutgoingPOJOMessageBundle[M <: Writable] 
       extends OutgoingMessageManager[M] {
 
-  type PeerAndBundleIter = Iterator[Entry[PeerInfo, BSPMessageBundle[M]]] 
+  type PeerAndBundleIter = Iterator[Entry[ProxyInfo, BSPMessageBundle[M]]] 
 
   private var conf: HamaConfiguration = _
   private var compressor: BSPMessageCompressor = _
   private var combiner: Combiner[M] = _
-  private val peerSocketCache = new HashMap[String, PeerInfo]()
-  private val outgoingBundles = new HashMap[PeerInfo, BSPMessageBundle[M]]()
+  private val peerSocketCache = new HashMap[String, ProxyInfo]()
+  private val outgoingBundles = new HashMap[ProxyInfo, BSPMessageBundle[M]]()
 
   override def init(conf: HamaConfiguration, 
                     compressor: BSPMessageCompressor) {
@@ -54,8 +55,8 @@ class OutgoingPOJOMessageBundle[M <: Writable]
     }
   }
 
-  override def addMessage(peer: PeerInfo, msg: M) {
-
+  override def addMessage(peer: ProxyInfo, msg: M) {
+    
     if (null != combiner) {
       val bundle = outgoingBundles.get(peer)
       bundle.addMessage(msg)
@@ -70,12 +71,13 @@ class OutgoingPOJOMessageBundle[M <: Writable]
     }
   }
 
-  def getPeerInfo(peerName: String): PeerInfo = {
-    var peer: PeerInfo = null
+/* This is needed when addMessage with peerName (String) as param
+  def getPeerInfo(peerName: String): ProxyInfo = {
+    var peer: ProxyInfo = null
     if (peerSocketCache.containsKey(peerName)) {
       peer = peerSocketCache.get(peerName)
     } else {
-      peer = PeerInfo.fromString(peerName)
+      peer = Peer.at(peerName)
       peerSocketCache.put(peerName, peer) 
     }
 
@@ -87,11 +89,12 @@ class OutgoingPOJOMessageBundle[M <: Writable]
     }
     peer 
   }
+*/
 
   override def clear() {
     outgoingBundles.clear
   }
 
-  override def getBundleIterator(): java.util.Iterator[java.util.Map.Entry[PeerInfo, BSPMessageBundle[M]]] = { outgoingBundles.entrySet.iterator }
+  override def getBundleIterator(): java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] = { outgoingBundles.entrySet.iterator }
 
 }

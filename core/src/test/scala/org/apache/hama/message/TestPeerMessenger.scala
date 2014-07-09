@@ -43,7 +43,7 @@ class RemotePeerMessenger(tester: ActorRef) extends PeerMessenger {
 
 object LocalPeerMessenger {
 
-  val dummyPeer = PeerInfo("TestPeerMessenger", "127.0.0.1", 1234)
+  val dummyPeer = Peer.at("TestPeerMessenger", "127.0.0.1", 1234)
 
 }
 
@@ -69,8 +69,8 @@ class LocalPeerMessenger(tester: ActorRef) extends PeerMessenger {
   }
 
   override def afterLinked(target: String, proxy: ActorRef) {
-    LOG.info("Replace peer messenger path with {}.", dummyPeer.path)
-    findThenSend(dummyPeer.path(), proxy)
+    LOG.info("Replace peer messenger path with {}.", dummyPeer.getPath)
+    findThenSend(dummyPeer.getPath, proxy)
   }
 
   override def lookupPeer(name: String, addr: String) = {

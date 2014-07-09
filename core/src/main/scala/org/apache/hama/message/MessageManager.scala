@@ -24,6 +24,7 @@ import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.ProxyInfo
 
 object MessageManager {
 
@@ -78,7 +79,7 @@ trait MessageManager[M <: Writable] {
    * Returns an bundle of messages grouped by {@link BSPPeer}. 
    * @return an iterator that contains messages associated with a peer address.
    */
-  def getOutgoingBundles(): Iterator[Entry[PeerInfo, BSPMessageBundle[M]]] 
+  def getOutgoingBundles(): Iterator[Entry[ProxyInfo, BSPMessageBundle[M]]] 
 
   /**
    * Wrap peer into an object which should contain all necessary information.
@@ -86,7 +87,7 @@ trait MessageManager[M <: Writable] {
    * @param bundle are message to be sent.
    */
   @throws(classOf[IOException])
-  def transfer(peer: PeerInfo, bundle: BSPMessageBundle[M])
+  def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M])
 
   /**
    * Clears the outgoing message queue. 
@@ -117,5 +118,5 @@ trait MessageManager[M <: Writable] {
    * Returns the server address on which the incoming connections are listening.
    * @param InetSocketAddress to which this server listens.
    */
-  def getListenerAddress(): PeerInfo
+  def getListenerAddress(): ProxyInfo
 }

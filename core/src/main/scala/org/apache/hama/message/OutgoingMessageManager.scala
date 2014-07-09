@@ -24,6 +24,7 @@ import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.compress.BSPMessageCompressor
+import org.apache.hama.ProxyInfo
 
 object OutgoingMessageManager {
 
@@ -52,7 +53,7 @@ trait OutgoingMessageManager[M <: Writable] {
    * @param peerInfo is consisted of ${actor-system-name}@${host}:${port}
    * @param msg is a writable message to be sent.
    */
-  def addMessage(peerInfo: PeerInfo, msg: M)
+  def addMessage(peerInfo: ProxyInfo, msg: M)
 
   /**
    * Clear the outgoing queue.
@@ -63,6 +64,6 @@ trait OutgoingMessageManager[M <: Writable] {
    * Iterator of the entire messages.
    * @return Iterator contains peer info associated with message bundles.
    */
-  def getBundleIterator(): java.util.Iterator[java.util.Map.Entry[PeerInfo, BSPMessageBundle[M]]] 
+  def getBundleIterator(): java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] 
 
 }

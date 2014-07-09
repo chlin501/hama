@@ -44,6 +44,7 @@ import org.apache.hama.message.queue.MemoryQueue
 import org.apache.hama.message.queue.MessageQueue
 import org.apache.hama.message.queue.SingleLockQueue
 import org.apache.hama.message.queue.SynchronizedQueue
+import org.apache.hama.ProxyInfo
 import org.apache.hama.util.LRUCache
 import org.apache.hama.logging.Logger
 import scala.collection.JavaConversions._
@@ -89,7 +90,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   /**
    * {@link PeerMessenger} address information.
    */
-  protected var currentPeer: PeerInfo = _
+  protected var currentPeer: ProxyInfo = _
 
   /**
    * This is used for receiving loopback message {@link #loopBackMessages} 
@@ -134,11 +135,15 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     this.hermes.initialize[M](configuration, loopbackMessageQueue)
   }
 
-  def currentPeerInfo(conf: HamaConfiguration): PeerInfo = {
-    val sys = conf.get("bsp.groom.actor-system.name", "GroomSystem")
-    val host = conf.get("bsp.peer.hostname", "0.0.0.0")
-    val port = conf.getInt("bsp.peer.port", 61000)
-    PeerInfo(sys, host, port)
+  /**
+   * Indicate the local peer.
+   */
+  def currentPeerInfo(conf: HamaConfiguration): ProxyInfo = {
+    val seq = conf.getInt("bsp.child.slot.seq", -1)
+    if(-1 == seq)
+      throw new RuntimeException("Invalid slot seq "+seq+" for constructing "+
+                                 "peer info!")
+    Peer.at("BSPPeerSystem%d".format(seq))
   }
 
   /**
@@ -239,13 +244,13 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
    */
   @throws(classOf[IOException])
   override def send(peerName: String, msg: M) {
-    outgoingMessageManager.addMessage(PeerInfo.fromString(peerName), msg); 
+    outgoingMessageManager.addMessage(Peer.at(peerName), msg); 
     // TODO: increment counter by 1
     // peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_SENT, 1L)
   }
 
   override def getOutgoingBundles(): 
-    java.util.Iterator[java.util.Map.Entry[PeerInfo, BSPMessageBundle[M]]] = 
+    java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] = 
     outgoingMessageManager.getBundleIterator
 
   /**
@@ -255,13 +260,13 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
    * @param bundle are messages to be sent.
    */
   @throws(classOf[IOException])
-  override def transfer(peer: PeerInfo, bundle: BSPMessageBundle[M]) {
+  override def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M]) {
     import ExecutionContext.Implicits.global
     this.hermes.transfer(peer, bundle) onComplete {
       case Failure(failure) => 
-        LOG.error("["+failure+"] Fail transferring message to "+peer.path)
+        LOG.error("["+failure+"] Fail transferring message to "+peer.getPath)
       case Success(result) => 
-        LOG.info("Successful transferring message to "+peer.path)
+        LOG.info("Successful transferring message to "+peer.getPath)
     }
   }
 
@@ -283,6 +288,6 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     //TODO: stats peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_RECEIVED, 1L);
   } 
 
-  override def getListenerAddress(): PeerInfo = this.currentPeer 
+  override def getListenerAddress(): ProxyInfo = this.currentPeer 
 
 }
