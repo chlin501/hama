@@ -213,7 +213,6 @@ public final class ProxyInfo extends SystemInfo implements Writable {
                    final String host,
                    final int port, 
                    final String actorPath) {
-
     super(protocol, actorSystemName, host, port);
 
     if(null == actorName) 
@@ -232,9 +231,12 @@ public final class ProxyInfo extends SystemInfo implements Writable {
   }
 
   public String getPath() {
-    final String path = getProtocol()+"://"+getActorSystemName()+"@"+
-                        getHost()+":"+getPort()+"/user/"+getActorPath();
-    return path;
+    if(Protocol.Local.equals(getProtocol())) {
+      return getProtocol()+"://"+getActorSystemName()+"/user/"+getActorPath();
+    } else {
+      return getProtocol()+"://"+getActorSystemName()+"@"+getHost()+":"+
+             getPort()+"/user/"+getActorPath();
+    }
   }
 
   public String getActorPath() {
@@ -256,28 +258,44 @@ public final class ProxyInfo extends SystemInfo implements Writable {
     Protocol proto = Protocol.Remote;
     if(!Protocol.Remote.toString().equals(protoWithRest[0])) 
       proto = Protocol.Local;
-    final String[] actorSysWithRest = protoWithRest[1].split("@");
-    if(2 != actorSysWithRest.length)
-      throw new RuntimeException("Invalid actor system name format: "+
-                                      address);
-    final String actorSysName = actorSysWithRest[0]; 
-    final String[] hostWithRest = actorSysWithRest[1].split(":");
-    if(2 != hostWithRest.length)
-      throw new RuntimeException("Invalid host format: "+address);
-    final String host = hostWithRest[0];
-    final String[] portAndActorPath = hostWithRest[1].split("/user/");
-    if(2 != portAndActorPath.length)
+    if(Protocol.Remote.equals(proto)) {
+      final String[] actorSysWithRest = protoWithRest[1].split("@");
+      if(2 != actorSysWithRest.length)
+        throw new RuntimeException("Invalid actor system name format: "+
+                                   address);
+      final String actorSysName = actorSysWithRest[0]; 
+      final String[] hostWithRest = actorSysWithRest[1].split(":");
+      if(2 != hostWithRest.length)
+        throw new RuntimeException("Invalid host format: "+address);
+      final String host = hostWithRest[0];
+      final String[] portAndActorPath = hostWithRest[1].split("/user/");
+      if(2 != portAndActorPath.length)
       throw new RuntimeException("Invalid port format: "+address);
-    final int port = new Integer(portAndActorPath[0]).intValue();
-    final String actorPath = portAndActorPath[1];
-    final String[] actors = actorPath.split("/");
-    final String actorName = actors[actors.length-1];
-    return new ProxyInfo(proto, 
-                         actorName,
-                         actorSysName,
-                         host,
-                         port,
-                         actorPath);
+      final int port = new Integer(portAndActorPath[0]).intValue();
+      final String actorPath = portAndActorPath[1];
+      final String[] actors = actorPath.split("/");
+      final String actorName = actors[actors.length-1];
+      return new ProxyInfo(proto, 
+                           actorName,
+                           actorSysName,
+                           host,
+                           port,
+                           actorPath);
+    } else {
+      final String[] actorSysWithRest = protoWithRest[1].split("/user/");
+      if(2 != actorSysWithRest.length) 
+        throw new RuntimeException("Invalid actor sys format: "+address);
+      final String actorSysName = actorSysWithRest[0];
+      final String actorPath = actorSysWithRest[1];
+      final String[] actors = actorSysWithRest[1].split("/");
+      final String actorName = actors[actors.length-1];
+      return new ProxyInfo(proto, 
+                           actorName,
+                           actorSysName,
+                           Localhost,
+                           LocalMode,
+                           actorPath);
+    }
   }
 
   @Override 

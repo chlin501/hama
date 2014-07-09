@@ -95,4 +95,22 @@ public class TestProxyInfo extends TestCase {
                  "akka.tcp://GroomSystem@127.0.0.1:50000/user/groomServer/" +
                  "monitor/testActor1");
   }
+
+  public void testFromString() throws Exception {
+    final String remote = 
+      "akka.tcp://bspPeerSystem1@host14:1946/user/peerMessenger";
+    final String local = "akka://bspPeerSystem1/user/peerMessenger";
+    final ProxyInfo remoteProxy = ProxyInfo.fromString(remote);
+    assertNotNull("Remote proxy not null!", remoteProxy);
+    assertEquals("Remote proxy path reconstructed should equal.", 
+                 remote, remoteProxy.getPath());
+    assertEquals("Remote actor name should be peerMessenger", 
+                 "peerMessenger", remoteProxy.getActorName());
+    final ProxyInfo localProxy = ProxyInfo.fromString(local);
+    assertNotNull("Local proxy not null!", localProxy);
+    assertEquals("Local path reconstructed should equal.", 
+                 local, localProxy.getPath());
+    assertEquals("Local actor name should be peerMessenger", 
+                 "peerMessenger", localProxy.getActorName());
+  }
 }

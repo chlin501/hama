@@ -27,14 +27,13 @@ import org.apache.hadoop.io.Writable;
 
 public class SystemInfo implements Writable {
 
+  public static final String Localhost = "127.0.0.1";
+  public static final int LocalMode = -1;
   private Text protocol = new Text(Protocol.Remote.toString());
   private Text actorSystemName = new Text();
   private Text host = new Text();
   private IntWritable port = new IntWritable();
 
-  // TODO: may need to provide a uniform way for remote and local lookup.
-  //       proxy should only be remote.
-  //       local lookup shouldn't use proxy.
   static enum Protocol { 
     Local("akka"), Remote("akka.tcp");
     final String p;
@@ -44,6 +43,16 @@ public class SystemInfo implements Writable {
     public String toString() { return this.p; }
   }
 
+  /**
+   * For local lookup.
+   */
+  public SystemInfo(final String actorSystemName) {
+    this(Protocol.Local, actorSystemName, Localhost, LocalMode);
+  }
+
+  /**
+   * For remote lookup.
+   */
   public SystemInfo(final String actorSystemName,
                     final String host,
                     final int port) {
@@ -67,17 +76,17 @@ public class SystemInfo implements Writable {
       throw new IllegalArgumentException("Target host is not provided.");
 
     this.host = new Text(host);
-
-    if(0 > port)
-      throw new IllegalArgumentException("Illegal port value.");
+  
+    if(port > 65535) 
+      throw new IllegalArgumentException("Invalid port value! port: "+port);
 
     this.port = new IntWritable(port);
   }
 
   public Protocol getProtocol() {
     Protocol p = Protocol.Remote;
-    if(this.protocol.toString().equals(Protocol.Local.toString())) {
-      p = Protocol.Remote;
+    if(Protocol.Local.toString().equals(this.protocol.toString())) {
+      p = Protocol.Local;
     }
     return p; 
   }
