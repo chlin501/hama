@@ -210,6 +210,15 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   
   override def getNumCurrentMessages(): Int = localQueue.size
 
+  /**
+   * This all happens within sync() function.
+   * transfer() actually trasmits messages to remote peer or itself, which 
+   * in turns calls loopBackMessage(), adding all messages received to 
+   * localQueueForNextIteration.
+   * After transfer(), bsp peer calls messenger.clearOutgoingMessages. This 
+   * function moves all messages from localQueueForNextIteration to localQueue
+   * so that bsp peer can obtain messages sent to itself in the next iteration.
+   */
   override def clearOutgoingMessages() {
     outgoingMessageManager.clear
     if (configuration.getBoolean("hama.queue.behaviour.persistent", false) && 
