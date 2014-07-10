@@ -39,18 +39,17 @@ object Peer {
     ProxyInfo.fromString("akka.tcp://"+actorSystemName+"@"+host+":"+port+
                          "/user/peerMessenger")  
 
+  /**
+   * This doesn't distinguish local from remote address because remote module
+   * can correctly dispatch mesage to the right actor.
+   * @param peer is the actor address/ path to be used with the form of 
+   *             <b>${actor-system-name}@${host}:${port}</b>.
+   * @return ProxyInfo contains related peer information.
+   */
   def at(peer: String): ProxyInfo = {
-    if(-1 == peer.indexOf("@") || -1 != peer.indexOf(":"))
+    if(-1 == peer.indexOf("@") || -1 == peer.indexOf(":")) 
       throw new IllegalArgumentException("Invalid peer string format: "+peer)
     ProxyInfo.fromString("akka.tcp://"+peer+"/user/peerMessenger")
   }
-
-  /**
-   * Create local Peer's ProxyInfo for MessageManager sending messages.
-   * @param actorSystemName is the name of the actor system, found in zk client.
-   * @return ProxyInfo contains related peer information.
-  def at(actorSystemName: String): ProxyInfo = 
-    ProxyInfo.fromString("akka://"+actorSystemName+"/user/peerMessenger") 
-   */
 
 }

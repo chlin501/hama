@@ -28,6 +28,12 @@ import org.apache.hama.ProxyInfo
 
 object OutgoingMessageManager {
 
+  /**
+   * Create an {@link OutgoingMessageManager} with default class configured to 
+   * {@link OutgoingPOJOMessageBundle}.
+   * It also initializes with a default {@link BSPMessageCompressor} set to
+   * {@link SnappyCompressor}.
+   */
   def get[M <: Writable](conf: HamaConfiguration): OutgoingMessageManager[M] = {
     val clazz = conf.getClass("hama.messenger.outgoing.message.manager.class",
                               classOf[OutgoingPOJOMessageBundle[M]],
@@ -66,4 +72,6 @@ trait OutgoingMessageManager[M <: Writable] {
    */
   def getBundleIterator(): java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] 
 
+  // TODO: use flapmap to flatten value stored in bsp message bundle 
+  //def getBundleIterator(): Iterator[ProxyInfo, Seq[M]]
 }

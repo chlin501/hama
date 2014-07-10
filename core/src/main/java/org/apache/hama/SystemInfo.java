@@ -29,10 +29,11 @@ public class SystemInfo implements Writable {
 
   public static final String Localhost = "127.0.0.1";
   public static final int LocalMode = -1;
-  private Text protocol = new Text(Protocol.Remote.toString());
-  private Text actorSystemName = new Text();
-  private Text host = new Text();
-  private IntWritable port = new IntWritable();
+
+  protected Text protocol = new Text(Protocol.Remote.toString());
+  protected Text actorSystemName = new Text();
+  protected Text host = new Text();
+  protected IntWritable port = new IntWritable();
 
   static enum Protocol { 
     Local("akka"), Remote("akka.tcp");
@@ -101,6 +102,43 @@ public class SystemInfo implements Writable {
 
   public int getPort() {
     return this.port.get();
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (o == this) return true;
+    if (null == o) return false;
+    if (getClass() != o.getClass()) return false;
+
+    final SystemInfo s = (SystemInfo) o;
+    if (!s.protocol.toString().equals(protocol.toString())) return false;
+    if (!s.actorSystemName.toString().equals(actorSystemName.toString())) 
+      return false;
+    if (!s.host.toString().equals(host.toString())) return false;
+    if (s.port.get() != port.get()) return false;
+    return true;
+  }
+
+  @Override
+  public int hashCode() {
+    int result = 17;
+    result = 37 * result + protocol.toString().hashCode();
+    result = 37 * result + actorSystemName.toString().hashCode();
+    result = 37 * result + host.toString().hashCode();
+    result = 37 * result + port.get();
+    return result;
+  }
+
+  public String getSystemPath() {
+    return getActorSystemName()+"@"+getHost()+":"+getPort();
+  }
+
+  @Override 
+  public String toString() {
+    return "SystemInfo("+getProtocol()+","+
+                         getActorSystemName()+","+
+                         getHost()+","+
+                         getPort()+")";
   }
 
   @Override 

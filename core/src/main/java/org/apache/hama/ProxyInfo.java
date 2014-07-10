@@ -298,6 +298,41 @@ public final class ProxyInfo extends SystemInfo implements Writable {
     }
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (o == this) return true;
+    if (null == o) return false;
+    if (getClass() != o.getClass()) return false;
+
+    final ProxyInfo s = (ProxyInfo) o;
+    if (!s.protocol.toString().equals(protocol.toString())) return false;
+    if (!s.actorSystemName.toString().equals(actorSystemName.toString()))
+      return false;
+    if (!s.host.toString().equals(host.toString())) return false;
+    if (s.port.get() != port.get()) return false;
+    if (!s.actorName.toString().equals(actorName.toString())) return false;
+    if (!s.actorPath.toString().equals(actorPath.toString())) return false;
+    return true;
+  }
+
+  @Override
+  public int hashCode() {
+    int result = super.hashCode();
+    result = 37 * result + actorName.toString().hashCode();
+    result = 37 * result + actorPath.toString().hashCode();
+    return result;
+  }
+
+  @Override 
+  public String toString() {
+    return "ProxyInfo("+getProtocol()+","+
+                        getActorSystemName()+","+
+                        getHost()+","+
+                        getPort()+","+
+                        getActorName()+","+
+                        getActorPath()+")";
+  }
+
   @Override 
   public void write(DataOutput out) throws IOException {
     super.write(out);

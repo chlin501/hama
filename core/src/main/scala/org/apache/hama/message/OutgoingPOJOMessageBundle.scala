@@ -28,16 +28,17 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.compress.BSPMessageCompressor
 import org.apache.hama.ProxyInfo
 import org.apache.hama.util.ReflectionUtils
+import org.apache.hama.logging.Logger
 
 class OutgoingPOJOMessageBundle[M <: Writable] 
-      extends OutgoingMessageManager[M] {
+      extends OutgoingMessageManager[M] with Logger {
 
   type PeerAndBundleIter = Iterator[Entry[ProxyInfo, BSPMessageBundle[M]]] 
 
   private var conf: HamaConfiguration = _
   private var compressor: BSPMessageCompressor = _
   private var combiner: Combiner[M] = _
-  private val peerSocketCache = new HashMap[String, ProxyInfo]()
+  //private val peerSocketCache = new HashMap[String, ProxyInfo]()
   private val outgoingBundles = new HashMap[ProxyInfo, BSPMessageBundle[M]]()
 
   override def init(conf: HamaConfiguration, 
@@ -47,16 +48,23 @@ class OutgoingPOJOMessageBundle[M <: Writable]
     val combinerName = conf.get(Constants.COMBINER_CLASS)
     if (null != combinerName) {
       try {
-        this.combiner = ReflectionUtils.newInstance(conf
-            .getClassByName(combinerName)).asInstanceOf[Combiner[M]]
+        this.combiner = 
+          ReflectionUtils.newInstance(conf.getClassByName(combinerName)).
+                          asInstanceOf[Combiner[M]]
       } catch {
-       case cnfe: ClassNotFoundException => cnfe.printStackTrace()
+        case cnfe: ClassNotFoundException => LOG.info("Combiner not found!", 
+                                                      cnfe)
       }
     }
   }
 
   override def addMessage(peer: ProxyInfo, msg: M) {
-    
+   if (!outgoingBundles.containsKey(peer)) {
+      val bundle = new BSPMessageBundle[M]()
+      bundle.setCompressor(compressor,
+          conf.getLong("hama.messenger.compression.threshold", 128))
+      outgoingBundles.put(peer, bundle)
+    } 
     if (null != combiner) {
       val bundle = outgoingBundles.get(peer)
       bundle.addMessage(msg)
@@ -91,10 +99,8 @@ class OutgoingPOJOMessageBundle[M <: Writable]
   }
 */
 
-  override def clear() {
-    outgoingBundles.clear
-  }
+  override def clear() = outgoingBundles.clear
 
-  override def getBundleIterator(): java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] = { outgoingBundles.entrySet.iterator }
+  override def getBundleIterator(): java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] = outgoingBundles.entrySet.iterator 
 
 }
