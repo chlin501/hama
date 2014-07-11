@@ -35,6 +35,7 @@ import org.apache.hama.ProxyInfo
 import org.apache.hama.logging.Logger
 import org.apache.hama.io.IO
 import org.apache.hama.message.MessageManager
+import org.apache.hama.message.PeerCommunicator
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncServiceFactory
 
@@ -134,6 +135,9 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
       MessageManager[Writable] = {
     val mgr = MessageManager.get[Writable](conf)
     mgr.init(conf, task.getId)
+    if(mgr.isInstanceOf[PeerCommunicator]) {
+      mgr.asInstanceOf[PeerCommunicator].initialize(bspActorSystem)
+    }
     mgr
   }
 

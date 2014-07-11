@@ -24,9 +24,10 @@ import akka.actor.Props
 import akka.actor.TypedActor
 import akka.event.Logging
 import akka.pattern.ask
+import akka.util.Timeout
+import java.net.InetAddress
 import java.util.concurrent.BlockingQueue
 import java.util.Map.Entry
-import akka.util.Timeout
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.ProxyInfo
@@ -78,17 +79,34 @@ class Iris extends Hermes {
 
   protected var actor: ActorRef = _
 
+  protected var id: String = _
+
   private def getActor(): ActorRef = {
     if(null == this.actor) {
       val ctx = TypedActor.context
-      this.actor = ctx.actorOf(Props(classOf[PeerMessenger]), "peerMessenger")
+      if(null == id) 
+        throw new IllegalStateException("Id for peerMessenger name is missing!")
+      this.actor = ctx.actorOf(Props(classOf[PeerMessenger]), 
+                               "peerMessenger_"+id)
     }
     this.actor
+  }
+
+  private def identifier(conf: HamaConfiguration): String = {
+    val seq = conf.getInt("bsp.child.slot.seq", -1)
+    if(-1 == seq)
+      throw new RuntimeException("Invalid slot seq "+seq+" for constructing "+
+                                 "peer info!")
+    val host = conf.get("bsp.peer.hostname",
+                        InetAddress.getLocalHost.getHostName)
+    val port = conf.getInt("bsp.peer.port", 61000)
+    "BSPPeerSystem%d@%s:%d".format(seq, host, port)
   }
 
   override def initialize[M <: Writable](conf: HamaConfiguration, 
                                          q: BlockingQueue[BSPMessageBundle[M]]){
 
+    this.id = identifier(conf) 
     getActor ! Setup(conf, q)
   }
 
@@ -166,7 +184,7 @@ class PeerMessenger extends Actor with RemoteService {
       throw new RuntimeException("Messeage bundle or remote PeerMessenger "+
                                  " is missing!")
     addToWaitingList(peer, MessageFrom(msg, from))
-    LOG.info("Look up remote peer "+peer.getPath())
+    LOG.info("Look up remote peer "+peer.getActorName+" at "+peer.getPath)
     lookupPeer(peer.getActorName, peer.getPath)
   }
 
@@ -183,7 +201,7 @@ class PeerMessenger extends Actor with RemoteService {
   } 
 
   protected def findThenSend(target: String, proxy: ActorRef) {
-    waitingList.find(entry => entry._1.getPath.equals(target)) match {
+    waitingList.find(entry => entry._1.getActorName.equals(target)) match {
       case Some(found) => {
         val msgFrom = found._2
         val msg = msgFrom.msg 

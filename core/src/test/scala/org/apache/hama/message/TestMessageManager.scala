@@ -53,6 +53,30 @@ class TestMessageManager extends TestEnv(ActorSystem("TestMessageManager"))
     val messageManager = MessageManager.get[IntWritable](testConfiguration)
     assert(null != messageManager)
     messageManager.init(testConfiguration, taskAttemptId)
+
+    // transfer() -> loopbackmessage() -> messenger.clearoutgoingmessage()
+    // so we can verify getCurrentMessage, etc. functions.  
+
+    val numMsgs = messageManager.getNumCurrentMessages 
+    LOG.info("Expect 0 messages. Actual "+numMsgs+" messages.")
+    assert(0 == numMsgs)
+    val currentMsg = messageManager.getCurrentMessage
+    LOG.info("Expected null message. Actual message is "+currentMsg)
+    assert(null == currentMsg)
+    messageManager.loopBackMessage(new IntWritable(78)) 
+    messageManager.loopBackMessage(new IntWritable(87)) 
+    messageManager.clearOutgoingMessages // move msgs to localQueue
+    val msgNum = messageManager.getNumCurrentMessages
+    LOG.info("Expected 2 messages. Actual "+msgNum+" received!")
+    assert(2 == msgNum)
+    val msgCurrent1 = messageManager.getCurrentMessage
+    LOG.info("First current message "+msgCurrent1)
+    assert(78 == msgCurrent1.get)
+    val msgCurrent2 = messageManager.getCurrentMessage
+    LOG.info("Second current message "+msgCurrent2)
+    assert(87 == msgCurrent2.get)
+
+    // test the rest functions such as peer address, etc.
     val peer = messageManager.getListenerAddress   
     LOG.info("Peer at the machine: "+peer)
     assert(null != peer)
@@ -85,9 +109,6 @@ class TestMessageManager extends TestEnv(ActorSystem("TestMessageManager"))
     })
     LOG.info("Expect 2 peers. "+peerCnt+" peers found.")
     assert(2 == peerCnt)
-    // TODO: not yet finished! test the rest of messagea manager functions.
-    // simulate sync() which does 
-    // transfer() -> loopbackmessage() -> messenger.clearoutgoingmessage()
-    // so we can verify getCurrentMessage, etc. functions.  
+    messageManager.close       
   }
 }

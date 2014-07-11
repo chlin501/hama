@@ -57,7 +57,9 @@ trait MessageManager[M <: Writable] {
   def init(conf: HamaConfiguration, id: TaskAttemptID)
 
   /**
-   * Close the communication between {@link BSPPeer}s.
+   * Close underlying operations.
+   * - localQueue
+   * - outgoingMessageManager
    */
   def close()
 

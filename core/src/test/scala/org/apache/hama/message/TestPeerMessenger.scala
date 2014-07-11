@@ -51,8 +51,8 @@ class LocalPeerMessenger(tester: ActorRef) extends PeerMessenger {
 
   import LocalPeerMessenger._
 
-  val remoteName: String = "remotePeer"
-  val remoteAddr: String = "akka://TestPeerMessenger/user/remotePeer"
+//  val remoteName: String = "remotePeer"
+  //val remoteAddr: String = "akka://TestPeerMessenger/user/remotePeer"
   // this should be quals to the one in testing function.
 
   override def link(target: String, ref: ActorRef): ActorRef = {
@@ -74,9 +74,11 @@ class LocalPeerMessenger(tester: ActorRef) extends PeerMessenger {
   }
 
   override def lookupPeer(name: String, addr: String) = {
-    LOG.info("Lookup local peer instead of remote - name {} at {}", 
-             remoteName, remoteAddr)
-    lookup(remoteName, remoteAddr)
+    LOG.info("Lookup local peer instead of remote - name {} at {}", name, addr)
+    //LOG.info("Lookup local peer instead of remote - name {} at {}", 
+             //remoteName, remoteAddr)
+    lookup(name, addr)
+    //lookup(remoteName, remoteAddr)
   }
 
   override def receive = super.receive

@@ -35,9 +35,11 @@ object Peer {
    * @param port is the port value of the remote host.
    * @return ProxyInfo contains related peer information.
    */
-  def at(actorSystemName: String, host: String, port: Int): ProxyInfo = 
-    ProxyInfo.fromString("akka.tcp://"+actorSystemName+"@"+host+":"+port+
-                         "/user/peerMessenger")  
+  def at(actorSystemName: String, host: String, port: Int): ProxyInfo = {
+    val identifier = actorSystemName+"@"+host+":"+port
+    ProxyInfo.fromString("akka.tcp://"+identifier+"/user/peerMessenger_"+
+                         identifier.replaceAll("@", "_").replaceAll(":", "_"))
+  }
 
   /**
    * This doesn't distinguish local from remote address because remote module
@@ -49,7 +51,8 @@ object Peer {
   def at(peer: String): ProxyInfo = {
     if(-1 == peer.indexOf("@") || -1 == peer.indexOf(":")) 
       throw new IllegalArgumentException("Invalid peer string format: "+peer)
-    ProxyInfo.fromString("akka.tcp://"+peer+"/user/peerMessenger")
+    ProxyInfo.fromString("akka.tcp://"+peer+"/user/peerMessenger_"+
+                         peer.replaceAll("@", "_").replaceAll(":", "_"))
   }
 
 }
