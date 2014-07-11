@@ -19,6 +19,7 @@ package org.apache.hama.message
 
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
+import java.net.InetAddress
 import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
