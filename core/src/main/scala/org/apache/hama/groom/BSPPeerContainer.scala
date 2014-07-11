@@ -28,6 +28,7 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import java.io.File
 import java.io.FileWriter
+import java.net.InetAddress
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
@@ -39,10 +40,26 @@ import org.apache.hama.util.ExecutorLocator
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
-final case class Args(actorSystemName: String, host: String, port: Int, 
+/**
+ * Args contains information for launching akka ActorSystem.
+ * Note that listeningTo value may be bound to 0.0.0.0 so that the system can
+ * accept messages from the machine with many interfaces bound to it.  
+ * 
+ * @param actorSystemName denotes the actor system that runs actors on forked.
+ *                        process.
+ * @param listeningTo denotes the host/ interfaces the remote actor modules 
+ *                    listens to.
+ * @param port is the port value used by the remote actor module.
+ * @param seq tells this process is the N-th forked by {@link TaskManager}.
+ * @param config contains related setting for activating remote actor module.
+ */
+final case class Args(actorSystemName: String, listeningTo: String, port: Int, 
                       seq: Int, config: Config)
 
 private final case class Initialize(taskAttemptId: TaskAttemptID)
+/**
+ * Following log levels are only intended for container use.
+ */
 private final case class Info(message: String)
 private final case class Debug(message: String)
 private final case class Warning(message: String)
@@ -175,7 +192,7 @@ private[groom] object TaskLogging {
 object BSPPeerContainer {
 
   // TODO: all config need to post to zk
-  def toConfig(host: String, port: Int): Config = {
+  def toConfig(listeningTo: String, port: Int): Config = {
     ConfigFactory.parseString(s"""
       peerContainer {
         akka {
@@ -193,7 +210,7 @@ object BSPPeerContainer {
           }
           remote {
             netty.tcp {
-              hostname = "$host"
+              hostname = "$listeningTo"
               port = $port 
             }
           }
@@ -207,11 +224,11 @@ object BSPPeerContainer {
       throw new IllegalArgumentException("No arguments supplied when "+
                                          "BSPPeerContainer is forked.")
     val actorSystemName = args(0)
-    val host = args(1)
+    val listeningTo = args(1) // it may binds to 0.0.0.0 for all inet.
     val port = args(2).toInt
     val seq = args(3).toInt
-    val config = toConfig(host, port) 
-    Args(actorSystemName, host, port, seq, config)
+    val config = toConfig(listeningTo, port) 
+    Args(actorSystemName, listeningTo, port, seq, config)
   }
 
   def initialize(args: Array[String]): (ActorSystem, HamaConfiguration, Int) = {
@@ -220,7 +237,13 @@ object BSPPeerContainer {
     val system = ActorSystem("BSPPeerSystem%s".format(arguments.seq), 
                              arguments.config.getConfig("peerContainer"))
     defaultConf.set("bsp.groom.actor-system.name", arguments.actorSystemName)
-    defaultConf.set("bsp.peer.hostname", arguments.host)
+    val listeningTo = defaultConf.get("bsp.peer.hostname", 
+                                      arguments.listeningTo)
+    // if default listening to 0.0.0.0, changes host by obtaining host address.
+    if("0.0.0.0".equals(listeningTo)) { 
+       defaultConf.set("bsp.peer.hostname", 
+                       InetAddress.getLocalHost.getHostName)
+    }
     defaultConf.setInt("bsp.peer.port", arguments.port)
     defaultConf.setInt("bsp.child.slot.seq", arguments.seq)
     (system, defaultConf, arguments.seq)

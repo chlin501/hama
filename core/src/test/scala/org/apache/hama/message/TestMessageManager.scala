@@ -85,5 +85,8 @@ class TestMessageManager extends TestEnv(ActorSystem("TestMessageManager"))
     LOG.info("Expect 2 peers. "+peerCnt+" peers found.")
     assert(2 == peerCnt)
     // TODO: not yet finished! test the rest of messagea manager functions.
+    // simulate sync() which does 
+    // transfer() -> loopbackmessage() -> messenger.clearoutgoingmessage()
+    // so we can verify getCurrentMessage, etc. functions.  
   }
 }

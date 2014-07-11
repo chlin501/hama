@@ -19,6 +19,7 @@ package org.apache.hama.bsp.v2
 
 import akka.actor.ActorSystem
 import java.io.IOException
+import java.net.InetAddress
 import java.net.URLClassLoader
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
@@ -168,7 +169,8 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
     "BSPPeerSystem%s".format(configuration.getInt("bsp.child.slot.seq", 1))
 
   protected def host(): String = 
-    configuration.get("bsp.peer.hostname", "0.0.0.0") 
+    configuration.get("bsp.peer.hostname", 
+                      InetAddress.getLocalHost.getHostAddress) 
 
   protected def port(): Int = configuration.getInt("bsp.peer.port", 61000)
 

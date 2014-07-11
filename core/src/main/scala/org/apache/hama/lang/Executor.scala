@@ -166,11 +166,12 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
     val bspClassName = child.getName
     val groomActorSystemName = conf.get("bsp.groom.actor-system.name", 
                                         "GroomSystem")
-    val taskHost = conf.get("bsp.peer.hostname", "0.0.0.0")
+    // decide the host to which remote module will listen, default to 0.0.0.0 
+    val listeningTo = conf.get("bsp.peer.hostname", "0.0.0.0") 
     val command = Seq(java) ++ Seq(opts) ++  
                   Seq("-classpath") ++ Seq(classpath(hamaHome, cp)) ++
                   Seq(bspClassName) ++ Seq(groomActorSystemName) ++ 
-                  Seq(taskHost) ++ Seq(taskPort) ++ Seq(slotSeq.toString)
+                  Seq(listeningTo) ++ Seq(taskPort) ++ Seq(slotSeq.toString)
     LOG.debug("java args: {}", command.mkString(" "))
     command
   }

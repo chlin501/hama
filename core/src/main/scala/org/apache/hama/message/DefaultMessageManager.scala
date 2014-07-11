@@ -143,7 +143,8 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     if(-1 == seq)
       throw new RuntimeException("Invalid slot seq "+seq+" for constructing "+
                                  "peer info!")
-    val host = conf.get("bsp.peer.hostname", "0.0.0.0")
+    val host = conf.get("bsp.peer.hostname", 
+                        InetAddress.getLocalHost.getHostName) 
     val port = conf.getInt("bsp.peer.port", 61000)
     val addr = "BSPPeerSystem%d@%s:%d".format(seq, host, port)
     LOG.info("Current peer address is "+addr)
