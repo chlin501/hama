@@ -43,7 +43,7 @@ class RemotePeerMessenger(tester: ActorRef) extends PeerMessenger {
 
 object LocalPeerMessenger {
 
-  val dummyPeer = Peer.at("TestPeerMessenger", "127.0.0.1", 1234)
+  val dummyPeer = Peer.atLocal("TestPeerMessenger")
 
 }
 
@@ -51,12 +51,8 @@ class LocalPeerMessenger(tester: ActorRef) extends PeerMessenger {
 
   import LocalPeerMessenger._
 
-//  val remoteName: String = "remotePeer"
-  //val remoteAddr: String = "akka://TestPeerMessenger/user/remotePeer"
-  // this should be quals to the one in testing function.
-
   override def link(target: String, ref: ActorRef): ActorRef = {
-    LOG.info("[For test only] Link to remote target: {} ref: {}.", target, ref)
+    LOG.info("Override link() with target: {} ref: {}.", target, ref)
     val proxy = ref
     proxies ++= Set(proxy)
     proxiesLookup.get(target) match {
@@ -66,19 +62,6 @@ class LocalPeerMessenger(tester: ActorRef) extends PeerMessenger {
     }
     LOG.info("Done linking to remote service {}.", target)
     proxy
-  }
-
-  override def afterLinked(target: String, proxy: ActorRef) {
-    LOG.info("Replace peer messenger path with {}.", dummyPeer.getPath)
-    findThenSend(dummyPeer.getPath, proxy)
-  }
-
-  override def lookupPeer(name: String, addr: String) = {
-    LOG.info("Lookup local peer instead of remote - name {} at {}", name, addr)
-    //LOG.info("Lookup local peer instead of remote - name {} at {}", 
-             //remoteName, remoteAddr)
-    lookup(name, addr)
-    //lookup(remoteName, remoteAddr)
   }
 
   override def receive = super.receive
@@ -137,17 +120,21 @@ class TestPeerMessenger extends TestEnv(ActorSystem("TestPeerMessenger")) {
     bundle
   }
 
+  // instead of actual sending through network, we simply launch 2 actors and
+  // test communication between these two actors.
   it("test peer messenger function.") {
 
     val localPeer = createPeer[Writable]("localPeer", 
                                          localMsgQueue, 
                                          classOf[LocalPeerMessenger])
-    val remotePeer = createPeer[Writable]("remotePeer", 
-                                          localMsgQueue,
-                                          classOf[RemotePeerMessenger])
+    val remoteActorName = LocalPeerMessenger.dummyPeer.getActorName
+    LOG.info("Remote actor name "+remoteActorName+" is created.")
+    createPeer[Writable](remoteActorName, 
+                         localMsgQueue,
+                         classOf[RemotePeerMessenger])
     val bundle = createBundle[IntWritable](seq(0), seq(1), seq(2))
     localPeer ! Transfer(LocalPeerMessenger.dummyPeer, bundle)
-    Thread.sleep(15*1000)
+    Thread.sleep(20*1000)
     LOG.info("Bundle "+forVerification+" size "+forVerification.size)
     assert(null != forVerification)
     var idx = 0

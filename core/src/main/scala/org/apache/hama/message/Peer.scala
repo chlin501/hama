@@ -55,4 +55,13 @@ object Peer {
                          peer.replaceAll("@", "_").replaceAll(":", "_"))
   }
 
+  def atLocal(actorSystemName: String): ProxyInfo = {
+    if(-1 != actorSystemName.indexOf("@") || 
+       -1 != actorSystemName.indexOf(":")) 
+      throw new IllegalArgumentException("Invalid local actor system name: "+
+                                         actorSystemName)
+    ProxyInfo.fromString("akka://"+actorSystemName+"/user/peerMessenger_"+
+                         actorSystemName)
+  }
+
 }
