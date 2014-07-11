@@ -239,7 +239,7 @@ object BSPPeerContainer {
     defaultConf.set("bsp.groom.actor-system.name", arguments.actorSystemName)
     val listeningTo = defaultConf.get("bsp.peer.hostname", 
                                       arguments.listeningTo)
-    // if default listening to 0.0.0.0, changes host by obtaining host address.
+    // if default listening to 0.0.0.0, changes host by obtaining host name.
     if("0.0.0.0".equals(listeningTo)) { 
        defaultConf.set("bsp.peer.hostname", 
                        InetAddress.getLocalHost.getHostName)

@@ -168,6 +168,11 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
   protected def peerActorSystem: String = 
     "BSPPeerSystem%s".format(configuration.getInt("bsp.child.slot.seq", 1))
 
+  /**
+   * The host this actor runs on. It may be different from the host that remote 
+   * module listens to.
+   * @return String name of the host.
+   */
   protected def host(): String = 
     configuration.get("bsp.peer.hostname", 
                       InetAddress.getLocalHost.getHostAddress) 

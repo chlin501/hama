@@ -35,14 +35,14 @@ class TestMessageManager extends TestEnv(ActorSystem("TestMessageManager"))
                          with Logger {
 
   val seq = 2
-  val ip = "192.168.2.123"
+  val host = InetAddress.getLocalHost.getHostName
   val port = 12341
-  val expectedPeer = Peer.at("BSPPeerSystem%d@%s:%d".format(seq, ip, port))
+  val expectedPeer = Peer.at("BSPPeerSystem%d@%s:%d".format(seq, host, port))
 
   override def beforeAll {
     super.beforeAll
     testConfiguration.setInt("bsp.child.slot.seq", seq)
-    testConfiguration.set("bsp.peer.hostname", ip)
+    testConfiguration.set("bsp.peer.hostname", host)
     testConfiguration.setInt("bsp.peer.port", port)
   }
 
@@ -53,7 +53,7 @@ class TestMessageManager extends TestEnv(ActorSystem("TestMessageManager"))
     assert(null != messageManager)
     messageManager.init(testConfiguration, taskAttemptId)
     val peer = messageManager.getListenerAddress   
-    LOG.info("Peer at that machine: "+peer)
+    LOG.info("Peer at the machine: "+peer)
     assert(null != peer)
     assert(expectedPeer.equals(peer))
     messageManager.send("BSPPeerSystem2@host31:1294", new IntWritable(7)) 
