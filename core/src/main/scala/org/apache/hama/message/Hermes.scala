@@ -196,9 +196,8 @@ class PeerMessenger extends Actor with RemoteService {
   protected def cache(peer: ProxyInfo, proxy: ActorRef) = 
     peersLRUCache.put(peer, proxy)   
 
-  override def afterLinked(target: String, proxy: ActorRef) {
+  override def afterLinked(target: String, proxy: ActorRef) = 
     findThenSend(target, proxy) 
-  } 
 
   protected def findThenSend(target: String, proxy: ActorRef) {
     waitingList.find(entry => entry._1.getActorName.equals(target)) match {
@@ -211,7 +210,7 @@ class PeerMessenger extends Actor with RemoteService {
         proxy ! msg
         confirm(from)
       }
-      case None => LOG.warning("No corresponded {} for sending message bundle.",
+      case None => LOG.warning("Target {} for sending message bundle.",
                                target)
     }
   }

@@ -35,11 +35,7 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
-class RemotePeerMessenger(tester: ActorRef) extends PeerMessenger { 
-
-  override def receive = super.receive
-
-}
+class RemotePeerMessenger(tester: ActorRef) extends PeerMessenger 
 
 object LocalPeerMessenger {
 
@@ -51,6 +47,8 @@ class LocalPeerMessenger(tester: ActorRef) extends PeerMessenger {
 
   import LocalPeerMessenger._
 
+  // override link funciton by removing actroOf method which would result in
+  // actor not unique exception because we've already had an actor created.
   override def link(target: String, ref: ActorRef): ActorRef = {
     LOG.info("Override link() with target: {} ref: {}.", target, ref)
     val proxy = ref
@@ -63,8 +61,6 @@ class LocalPeerMessenger(tester: ActorRef) extends PeerMessenger {
     LOG.info("Done linking to remote service {}.", target)
     proxy
   }
-
-  override def receive = super.receive
 
 }
 
@@ -134,7 +130,7 @@ class TestPeerMessenger extends TestEnv(ActorSystem("TestPeerMessenger")) {
                          classOf[RemotePeerMessenger])
     val bundle = createBundle[IntWritable](seq(0), seq(1), seq(2))
     localPeer ! Transfer(LocalPeerMessenger.dummyPeer, bundle)
-    Thread.sleep(20*1000)
+    Thread.sleep(1*1000)
     LOG.info("Bundle "+forVerification+" size "+forVerification.size)
     assert(null != forVerification)
     var idx = 0
@@ -145,5 +141,6 @@ class TestPeerMessenger extends TestEnv(ActorSystem("TestPeerMessenger")) {
       idx+=1
     })
     LOG.info("Messages sent: "+bundle.size+". Messages received: "+idx)
+    LOG.info("Done testing peer messenger!")  
   }
 }
