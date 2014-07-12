@@ -138,7 +138,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   /**
    * Indicate the local peer.
    */
-  def currentPeerInfo(conf: HamaConfiguration): ProxyInfo = {
+  protected def currentPeerInfo(conf: HamaConfiguration): ProxyInfo = {
     val seq = conf.getInt("bsp.child.slot.seq", -1)
     if(-1 == seq)
       throw new RuntimeException("Invalid slot seq "+seq+" for constructing "+
@@ -177,13 +177,13 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
    * called.
    * @return MessageQueue type is backed with a particular queue implementation.
    */
-  def getReceiverQueue: MessageQueue[M] = { 
+  protected def getReceiverQueue: MessageQueue[M] = { 
     val queue = MessageQueue.get[M](configuration)
     queue.init(configuration, taskAttemptId)
     queue
   }
 
-  def getSynchronizedReceiverQueue: SynchronizedQueue[M] = 
+  protected def getSynchronizedReceiverQueue: SynchronizedQueue[M] = 
     SingleLockQueue.synchronize(getReceiverQueue)
 
   override def close() {
@@ -193,7 +193,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     cleanupDiskQueue
   }
 
-  def cleanupDiskQueue() {
+  protected def cleanupDiskQueue() {
     try {
       val operation = Operation.get(this.configuration)
       val diskQueueDir = configuration.get("bsp.disk.queue.dir")
