@@ -110,6 +110,10 @@ class TestMessageManager extends TestEnv(ActorSystem("TestMessageManager"))
     LOG.info("Expect 2 peers. "+peerCnt+" peers found.")
     assert(2 == peerCnt)
     messageManager.close       
+    val totalMsgs = messageManager.getNumCurrentMessages
+    LOG.info("Expected 0 messages. Actual "+totalMsgs+" messages found.")
+    assert(0 == totalMsgs)
     LOG.info("Done testing message manager!")
+
   }
 }
