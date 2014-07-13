@@ -31,13 +31,16 @@ import org.apache.hama.bsp.OutputCollector
 import org.apache.hama.fs.CacheService
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.ProxyInfo
-import org.apache.hama.logging.Logger
 import org.apache.hama.io.IO
+import org.apache.hama.logging.Logger
+import org.apache.hama.ProxyInfo
+import org.apache.hama.sync.SyncException
+import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.MessageManager
 import org.apache.hama.message.PeerCommunicator
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncServiceFactory
+import scala.collection.JavaConversions._
 
 private[v2] final case class TaskWithStats(task: Task, counters: Counters) {
   if(null == task)
@@ -76,6 +79,10 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
 
   private var allPeers: Array[String] = _
 
+  // only for internal use.
+  private def getTask(): Task = taskWithStats.task
+  private def getCounters(): Counters = taskWithStats.counters 
+
   /**
    * Initialize necessary services, including
    * - io
@@ -90,12 +97,12 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
   protected[v2] def initialize(conf: HamaConfiguration, task: Task) {
     this.configuration = conf
     this.taskWithStats = TaskWithStats(task, new Counters())
-    this.messenger = messengingService(conf, taskWithStats.task) 
+    this.messenger = messengingService(conf, getTask) 
     this.io = ioService(conf, taskWithStats) 
-    localize(conf, taskWithStats.task)
-    settingForTask(conf, taskWithStats.task)
-    this.syncClient = syncService(conf, taskWithStats.task)
-    //updateStatus(conf, taskWithStats.task)
+    localize(conf, getTask)
+    settingForTask(conf, getTask)
+    this.syncClient = syncService(conf, getTask)
+    updateStatus(conf, getTask)
     doSync()
   }
 
@@ -129,7 +136,7 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
 
   
   /**
-   * Setup message service according to a specific task.
+   * Setup message service for a specific task.
    */
   protected def messengingService(conf: HamaConfiguration, task: Task): 
       MessageManager[Writable] = {
@@ -142,15 +149,15 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
   }
 
   /**
-   * Setup io service according to a specific task.
+   * Setup io service for a specific task.
    */
   protected def ioService(conf: HamaConfiguration, 
                           taskWithStats: TaskWithStats): 
       IO[RecordReader[_,_], OutputCollector[_,_]] = {
     val rw = IO.get[RecordReader[_, _], OutputCollector[_, _]](conf)
-    rw.initialize(taskWithStats.task.getConfiguration, // tight to a task 
-                  taskWithStats.task.getSplit, 
-                  taskWithStats.counters)
+    rw.initialize(getTask.getConfiguration, // tight to a task 
+                  getTask.getSplit, 
+                  getCounters)
     rw 
   }
 
@@ -161,6 +168,10 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
   protected def localize(conf: HamaConfiguration, task: Task) = 
     CacheService.moveCacheToLocal(conf)
 
+  /**
+   * Instantiate ZooKeeper sync service for BarrierSynchronization according to
+   * a specific task.
+   */
   protected def syncService(conf: HamaConfiguration, task: Task): 
       PeerSyncClient =  {
     val client = SyncServiceFactory.getPeerSyncClient(conf)
@@ -168,9 +179,6 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
     client.register(task.getId.getJobID, task.getId, host, port)
     client
   }
-
-  protected def peerActorSystem: String = 
-    "BSPPeerSystem%s".format(configuration.getInt("bsp.child.slot.seq", 1))
 
   /**
    * The host this actor runs on. It may be different from the host that remote 
@@ -184,9 +192,13 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
   protected def port(): Int = configuration.getInt("bsp.peer.port", 61000)
 
   protected def socketAddress(): String = "%s:%s".format(host, port)
-// end TODO: move to PeerInfo
 
-  //def updateStatus(conf: HamaConfiguration) {}
+  /**
+   * Update current task status
+   * (Async actor) report status back to master.
+   */ 
+  def updateStatus(conf: HamaConfiguration, task: Task) {
+  }
 
   override def getIO[I, O](): IO[I, O] = this.io.asInstanceOf[IO[I, O]]
 
@@ -199,24 +211,54 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
 
   override def getNumCurrentMessages(): Int = messenger.getNumCurrentMessages
 
+  @throws(classOf[SyncException])
+  protected def enterBarrier() {
+    syncClient.enterBarrier(getTask.getId.getJobID, 
+                            getTask.getId, 
+                            getTask.getCurrentSuperstep)
+  }
+
+  @throws(classOf[SyncException])
+  protected def leaveBarrier() {
+    syncClient.leaveBarrier(getTask.getId.getJobID, 
+                            getTask.getId,
+                            getTask.getCurrentSuperstep)
+  }
+
+  def doTransfer(peer: ProxyInfo, bundle: BSPMessageBundle[Writable]) {
+    try {
+      messenger.transfer(peer, bundle) 
+    } catch {
+      case ioe: IOException => 
+        LOG.error("Fail transferring messages to {} for {}", 
+                  peer, ioe)
+    }
+  }
+
   @throws(classOf[IOException])
   override def sync() {
     val it = messenger.getOutgoingBundles
-    while(it.hasNext) {
-      val entry = it.next
-      val addr = entry.getKey
+    if(null == it)
+      throw new IllegalStateException("MessageManager's outgoing bundles is "+
+                                      "null!")
+    asScalaIterator(it).foreach( entry => {
+      val peer = entry.getKey
       val bundle = entry.getValue
       it.remove
-      // actual send message out 
-    }
+      doTransfer(peer, bundle)      
+    })
+    enterBarrier 
+    messenger.clearOutgoingMessages
+    leaveBarrier
+    updateStatus(configuration, getTask) 
   } 
 
   override def getSuperstepCount(): Long = 
-    taskWithStats.task.getCurrentSuperstep
+    getTask.getCurrentSuperstep
 
   private def initPeerNames() {
     if (null == allPeers) {
-      allPeers = syncClient.getAllPeerNames(taskWithStats.task.getId);
+      allPeers = syncClient.getAllPeerNames(getTask.getId);
     }
   }
 
@@ -227,7 +269,7 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
     allPeers(index)
   }
 
-  override def getPeerIndex(): Int = taskWithStats.task.getId.getTaskID.getId
+  override def getPeerIndex(): Int = getTask.getId.getTaskID.getId
 
   override def getAllPeerNames(): Array[String] = {
     initPeerNames
@@ -243,6 +285,6 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
 
   override def getConfiguration(): HamaConfiguration = configuration
 
-  override def getTaskAttemptId(): TaskAttemptID = taskWithStats.task.getId
+  override def getTaskAttemptId(): TaskAttemptID = getTask.getId
 
 }

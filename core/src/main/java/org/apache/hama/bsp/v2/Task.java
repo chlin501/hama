@@ -38,7 +38,7 @@ import org.apache.hama.io.PartitionedSplit;
  * Task building should be done through factory method. 
  */
 public final class Task implements Writable {
-  
+
   final Log LOG = LogFactory.getLog(Task.class);
 
   /* The unique id for this task, including BSPJobID. */
@@ -61,11 +61,21 @@ public final class Task implements Writable {
 
   private IntWritable currentSuperstep = new IntWritable(1);
 
+  /**
+   * This is only used for finding next State. Read only.
+   */
+  public static final Stage<State> States = new Stage(State.values());
+
   /* The state of this task. */
-  private State state = State.WAITING;
+  private State state = States.next(); 
+
+  /**
+   * This is only used for finding next Phase. Read only.
+   */
+  public static final Stage<Phase> Phases = new Stage(Phase.values());
 
   /* The phase at which this task is. */
-  private Phase phase = Phase.SETUP;
+  private Phase phase = Phases.next(); 
 
   /* Denote if this task is completed. */
   private BooleanWritable completed = new BooleanWritable(false);
@@ -122,6 +132,47 @@ public final class Task implements Writable {
   }
 
   /**
+   * Used for iterator over Enum, including Phase and State. 
+   */
+  final static class Stage<E> {
+    int currentIndex = 0;
+    final E[] enums;
+
+    /**
+     * Adding all enum elements for iteration.
+     * @param enums are all enum elements.
+     */
+    Stage(final E[] enums) {
+      this.enums = enums;
+    }
+
+    /**
+     * Return current element in the enum array and increase index by 1.
+     * @return E is the enum type.
+     */
+    public E next() {
+      final E e = enums[currentIndex];
+      currentIndex += 1;
+      return e;
+    }
+
+    /**
+     * Reset index to the beginning of the enum.
+     */
+    public void reset() {
+      currentIndex = 0;
+    }
+
+    /**
+     * Check if reaching the end of the enum.
+     * May call {@link #reset} for restart from the beginning.
+     */
+    public boolean isEnd() {
+      return (enums.length == currentIndex);
+    }
+  }
+
+  /**
    * Describe in which phase a task is in terms of supersteps.
    * The procedure is
    *             +------------ +
@@ -133,6 +184,7 @@ public final class Task implements Writable {
     SETUP, COMPUTE, BARRIER_SYNC, CLEANUP
   }
 
+
   /**
    * Indicate the current task state ie whether it's running, failed, etc. in a
    * particular executing point.
@@ -140,6 +192,7 @@ public final class Task implements Writable {
   public static enum State {
     WAITING, RUNNING, SUCCEEDED, FAILED, RECOVERING, STOPPED, CANCELLED 
   }
+
 
   public static final class Builder {
 
@@ -320,7 +373,7 @@ public final class Task implements Writable {
   /**
    * Increment the current superstep via 1.
    */
-  public void increatmentSuperspte() {
+  public void increatmentSuperstep() {
     this.currentSuperstep = new IntWritable((getCurrentSuperstep()+1));
   }
 
@@ -329,20 +382,31 @@ public final class Task implements Writable {
   }
 
   /**
-   * Transfer the task to the next state.
+   * Indiate this task is moved to the next state.
    */
   public void nextState() {
-//TODO:
-    throw new UnsupportedOperationException();
+    if(!States.isEnd()) {
+      this.state = States.next(); 
+    } else {
+      States.reset();
+      this.state = States.next();
+    }
   }
 
   public Phase getPhase() {
     return this.phase;
   }
 
+  /**
+   * Indiate this task is moved to the next phase.
+   */
   public void nextPhase() {
-//TODO:
-    throw new UnsupportedOperationException();
+    if(!Phases.isEnd()) {
+      this.phase = Phases.next(); 
+    } else {
+      States.reset();
+      this.phase = Phases.next();
+    }
   }
 
   /**
