@@ -38,6 +38,22 @@ public class TestTask extends TestCase {
 
   final Log LOG = LogFactory.getLog(TestTask.class);
 
+  Task createTaskWithDefault(final int id) throws Exception {
+    final TaskAttemptID attemptId = IDCreator.newBSPJobID().
+                                              withId("test").
+                                              withId(id).
+                                              getTaskIDBuilder().
+                                              withId(id).
+                                              getTaskAttemptIDBuilder().
+                                              withId(id).
+                                              build();
+    final HamaConfiguration conf = new HamaConfiguration();
+    final Task task = new Task.Builder().setId(attemptId). 
+                                         setConfiguration(conf).
+                                         build();
+    return task;
+  }
+
   Task createTask(final int id) throws Exception {
     final TaskAttemptID attemptId = IDCreator.newBSPJobID().
                                               withId("test").
@@ -50,6 +66,7 @@ public class TestTask extends TestCase {
     final HamaConfiguration conf = new HamaConfiguration();
     final long startTime = System.currentTimeMillis();
     final long finishTime = startTime + 1000*10;
+    LOG.info("Note that State is configured to RUNNING!!!");
     final Task.State state = Task.State.RUNNING;
     final Task.Phase phase = Task.Phase.SETUP;
     final Task task = new Task.Builder().setId(attemptId). 
@@ -113,4 +130,53 @@ public class TestTask extends TestCase {
                  task.isCompleted(), forVerification.isCompleted());
   }
 
+  /**
+   * Test moving phase/ state to the next one is correctly configured.
+   */
+  public void testStage() throws Exception {
+    final Task task = createTaskWithDefault(9);
+    assertPhase(task, Task.Phase.SETUP);
+    assertState(task, Task.State.WAITING);
+    nextStage(task);
+    assertPhase(task, Task.Phase.COMPUTE);
+    assertState(task, Task.State.RUNNING);
+    nextStage(task);
+    assertPhase(task, Task.Phase.BARRIER_SYNC);
+    assertState(task, Task.State.SUCCEEDED);
+    nextStage(task);
+    assertPhase(task, Task.Phase.CLEANUP);
+    assertState(task, Task.State.FAILED);
+    nextStage(task);
+    assertPhase(task, Task.Phase.SETUP); // must start from the initial phase
+    assertState(task, Task.State.STOPPED);
+    nextStage(task);
+    assertPhase(task, Task.Phase.COMPUTE);
+    assertState(task, Task.State.CANCELLED);
+    nextStage(task);
+    assertPhase(task, Task.Phase.BARRIER_SYNC);
+    assertState(task, Task.State.WAITING); // must start from the initial state
+  }
+
+  void nextStage(final Task task) throws Exception {
+    task.nextPhase();
+    task.nextState();
+  }
+
+  void assertPhase(final Task task, 
+                   final Task.Phase expectedPhase) throws Exception {
+    final Task.Phase actualPhase = task.getPhase();
+    LOG.info("Current phase "+actualPhase);
+    assertNotNull("Phase shoudn't be null!", actualPhase);
+    assertEquals("Initial phase should be "+expectedPhase, 
+                 expectedPhase, actualPhase);
+  }
+
+  void assertState(final Task task, 
+                   final Task.State expectedState) throws Exception {
+    final Task.State actualState = task.getState();
+    LOG.info("Current state "+actualState);
+    assertNotNull("State shoudn't be null!", actualState);
+    assertEquals("Initial State should be "+expectedState, 
+                 expectedState, actualState);
+  }
 }

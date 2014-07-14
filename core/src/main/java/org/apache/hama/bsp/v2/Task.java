@@ -64,7 +64,7 @@ public final class Task implements Writable {
   /**
    * This is only used for finding next State. Read only.
    */
-  public static final Stage<State> States = new Stage(State.values());
+  public static final Stage<State> States = new Stage<State>(State.values());
 
   /* The state of this task. */
   private State state = States.next(); 
@@ -72,7 +72,7 @@ public final class Task implements Writable {
   /**
    * This is only used for finding next Phase. Read only.
    */
-  public static final Stage<Phase> Phases = new Stage(Phase.values());
+  public static final Stage<Phase> Phases = new Stage<Phase>(Phase.values());
 
   /* The phase at which this task is. */
   private Phase phase = Phases.next(); 
@@ -190,7 +190,7 @@ public final class Task implements Writable {
    * particular executing point.
    */
   public static enum State {
-    WAITING, RUNNING, SUCCEEDED, FAILED, RECOVERING, STOPPED, CANCELLED 
+    WAITING, RUNNING, SUCCEEDED, FAILED, STOPPED, CANCELLED 
   }
 
 
@@ -202,8 +202,8 @@ public final class Task implements Writable {
     private long finishTime = 0;
     private PartitionedSplit split = null;
     private int currentSuperstep = 1;
-    private State state = State.WAITING;
     private Phase phase = Phase.SETUP;
+    private State state = State.WAITING;
     private boolean completed = false;
     private Marker marker = new Marker(false, ""); 
 
@@ -404,7 +404,7 @@ public final class Task implements Writable {
     if(!Phases.isEnd()) {
       this.phase = Phases.next(); 
     } else {
-      States.reset();
+      Phases.reset();
       this.phase = Phases.next();
     }
   }
