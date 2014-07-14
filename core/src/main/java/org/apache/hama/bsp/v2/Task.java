@@ -64,7 +64,7 @@ public final class Task implements Writable {
   /**
    * This is only used for finding next State. Read only.
    */
-  public static final Stage<State> States = new Stage<State>(State.values());
+  public final Stage<State> States = new Stage<State>(State.values());
 
   /* The state of this task. */
   private State state = States.next(); 
@@ -72,7 +72,7 @@ public final class Task implements Writable {
   /**
    * This is only used for finding next Phase. Read only.
    */
-  public static final Stage<Phase> Phases = new Stage<Phase>(Phase.values());
+  public final Stage<Phase> Phases = new Stage<Phase>(Phase.values());
 
   /* The phase at which this task is. */
   private Phase phase = Phases.next(); 

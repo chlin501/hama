@@ -131,30 +131,32 @@ public class TestTask extends TestCase {
   }
 
   /**
-   * Test moving phase/ state to the next one is correctly configured.
+   * Test phase/ state change if correctly configured.
    */
   public void testStage() throws Exception {
     final Task task = createTaskWithDefault(9);
-    assertPhase(task, Task.Phase.SETUP);
-    assertState(task, Task.State.WAITING);
+    assertStage(task, Task.Phase.SETUP, Task.State.WAITING);
     nextStage(task);
-    assertPhase(task, Task.Phase.COMPUTE);
-    assertState(task, Task.State.RUNNING);
+    assertStage(task, Task.Phase.COMPUTE, Task.State.RUNNING);
     nextStage(task);
-    assertPhase(task, Task.Phase.BARRIER_SYNC);
-    assertState(task, Task.State.SUCCEEDED);
+    assertStage(task, Task.Phase.BARRIER_SYNC, Task.State.SUCCEEDED);
     nextStage(task);
-    assertPhase(task, Task.Phase.CLEANUP);
-    assertState(task, Task.State.FAILED);
+    assertStage(task, Task.Phase.CLEANUP, Task.State.FAILED);
     nextStage(task);
-    assertPhase(task, Task.Phase.SETUP); // must start from the initial phase
-    assertState(task, Task.State.STOPPED);
+    // phase must start from the initial one ie setup.
+    assertStage(task, Task.Phase.SETUP, Task.State.STOPPED);
     nextStage(task);
-    assertPhase(task, Task.Phase.COMPUTE);
-    assertState(task, Task.State.CANCELLED);
+    assertStage(task, Task.Phase.COMPUTE, Task.State.CANCELLED);
     nextStage(task);
-    assertPhase(task, Task.Phase.BARRIER_SYNC);
-    assertState(task, Task.State.WAITING); // must start from the initial state
+    // state must start from the initial one ie waiting.
+    assertStage(task, Task.Phase.BARRIER_SYNC, Task.State.WAITING); 
+  }
+
+  void assertStage(final Task task, 
+                   final Task.Phase expectedPhase, 
+                   final Task.State expectedState) throws Exception {
+    assertPhase(task, expectedPhase);
+    assertState(task, expectedState);
   }
 
   void nextStage(final Task task) throws Exception {
