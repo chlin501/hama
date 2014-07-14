@@ -206,6 +206,7 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
    * (Async actor) report status back to master.
    */ 
   def updateStatus(conf: HamaConfiguration, task: Task) {
+//TODO: need to investigate the state/ phase flow first.
   }
 
   override def getIO[I, O](): IO[I, O] = this.io.asInstanceOf[IO[I, O]]
