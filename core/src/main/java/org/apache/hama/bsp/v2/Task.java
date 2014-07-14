@@ -49,7 +49,6 @@ public final class Task implements Writable {
    */
   private HamaConfiguration configuration = new HamaConfiguration();
 
-  // TODO: maybe we need record time when the task in queue?
   /* Time this task begins. */
   private LongWritable startTime = new LongWritable(0);
 

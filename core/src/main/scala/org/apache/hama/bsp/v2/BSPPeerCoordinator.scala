@@ -80,8 +80,16 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
   private var allPeers: Array[String] = _
 
   // only for internal use.
-  private def getTask(): Task = taskWithStats.task
-  private def getCounters(): Counters = taskWithStats.counters 
+  private def getTask(): Task = {
+    if(null == taskWithStats)
+      throw new IllegalStateException("TaskWithStats is not yet setup!")
+    taskWithStats.task
+  }
+  private def getCounters(): Counters = {
+    if(null == taskWithStats)
+      throw new IllegalStateException("TaskWithStats is not yet setup!")
+    taskWithStats.counters 
+  }
 
   /**
    * Initialize necessary services, including
@@ -103,16 +111,16 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
     settingForTask(conf, getTask)
     this.syncClient = syncService(conf, getTask)
     updateStatus(conf, getTask)
-    doSync()
+    doSync(getTask.getCurrentSuperstep)
   }
 
   /**
    * Internal sync to ensure all peers is registered/ ready.
-   * TODO: need to sperate syncClient.init and syncClient.register
-   *       for aync operation.
+   * @param superstep indicate the curent superstep value.
    */
-  protected def doSync() {
-//TODO: 
+  protected def doSync(superstep: Long) {
+    syncClient.enterBarrier(getTask.getId.getJobID, getTask.getId, superstep)
+    syncClient.leaveBarrier(getTask.getId.getJobID, getTask.getId, superstep)
   }
 
   /** 
