@@ -110,7 +110,7 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
     localize(conf, getTask)
     settingForTask(conf, getTask)
     this.syncClient = syncService(conf, getTask)
-    updateStatus(conf, getTask)
+    //updateStatus(conf, getTask)
     doSync(getTask.getCurrentSuperstep)
   }
 
@@ -202,12 +202,12 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
   protected def socketAddress(): String = "%s:%s".format(host, port)
 
   /**
+   * TODO: task phase update needs to be done in e.g. BSPTask.java
    * Update current task status
    * (Async actor) report status back to master.
-   */ 
   def updateStatus(conf: HamaConfiguration, task: Task) {
-//TODO: need to investigate the state/ phase flow first.
   }
+   */ 
 
   override def getIO[I, O](): IO[I, O] = this.io.asInstanceOf[IO[I, O]]
 
@@ -259,7 +259,7 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
     enterBarrier 
     messenger.clearOutgoingMessages
     leaveBarrier
-    updateStatus(configuration, getTask) 
+    //updateStatus(configuration, getTask) 
   } 
 
   override def getSuperstepCount(): Long = 

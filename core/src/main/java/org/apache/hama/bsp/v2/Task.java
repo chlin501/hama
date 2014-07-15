@@ -62,19 +62,20 @@ public final class Task implements Writable {
 
   /**
    * This is only used for finding next State. Read only.
-   */
+   * TODO: change to use something like linked list?
   public final Stage<State> States = new Stage<State>(State.values());
+   */
 
   /* The state of this task. */
-  private State state = States.next(); 
+  private State state = State.WAITING; //States.current(); 
 
   /**
    * This is only used for finding next Phase. Read only.
-   */
   public final Stage<Phase> Phases = new Stage<Phase>(Phase.values());
+   */
 
   /* The phase at which this task is. */
-  private Phase phase = Phases.next(); 
+  private Phase phase = Phase.SETUP; //Phases.current(); 
 
   /* Denote if this task is completed. */
   private BooleanWritable completed = new BooleanWritable(false);
@@ -132,45 +133,55 @@ public final class Task implements Writable {
 
   /**
    * Used for iterator over Enum, including Phase and State. 
-   */
+   * Index is started from 0.
   final static class Stage<E> {
     int currentIndex = 0;
     final E[] enums;
 
-    /**
      * Adding all enum elements for iteration.
      * @param enums are all enum elements.
-     */
     Stage(final E[] enums) {
       this.enums = enums;
     }
 
-    /**
-     * Return current element in the enum array and increase index by 1.
-     * @return E is the enum type.
-     */
-    public E next() {
-      final E e = enums[currentIndex];
-      currentIndex += 1;
-      return e;
+    public E current() {
+      return enums[currentIndex];
     }
 
-    /**
+     * Return current element in the enum array and increase index by 1.
+     * @return E is the enum type.
+    public E next() {
+      currentIndex += 1;
+      return current();
+    }
+ 
+     * Return current element in the enum array and decrease index by 1.
+     * @return E is the enum type.
+    public E prev() {
+      currentIndex -= 1;
+      return current();
+    }
+
      * Reset index to the beginning of the enum.
-     */
     public void reset() {
       currentIndex = 0;
     }
 
-    /**
+    public void moveToLast() {
+      currentIndex = (enums.length - 1);
+    }
+
      * Check if reaching the end of the enum.
      * May call {@link #reset} for restart from the beginning.
-     */
     public boolean isEnd() {
-      return (enums.length == currentIndex);
+      return (enums.length == (currentIndex + 1));
+    }
+
+    public boolean isBeg() {
+      return (0 == currentIndex);
     }
   }
-
+   */
   /**
    * Describe in which phase a task is in terms of supersteps.
    * The procedure is
@@ -183,15 +194,13 @@ public final class Task implements Writable {
     SETUP, COMPUTE, BARRIER_SYNC, CLEANUP
   }
 
-
   /**
    * Indicate the current task state ie whether it's running, failed, etc. in a
    * particular executing point.
    */
   public static enum State {
-    WAITING, RUNNING, SUCCEEDED, FAILED, STOPPED, CANCELLED 
+    WAITING, RUNNING, SUCCEEDED, FAILED, CANCELLED 
   }
-
 
   public static final class Builder {
 
@@ -382,31 +391,85 @@ public final class Task implements Writable {
 
   /**
    * Indiate this task is moved to the next state.
-   */
   public void nextState() {
     if(!States.isEnd()) {
       this.state = States.next(); 
     } else {
       States.reset();
-      this.state = States.next();
+      this.state = States.current();
     }
+  }
+
+  public void prevState() {
+    if(!States.isBeg()) {
+      this.state = States.prev(); 
+    } else {
+      States.moveToLast();
+      this.state = States.current();
+    }
+  }
+   */
+
+  public void markAsWaiting() {
+    this.state = State.WAITING; 
+  } 
+
+  public void markAsRunning() {
+    this.state = State.RUNNING;
+  }
+
+  public void markAsSucceed() {
+    this.state = State.SUCCEEDED;
+  }
+
+  public void markAsFailed() {
+    this.state = State.FAILED;
+  }
+
+  public void markAsCancelled() {
+    this.state = State.CANCELLED;
   }
 
   public Phase getPhase() {
     return this.phase;
   }
 
+  public void transitToSetup() {
+    this.phase = Phase.SETUP;
+  }
+
+  public void transitToCompute() {
+    this.phase = Phase.COMPUTE;
+  }
+
+  public void transitToSync() {
+    this.phase = Phase.BARRIER_SYNC;
+  }
+
+  public void transitToCleanup() {
+    this.phase = Phase.CLEANUP;
+  }
+
   /**
    * Indiate this task is moved to the next phase.
-   */
   public void nextPhase() {
     if(!Phases.isEnd()) {
       this.phase = Phases.next(); 
     } else {
       Phases.reset();
-      this.phase = Phases.next();
+      this.phase = Phases.current();
     }
   }
+
+  public void prevPhase() {
+    if(!Phases.isBeg()) {
+      this.phase = Phases.prev(); 
+    } else {
+      Phases.moveToLast();
+      this.phase = Phases.current();
+    }
+  }
+   */
 
   /**
    * Denote if this task is completed.

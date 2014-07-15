@@ -132,36 +132,28 @@ public class TestTask extends TestCase {
 
   /**
    * Test phase/ state change if correctly configured.
-   */
-  public void testStage() throws Exception {
+  public void testPhase() throws Exception {
     final Task task = createTaskWithDefault(9);
-    assertStage(task, Task.Phase.SETUP, Task.State.WAITING);
-    nextStage(task);
-    assertStage(task, Task.Phase.COMPUTE, Task.State.RUNNING);
-    nextStage(task);
-    assertStage(task, Task.Phase.BARRIER_SYNC, Task.State.SUCCEEDED);
-    nextStage(task);
-    assertStage(task, Task.Phase.CLEANUP, Task.State.FAILED);
-    nextStage(task);
-    // phase must start from the initial one ie setup.
-    assertStage(task, Task.Phase.SETUP, Task.State.STOPPED);
-    nextStage(task);
-    assertStage(task, Task.Phase.COMPUTE, Task.State.CANCELLED);
-    nextStage(task);
-    // state must start from the initial one ie waiting.
-    assertStage(task, Task.Phase.BARRIER_SYNC, Task.State.WAITING); 
-  }
-
-  void assertStage(final Task task, 
-                   final Task.Phase expectedPhase, 
-                   final Task.State expectedState) throws Exception {
-    assertPhase(task, expectedPhase);
-    assertState(task, expectedState);
-  }
-
-  void nextStage(final Task task) throws Exception {
+    assertPhase(task, Task.Phase.SETUP);
     task.nextPhase();
-    task.nextState();
+    assertPhase(task, Task.Phase.COMPUTE);
+    task.nextPhase();
+    assertPhase(task, Task.Phase.BARRIER_SYNC);
+    task.nextPhase();
+    assertPhase(task, Task.Phase.CLEANUP);
+
+    task.nextPhase();
+    assertPhase(task, Task.Phase.SETUP); // ensure it's circle.
+    task.prevPhase();
+    assertPhase(task, Task.Phase.CLEANUP); // ensure it's circle.
+    task.prevPhase();
+    assertPhase(task, Task.Phase.BARRIER_SYNC); 
+    task.prevPhase();
+    assertPhase(task, Task.Phase.COMPUTE);
+    task.prevPhase();
+    assertPhase(task, Task.Phase.SETUP);
+    task.prevPhase();
+    assertPhase(task, Task.Phase.CLEANUP);
   }
 
   void assertPhase(final Task task, 
@@ -181,4 +173,5 @@ public class TestTask extends TestCase {
     assertEquals("Initial State should be "+expectedState, 
                  expectedState, actualState);
   }
+   */
 }
