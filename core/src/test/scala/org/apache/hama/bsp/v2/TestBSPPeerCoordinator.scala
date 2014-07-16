@@ -35,6 +35,8 @@ final case object GetAllPeers
 final case object GetPeerName
 final case object GetNumPeers
 final case object GetTaskAttemptId
+final case object GetSuperstepCount
+final case object PeerNameAt
 
 class Worker(conf: HamaConfiguration, tester: ActorRef, task: Task) 
       extends Actor {
@@ -84,12 +86,28 @@ class Worker(conf: HamaConfiguration, tester: ActorRef, task: Task)
     }
   }
 
+  def getSuperstepCount: Receive = {
+    case GetSuperstepCount => {
+      val superstep = peer.getSuperstepCount
+      tester ! superstep
+    }
+  }
+
+  def peerNameAt: Receive = {
+    case PeerNameAt => {
+      val seq = conf.getInt("bsp.child.slot.seq", -1)
+      if(-1 == seq) throw new RuntimeException("Wrong seq -1 for bsp peer!")
+      val name = peer.getPeerName((seq-1))
+      LOG.info("Peer name at {} is {}", (seq-1), name)
+      tester ! name 
+    }
+  }
 
   def unknown: Receive = {
     case msg@_ => LOG.warning("Unknown message {} received by worker.", msg)
   }
 
-  override def receive = init orElse getPeerName orElse getAllPeers orElse getNumPeers orElse getTaskAttemptId orElse unknown
+  override def receive = init orElse getPeerName orElse getAllPeers orElse getNumPeers orElse getTaskAttemptId orElse peerNameAt orElse getSuperstepCount orElse unknown
 }
 
 @RunWith(classOf[JUnitRunner])
@@ -163,9 +181,13 @@ class TestBSPPeerCoordinator
     
     worker1 ! GetPeerName
     expect(peerName(conf1)) 
+    worker1 ! PeerNameAt 
+    expectAnyOf(peerName(conf1), peerName(conf2))
 
     worker2 ! GetPeerName
     expect(peerName(conf2)) 
+    worker2 ! PeerNameAt 
+    expectAnyOf(peerName(conf1), peerName(conf2))
 
     worker1 ! GetNumPeers
     expect(2)
@@ -178,6 +200,12 @@ class TestBSPPeerCoordinator
 
     worker2 ! GetTaskAttemptId
     expect(task2.getId.toString)
+
+    worker1 ! GetSuperstepCount
+    expect(1L)
+
+    worker2 ! GetSuperstepCount
+    expect(1L)
 
     LOG.info("Done testing BSPPeerCoordinator!")
   }
