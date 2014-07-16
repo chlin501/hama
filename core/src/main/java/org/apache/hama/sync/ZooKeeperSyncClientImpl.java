@@ -73,6 +73,9 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
   public void init(HamaConfiguration conf, BSPJobID jobId, TaskAttemptID taskId)
       throws Exception {
     quorumServers = QuorumPeer.getZKQuorumServersString(conf);
+    LOG.debug("Quorum servers string: "+quorumServers);
+    if(null == quorumServers)
+      throw new IllegalArgumentException("Quorum servers string not found!");
     this.zk = new ZooKeeper(quorumServers, conf.getInt(
         Constants.ZOOKEEPER_SESSION_TIMEOUT, 1200000), this);
     bspRoot = conf.get(Constants.ZOOKEEPER_ROOT,
@@ -89,8 +92,8 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
     if(0 >= peerSeq) 
       throw new RuntimeException("Invalid slot seq -1 for BSPPeerSystem!");
     peerActorSystem = String.format("BSPPeerSystem%s", new Integer(peerSeq));
-    LOG.info("Start connecting to Zookeeper! At " + peerActorSystem+ "@"+
-             peerAddress);
+    LOG.info("Start connecting to Zookeeper at " + peerActorSystem+ "@"+
+             peerAddress.getHostName() +":"+ peerAddress.getPort()); 
     numBSPTasks = conf.getInt("bsp.peers.num", 1);
   }
 
@@ -120,7 +123,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
           size--;
         }
 
-        LOG.debug("===> at superstep :" + superstep + " current znode size: "
+        LOG.debug("At superstep :" + superstep + " current znode size: "
             + znodes.size() + " current znodes:" + znodes);
 
         LOG.debug("enterBarrier() znode size within " + pathToSuperstepZnode
@@ -361,8 +364,11 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
   /**
    * @return the string as host:port of this Peer
    */
+  @Override
   public String getPeerName() {
-    return peerAddress.getHostName() + ":" + peerAddress.getPort();
+    return peerActorSystem + "@" + 
+           peerAddress.getHostName() + ":" +  
+           peerAddress.getPort();
   }
 
   /*

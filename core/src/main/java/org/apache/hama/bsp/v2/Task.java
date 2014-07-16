@@ -60,22 +60,11 @@ public final class Task implements Writable {
 
   private IntWritable currentSuperstep = new IntWritable(1);
 
-  /**
-   * This is only used for finding next State. Read only.
-   * TODO: change to use something like linked list?
-  public final Stage<State> States = new Stage<State>(State.values());
-   */
-
   /* The state of this task. */
-  private State state = State.WAITING; //States.current(); 
-
-  /**
-   * This is only used for finding next Phase. Read only.
-  public final Stage<Phase> Phases = new Stage<Phase>(Phase.values());
-   */
+  private State state = State.WAITING; 
 
   /* The phase at which this task is. */
-  private Phase phase = Phase.SETUP; //Phases.current(); 
+  private Phase phase = Phase.SETUP; 
 
   /* Denote if this task is completed. */
   private BooleanWritable completed = new BooleanWritable(false);
@@ -131,57 +120,6 @@ public final class Task implements Writable {
     }
   }
 
-  /**
-   * Used for iterator over Enum, including Phase and State. 
-   * Index is started from 0.
-  final static class Stage<E> {
-    int currentIndex = 0;
-    final E[] enums;
-
-     * Adding all enum elements for iteration.
-     * @param enums are all enum elements.
-    Stage(final E[] enums) {
-      this.enums = enums;
-    }
-
-    public E current() {
-      return enums[currentIndex];
-    }
-
-     * Return current element in the enum array and increase index by 1.
-     * @return E is the enum type.
-    public E next() {
-      currentIndex += 1;
-      return current();
-    }
- 
-     * Return current element in the enum array and decrease index by 1.
-     * @return E is the enum type.
-    public E prev() {
-      currentIndex -= 1;
-      return current();
-    }
-
-     * Reset index to the beginning of the enum.
-    public void reset() {
-      currentIndex = 0;
-    }
-
-    public void moveToLast() {
-      currentIndex = (enums.length - 1);
-    }
-
-     * Check if reaching the end of the enum.
-     * May call {@link #reset} for restart from the beginning.
-    public boolean isEnd() {
-      return (enums.length == (currentIndex + 1));
-    }
-
-    public boolean isBeg() {
-      return (0 == currentIndex);
-    }
-  }
-   */
   /**
    * Describe in which phase a task is in terms of supersteps.
    * The procedure is
@@ -389,27 +327,6 @@ public final class Task implements Writable {
     return this.state;
   }
 
-  /**
-   * Indiate this task is moved to the next state.
-  public void nextState() {
-    if(!States.isEnd()) {
-      this.state = States.next(); 
-    } else {
-      States.reset();
-      this.state = States.current();
-    }
-  }
-
-  public void prevState() {
-    if(!States.isBeg()) {
-      this.state = States.prev(); 
-    } else {
-      States.moveToLast();
-      this.state = States.current();
-    }
-  }
-   */
-
   public void markAsWaiting() {
     this.state = State.WAITING; 
   } 
@@ -449,27 +366,6 @@ public final class Task implements Writable {
   public void transitToCleanup() {
     this.phase = Phase.CLEANUP;
   }
-
-  /**
-   * Indiate this task is moved to the next phase.
-  public void nextPhase() {
-    if(!Phases.isEnd()) {
-      this.phase = Phases.next(); 
-    } else {
-      Phases.reset();
-      this.phase = Phases.current();
-    }
-  }
-
-  public void prevPhase() {
-    if(!Phases.isBeg()) {
-      this.phase = Phases.prev(); 
-    } else {
-      Phases.moveToLast();
-      this.phase = Phases.current();
-    }
-  }
-   */
 
   /**
    * Denote if this task is completed.

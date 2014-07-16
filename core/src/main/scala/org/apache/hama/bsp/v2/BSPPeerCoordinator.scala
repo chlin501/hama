@@ -52,11 +52,13 @@ private[v2] final case class TaskWithStats(task: Task, counters: Counters) {
 /**
  * This class purely implements BSPPeer interface. With a separated 
  * @{link BSPPeerExecutor} serves for executing worker logic.
+ *
  * {@link BSPPeerCoordinator} is responsible for providing related services, 
- * including
+ * including:
  * - messenging
  * - io 
  * - sync
+ * 
  * And update task information such as
  * - status
  * - start time
@@ -136,10 +138,11 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
       new Path(Operation.defaultWorkingDirectory(taskConf))
     )
     val libjars = CacheService.moveJarsAndGetClasspath(conf) 
-    if(null != libjars) 
+    if(null != libjars) {
       LOG.info("Classpath to be included are "+libjars.mkString(", "))
-    taskConf.setClassLoader(new URLClassLoader(libjars, 
-                                               taskConf.getClassLoader))
+      taskConf.setClassLoader(new URLClassLoader(libjars, 
+                                                 taskConf.getClassLoader))
+    } else LOG.warn("No jars to be included for "+task.getId)
   }
 
   
@@ -195,11 +198,11 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
    */
   protected def host(): String = 
     configuration.get("bsp.peer.hostname", 
-                      InetAddress.getLocalHost.getHostAddress) 
+                      InetAddress.getLocalHost.getHostName) 
 
   protected def port(): Int = configuration.getInt("bsp.peer.port", 61000)
 
-  protected def socketAddress(): String = "%s:%s".format(host, port)
+  //protected def socketAddress(): String = "%s:%s".format(host, port)
 
   /**
    * TODO: task phase update needs to be done in e.g. BSPTask.java
@@ -271,7 +274,7 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
     }
   }
 
-  override def getPeerName(): String = socketAddress
+  override def getPeerName(): String = syncClient.getPeerName
 
   override def getPeerName(index: Int): String = {
     initPeerNames

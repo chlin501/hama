@@ -18,22 +18,22 @@
 package org.apache.hama.zk
 
 import org.apache.curator.test.TestingServer
+import org.apache.hama.logging.Logger
 
-trait LocalZooKeeper {
+trait LocalZooKeeper extends Logger {
 
-  var server: TestingServer = _
-
-  def log(message: String) = println(message) 
+  protected var server: TestingServer = _
   
   def launchZk {
     server = new TestingServer(2181)
-    log("Curator TestingServer is launched at port 2181.")
+    LOG.info("Curator TestingServer is launched at port 2181.")
   }
 
   def launchZk(port: Int) {
     server = new TestingServer(port)
-    log("Curator TestingServer is launched at port %s.".format(port))
+    LOG.info("Curator TestingServer is launched at port %s.".format(port))
   }
 
   def closeZk = if(null != server) server.close
+
 }

@@ -17,26 +17,168 @@
  */
 package org.apache.hama.bsp.v2
 
+import akka.actor.Actor
+import akka.actor.ActorRef
 import akka.actor.ActorSystem
-import akka.util.ByteString
-import akka.util.ByteStringBuilder
-import akka.util.ByteIterator
+import akka.event.Logging
+import java.net.InetAddress
 import org.apache.hadoop.fs.Path
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
+import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
+
+final case object Init
+final case object GetAllPeers
+final case object GetPeerName
+final case object GetNumPeers
+final case object GetTaskAttemptId
+
+class Worker(conf: HamaConfiguration, tester: ActorRef, task: Task) 
+      extends Actor {
+
+  val LOG = Logging(context.system, this)
+
+  var peer: BSPPeer = _
+
+  def createPeer(sys: ActorSystem, 
+                 conf: HamaConfiguration,
+                 task: Task): BSPPeer = {
+    val p = new BSPPeerCoordinator(sys)
+    p.initialize(conf, task)
+    p 
+  }
+ 
+  def init: Receive = {
+    case Init => peer = createPeer(context.system, conf, task)
+  }
+
+  // getPeerName shouldn't return 0.0.0.0 
+  def getPeerName: Receive = {
+    case GetPeerName => {
+      val currentPeerName = peer.getPeerName 
+      tester ! currentPeerName 
+    }
+  }
+
+  def getAllPeers: Receive = {
+    case GetAllPeers => {
+      val allPeers = peer.getAllPeerNames
+      tester ! allPeers.mkString(",")
+    }
+  }
+
+  def getNumPeers: Receive = {
+    case GetNumPeers => {
+      val num = peer.getNumPeers
+      tester ! num
+    }
+  }
+
+  def getTaskAttemptId: Receive = {
+    case GetTaskAttemptId => {
+      val id = peer.getTaskAttemptId
+      tester ! id.toString
+    }
+  }
+
+
+  def unknown: Receive = {
+    case msg@_ => LOG.warning("Unknown message {} received by worker.", msg)
+  }
+
+  override def receive = init orElse getPeerName orElse getAllPeers orElse getNumPeers orElse getTaskAttemptId orElse unknown
+}
 
 @RunWith(classOf[JUnitRunner])
 class TestBSPPeerCoordinator 
       extends TestEnv(ActorSystem("TestBSPPeerCoordinator")) 
-      with JobUtil {
+      with JobUtil 
+      with LocalZooKeeper {
+
+  var conf1 = new HamaConfiguration(testConfiguration)
+  var conf2 = new HamaConfiguration(testConfiguration)
+
+  override def beforeAll {
+    super.beforeAll
+    conf1 = configure(conf1)
+    conf2 = configure(conf2, 2, 2, 62000)
+    launchZk
+  }
+
+  override protected def afterAll = {
+    closeZk
+    super.afterAll
+  }
+
+  def configure(conf: HamaConfiguration, 
+                seq: Int = 1,
+                numPeers: Int = 2,
+                port: Int = 61000): HamaConfiguration = {
+    conf.setInt("bsp.child.slot.seq", seq)
+    conf.set("hama.zookeeper.quorum", "localhost:2181")
+    conf.setInt("hama.zookeeper.property.clientPort", 2181)
+    conf.setInt("bsp.peers.num", numPeers)
+    conf.set("bsp.peer.hostname", InetAddress.getLocalHost.getHostName)
+    conf.setInt("bsp.peer.port", port) 
+    conf
+  } 
+
+  def peerName(conf: HamaConfiguration): String = {
+    val seq = conf.getInt("bsp.child.slot.seq", 1)
+    val ip = conf.get("bsp.peer.hostname", 
+                      InetAddress.getLocalHost.getHostName)
+    val port = conf.getInt("bsp.peer.port", 61000) 
+    val name = "BSPPeerSystem%s@%s:%s".format(seq, ip, port)
+    name
+  }
+
 
   it("test bsp peer coordinator function.") {
-    val task =createTask("test", 2, 23, 3)
-    assert(null != task)
-    val coordinator = new BSPPeerCoordinator(system)
-    coordinator.initialize(testConfiguration, task)
+    // job id should be the same, so peers can sync
+    val JOB2 = 2 
+
+    val task1 = createTask("test", JOB2, 23, 3)
+    assert(null != task1)
+    val worker1 = createWithArgs("worker1", classOf[Worker], 
+                                 conf1, tester, task1) 
+
+    val task2 = createTask("test", JOB2, 2, 2)
+    assert(null != task2)
+    val worker2 = createWithArgs("worker2", classOf[Worker], 
+                                 conf2, tester, task2) 
+
+    worker1 ! Init
+    worker2 ! Init
+
+    worker1 ! GetAllPeers
+    expectAnyOf(Array(peerName(conf1), peerName(conf2)).mkString(","),
+                Array(peerName(conf2), peerName(conf1)).mkString(","))
+
+    worker2 ! GetAllPeers
+    expectAnyOf(Array(peerName(conf1), peerName(conf2)).mkString(","),
+                Array(peerName(conf2), peerName(conf1)).mkString(","))
+    
+    worker1 ! GetPeerName
+    expect(peerName(conf1)) 
+
+    worker2 ! GetPeerName
+    expect(peerName(conf2)) 
+
+    worker1 ! GetNumPeers
+    expect(2)
+
+    worker2 ! GetNumPeers
+    expect(2)
+
+    worker1 ! GetTaskAttemptId
+    expect(task1.getId.toString)
+
+    worker2 ! GetTaskAttemptId
+    expect(task2.getId.toString)
+
+    LOG.info("Done testing BSPPeerCoordinator!")
   }
 }

@@ -82,7 +82,14 @@ public interface PeerSyncClient extends SyncClient {
   String[] getAllPeerNames(TaskAttemptID taskId);
 
   /**
-   * TODO this has currently no use. Could later be used to deregister tasks
+   * Obtain current peer name in  the form of 
+   * ${actor-system-name}@${host}:${port}
+   * @return String of this peer's name.
+   */
+  String getPeerName();
+
+  /**
+   * TODO: this has currently no use. Could later be used to deregister tasks
    * from the barrier during runtime if they are finished. Something equal to
    * voteToHalt() in Pregel.
    * 
