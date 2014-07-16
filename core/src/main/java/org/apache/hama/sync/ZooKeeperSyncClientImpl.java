@@ -123,11 +123,9 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
           size--;
         }
 
-        LOG.debug("At superstep :" + superstep + " current znode size: "
-            + znodes.size() + " current znodes:" + znodes);
-
-        LOG.debug("enterBarrier() znode size within " + pathToSuperstepZnode
-            + " is " + znodes.size() + ". Znodes include " + znodes);
+        LOG.debug("At znode path " + pathToSuperstepZnode + ", superstep "+
+                  superstep + ", current znode size is " + znodes.size() + 
+                  ", including " + znodes);
 
         if (size < numBSPTasks) {
           while (!barrierWatcher.isComplete()) {
@@ -137,10 +135,10 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
               }
             }
           }
-          LOG.debug("2. at superstep: " + superstep + " after waiting ..."
-              + taskId.toString());
+          LOG.debug("At superstep: " + superstep + " after waiting ..." +
+                    taskId.toString());
         } else {
-          LOG.debug("---> at superstep: " + superstep
+          LOG.debug("At superstep: " + superstep
               + " task that is creating /ready znode:" + taskId.toString());
           writeNode(pathToSuperstepZnode + "/ready", null, false, null);
         }
@@ -160,14 +158,14 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
           "sync", "" + superstep);
       while (true) {
         List<String> znodes = zk.getChildren(pathToSuperstepZnode, false);
-        LOG.debug("leaveBarrier() !!! checking znodes contnains /ready node or not: at superstep:"
+        LOG.debug("Checking znodes contnains /ready node or not: at superstep:"
             + superstep + " znode:" + znodes);
         if (znodes.contains("ready")) {
           znodes.remove("ready");
         }
         final int size = znodes.size();
 
-        LOG.debug("leaveBarrier() at superstep:" + superstep + " znode size: ("
+        LOG.debug("At superstep:" + superstep + " znode size: ("
             + size + ") znodes:" + znodes);
 
         if (null == znodes || znodes.isEmpty())
@@ -177,7 +175,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
             zk.delete(getNodeName(taskId, superstep), 0);
           } catch (KeeperException.NoNodeException nne) {
             LOG.debug(
-                "+++ (znode size is 1). Ignore because znode may disconnect.",
+                "(znode size is 1). Ignore because znode may disconnect.",
                 nne);
           }
           return;
@@ -196,7 +194,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
                   @Override
                   public void process(WatchedEvent event) {
                     synchronized (mutex) {
-                      LOG.debug("leaveBarrier() at superstep: " + superstep
+                      LOG.debug("At superstep: " + superstep
                           + " taskid:" + taskId.toString()
                           + " highest notify lowest.");
                       mutex.notifyAll();
@@ -205,7 +203,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
                 });
 
             if (null != s) {
-              LOG.debug("leaveBarrier(): superstep:" + superstep + " taskid:"
+              LOG.debug("Superstep:" + superstep + " taskid:"
                   + taskId.toString() + " wait for higest notify.");
               mutex.wait();
             }
@@ -216,7 +214,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
               try {
                 zk.delete(getNodeName(taskId, superstep), 0);
               } catch (KeeperException.NoNodeException nne) {
-                LOG.debug("++++ Ignore because node may be dleted.", nne);
+                LOG.debug("Ignore because node may be dleted.", nne);
               }
             }
 
@@ -225,7 +223,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
                   @Override
                   public void process(WatchedEvent event) {
                     synchronized (mutex) {
-                      LOG.debug("leaveBarrier() at superstep: " + superstep
+                      LOG.debug("At superstep: " + superstep
                           + " taskid:" + taskId.toString()
                           + " lowest notify other nodes.");
                       mutex.notifyAll();
@@ -233,7 +231,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
                   }
                 });
             if (null != s2) {
-              LOG.debug("leaveBarrier(): superstep:" + superstep + " taskid:"
+              LOG.debug("Superstep:" + superstep + " taskid:"
                   + taskId.toString() + " wait for lowest notify.");
               mutex.wait();
             }

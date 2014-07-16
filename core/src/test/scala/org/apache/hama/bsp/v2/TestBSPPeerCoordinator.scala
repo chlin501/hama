@@ -29,6 +29,8 @@ import org.apache.hama.util.JobUtil
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.DurationInt
 
 final case object Init
 final case object GetAllPeers
@@ -37,6 +39,8 @@ final case object GetNumPeers
 final case object GetTaskAttemptId
 final case object GetSuperstepCount
 final case object PeerNameAt
+final case object GetPeerIndex
+final case object SyncThenValidateSuperstep
 
 class Worker(conf: HamaConfiguration, tester: ActorRef, task: Task) 
       extends Actor {
@@ -103,11 +107,26 @@ class Worker(conf: HamaConfiguration, tester: ActorRef, task: Task)
     }
   }
 
+  def getPeerIndex: Receive = {
+    case GetPeerIndex => tester ! peer.getPeerIndex 
+  }
+
+  def syncThenValidateSuperstep: Receive = {
+    case SyncThenValidateSuperstep => {
+      LOG.info("Start sync barrier for {} ...", task.getId)
+      val start = System.currentTimeMillis
+      peer.sync
+      val elapsed = System.currentTimeMillis - start
+      LOG.info("Finish sync barrier, taking around {} milli secs.", elapsed)
+      tester ! peer.getSuperstepCount
+    }
+  }
+
   def unknown: Receive = {
     case msg@_ => LOG.warning("Unknown message {} received by worker.", msg)
   }
 
-  override def receive = init orElse getPeerName orElse getAllPeers orElse getNumPeers orElse getTaskAttemptId orElse peerNameAt orElse getSuperstepCount orElse unknown
+  override def receive = init orElse getPeerName orElse getAllPeers orElse getNumPeers orElse getTaskAttemptId orElse peerNameAt orElse getSuperstepCount orElse getPeerIndex orElse syncThenValidateSuperstep orElse unknown
 }
 
 @RunWith(classOf[JUnitRunner])
@@ -172,40 +191,48 @@ class TestBSPPeerCoordinator
     worker2 ! Init
 
     worker1 ! GetAllPeers
+    worker2 ! GetAllPeers
     expectAnyOf(Array(peerName(conf1), peerName(conf2)).mkString(","),
                 Array(peerName(conf2), peerName(conf1)).mkString(","))
-
-    worker2 ! GetAllPeers
     expectAnyOf(Array(peerName(conf1), peerName(conf2)).mkString(","),
                 Array(peerName(conf2), peerName(conf1)).mkString(","))
     
     worker1 ! GetPeerName
     expect(peerName(conf1)) 
-    worker1 ! PeerNameAt 
-    expectAnyOf(peerName(conf1), peerName(conf2))
-
     worker2 ! GetPeerName
     expect(peerName(conf2)) 
+
+    worker1 ! PeerNameAt 
+    expectAnyOf(peerName(conf1), peerName(conf2))
     worker2 ! PeerNameAt 
     expectAnyOf(peerName(conf1), peerName(conf2))
 
     worker1 ! GetNumPeers
     expect(2)
-
     worker2 ! GetNumPeers
     expect(2)
 
     worker1 ! GetTaskAttemptId
     expect(task1.getId.toString)
-
     worker2 ! GetTaskAttemptId
     expect(task2.getId.toString)
 
     worker1 ! GetSuperstepCount
-    expect(1L)
-
+    expect(2L)
     worker2 ! GetSuperstepCount
-    expect(1L)
+    expect(2L)
+
+    worker1 ! GetPeerIndex
+    expect(task1.getId.getTaskID.getId)
+    worker2 ! GetPeerIndex
+    expect(task2.getId.getTaskID.getId)
+
+    // N.B.: for we call sync() so we must allow two coordinators meet at 
+    //       that point, otherwise dead lock occurs.
+    worker1 ! SyncThenValidateSuperstep
+    worker2 ! SyncThenValidateSuperstep
+    expect(3L)    
+    expect(3L)    
 
     LOG.info("Done testing BSPPeerCoordinator!")
   }

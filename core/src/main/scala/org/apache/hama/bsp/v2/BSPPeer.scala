@@ -91,6 +91,8 @@ trait BSPPeer {
 
   /**
    * The index for this bsp peer.
+   * Note: this function actually returns <b>task id</b>, not index of all
+   * sorted peers.
    * @return the index of this peer from sorted array by name.
    */
   def getPeerIndex(): Int

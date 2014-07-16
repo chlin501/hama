@@ -113,16 +113,18 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
     settingForTask(conf, getTask)
     this.syncClient = syncService(conf, getTask)
     //updateStatus(conf, getTask)
-    doSync(getTask.getCurrentSuperstep)
+    firstSync(getTask.getCurrentSuperstep)
   }
 
   /**
    * Internal sync to ensure all peers is registered/ ready.
    * @param superstep indicate the curent superstep value.
    */
-  protected def doSync(superstep: Long) {
+  protected def firstSync(superstep: Long) {
+    //TODO: should the task's superstep be confiured to 0 instead?
     syncClient.enterBarrier(getTask.getId.getJobID, getTask.getId, superstep)
     syncClient.leaveBarrier(getTask.getId.getJobID, getTask.getId, superstep)
+    getTask.increatmentSuperstep
   }
 
   /** 
@@ -259,9 +261,11 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
       it.remove
       doTransfer(peer, bundle)      
     })
-    enterBarrier 
+    enterBarrier()
     messenger.clearOutgoingMessages
-    leaveBarrier
+    leaveBarrier()
+    // TODO: record time elapsed between enterBarrier and leaveBarrier
+    getTask.increatmentSuperstep
     //updateStatus(configuration, getTask) 
   } 
 
