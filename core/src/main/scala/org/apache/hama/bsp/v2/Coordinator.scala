@@ -53,7 +53,7 @@ private[v2] final case class TaskWithStats(task: Task, counters: Counters) {
  * This class purely implements BSPPeer interface. With a separated 
  * @{link BSPPeerExecutor} serves for executing worker logic.
  *
- * {@link BSPPeerCoordinator} is responsible for providing related services, 
+ * {@link Coordinator} is responsible for providing related services, 
  * including:
  * - messenging
  * - io 
@@ -66,8 +66,7 @@ private[v2] final case class TaskWithStats(task: Task, counters: Counters) {
  * - progress 
  * when necessary.
  */
-class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer 
-                                                      with Logger {
+class Coordinator(bspActorSystem: ActorSystem) extends BSPPeer with Logger {
 
   /* common setting for the entire BSPPeer. */
   protected var configuration: HamaConfiguration = _
@@ -102,7 +101,7 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
    *       The formor comes from process startup, the later from task.
    * @param conf contains common setting for starting up related services.
    * @param task contains setting for a specific job; its configuration differs
-   *             from conf provided by {@link BSPPeerContainer}.
+   *             from conf provided by {@link Container}.
    */
   protected[v2] def initialize(conf: HamaConfiguration, task: Task) {
     this.configuration = conf
@@ -203,8 +202,6 @@ class BSPPeerCoordinator(bspActorSystem: ActorSystem) extends BSPPeer
                       InetAddress.getLocalHost.getHostName) 
 
   protected def port(): Int = configuration.getInt("bsp.peer.port", 61000)
-
-  //protected def socketAddress(): String = "%s:%s".format(host, port)
 
   /**
    * TODO: task phase update needs to be done in e.g. BSPTask.java

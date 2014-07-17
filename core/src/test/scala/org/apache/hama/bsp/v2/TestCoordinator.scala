@@ -52,7 +52,7 @@ class Worker(conf: HamaConfiguration, tester: ActorRef, task: Task)
   def createPeer(sys: ActorSystem, 
                  conf: HamaConfiguration,
                  task: Task): BSPPeer = {
-    val p = new BSPPeerCoordinator(sys)
+    val p = new Coordinator(sys)
     p.initialize(conf, task)
     p 
   }
@@ -130,10 +130,9 @@ class Worker(conf: HamaConfiguration, tester: ActorRef, task: Task)
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestBSPPeerCoordinator 
-      extends TestEnv(ActorSystem("TestBSPPeerCoordinator")) 
-      with JobUtil 
-      with LocalZooKeeper {
+class TestCoordinator extends TestEnv(ActorSystem("TestCoordinator")) 
+                      with JobUtil 
+                      with LocalZooKeeper {
 
   var conf1 = new HamaConfiguration(testConfiguration)
   var conf2 = new HamaConfiguration(testConfiguration)
@@ -234,6 +233,6 @@ class TestBSPPeerCoordinator
     expect(3L)    
     expect(3L)    
 
-    LOG.info("Done testing BSPPeerCoordinator!")
+    LOG.info("Done testing Coordinator!")
   }
 }
