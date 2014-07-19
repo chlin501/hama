@@ -52,13 +52,15 @@ class Worker(conf: HamaConfiguration, tester: ActorRef, task: Task)
   def createPeer(sys: ActorSystem, 
                  conf: HamaConfiguration,
                  task: Task): BSPPeer = {
-    val p = new Coordinator(sys)
-    p.initialize(conf, task)
+    val p = Coordinator(conf, sys)
+    p.configureFor(task)
     p 
   }
  
   def init: Receive = {
-    case Init => peer = createPeer(context.system, conf, task)
+    case Init => {
+      peer = createPeer(context.system, conf, task)
+    }
   }
 
   // getPeerName shouldn't return 0.0.0.0 

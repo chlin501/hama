@@ -31,7 +31,7 @@ import org.apache.hama.bsp.OutputCollector
 import org.apache.hama.fs.CacheService
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.io.IO
+//import org.apache.hama.io.IO
 import org.apache.hama.logging.Logger
 import org.apache.hama.ProxyInfo
 import org.apache.hama.sync.SyncException
@@ -47,6 +47,16 @@ private[v2] final case class TaskWithStats(task: Task, counters: Counters) {
     throw new IllegalArgumentException("Task is not provided.")
   if(null == counters) 
     throw new IllegalArgumentException("Counters is not provided!")
+}
+
+object Coordinator {
+
+  /**
+   * Create Coordinator with common configuration and child process's actor 
+   * system.
+   */
+  def apply(conf: HamaConfiguration, actorSystem: ActorSystem): Coordinator = 
+    new Coordinator(conf, actorSystem)
 }
 
 /**
@@ -66,19 +76,22 @@ private[v2] final case class TaskWithStats(task: Task, counters: Counters) {
  * - progress 
  * when necessary.
  */
-class Coordinator(bspActorSystem: ActorSystem) extends BSPPeer with Logger {
+class Coordinator(conf: HamaConfiguration, 
+                  bspActorSystem: ActorSystem) extends BSPPeer with Logger {
 
-  /* common setting for the entire BSPPeer. */
-  protected var configuration: HamaConfiguration = _
   /* task and counters specific to a particular v2.Job. */
   protected var taskWithStats: TaskWithStats = _
 
   /* services for a particular v2.Task. */
-  protected var messenger: MessageManager[Writable] = _
-  protected var io: IO[RecordReader[_,_], OutputCollector[_, _]] = _
-  protected var syncClient: PeerSyncClient = _  
+  protected var messenger = MessageManager.get[Writable](configuration)
+  // TODO: we need a new io interface for reader/ writer which are not bound to
+  //       key value pair.
+  //protected var io = IO.get[_, _](configuration)
+  protected val syncClient = SyncServiceFactory.getPeerSyncClient(configuration)
 
   private var allPeers: Array[String] = _
+
+  def configuration(): HamaConfiguration = conf
 
   // only for internal use.
   private def getTask(): Task = {
@@ -86,6 +99,7 @@ class Coordinator(bspActorSystem: ActorSystem) extends BSPPeer with Logger {
       throw new IllegalStateException("TaskWithStats is not yet setup!")
     taskWithStats.task
   }
+
   private def getCounters(): Counters = {
     if(null == taskWithStats)
       throw new IllegalStateException("TaskWithStats is not yet setup!")
@@ -93,25 +107,23 @@ class Coordinator(bspActorSystem: ActorSystem) extends BSPPeer with Logger {
   }
 
   /**
-   * Initialize necessary services, including
+   * Configure necessary services for a specific task, including
    * - io
    * - sync
    * - messaging
-   * Note: <pre>conf != task.getConfiguration(). </pre>
-   *       The formor comes from process startup, the later from task.
-   * @param conf contains common setting for starting up related services.
+   * Note: <pre>configuration != task.getConfiguration(). </pre>
+   *       The formor comes from child process, the later from the task.
    * @param task contains setting for a specific job; its configuration differs
    *             from conf provided by {@link Container}.
    */
-  protected[v2] def initialize(conf: HamaConfiguration, task: Task) {
-    this.configuration = conf
+  protected[v2] def configureFor(task: Task) {
     this.taskWithStats = TaskWithStats(task, new Counters())
-    this.messenger = messengingService(conf, getTask) 
-    this.io = ioService(conf, taskWithStats) 
-    localize(conf, getTask)
-    settingForTask(conf, getTask)
-    this.syncClient = syncService(conf, getTask)
-    //updateStatus(conf, getTask)
+    this.messenger = messengingService(messenger, configuration, getTask) 
+    //this.io = ioService[_, _](io, configuration, taskWithStats) 
+    localize(configuration, getTask)
+    settingForTask(configuration, getTask)
+    syncService(configuration, getTask)
+    //updateStatus(configuration, getTask)
     firstSync(getTask.getCurrentSuperstep)
   }
 
@@ -150,8 +162,13 @@ class Coordinator(bspActorSystem: ActorSystem) extends BSPPeer with Logger {
   /**
    * Setup message service for a specific task.
    */
-  protected def messengingService(conf: HamaConfiguration, task: Task): 
-      MessageManager[Writable] = {
+  protected def messengingService(old: MessageManager[Writable], 
+                                  conf: HamaConfiguration, 
+                                  task: Task): MessageManager[Writable] = {
+    old match {
+      case null => 
+      case _ => old.close 
+    }
     val mgr = MessageManager.get[Writable](conf)
     mgr.init(conf, task.getId)
     if(mgr.isInstanceOf[PeerCommunicator]) {
@@ -162,16 +179,19 @@ class Coordinator(bspActorSystem: ActorSystem) extends BSPPeer with Logger {
 
   /**
    * Setup io service for a specific task.
-   */
-  protected def ioService(conf: HamaConfiguration, 
-                          taskWithStats: TaskWithStats): 
-      IO[RecordReader[_,_], OutputCollector[_,_]] = {
-    val rw = IO.get[RecordReader[_, _], OutputCollector[_, _]](conf)
-    rw.initialize(getTask.getConfiguration, // tight to a task 
-                  getTask.getSplit, 
-                  getCounters)
-    rw 
+  protected def ioService[I, O](io: IO[I, O],
+                                conf: HamaConfiguration, 
+                                taskWithStats: TaskWithStats): IO[I, O] = {
+    val newIO = io match {
+      case null => IO.get[I,O](conf)
+      case _ => io
+    }
+    newIO.initialize(getTask.getConfiguration, // tight to a task 
+                     getTask.getSplit, 
+                     getCounters)
+    newIO
   }
+   */
 
   /**
    * Copy necessary files to local (file) system so to speed up computation.
@@ -184,12 +204,9 @@ class Coordinator(bspActorSystem: ActorSystem) extends BSPPeer with Logger {
    * Instantiate ZooKeeper sync service for BarrierSynchronization according to
    * a specific task.
    */
-  protected def syncService(conf: HamaConfiguration, task: Task): 
-      PeerSyncClient =  {
-    val client = SyncServiceFactory.getPeerSyncClient(conf)
-    client.init(conf, task.getId.getJobID, task.getId)
-    client.register(task.getId.getJobID, task.getId, host, port)
-    client
+  protected def syncService(conf: HamaConfiguration, task: Task) {
+    this.syncClient.init(conf, task.getId.getJobID, task.getId)
+    this.syncClient.register(task.getId.getJobID, task.getId, host, port)
   }
 
   /**
@@ -211,7 +228,7 @@ class Coordinator(bspActorSystem: ActorSystem) extends BSPPeer with Logger {
   }
    */ 
 
-  override def getIO[I, O](): IO[I, O] = this.io.asInstanceOf[IO[I, O]]
+  //override def getIO[I, O](): IO[I, O] = this.io.asInstanceOf[IO[I, O]]
 
   @throws(classOf[IOException])
   override def send(peerName: String, msg: Writable) = 
