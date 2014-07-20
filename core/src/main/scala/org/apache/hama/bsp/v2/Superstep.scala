@@ -17,11 +17,51 @@
  */
 package org.apache.hama.bsp.v2
 
+import org.apache.hadoop.io.Writable
+import org.apache.hadoop.io.NullWritable
+
 /**
  * The main place to programme BSP logic.
  * Each superstep should be executed accoring to the routing map proposed.
  */
 abstract class Superstep {
+
+  protected var variables = Map.empty[String, Writable]
+
+  /**
+   * Obtain value with cooresponded key provided in the previous supersteps.
+   * @param key that identifies the value. 
+   * @return Writable may contains null if no data found.
+   */
+  def find[W <: Writable](key: String): W = 
+    variables.getOrElse(key, NullWritable.get).asInstanceOf[W]
+
+  /**
+   * Collect key value pair for future supersteps.
+   * @param key is used to identifies the value.
+   * @param value is the actual data.
+   */
+  def collect[W <: Writable](key: String, value: W) = 
+    variables ++= Map(key -> value)
+
+  /**
+   * Obtain all variables that is set.
+   * @return Map that contains all variables.
+   */
+  protected[v2] def getVariables(): Map[String, Writable] = variables
+
+  /**
+   * Set all variables. This is intended to be called by {@link SuperstepBSP}.
+   * @param variables of all keys and values.
+   */
+  protected[v2] def setVariables(variables: Map[String, Writable]) = 
+    this.variables = variables
+
+  /**
+   * Prepare before starting computation.
+   * @param peer is {@link BSPPeer} holds services such as sync, messeging, etc.
+   */
+  def setup(peer: BSPPeer)
 
   /**
    * BSP main logic to be executed.
@@ -29,6 +69,13 @@ abstract class Superstep {
    *             during computation.
    */
   def compute(peer: BSPPeer) 
+
+  /**
+   * Cleanup after computation is finished.
+   * @param peer is {@link BSPPeer} holds services such as sync, messeging, etc.
+   */
+  def cleanup(peer: BSPPeer)
+
 
   /**
    * The returned class points the to next {@link Superstep} to be executed.

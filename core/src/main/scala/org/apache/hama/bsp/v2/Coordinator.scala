@@ -91,7 +91,7 @@ class Coordinator(conf: HamaConfiguration,
 
   private var allPeers: Array[String] = _
 
-  def configuration(): HamaConfiguration = conf
+  override def configuration(): HamaConfiguration = conf
 
   // only for internal use.
   private def getTask(): Task = {
@@ -312,8 +312,6 @@ class Coordinator(conf: HamaConfiguration,
   }
 
   override def clear() = messenger.clearOutgoingMessages 
-
-  override def getConfiguration(): HamaConfiguration = configuration
 
   override def getTaskAttemptId(): TaskAttemptID = getTask.getId
 

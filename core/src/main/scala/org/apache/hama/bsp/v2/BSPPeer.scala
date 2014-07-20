@@ -123,7 +123,7 @@ trait BSPPeer {
    * The configuration for this job.
    * @return the job's configuration.
    */
-  def getConfiguration(): HamaConfiguration  
+  def configuration(): HamaConfiguration  
 
   /**
    * Get the {@link Counter} of the given group with the given name.

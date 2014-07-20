@@ -15,36 +15,41 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.bsp.v2;
+package org.apache.hama.bsp.v2
 
-import java.io.IOException;
+import java.io.IOException
 
-import org.apache.hadoop.io.Writable;
-import org.apache.hama.sync.SyncException;
+import org.apache.hadoop.io.Writable
+import org.apache.hama.sync.SyncException
 
 /**
  * This class is the base class that perform bsp computation.
  */
-public abstract class BSP {
+abstract class BSP {
 
   /**
    * This function is executed before bsp().
    * @throws IOException is thrown when io fails.
    * @throws SyncException is thrown when barrier sync fails.
    */
-  public void setup(BSPPeer peer) throws IOException, SyncException { }
+  @throws(classOf[IOException])
+  @throws(classOf[SyncException])
+  def setup(peer: BSPPeer) { }
 
   /**
    * The main function that performs bsp computation.
    * @throws IOException when io not functions correctly.
    * @throws SyncException is thrown when barrier sync fails.
    */
-  public abstract void bsp(BSPPeer peer) throws IOException, SyncException;
+  @throws(classOf[IOException])
+  @throws(classOf[SyncException])
+  def bsp(peer: BSPPeer) 
 
   /**
    * This function is executed after bsp(). 
    * @throws IOException is thrown when io fails.
    */
-  public void cleanup(BSPPeer peer) throws IOException { }
+  @throws(classOf[IOException])
+  def cleanup(peer: BSPPeer) { }
 
 }
