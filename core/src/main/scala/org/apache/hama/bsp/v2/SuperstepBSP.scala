@@ -62,11 +62,50 @@ class SuperstepBSP extends BSP with Logger {
   @throws(classOf[IOException])
   @throws(classOf[SyncException])
   override def bsp(peer: BSPPeer) {
-    // TODO: when sync(), record 1. (non-shared) message 2. supestep class 3. var cache 
+    // TODO: when sync(), record 
+    //       1. (non-shared) message 
+    //       2. supestep classes 
+    //       3. variables map  
+    findThenExecute(classOf[FirstSuperstep].getName, 
+                    peer,
+                    Map.empty[String, Writable]) 
   }
+
+  protected def findThenExecute(className: String, 
+                                peer: BSPPeer,
+                                variables: Map[String, Writable]) {
+    supersteps.find(entry => {
+      if(classOf[FirstSuperstep].getName.equals(className)) {
+        entry._2.isInstanceOf[FirstSuperstep]
+      } else {
+        entry._1.equals(className)
+      }
+    }) match {
+      case Some(found) => {
+        val superstep = found._2
+        superstep.setVariables(variables)
+        superstep.compute(peer)
+        val next = superstep.next
+        next match {
+           case null => eventually(peer)
+           case clazz@_ => {
+             peer.sync
+             findThenExecute(clazz.getName, peer, superstep.getVariables)
+           }
+        }
+      }
+      case None => 
+        throw new RuntimeException("Can't execute for "+className+" not found!")
+    }
+  }
+
+  protected def eventually(peer: BSPPeer) = cleanup(peer) 
 
   @throws(classOf[IOException])
   override def cleanup(peer: BSPPeer) { 
+    supersteps.foreach{ case (key, value) => {
+      value.cleanup(peer)  
+    }}
   }
 
 }
