@@ -64,7 +64,7 @@ public final class TaskTable implements Writable {
    * @pram BSPJobID indicates to which job this table belongs.
    * @param splits denotes the data splits to be consumed by each task.
    */ 
-  // TODO: perhaps use other way to record tasks for efficiency. 
+  // TODO: perhaps use other data structure to record tasks for efficiency. 
   public TaskTable(final BSPJobID jobId, 
                    final HamaConfiguration conf,
                    final PartitionedSplit[] splits) {

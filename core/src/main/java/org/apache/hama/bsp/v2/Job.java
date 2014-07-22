@@ -51,7 +51,7 @@ public final class Job implements Writable {
   
 
   /* The jar file path stored in local fs. */
-  private Text localJarFilePath = new Text("");
+  //private Text localJarFilePath = new Text("");
 
   /* The lastest superstep was successfully snapshotted. */
   private IntWritable lastCheckpoint = new IntWritable(0);  // only a record.
@@ -120,7 +120,7 @@ public final class Job implements Writable {
     private BSPJobID id;
     private HamaConfiguration conf = new HamaConfiguration();
     //private String localJobFilePath = "";
-    private String localJarFilePath = "";
+    //private String localJarFilePath = "";
     private int lastCheckpoint;
     private State state = State.PREP;
     private long progress;
@@ -156,7 +156,9 @@ public final class Job implements Writable {
     }
 
     public Builder setLocalJarFile(final String localJarFilePath) {
-      this.localJarFilePath = localJarFilePath;
+      //this.localJarFilePath = localJarFilePath;
+      if(null != localJarFilePath && !"".equals(localJarFilePath))
+        conf.set("bsp.jar", localJarFilePath);
       return this;
     }
 
@@ -315,7 +317,7 @@ public final class Job implements Writable {
     public Job build() {
       return new Job(id, 
                      //localJobFilePath, 
-                     localJarFilePath, 
+                     //localJarFilePath, 
                      lastCheckpoint, 
                      state,
                      progress,
@@ -333,7 +335,7 @@ public final class Job implements Writable {
 
   public Job(final BSPJobID id,
              //final String localJobFilePath,
-             final String localJarFilePath,
+             //final String localJarFilePath,
              final int lastCheckpoint,
              final State state,
              final long progress,
@@ -350,8 +352,8 @@ public final class Job implements Writable {
     this.conf = (null == conf)? new HamaConfiguration(): conf;
     //this.localJobFilePath = 
       //(null == localJobFilePath)? new Text(""): new Text(localJobFilePath);
-    this.localJarFilePath = 
-      (null == localJarFilePath)? new Text(""): new Text(localJarFilePath);
+    //this.localJarFilePath = 
+      //(null == localJarFilePath)? new Text(""): new Text(localJarFilePath);
 
     if(0 < lastCheckpoint) {
       this.lastCheckpoint = new IntWritable(lastCheckpoint);
@@ -413,7 +415,8 @@ public final class Job implements Writable {
   //}
 
   public String getLocalJarFile() {
-    return this.localJarFilePath.toString();
+    return conf.get("bsp.jar");
+    //return this.localJarFilePath.toString();
   }
 
   public int getLastCheckpoint() {
@@ -543,7 +546,7 @@ public final class Job implements Writable {
   public void write(DataOutput out) throws IOException {
     id.write(out);
     //localJobFilePath.write(out);
-    localJarFilePath.write(out);
+    //localJarFilePath.write(out);
     lastCheckpoint.write(out);
     WritableUtils.writeEnum(out, state);
     progress.write(out);
@@ -567,8 +570,8 @@ public final class Job implements Writable {
     this.id.readFields(in);
     //this.localJobFilePath = new Text("");
     //this.localJobFilePath.readFields(in);
-    this.localJarFilePath = new Text("");
-    this.localJarFilePath.readFields(in);
+    //this.localJarFilePath = new Text("");
+    //this.localJarFilePath.readFields(in);
     this.lastCheckpoint = new IntWritable(0);
     this.lastCheckpoint.readFields(in);
     this.state = WritableUtils.readEnum(in, State.class);
@@ -623,7 +626,7 @@ public final class Job implements Writable {
                    getName() + "," +
                    getUser() + "," + 
                    //localJobFilePath.toString() + "," +
-                   localJarFilePath.toString() + "," +
+                   //localJarFilePath.toString() + "," +
                    lastCheckpoint.toString() + "," +
                    getNumBSPTasks() + "," +
                    getMaster() + "," +
