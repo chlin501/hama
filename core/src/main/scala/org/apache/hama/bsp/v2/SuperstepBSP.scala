@@ -22,6 +22,7 @@ import java.io.IOException
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.logging.Logger
+import org.apache.hama.HamaConfiguration
 import org.apache.hama.sync.SyncException
 import scala.util.Failure
 import scala.util.Success
@@ -34,11 +35,14 @@ import scala.util.Try
 class SuperstepBSP extends BSP with Logger {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
+
+  protected[v2] def getConf(peer: BSPPeer): HamaConfiguration = 
+    peer.configuration
   
   @throws(classOf[IOException])
   @throws(classOf[SyncException])
   override def setup(peer: BSPPeer) { 
-    val classes = peer.configuration.get("hama.supersteps.class")
+    val classes = getConf(peer).get("hama.supersteps.class")
     val classNames = classes.split(",")
     LOG.info(classNames.length+" superstep classes, including "+classes) 
     classNames.foreach( className => {
@@ -56,7 +60,7 @@ class SuperstepBSP extends BSP with Logger {
 
   protected def instantiate(className: String, peer: BSPPeer): Try[Superstep] =
     Try(ReflectionUtils.newInstance(Class.forName(className), 
-                                    peer.configuration).asInstanceOf[Superstep])
+                                    getConf(peer)).asInstanceOf[Superstep])
   
 
   @throws(classOf[IOException])
@@ -64,7 +68,7 @@ class SuperstepBSP extends BSP with Logger {
   override def bsp(peer: BSPPeer) {
     // TODO: when sync(), record 
     //       1. (non-shared) message 
-    //       2. supestep classes 
+    //       2. current supestep class
     //       3. variables map  
     findThenExecute(classOf[FirstSuperstep].getName, 
                     peer,

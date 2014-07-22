@@ -18,7 +18,6 @@
 package org.apache.hama.bsp.v2
 
 import org.apache.hadoop.io.Writable
-import org.apache.hadoop.io.NullWritable
 
 /**
  * The main place to programme BSP logic.
@@ -34,7 +33,7 @@ abstract class Superstep {
    * @return Writable may contains null if no data found.
    */
   def find[W <: Writable](key: String): W = 
-    variables.getOrElse(key, NullWritable.get).asInstanceOf[W]
+    variables.getOrElse(key, null).asInstanceOf[W]
 
   /**
    * Collect key value pair for future supersteps.
@@ -61,7 +60,7 @@ abstract class Superstep {
    * Prepare before starting computation.
    * @param peer is {@link BSPPeer} holds services such as sync, messeging, etc.
    */
-  def setup(peer: BSPPeer)
+  def setup(peer: BSPPeer) { }
 
   /**
    * BSP main logic to be executed.
@@ -74,7 +73,7 @@ abstract class Superstep {
    * Cleanup after computation is finished.
    * @param peer is {@link BSPPeer} holds services such as sync, messeging, etc.
    */
-  def cleanup(peer: BSPPeer)
+  def cleanup(peer: BSPPeer) { }
 
 
   /**
