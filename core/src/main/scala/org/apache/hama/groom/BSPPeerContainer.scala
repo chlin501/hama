@@ -264,8 +264,8 @@ object BSPPeerContainer {
 
 /**
  * Launched BSP actor in forked process.
- * @param conf contains setting sepcific to the forked process instead of tasks
- *             to be exected later on.
+ * @param conf contains common setting for the forked process instead of tasks
+ *             to be executed later on.
  */
 class BSPPeerContainer(conf: HamaConfiguration) extends LocalService 
                                                 with RemoteService 
@@ -309,7 +309,9 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     }
   }
 
-  def doLaunch(task: Task) { /* ... */ }
+  def doLaunch(task: Task) { 
+
+  }
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
     from ! new LaunchAck(slotSeq, taskAttemptId)

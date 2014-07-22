@@ -26,7 +26,7 @@ import org.apache.hama.HamaConfiguration
 final case class Bind(conf: HamaConfiguration, actorSystem: ActorSystem,
                       container: ActorRef)
 final case class Initialize(task: Task)
-final case object Execute
+final case class Execute(conf: HamaConfiguration)
 
 class Worker extends Agent {
 
@@ -61,12 +61,19 @@ class Worker extends Agent {
     }
   }
 
+  /**
+   * Start executing {@link Superstep}s accordingly.
+   * @return Receive id partial function.
+   */
   def execute: Receive = {
-    case Execute => {
-
+    case Execute(conf) => {
+      val superstepBSP = SuperstepBSP()
+      val peer = Coordinator(conf, context.system)
+      superstepBSP.setup(peer)
+      superstepBSP.bsp(peer)
     }
   }
 
-  override def receive = bind orElse initialize orElse unknown
+  override def receive = bind orElse initialize orElse execute orElse unknown
 }
 

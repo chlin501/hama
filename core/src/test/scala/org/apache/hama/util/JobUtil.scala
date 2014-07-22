@@ -29,6 +29,7 @@ import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.v2.IDCreator
 import org.apache.hama.bsp.v2.IDCreator._
+import org.apache.hama.fs.Operation
 import org.apache.hama.fs.HDFS
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.Logger
@@ -36,6 +37,7 @@ import org.apache.hama.logging.Logger
 class MockHDFS extends HDFS {
 
   def getHDFS: FileSystem = hdfs
+
 }
 
 trait JobUtil extends Logger {
@@ -113,7 +115,10 @@ trait JobUtil extends Logger {
   
   val random = new Random()
 
-  val op: MockHDFS = new MockHDFS()
+  val op = Operation.get[MockHDFS](configuration, classOf[MockHDFS]).
+                     asInstanceOf[MockHDFS]
+
+  def configuration: HamaConfiguration = new HamaConfiguration
 
   def qualified(path: Path): Path = path.makeQualified(op.getHDFS)  
 

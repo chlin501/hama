@@ -104,7 +104,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     LOG.info("localJobFilePath: {}, localJarFilePath: {}", localJobFilePath, 
              localJarFilePath)
     copyJobFile(jobId, jobFilePath, localJobFilePath)
-    config.addResource(new Path(localJobFilePath)) // user provided config
+    //config.addResource(new Path(localJobFilePath)) // user provided config
     val jarFilePath = config.get("bsp.jar") match {
       case null => None
       case jar@_ => Some(jar)
@@ -118,8 +118,8 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     } else {
       Some(new Job.Builder().setId(jobId). 
                              setConf(config).
-                             setLocalJobFile(localJobFilePath).
                              setLocalJarFile(localJarFilePath).
+                             addLocalJobFile(localJobFilePath).
                              withTaskTable(splits.getOrElse(null)). 
                              build)
     }
@@ -186,7 +186,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
   }
 
   /**
-   * copy the jar file from jarFilePath to localJarFilePath at local disk.
+   * Copy the jar file from jarFilePath to localJarFilePath at local disk.
    * @param jobId denotes which job the action is operated.
    * @param jarFilePath indicates the remote jar file path.
    * @param localJarFilePath is the dest of local jar file path.

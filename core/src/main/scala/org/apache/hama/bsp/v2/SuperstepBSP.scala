@@ -28,11 +28,17 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
+object SuperstepBSP {
+
+  def apply(): SuperstepBSP = new SuperstepBSP
+
+}
+
 /**
  * This class has all superstep and routes through supersteps, started from the
  * first superstep, according to the execution instruction.
  */
-class SuperstepBSP extends BSP with Logger {
+protected class SuperstepBSP extends BSP with Logger {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 

@@ -45,12 +45,14 @@ abstract class Superstep {
 
   /**
    * Obtain all variables that is set.
+   * Intended to be used by {@link SuperstepBSP} only.
    * @return Map that contains all variables.
    */
   protected[v2] def getVariables(): Map[String, Writable] = variables
 
   /**
    * Set all variables. This is intended to be called by {@link SuperstepBSP}.
+   * Intended to be used by {@link SuperstepBSP} only.
    * @param variables of all keys and values.
    */
   protected[v2] def setVariables(variables: Map[String, Writable]) = 

@@ -35,8 +35,11 @@ object Operation {
    * @param conf is common configuration.
    * @return Operation for a specific file system, usually HDFS.
    */
-  def get(conf: HamaConfiguration): Operation = {
-    val clazz = conf.getClass("bsp.fs.class", classOf[HDFS], classOf[Operation])
+  def get(conf: HamaConfiguration): Operation = get[HDFS](conf, classOf[HDFS])
+
+  def get[F <: Operation](conf: HamaConfiguration, default: Class[F]): 
+      Operation = {
+    val clazz = conf.getClass("bsp.fs.class", default, classOf[Operation])
     val op = ReflectionUtils.newInstance(clazz, conf)
     op.initialize(conf)
     op

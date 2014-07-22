@@ -151,11 +151,14 @@ class Coordinator(conf: HamaConfiguration,
       new Path(Operation.defaultWorkingDirectory(taskConf))
     )
     val libjars = CacheService.moveJarsAndGetClasspath(conf) 
-    if(null != libjars) {
-      LOG.info("Classpath to be included are "+libjars.mkString(", "))
-      taskConf.setClassLoader(new URLClassLoader(libjars, 
-                                                 taskConf.getClassLoader))
-    } else LOG.warn("No jars to be included for "+task.getId)
+    libjars match {
+      case null => LOG.warn("No jars to be included for "+task.getId)
+      case _ => {
+        LOG.info("Jars to be included in classpath are "+libjars.mkString(", "))
+        taskConf.setClassLoader(new URLClassLoader(libjars, 
+                                                   taskConf.getClassLoader))
+      }
+    } 
   }
 
   

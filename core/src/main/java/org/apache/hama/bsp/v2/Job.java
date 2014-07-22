@@ -47,7 +47,8 @@ public final class Job implements Writable {
   private BSPJobID id;
 
   /* job.xml path stored in local fs. */
-  private Text localJobFilePath = new Text("");
+  //private Text localJobFilePath = new Text("");
+  
 
   /* The jar file path stored in local fs. */
   private Text localJarFilePath = new Text("");
@@ -118,7 +119,7 @@ public final class Job implements Writable {
 
     private BSPJobID id;
     private HamaConfiguration conf = new HamaConfiguration();
-    private String localJobFilePath = "";
+    //private String localJobFilePath = "";
     private String localJarFilePath = "";
     private int lastCheckpoint;
     private State state = State.PREP;
@@ -147,8 +148,10 @@ public final class Job implements Writable {
       return this;
     }
 
-    public Builder setLocalJobFile(final String localJobFilePath) {
-      this.localJobFilePath = localJobFilePath;
+    public Builder addLocalJobFile(final String localJobFilePath) {
+      //this.localJobFilePath = localJobFilePath;
+      if(null != localJobFilePath && !"".equals(localJobFilePath))
+        conf.addResource(new Path(localJobFilePath));
       return this;
     }
 
@@ -311,7 +314,7 @@ public final class Job implements Writable {
 
     public Job build() {
       return new Job(id, 
-                     localJobFilePath, 
+                     //localJobFilePath, 
                      localJarFilePath, 
                      lastCheckpoint, 
                      state,
@@ -329,7 +332,7 @@ public final class Job implements Writable {
   Job() {} // for Writable
 
   public Job(final BSPJobID id,
-             final String localJobFilePath,
+             //final String localJobFilePath,
              final String localJarFilePath,
              final int lastCheckpoint,
              final State state,
@@ -345,8 +348,8 @@ public final class Job implements Writable {
     if(null == this.id) 
       throw new IllegalArgumentException("BSPJobID is not provided.");
     this.conf = (null == conf)? new HamaConfiguration(): conf;
-    this.localJobFilePath = 
-      (null == localJobFilePath)? new Text(""): new Text(localJobFilePath);
+    //this.localJobFilePath = 
+      //(null == localJobFilePath)? new Text(""): new Text(localJobFilePath);
     this.localJarFilePath = 
       (null == localJarFilePath)? new Text(""): new Text(localJarFilePath);
 
@@ -405,9 +408,9 @@ public final class Job implements Writable {
     return conf.get("user.name", System.getProperty("user.name"));
   }
 
-  public String getLocalJobFile() {
-    return this.localJobFilePath.toString();
-  }
+  //public String getLocalJobFile() { 
+    //return this.localJobFilePath.toString();
+  //}
 
   public String getLocalJarFile() {
     return this.localJarFilePath.toString();
@@ -539,7 +542,7 @@ public final class Job implements Writable {
   @Override
   public void write(DataOutput out) throws IOException {
     id.write(out);
-    localJobFilePath.write(out);
+    //localJobFilePath.write(out);
     localJarFilePath.write(out);
     lastCheckpoint.write(out);
     WritableUtils.writeEnum(out, state);
@@ -562,8 +565,8 @@ public final class Job implements Writable {
   public void readFields(DataInput in) throws IOException {
     this.id = new BSPJobID();
     this.id.readFields(in);
-    this.localJobFilePath = new Text("");
-    this.localJobFilePath.readFields(in);
+    //this.localJobFilePath = new Text("");
+    //this.localJobFilePath.readFields(in);
     this.localJarFilePath = new Text("");
     this.localJarFilePath.readFields(in);
     this.lastCheckpoint = new IntWritable(0);
@@ -619,7 +622,7 @@ public final class Job implements Writable {
     return "Job("+ id.toString()+ "," +
                    getName() + "," +
                    getUser() + "," + 
-                   localJobFilePath.toString() + "," +
+                   //localJobFilePath.toString() + "," +
                    localJarFilePath.toString() + "," +
                    lastCheckpoint.toString() + "," +
                    getNumBSPTasks() + "," +

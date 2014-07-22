@@ -24,16 +24,14 @@ import org.apache.hama.pipes.util.DistributedCacheUtil
 /**
  * Intended to be a wrapper for decoupling from underlying cache services so
  * that a neutral mechanism can be provided.
- */
 trait CacheService {
 
-  /**
    * Move cached files to local file system.
    * @param conf should contains all cached files setting.
-   */
   def moveCacheToLocal(conf: HamaConfiguration) 
 
 }
+ */
 
 object CacheService {
 
