@@ -50,7 +50,7 @@ import org.apache.hama.logging.Logger
 import scala.collection.JavaConversions._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-import scala.util.{Failure, Success}
+import scala.util.{Try, Failure, Success}
 
 
 /**
@@ -90,7 +90,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   /**
    * {@link PeerMessenger} address information.
    */
-  protected var currentPeer: ProxyInfo = _
+  protected var currentPeer: Option[ProxyInfo] = None
 
   /**
    * This is used for receiving loopback message {@link #loopBackMessages} 
@@ -138,17 +138,20 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   /**
    * Indicate the local peer.
    */
-  protected def currentPeerInfo(conf: HamaConfiguration): ProxyInfo = {
+  protected def currentPeerInfo(conf: HamaConfiguration): 
+      Either[RuntimeException, ProxyInfo] = {
     val seq = conf.getInt("bsp.child.slot.seq", -1)
-    if(-1 == seq)
-      throw new RuntimeException("Invalid slot seq "+seq+" for constructing "+
-                                 "peer info!")
-    val host = conf.get("bsp.peer.hostname", 
-                        InetAddress.getLocalHost.getHostName) 
-    val port = conf.getInt("bsp.peer.port", 61000)
-    val addr = "BSPPeerSystem%d@%s:%d".format(seq, host, port)
-    LOG.info("Current peer address is "+addr)
-    Peer.at(addr)
+    seq match {
+      case -1 => Left(new RuntimeException("Slot seq -1 is not configured!")) 
+      case _ => {
+        val host = conf.get("bsp.peer.hostname", 
+                            InetAddress.getLocalHost.getHostName) 
+        val port = conf.getInt("bsp.peer.port", 61000)
+        val addr = "BSPPeerSystem%d@%s:%d".format(seq, host, port)
+        LOG.info("Current peer address is "+addr)
+        Right(Peer.at(addr))
+      }
+    }
   }
 
   /**
@@ -165,7 +168,10 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     this.configuration = conf
     if(null == this.configuration)
       throw new IllegalArgumentException("HamaConfiguration is missing!")
-    this.currentPeer = currentPeerInfo(configuration)
+    currentPeerInfo(configuration) match {
+      case Left(e) => throw e
+      case Right(info) => this.currentPeer = Some(info)
+    }
     this.localQueue = getReceiverQueue
     this.localQueueForNextIteration = getSynchronizedReceiverQueue
     this.outgoingMessageManager = OutgoingMessageManager.get[M](configuration)
@@ -188,23 +194,42 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
 
   override def close() {
     executor.shutdown
-    outgoingMessageManager.clear
-    localQueue.close
-    cleanupDiskQueue
-  }
-
-  protected def cleanupDiskQueue() {
-    try {
-      val operation = Operation.get(this.configuration)
-      val diskQueueDir = configuration.get("bsp.disk.queue.dir")
-      operation.remove(DiskQueue.getQueueDir(configuration, 
-                                             taskAttemptId,
-                                             diskQueueDir))
-    } catch {
-      case e: IOException => 
-        LOG.warn("Can't remove disk queue for "+taskAttemptId, e) 
+    outgoingMessageManager match {
+      case null =>
+      case _ => outgoingMessageManager.clear
+    }
+    localQueue match {
+      case null =>
+      case _ => localQueue.close
+    }
+    cleanupDiskQueue match {
+      case Success(yOrN) => LOG.debug("Need to cleanup disk queue? "+yOrN)
+      case Failure(ioe) => LOG.warn("Fail cleaning up disk queue for "+
+                                    taskAttemptId+"!",ioe)
     }
   }
+
+  /**
+   * Cleanup disk queue if needed. 
+   * @return Boolean denotes that the disk is cleanup when true; otherwise 
+   *                 false.
+   */ 
+  def needToCleanup(taskAttemptId: TaskAttemptID): Boolean = {
+    taskAttemptId match {
+      case null => false
+      case _ => {
+        val operation = Operation.get(this.configuration)
+        val diskQueueDir = configuration.get("bsp.disk.queue.dir")
+        operation.remove(DiskQueue.getQueueDir(configuration, 
+                                             taskAttemptId,
+                                             diskQueueDir))
+        true
+      }
+    }
+  }
+
+  protected def cleanupDiskQueue(): Try[Boolean] = 
+    Try(needToCleanup(taskAttemptId))
 
   @throws(classOf[IOException])
   override def getCurrentMessage(): M = localQueue.poll
@@ -302,6 +327,10 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     //TODO: stats peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_RECEIVED, 1L);
   } 
 
-  override def getListenerAddress(): ProxyInfo = this.currentPeer 
+  override def getListenerAddress(): ProxyInfo = this.currentPeer match {
+    case None => 
+      throw new RuntimeException("Peer is not initialized because it's null!")
+    case Some(info) => info
+  }
 
 }

@@ -42,8 +42,9 @@ final case object PeerNameAt
 final case object GetPeerIndex
 final case object SyncThenValidateSuperstep
 
-class Worker(conf: HamaConfiguration, tester: ActorRef, task: Task) 
-      extends Actor {
+class MockWorker(conf: HamaConfiguration, 
+                 tester: ActorRef, 
+                 task: Task) extends Actor {
 
   val LOG = Logging(context.system, this)
 
@@ -180,12 +181,12 @@ class TestCoordinator extends TestEnv(ActorSystem("TestCoordinator"))
 
     val task1 = createTask("test", JOB2, 23, 3)
     assert(null != task1)
-    val worker1 = createWithArgs("worker1", classOf[Worker], 
+    val worker1 = createWithArgs("worker1", classOf[MockWorker], 
                                  conf1, tester, task1) 
 
     val task2 = createTask("test", JOB2, 2, 2)
     assert(null != task2)
-    val worker2 = createWithArgs("worker2", classOf[Worker], 
+    val worker2 = createWithArgs("worker2", classOf[MockWorker], 
                                  conf2, tester, task2) 
 
     worker1 ! Init

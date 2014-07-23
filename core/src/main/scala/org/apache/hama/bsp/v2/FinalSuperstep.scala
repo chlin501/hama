@@ -20,7 +20,9 @@ package org.apache.hama.bsp.v2
 /**
  * The final superstep that ends the entire sequence.
  */
-abstract class FinalSuperstep extends Superstep {
+class FinalSuperstep extends Superstep {
+
+  override def compute(peer: BSPPeer) { }
 
   /**
    * This method can't be overridden because it indicates the end of execution. 

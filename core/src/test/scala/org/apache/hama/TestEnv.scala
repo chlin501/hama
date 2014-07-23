@@ -83,6 +83,16 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
   protected def createWithArgs(name: String, clazz: Class[_], args: Any*): 
     ActorRef = system.actorOf(Props(clazz, args:_*), name)
 
+  
+  /**
+   * Create testActor without any arguments supplied.
+   * @param name of the testActor.
+   * @param clazz denotes the actual actor class implementation.
+   * @return ActorRef of the target testActor. 
+   */  
+  protected def createWithoutArgs(name: String, clazz: Class[_]): ActorRef =
+    system.actorOf(Props(clazz), name)
+
   /**
    * Create testActor with testConfiguration.
    * @param name of the testActor.

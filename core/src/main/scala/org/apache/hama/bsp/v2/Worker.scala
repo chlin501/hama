@@ -23,32 +23,25 @@ import akka.actor.ActorSystem
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 
-final case class Bind(conf: HamaConfiguration, actorSystem: ActorSystem,
-                      container: ActorRef)
+final case class Bind(conf: HamaConfiguration, actorSystem: ActorSystem)
 final case class Initialize(task: Task)
 final case class Execute(conf: HamaConfiguration)
 
 class Worker extends Agent {
 
-  protected var coordinator: Coordinator = _
-  protected var container: ActorRef = _
+  protected var peer: Option[Coordinator] = None
 
-  protected def bind1(old: Coordinator, 
-                      conf: HamaConfiguration, 
-                      actorSystem: ActorSystem): Coordinator = old match {
-    case null => Coordinator(conf, actorSystem)
-    case _ => old
+  protected def bind(old: Option[Coordinator], 
+                     conf: HamaConfiguration, 
+                     actorSystem: ActorSystem): Option[Coordinator] = 
+  old match {
+    case None => Some(Coordinator(conf, actorSystem))
+    case Some(peer) => old
   } 
 
-  protected def bind2(ref: ActorRef, param: ActorRef): ActorRef = ref match {
-    case null => param
-    case _ => ref
-  }
-
   def bind: Receive = {
-    case Bind(conf, actorSystem, container) => {
-      this.coordinator = bind1(this.coordinator, conf, actorSystem) 
-      this.container = bind2(this.container, container)
+    case Bind(conf, actorSystem) => {
+      this.peer = bind(this.peer, conf, actorSystem) 
     }
   }
 
@@ -56,8 +49,13 @@ class Worker extends Agent {
    * This ties coordinator to a particular task.
    */
   def initialize: Receive = {
-    case Initialize(task: Task) => {
-      coordinator.configureFor(task)
+    case Initialize(task) => {
+      peer match {
+        case Some(found) => {
+          found.configureFor(task)
+        }
+        case None => LOG.warning("Unable to initialize task "+task)
+      }
     }
   }
 
@@ -66,14 +64,19 @@ class Worker extends Agent {
    * @return Receive id partial function.
    */
   def execute: Receive = {
-    case Execute(conf) => {
-      val superstepBSP = SuperstepBSP()
-      val peer = Coordinator(conf, context.system)
-      superstepBSP.setup(peer)
-      superstepBSP.bsp(peer)
+    case Execute(conf) => doExecute(conf)
+  }
+
+  protected def doExecute(conf: HamaConfiguration) {
+    peer match {
+      case Some(found) => {
+        val superstepBSP = SuperstepBSP()
+        superstepBSP.setup(found)
+        superstepBSP.bsp(found)
+      }
+      case None => LOG.warning("BSPPeer is missing!")
     }
   }
 
   override def receive = bind orElse initialize orElse execute orElse unknown
 }
-

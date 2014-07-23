@@ -118,7 +118,7 @@ class Coordinator(conf: HamaConfiguration,
    */
   protected[v2] def configureFor(task: Task) {
     this.taskWithStats = TaskWithStats(task, new Counters())
-    this.messenger = messengingService(messenger, configuration, getTask) 
+    this.messenger = messengingService(this.messenger, configuration, getTask) 
     //this.io = ioService[_, _](io, configuration, taskWithStats) 
     localize(configuration, getTask)
     settingForTask(configuration, getTask)

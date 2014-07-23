@@ -95,6 +95,7 @@ class MockSuperstepBSP(testConf: HamaConfiguration) extends SuperstepBSP {
 class TestSuperstepBSP extends TestEnv(ActorSystem("TestSuperstepBSP")) {
 
   override def beforeAll {
+    super.beforeAll
     val classes = "%s,%s,%s".format(classOf[Begin].getName, 
                                     classOf[Second].getName,
                                     classOf[End].getName)

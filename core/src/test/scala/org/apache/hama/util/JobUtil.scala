@@ -191,7 +191,8 @@ trait JobUtil extends Logger {
   }
 
   def createTask(jobIdentifier: String = "test", jobId: Int = 1,
-                 taskId: Int = 1, taskAttemptId: Int = 1): Task = {
+                 taskId: Int = 1, taskAttemptId: Int = 1,
+                 conf: HamaConfiguration = new HamaConfiguration): Task = {
     val attemptId = IDCreator.newBSPJobID.withId(jobIdentifier)
                                          .withId(jobId)
                                          .getTaskIDBuilder
@@ -204,6 +205,7 @@ trait JobUtil extends Logger {
     val state = Task.State.RUNNING
     val phase = Task.Phase.SETUP
     new Task.Builder().setId(attemptId)
+                      .setConfiguration(conf)
                       .setStartTime(startTime)
                       .setFinishTime(finishTime)
                       .setState(state)
