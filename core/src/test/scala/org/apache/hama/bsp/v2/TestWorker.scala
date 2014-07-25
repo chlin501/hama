@@ -145,7 +145,7 @@ class TestWorker extends TestEnv(ActorSystem("TestWorker"))
      val worker = createWithArgs("testWorker", classOf[MockWorker1], tester)
      worker ! Bind(testConfiguration, system)
      worker ! Initialize(task)
-     worker ! Execute(testConfiguration)
+     worker ! Execute(task.getConfiguration)
      worker ! GetCount
      expect(2)
      LOG.info("Done testing BSP Worker!")

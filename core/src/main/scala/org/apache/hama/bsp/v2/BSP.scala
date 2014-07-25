@@ -32,15 +32,15 @@ object BSP {
    * interface, so there is no difference when calling 
    * {@link ReflectionUtils#newInstance} because BSP doesn't provide setConf 
    * and getConf method.
-   * @param conf is task configuration.
+   * @param taskConf is task configuration.
    */
-  def get[B <: BSP](conf: HamaConfiguration, bspClass: Class[B]): BSP = {
-    val bsp = conf.getClass("bsp.work.class", bspClass, classOf[BSP]) 
-    ReflectionUtils.newInstance(bsp, conf)
+  def get[B <: BSP](taskConf: HamaConfiguration, bspClass: Class[B]): BSP = {
+    val bsp = taskConf.getClass("bsp.work.class", bspClass, classOf[BSP]) 
+    ReflectionUtils.newInstance(bsp, taskConf)
   }
 
-  def get(conf: HamaConfiguration) : BSP = 
-    get[SuperstepBSP](conf, classOf[SuperstepBSP])
+  def get(taskConf: HamaConfiguration) : BSP = 
+    get[SuperstepBSP](taskConf, classOf[SuperstepBSP])
 
 }
 

@@ -64,13 +64,17 @@ class Worker extends Agent {
    * @return Receive id partial function.
    */
   def execute: Receive = {
-    case Execute(conf) => doExecute(conf)
+    case Execute(taskConf) => doExecute(taskConf)
   }
 
-  protected def doExecute(conf: HamaConfiguration) {
+  /**
+   * Execute supersteps according to the task configuration provided.
+   * @param taskConf is HamaConfiguration specific to a pariticular task.
+   */
+  protected def doExecute(taskConf: HamaConfiguration) {
     peer match {
       case Some(found) => {
-        val superstepBSP = BSP.get(conf)
+        val superstepBSP = BSP.get(taskConf)
         superstepBSP.setup(found)
         superstepBSP.bsp(found)
       }
