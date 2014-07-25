@@ -20,6 +20,8 @@ package org.apache.hama.bsp.v2
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
+import java.net.URL
+import java.net.URLClassLoader
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 
@@ -71,14 +73,29 @@ class Worker extends Agent {
    * Execute supersteps according to the task configuration provided.
    * @param taskConf is HamaConfiguration specific to a pariticular task.
    */
-  protected def doExecute(taskConf: HamaConfiguration) {
-    peer match {
-      case Some(found) => {
-        val superstepBSP = BSP.get(taskConf)
-        superstepBSP.setup(found)
-        superstepBSP.bsp(found)
+  protected def doExecute(taskConf: HamaConfiguration) = peer match {
+    case Some(found) => {
+      addJarToClasspath(taskConf)
+      val superstepBSP = BSP.get(taskConf)
+      superstepBSP.setup(found)
+      superstepBSP.bsp(found)
+    }
+    case None => LOG.error("BSPPeer is missing!")
+  }
+
+  def addJarToClasspath(taskConf: HamaConfiguration) {
+    val jar = taskConf.get("bsp.jar")
+    LOG.info("Jar path found in task configuration is {}", jar)
+    jar match {
+      case null =>
+      case "" =>
+      case url@_ => {
+        // TODO: copy jar to local so that user's supersteps classes can be 
+        //       referenced.
+        val loader = Thread.currentThread.getContextClassLoader
+        val newLoader = new URLClassLoader(Array[URL](new URL(url)), loader) 
+        Thread.currentThread.setContextClassLoader(newLoader)
       }
-      case None => LOG.warning("BSPPeer is missing!")
     }
   }
 
