@@ -70,7 +70,7 @@ class Worker extends Agent {
   protected def doExecute(conf: HamaConfiguration) {
     peer match {
       case Some(found) => {
-        val superstepBSP = SuperstepBSP()
+        val superstepBSP = BSP.get(conf)
         superstepBSP.setup(found)
         superstepBSP.bsp(found)
       }

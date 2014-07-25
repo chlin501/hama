@@ -20,7 +20,29 @@ package org.apache.hama.bsp.v2
 import java.io.IOException
 
 import org.apache.hadoop.io.Writable
+import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.sync.SyncException
+import org.apache.hama.HamaConfiguration
+
+object BSP {
+
+  /**
+   * Configuration is from something like {@link BSPJob}, which is specific 
+   * to a task. But BSP actually does not implement {@link Configurable} 
+   * interface, so there is no difference when calling 
+   * {@link ReflectionUtils#newInstance} because BSP doesn't provide setConf 
+   * and getConf method.
+   * @param conf is task configuration.
+   */
+  def get[B <: BSP](conf: HamaConfiguration, bspClass: Class[B]): BSP = {
+    val bsp = conf.getClass("bsp.work.class", bspClass, classOf[BSP]) 
+    ReflectionUtils.newInstance(bsp, conf)
+  }
+
+  def get(conf: HamaConfiguration) : BSP = 
+    get[SuperstepBSP](conf, classOf[SuperstepBSP])
+
+}
 
 /**
  * This class is the base class that perform bsp computation.

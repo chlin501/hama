@@ -42,6 +42,12 @@ protected class SuperstepBSP extends BSP with Logger {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
+  /**
+   * This function returns common configuration from BSPPeer.
+   * @param peer for the aggregation of all supersteps.
+   * @return HamaConfiguration is common configuration, not specific to any 
+   *                           tasks.
+   */
   protected[v2] def getConf(peer: BSPPeer): HamaConfiguration = 
     peer.configuration
   
