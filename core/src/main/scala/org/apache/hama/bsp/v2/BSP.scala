@@ -27,20 +27,24 @@ import org.apache.hama.HamaConfiguration
 object BSP {
 
   /**
-   * Configuration is from something like {@link BSPJob}, which is specific 
-   * to a task. But BSP actually does not implement {@link Configurable} 
-   * interface, so there is no difference when calling 
-   * {@link ReflectionUtils#newInstance} because BSP doesn't provide setConf 
-   * and getConf method.
+   * The default {@link BSP} implementation is {@link SuperstepBSP}, so it 
+   * should be obtained from common configuration instead of task 
+   * configuration. Task configuration contains dynamically added client jar 
+   * url, so it must be passed to {@link SuperstepBSP} for instantiating 
+   * client {@link Superstep} classes; otherwise {@link ClassNotFoundException}
+   * will be thrown during {@link SuperstepBSP#setup}.
+   * @param conf is common configuration.
    * @param taskConf is task configuration.
+   * @return BSP instance.
    */
-  def get[B <: BSP](taskConf: HamaConfiguration, bspClass: Class[B]): BSP = {
-    val bsp = taskConf.getClass("bsp.work.class", bspClass, classOf[BSP]) 
+  def get[B <: BSP](conf: HamaConfiguration, taskConf: HamaConfiguration, 
+                    bspClass: Class[B]): BSP = {
+    val bsp = conf.getClass("bsp.work.class", bspClass, classOf[BSP]) 
     ReflectionUtils.newInstance(bsp, taskConf)
   }
 
-  def get(taskConf: HamaConfiguration) : BSP = 
-    get[SuperstepBSP](taskConf, classOf[SuperstepBSP])
+  def get(conf: HamaConfiguration, taskConf: HamaConfiguration) : BSP = 
+    get[SuperstepBSP](conf, taskConf, classOf[SuperstepBSP])
 
 }
 

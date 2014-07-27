@@ -19,6 +19,8 @@ package org.apache.hama.bsp.v2
 
 import java.io.IOException
 
+import org.apache.hadoop.conf.Configurable
+import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.logging.Logger
@@ -38,9 +40,16 @@ object SuperstepBSP {
  * This class has all superstep and routes through supersteps, started from the
  * first superstep, according to the execution instruction.
  */
-protected class SuperstepBSP extends BSP with Logger {
+protected class SuperstepBSP extends BSP with Configurable with Logger {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
+
+  protected var taskConf = new HamaConfiguration
+
+  override def setConf(conf: Configuration) = 
+    this.taskConf = conf.asInstanceOf[HamaConfiguration]
+
+  override def getConf(): Configuration = this.taskConf
 
   /**
    * This function returns common configuration from BSPPeer.
@@ -70,8 +79,10 @@ protected class SuperstepBSP extends BSP with Logger {
     })
   }
 
-  protected def instantiate(className: String, peer: BSPPeer): Try[Superstep] =
-    Try(ReflectionUtils.newInstance(Class.forName(className), 
+  protected def instantiate(className: String, peer: BSPPeer): Try[Superstep] = 
+    Try(ReflectionUtils.newInstance(Class.forName(className, 
+                                                  true, 
+                                                  taskConf.getClassLoader), 
                                     getConf(peer)).asInstanceOf[Superstep])
   
 

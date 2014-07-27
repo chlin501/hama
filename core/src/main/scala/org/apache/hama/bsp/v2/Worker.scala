@@ -27,7 +27,7 @@ import org.apache.hama.HamaConfiguration
 
 final case class Bind(conf: HamaConfiguration, actorSystem: ActorSystem)
 final case class Initialize(task: Task)
-final case class Execute(conf: HamaConfiguration)
+final case class Execute(conf: HamaConfiguration, taskConf: HamaConfiguration)
 
 class Worker extends Agent {
 
@@ -66,35 +66,41 @@ class Worker extends Agent {
    * @return Receive id partial function.
    */
   def execute: Receive = {
-    case Execute(taskConf) => doExecute(taskConf)
+    case Execute(conf, taskConf) => doExecute(conf, taskConf)
   }
 
   /**
    * Execute supersteps according to the task configuration provided.
    * @param taskConf is HamaConfiguration specific to a pariticular task.
    */
-  protected def doExecute(taskConf: HamaConfiguration) = peer match {
+  protected def doExecute(conf: HamaConfiguration, 
+                          taskConf: HamaConfiguration) = peer match {
     case Some(found) => {
       addJarToClasspath(taskConf)
-      val superstepBSP = BSP.get(taskConf)
+      val superstepBSP = BSP.get(conf, taskConf)
       superstepBSP.setup(found)
       superstepBSP.bsp(found)
     }
     case None => LOG.error("BSPPeer is missing!")
   }
 
-  def addJarToClasspath(taskConf: HamaConfiguration) {
+  /**
+   * Dynamically add client jar url to the context class loader and task 
+   * configuration.
+   * @param taskConf is the configuration sepcific to a task.
+   * @return Option[ClassLoader] contains class loader with client jar url.
+   */
+  def addJarToClasspath(taskConf: HamaConfiguration): Option[ClassLoader] = {
     val jar = taskConf.get("bsp.jar")
     LOG.info("Jar path found in task configuration is {}", jar)
     jar match {
-      case null =>
-      case "" =>
+      case null => None
+      case "" => None
       case url@_ => {
-        // TODO: copy jar to local so that user's supersteps classes can be 
-        //       referenced.
         val loader = Thread.currentThread.getContextClassLoader
         val newLoader = new URLClassLoader(Array[URL](new URL(url)), loader) 
-        Thread.currentThread.setContextClassLoader(newLoader)
+        taskConf.setClassLoader(newLoader) 
+        Some(newLoader)
       }
     }
   }
