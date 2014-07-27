@@ -30,12 +30,6 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
-object SuperstepBSP {
-
-  def apply(): SuperstepBSP = new SuperstepBSP
-
-}
-
 /**
  * This class has all superstep and routes through supersteps, started from the
  * first superstep, according to the execution instruction.
@@ -44,12 +38,15 @@ protected class SuperstepBSP extends BSP with Configurable with Logger {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
+  /**
+   * This is configuration for a specific task. 
+   */
   protected var taskConf = new HamaConfiguration
 
   override def setConf(conf: Configuration) = 
     this.taskConf = conf.asInstanceOf[HamaConfiguration]
 
-  override def getConf(): Configuration = this.taskConf
+  override def getConf(): Configuration = this.taskConf 
 
   /**
    * This function returns common configuration from BSPPeer.
