@@ -143,7 +143,7 @@ class TestWorker extends TestEnv(ActorSystem("TestWorker"))
      val task = createTask("testworker", 1, 1, 1, testConfiguration)
      val worker = createWithArgs("testWorker", classOf[MockWorker1], tester)
      worker ! Bind(testConfiguration, system)
-     worker ! Initialize(task)
+     worker ! ConfigureFor(task)
      worker ! Execute(testConfiguration, task.getConfiguration)
      worker ! GetCount
      expect(2)

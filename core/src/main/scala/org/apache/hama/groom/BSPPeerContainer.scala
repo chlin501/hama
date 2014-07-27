@@ -30,9 +30,12 @@ import java.io.File
 import java.io.FileWriter
 import java.net.InetAddress
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.bsp.v2.Bind
+import org.apache.hama.bsp.v2.ConfigureFor
+import org.apache.hama.bsp.v2.Execute
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.bsp.v2.Worker
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.lang.Executor
 import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
 import org.apache.hama.util.ActorLocator
@@ -309,8 +312,15 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     }
   }
 
+  /**
+   * Start executing the task.
+   * @param task that is supplied to be executed.
+   */
   def doLaunch(task: Task) { 
-
+    val worker = context.actorOf(Props(classOf[Worker]))
+    worker ! Bind(configuration, context.system) 
+    worker ! ConfigureFor(task)
+    worker ! Execute(configuration, task.getConfiguration)
   }
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
@@ -414,17 +424,18 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    */
   def shutdownContainer: Receive = {
     case ShutdownContainer => {
-      LOG.info("Unwatch remote executro {} ...", executor)
+      LOG.debug("Unwatch remote executro {} ...", executor)
       context.unwatch(executor) 
-      LOG.info("Stop {} itself ...", self.path.name)
-      context.stop(self)
+      //LOG.debug("Stop {} itself ...", self.path.name)
+      //context.stop(self)
       LOG.info("Completely shutdown BSPContainer system ...")
       context.system.shutdown
     }
   }
 
   /**
-   * {@link BSPPeerContainer} is notified when executor is offline.
+   * When {@link Executor} is offline, {@link BSPPeerContainer} will shutdown
+   * itself.
    * @param target actor is {@link Executor}
    */
   override def offline(target: ActorRef) {

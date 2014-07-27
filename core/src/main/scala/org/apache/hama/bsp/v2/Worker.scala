@@ -26,7 +26,7 @@ import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 
 final case class Bind(conf: HamaConfiguration, actorSystem: ActorSystem)
-final case class Initialize(task: Task)
+final case class ConfigureFor(task: Task)
 final case class Execute(conf: HamaConfiguration, taskConf: HamaConfiguration)
 
 class Worker extends Agent {
@@ -50,13 +50,14 @@ class Worker extends Agent {
   /**
    * This ties coordinator to a particular task.
    */
-  def initialize: Receive = {
-    case Initialize(task) => {
+  def configureFor: Receive = {
+    case ConfigureFor(task) => {
       peer match {
         case Some(found) => {
           found.configureFor(task)
         }
-        case None => LOG.warning("Unable to initialize task "+task)
+        case None => LOG.warning("Unable to configure for task "+task+
+                                 " because BSPPeer is missing!")
       }
     }
   }
@@ -85,8 +86,7 @@ class Worker extends Agent {
   }
 
   /**
-   * Dynamically add client jar url to the context class loader and task 
-   * configuration.
+   * Dynamically add client jar url to the task configuration.
    * @param taskConf is the configuration sepcific to a task.
    * @return Option[ClassLoader] contains class loader with client jar url.
    */
@@ -105,5 +105,5 @@ class Worker extends Agent {
     }
   }
 
-  override def receive = bind orElse initialize orElse execute orElse unknown
+  override def receive = bind orElse configureFor orElse execute orElse unknown
 }
