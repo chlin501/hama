@@ -17,6 +17,7 @@
  */
 package org.apache.hama.fs
 
+import java.io.Closeable
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
@@ -25,6 +26,7 @@ import java.util.Arrays
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.FileStatus
+import org.apache.hadoop.io.IOUtils
 
 import org.apache.hadoop.fs.Path
 import org.apache.hama.HamaConfiguration
@@ -61,15 +63,7 @@ class HDFS extends Operation {
   @throws(classOf[IOException])
   override def create(path: Path): OutputStream = {
     validate
-    var out: OutputStream = null
-    var created = false
-    if(!exists(path)) 
-      created = hdfs.createNewFile(path)
-    else 
-      created = true
-    if(created) 
-      out = hdfs.create(path)
-    out 
+    hdfs.create(path, true) 
   }
 
   @throws(classOf[IOException])
@@ -129,4 +123,7 @@ class HDFS extends Operation {
     path.makeQualified(hdfs).toString
 
   override def setWorkingDirectory(path: Path) = hdfs.setWorkingDirectory(path)
+
+  override def close(out: Closeable) = IOUtils.closeStream(out) 
+  
 }

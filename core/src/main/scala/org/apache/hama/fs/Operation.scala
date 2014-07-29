@@ -17,6 +17,7 @@
  */
 package org.apache.hama.fs
 
+import java.io.Closeable
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
@@ -175,5 +176,11 @@ trait Operation {
    * @param path is the working directory to be used.
    */
   def setWorkingDirectory(path: Path)
+
+  /**
+   * Close underlying output stream.
+   * @param 
+   */ 
+  def close(stream: Closeable)
   
 }

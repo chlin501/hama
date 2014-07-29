@@ -17,7 +17,8 @@
  */
 package org.apache.hama.message
 
-import java.util.HashMap
+//import java.util.HashMap
+import java.util.concurrent.ConcurrentHashMap
 import java.util.Iterator
 import java.util.Map.Entry
 
@@ -29,75 +30,80 @@ import org.apache.hama.message.compress.BSPMessageCompressor
 import org.apache.hama.ProxyInfo
 import org.apache.hama.util.ReflectionUtils
 import org.apache.hama.logging.Logger
+import scala.util.Try
+import scala.util.Success
+import scala.util.Failure
 
 class OutgoingPOJOMessageBundle[M <: Writable] 
       extends OutgoingMessageManager[M] with Logger {
 
   type PeerAndBundleIter = Iterator[Entry[ProxyInfo, BSPMessageBundle[M]]] 
 
-  private var conf: HamaConfiguration = _
+  private var conf: Option[HamaConfiguration] = None
   private var compressor: BSPMessageCompressor = _
-  private var combiner: Combiner[M] = _
-  //private val peerSocketCache = new HashMap[String, ProxyInfo]()
-  private val outgoingBundles = new HashMap[ProxyInfo, BSPMessageBundle[M]]()
+  private var combiner: Option[Combiner[M]] = None
+  private val outgoingBundles = 
+    new ConcurrentHashMap[ProxyInfo, BSPMessageBundle[M]]() 
 
   override def init(conf: HamaConfiguration, 
                     compressor: BSPMessageCompressor) {
-    this.conf = conf
+    this.conf = Some(conf)
     this.compressor = compressor
-    val combinerName = conf.get(Constants.COMBINER_CLASS)
-    if (null != combinerName) {
-      try {
-        this.combiner = 
-          ReflectionUtils.newInstance(conf.getClassByName(combinerName)).
-                          asInstanceOf[Combiner[M]]
-      } catch {
-        case cnfe: ClassNotFoundException => LOG.info("Combiner not found!", 
-                                                      cnfe)
+    this.combiner = getCombiner(this.conf)
+  }
+
+  protected def getCombiner(conf: Option[HamaConfiguration]): 
+    Option[Combiner[M]] = conf match {
+      case None => None
+      case Some(found) => {
+        found.get(Constants.COMBINER_CLASS) match {
+          case null => None
+          case combinerName@_ => {
+            val combinerClass = found.getClassByName(combinerName)
+            newInstance(combinerClass) match {
+              case Success(instance) => Some(instance)
+              case Failure(cause) => {
+                LOG.error("Fail instantiating "+combinerName, cause)
+                None
+              }
+            }
+          }
+        }
       }
-    }
+    } 
+
+  protected def newInstance(combinerClass: Class[_]): Try[Combiner[M]] =
+    Try(ReflectionUtils.newInstance(combinerClass).asInstanceOf[Combiner[M]])
+  
+
+  protected def getCompressionThreshold(conf: Option[HamaConfiguration]): 
+    Long = conf match {
+      case None => 128L
+      case Some(found) => found.getLong("hama.messenger.compression.threshold",
+                                        128)
   }
 
   override def addMessage(peer: ProxyInfo, msg: M) {
-   if (!outgoingBundles.containsKey(peer)) {
-      val bundle = new BSPMessageBundle[M]()
-      bundle.setCompressor(compressor,
-          conf.getLong("hama.messenger.compression.threshold", 128))
-      outgoingBundles.put(peer, bundle)
+    outgoingBundles.containsKey(peer) match {
+      case true => 
+      case false => {
+        val bundle = new BSPMessageBundle[M]()
+        bundle.setCompressor(compressor, getCompressionThreshold(this.conf))
+        outgoingBundles.put(peer, bundle)
+      }
     } 
-    if (null != combiner) {
-      val bundle = outgoingBundles.get(peer)
-      bundle.addMessage(msg)
-      val combined = new BSPMessageBundle[M]()
-      combined.setCompressor(compressor, conf.getLong(
-        "hama.messenger.compression.threshold", 128)
-      )
-      combined.addMessage(combiner.combine(bundle))
-      outgoingBundles.put(peer, combined)
-    } else {
-      outgoingBundles.get(peer).addMessage(msg)
+    combiner match {
+      case None => outgoingBundles.get(peer).addMessage(msg)
+      case Some(found) => {
+        val bundle = outgoingBundles.get(peer)
+        bundle.addMessage(msg)
+        val combined = new BSPMessageBundle[M]()
+        combined.setCompressor(compressor, getCompressionThreshold(this.conf))
+        combined.addMessage(found.combine(bundle))
+        outgoingBundles.put(peer, combined)
+      }
     }
   }
-
-/* This is needed when addMessage with peerName (String) as param
-  def getPeerInfo(peerName: String): ProxyInfo = {
-    var peer: ProxyInfo = null
-    if (peerSocketCache.containsKey(peerName)) {
-      peer = peerSocketCache.get(peerName)
-    } else {
-      peer = Peer.at(peerName)
-      peerSocketCache.put(peerName, peer) 
-    }
-
-    if (!outgoingBundles.containsKey(peer)) {
-      val bundle = new BSPMessageBundle[M]()
-      bundle.setCompressor(compressor,
-          conf.getLong("hama.messenger.compression.threshold", 128))
-      outgoingBundles.put(peer, bundle)
-    }
-    peer 
-  }
-*/
 
   override def clear() = outgoingBundles.clear
 

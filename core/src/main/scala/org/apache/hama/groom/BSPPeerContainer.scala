@@ -313,7 +313,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   }
 
   /**
-   * Start executing the task.
+   * Start executing the task in another actor.
    * @param task that is supplied to be executed.
    */
   def doLaunch(task: Task) { 

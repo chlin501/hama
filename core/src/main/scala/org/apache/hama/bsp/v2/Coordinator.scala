@@ -275,7 +275,7 @@ class Coordinator(conf: HamaConfiguration,
     asScalaIterator(it).foreach( entry => {
       val peer = entry.getKey
       val bundle = entry.getValue
-      it.remove
+      //it.remove // remove should be done in checkpointer
       doTransfer(peer, bundle)      
     })
     enterBarrier()

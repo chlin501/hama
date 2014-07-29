@@ -17,6 +17,7 @@
  */
 package org.apache.hama.fs
 
+import java.io.Closeable
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
@@ -136,5 +137,7 @@ class HDFSLocal extends Operation {
     validate()
     localfs.setWorkingDirectory(path)
   }
+
+  override def close(out: Closeable) = if(null != out) try {} finally { out.close }
 
 }
