@@ -40,7 +40,7 @@ class OutgoingPOJOMessageBundle[M <: Writable]
   type PeerAndBundleIter = Iterator[Entry[ProxyInfo, BSPMessageBundle[M]]] 
 
   private var conf: Option[HamaConfiguration] = None
-  private var compressor: BSPMessageCompressor = _
+  private var compressor: Option[BSPMessageCompressor] = None
   private var combiner: Option[Combiner[M]] = None
   private val outgoingBundles = 
     new ConcurrentHashMap[ProxyInfo, BSPMessageBundle[M]]() 
@@ -48,7 +48,7 @@ class OutgoingPOJOMessageBundle[M <: Writable]
   override def init(conf: HamaConfiguration, 
                     compressor: BSPMessageCompressor) {
     this.conf = Some(conf)
-    this.compressor = compressor
+    this.compressor = Some(compressor)
     this.combiner = getCombiner(this.conf)
   }
 
@@ -87,20 +87,30 @@ class OutgoingPOJOMessageBundle[M <: Writable]
     outgoingBundles.containsKey(peer) match {
       case true => 
       case false => {
-        val bundle = new BSPMessageBundle[M]()
-        bundle.setCompressor(compressor, getCompressionThreshold(this.conf))
-        outgoingBundles.put(peer, bundle)
+        compressor match {
+          case None =>
+          case Some(found) => {
+            val bundle = new BSPMessageBundle[M]()
+            bundle.setCompressor(found, getCompressionThreshold(this.conf))
+            outgoingBundles.put(peer, bundle)
+          }
+        }
       }
     } 
     combiner match {
       case None => outgoingBundles.get(peer).addMessage(msg)
       case Some(found) => {
-        val bundle = outgoingBundles.get(peer)
-        bundle.addMessage(msg)
-        val combined = new BSPMessageBundle[M]()
-        combined.setCompressor(compressor, getCompressionThreshold(this.conf))
-        combined.addMessage(found.combine(bundle))
-        outgoingBundles.put(peer, combined)
+        compressor match {
+          case None =>
+          case Some(f) => {
+            val bundle = outgoingBundles.get(peer)
+            bundle.addMessage(msg)
+            val combined = new BSPMessageBundle[M]()
+            combined.setCompressor(f, getCompressionThreshold(this.conf))
+            combined.addMessage(found.combine(bundle))
+            outgoingBundles.put(peer, combined)
+          }
+        }
       }
     }
   }
