@@ -15,22 +15,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama
+package org.apache.hama.monitor
 
-/**
- * Load a particular service with name and its actor reference to services 
- * cache.
- * This happens when the service in the StartUp state.
- */
-final case object Load
+import org.apache.hadoop.fs.Path
+import org.apache.hadoop.io.Writable
 
-/**
- * Unload a service, denoted by name, out of services cache.
- * This happens when the service in the CleanUp state.
- */
-final case object Unload
+trait Checkpointable {
 
-/**
- * Shutdown the entire server.
- */
-final case object Shutdown
+  /**
+   * Checkpoint data to the destination path.
+   * @param data to be saved.
+   * @param dest points to the place where data to be saved.
+   */
+  def checkpoint(data: Writable, dest: Path) 
+  
+}

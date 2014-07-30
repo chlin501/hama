@@ -36,8 +36,8 @@ class Worker extends Agent {
   protected def bind(old: Option[Coordinator], 
                      conf: HamaConfiguration, 
                      actorSystem: ActorSystem): Option[Coordinator] = 
-  old match {
-    case None => Some(Coordinator(conf, actorSystem))
+  old match { // TODO: check if bsp peer ie coordinator needs close first!
+    case None => Some(Coordinator(/*self , */conf, actorSystem)) 
     case Some(peer) => old
   } 
 
@@ -97,6 +97,8 @@ class Worker extends Agent {
       case null => None
       case "" => None
       case url@_ => {
+        // TODO: if jar is located at remote e.g. hdfs, copy jar to local path
+        //       then add local path to url class loader!
         val loader = Thread.currentThread.getContextClassLoader
         val newLoader = new URLClassLoader(Array[URL](new URL(url)), loader) 
         taskConf.setClassLoader(newLoader) 

@@ -76,7 +76,8 @@ object Coordinator {
  * - progress 
  * when necessary.
  */
-class Coordinator(conf: HamaConfiguration, 
+class Coordinator(/* worker: ActorRef,  <- for checkpoint */
+                  conf: HamaConfiguration, 
                   bspActorSystem: ActorSystem) extends BSPPeer with Logger {
 
   /* task and counters specific to a particular v2.Job. */

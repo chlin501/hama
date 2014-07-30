@@ -236,7 +236,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    * @param conf contains related information for creating process.
    */
   def createProcess(cmd: Seq[String], conf: HamaConfiguration) {
-    val builder = new ProcessBuilder(asJavaList(cmd))
+    val builder = new ProcessBuilder(seqAsJavaList(cmd))
     builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
     try {
       process = builder.start

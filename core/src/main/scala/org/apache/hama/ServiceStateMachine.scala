@@ -117,7 +117,7 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
       val currentServices = subServices - sender 
       context.unwatch(sender) // unwatch sub service
       val cache = s.copy(currentServices)
-      if(0 == currentServices) {
+      if(0 == currentServices.size) {
         goto(Stopped) using cache
       } else {
         stay using cache
