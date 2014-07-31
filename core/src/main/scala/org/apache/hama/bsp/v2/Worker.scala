@@ -24,6 +24,7 @@ import java.net.URL
 import java.net.URLClassLoader
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.fs.Operation
 
 final case class Bind(conf: HamaConfiguration, actorSystem: ActorSystem)
 final case class ConfigureFor(task: Task)
@@ -94,15 +95,16 @@ class Worker extends Agent {
     val jar = taskConf.get("bsp.jar")
     LOG.info("Jar path found in task configuration is {}", jar)
     jar match {
-      case null => None
-      case "" => None
-      case url@_ => {
+      case null|"" => None
+      case urlString@_ => {
         // TODO: if jar is located at remote e.g. hdfs, copy jar to local path
         //       then add local path to url class loader!
+        val operation = Operation.get(taskConf)
+        //operation.copyToLocal()() 
         val loader = Thread.currentThread.getContextClassLoader
-        val newLoader = new URLClassLoader(Array[URL](new URL(url)), loader) 
+        val newLoader = new URLClassLoader(Array[URL](new URL(urlString)), loader) // urlString may not have protocol. this may lead to new URL failure!! need to normailize the bsp.jar path to a valid URL format.
         taskConf.setClassLoader(newLoader) 
-        Some(newLoader)
+        Some(newLoader)   
       }
     }
   }
