@@ -100,28 +100,18 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    */
   def initializeJob(jobId: BSPJobID, jobFilePath: String): Option[Job] = {
     val config = new HamaConfiguration() 
-    //val (localJobFilePath, localJarFilePath) = createLocalData(jobId, config)
     val localJobFilePath = createLocalPath(jobId, config)
     LOG.info("localJobFilePath is at {}", localJobFilePath)
     copyJobFile(jobId, jobFilePath, localJobFilePath)
     config.addResource(new Path(localJobFilePath)) // user provided config
-/* BSPJobClient already copy jar file to master system.
-    val jarFilePath = config.get("bsp.jar") match {
-      case null => None
-      case jar@_ => Some(jar)
-    }
-    copyJarFile(jobId, jarFilePath, localJarFilePath)
-*/
     val splits = createSplits(jobId, config)
-    LOG.info("Job with id {} is created!", jobId)
+    LOG.info("Creating job with id {}!...", jobId)
     adjustNumBSPTasks(jobId, config)
     if(!validateRequestedTargets(jobId, config)) {
       None
     } else {
       Some(new Job.Builder().setId(jobId). 
                              setConf(config).
-                             //setLocalJarFile(localJarFilePath).
-                             //addLocalJobFile(localJobFilePath).
                              withTaskTable(splits.getOrElse(null)). 
                              build)
     }
@@ -188,21 +178,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
   }
 
   /**
-   * Copy the jar file from jarFilePath to localJarFilePath at local disk.
-   * @param jobId denotes which job the action is operated.
-   * @param jarFilePath indicates the remote jar file path.
-   * @param localJarFilePath is the dest of local jar file path.
-  def copyJarFile(jobId: BSPJobID, jarFilePath: Option[String],
-                  localJarFilePath: String) = jarFilePath match {
-    case None => LOG.warning("jarFilePath for {} is not found!", jobId)
-    case Some(jarPath) => {
-      LOG.info("Copy jar file from {} to {}", jarPath, localJarFilePath)
-      op(jobId).copyToLocal(new Path(jarPath))(new Path(localJarFilePath))
-    }
-  }
-   */
-
-  /**
    * Retrieve job split files' path.
    * @param config contains user supplied information.
    * @return Option[String] if Some(path) when split file is found; otherwise
@@ -253,14 +228,11 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    * @return localJobFilePath points to the job file path at local.
    */
   def createLocalPath(jobId: BSPJobID, config: HamaConfiguration): String = {
-       /*(String, String) = { */
     val localDir = config.get("bsp.local.dir", "/tmp/local")
     val subDir = config.get("bsp.local.dir.sub_dir", "bspmaster")
     if(!operation.local.exists(new Path(localDir, subDir)))
       operation.local.mkdirs(new Path(localDir, subDir))
     val localJobFilePath = "%s/%s/%s.xml".format(localDir, subDir, jobId)
-    //val localJarFilePath = "%s/%s/%s.jar".format(localDir, subDir, jobId)
-    //(localJobFilePath, localJarFilePath)
     localJobFilePath
   }
 

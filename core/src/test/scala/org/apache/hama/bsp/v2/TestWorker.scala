@@ -21,6 +21,7 @@ import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import java.net.InetAddress
 import org.apache.hadoop.io.IntWritable
+import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
@@ -77,7 +78,7 @@ class MockWorker1(tester: ActorRef) extends Worker {
 
   var captured = Map.empty[String, Superstep] 
 
-  override def doExecute(conf: HamaConfiguration, 
+  override def doExecute(jobId: BSPJobID, conf: HamaConfiguration, 
                          taskConf: HamaConfiguration) = peer match { 
     case Some(found) => { 
       val superstepBSP = BSP.get(conf, taskConf)
@@ -144,7 +145,9 @@ class TestWorker extends TestEnv(ActorSystem("TestWorker"))
      val worker = createWithArgs("testWorker", classOf[MockWorker1], tester)
      worker ! Bind(testConfiguration, system)
      worker ! ConfigureFor(task)
-     worker ! Execute(testConfiguration, task.getConfiguration)
+     worker ! Execute(task.getId.getJobID, 
+                      testConfiguration, 
+                      task.getConfiguration)
      worker ! GetCount
      expect(2)
      LOG.info("Done testing BSP Worker!")
