@@ -85,7 +85,7 @@ class End extends FinalSuperstep with Logger {
 
 class MockSuperstepBSP(testConf: HamaConfiguration) extends SuperstepBSP {
 
-  override def getConf(peer: BSPPeer): HamaConfiguration = testConf
+  override def commonConf(peer: BSPPeer): HamaConfiguration = testConf
 
   def getSupersteps(): Map[String, Superstep] = supersteps
 

@@ -228,7 +228,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    * @return localJobFilePath points to the job file path at local.
    */
   def createLocalPath(jobId: BSPJobID, config: HamaConfiguration): String = {
-    val localDir = config.get("bsp.local.dir", "/tmp/local")
+    val localDir = config.get("bsp.local.dir", "/tmp/bsp/local")
     val subDir = config.get("bsp.local.dir.sub_dir", "bspmaster")
     if(!operation.local.exists(new Path(localDir, subDir)))
       operation.local.mkdirs(new Path(localDir, subDir))

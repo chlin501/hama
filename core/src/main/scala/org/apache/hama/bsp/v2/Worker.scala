@@ -35,7 +35,7 @@ final case class Execute(jobId: BSPJobID,
                          conf: HamaConfiguration, 
                          taskConf: HamaConfiguration)
 
-class Worker extends Agent {
+protected[v2] class Worker extends Agent {
 
   protected var peer: Option[Coordinator] = None
 
@@ -43,7 +43,7 @@ class Worker extends Agent {
                      conf: HamaConfiguration, 
                      actorSystem: ActorSystem): Option[Coordinator] = 
   old match { // TODO: check if bsp peer ie coordinator needs close first!
-    case None => Some(Coordinator(/*self , */conf, actorSystem)) 
+    case None => Some(Coordinator(conf, actorSystem)) 
     case Some(peer) => old
   } 
 
@@ -85,7 +85,7 @@ class Worker extends Agent {
                           taskConf: HamaConfiguration) = peer match {
     case Some(found) => {
       addJarToClasspath(jobId, taskConf)
-      val superstepBSP = BSP.get(conf, taskConf)
+      val superstepBSP = BSP.get(self, conf, taskConf)
       superstepBSP.setup(found)
       superstepBSP.bsp(found)
     }
@@ -131,7 +131,7 @@ class Worker extends Agent {
 
   def createLocalPath(jobId: BSPJobID, config: HamaConfiguration,
                       operation: Operation): String = {
-    val localDir = config.get("bsp.local.dir", "/tmp/local")
+    val localDir = config.get("bsp.local.dir", "/tmp/bsp/local")
     val subDir = config.get("bsp.local.dir.sub_dir", "bspmaster")
     if(!operation.local.exists(new Path(localDir, subDir)))
       operation.local.mkdirs(new Path(localDir, subDir))

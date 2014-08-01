@@ -17,8 +17,8 @@
  */
 package org.apache.hama.bsp.v2
 
+import akka.actor.ActorRef
 import java.io.IOException
-
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.sync.SyncException
@@ -43,8 +43,12 @@ object BSP {
     ReflectionUtils.newInstance(bsp, taskConf)
   }
 
-  def get(conf: HamaConfiguration, taskConf: HamaConfiguration) : BSP = 
-    get[SuperstepBSP](conf, taskConf, classOf[SuperstepBSP])
+  def get(worker: ActorRef, conf: HamaConfiguration, 
+          taskConf: HamaConfiguration) : BSP = {
+    val bsp = get[SuperstepBSP](conf, taskConf, classOf[SuperstepBSP])
+    bsp.asInstanceOf[SuperstepBSP].setWorker(Some(worker))
+    bsp
+  }
 
 }
 

@@ -33,6 +33,7 @@ import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
 //import org.apache.hama.io.IO
 import org.apache.hama.logging.Logger
+import org.apache.hama.monitor.UncheckpointedData
 import org.apache.hama.ProxyInfo
 import org.apache.hama.sync.SyncException
 import org.apache.hama.message.BSPMessageBundle
@@ -75,10 +76,16 @@ object Coordinator {
  * - finish time
  * - progress 
  * when necessary.
+ * 
+ * @param conf contains the common configuration.
+ * @param bspActorSystem is the actor system of bsp process; it is responsible 
+ *                       for launching peer messenger for coordinating between
+ *                       peers.
  */
-class Coordinator(/* worker: ActorRef,  <- for checkpoint */
-                  conf: HamaConfiguration, 
-                  bspActorSystem: ActorSystem) extends BSPPeer with Logger {
+class Coordinator(conf: HamaConfiguration, 
+                  bspActorSystem: ActorSystem) extends BSPPeer 
+                                               with UncheckpointedData 
+                                               with Logger {
 
   /* task and counters specific to a particular v2.Job. */
   protected var taskWithStats: TaskWithStats = _
@@ -270,19 +277,24 @@ class Coordinator(/* worker: ActorRef,  <- for checkpoint */
   @throws(classOf[IOException])
   override def sync() {
     val it = messenger.getOutgoingBundles
-    if(null == it)
-      throw new IllegalStateException("MessageManager's outgoing bundles is "+
-                                      "null!")
-    asScalaIterator(it).foreach( entry => {
-      val peer = entry.getKey
-      val bundle = entry.getValue
-      //it.remove // remove should be done in checkpointer
-      doTransfer(peer, bundle)      
-    })
+    it match {
+      case null =>
+        throw new IllegalStateException("MessageManager's outgoing bundles is "+
+                                        "null!")
+      case _ => {
+        asScalaIterator(it).foreach( entry => {
+          val peer = entry.getKey
+          val bundle = entry.getValue
+          it.remove 
+          collect[Writable](getSuperstepCount, peer, bundle)
+          doTransfer(peer, bundle)      
+        })
+      }
+    }
     enterBarrier()
     messenger.clearOutgoingMessages
     leaveBarrier()
-    // TODO: record time elapsed between enterBarrier and leaveBarrier
+    // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
     getTask.increatmentSuperstep
     //updateStatus(configuration, getTask) 
   } 
