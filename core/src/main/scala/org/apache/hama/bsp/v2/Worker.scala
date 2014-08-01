@@ -20,6 +20,7 @@ package org.apache.hama.bsp.v2
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
+import java.io.File
 import java.net.URL
 import java.net.URLClassLoader
 import org.apache.hadoop.fs.Path
@@ -92,7 +93,8 @@ class Worker extends Agent {
   }
 
   /**
-   * Dynamically add client jar url to the task configuration.
+   * Dynamically add client jar url to the {@link URLClassLoader}, which will
+   * be used for intializing necessary user customized classes. 
    * @param taskConf is the configuration sepcific to a task.
    * @return Option[ClassLoader] contains class loader with client jar url.
    */
@@ -103,23 +105,29 @@ class Worker extends Agent {
     jar match {
       case null|"" => None
       case urlString@_ => {
-        // TODO: if jar is located at remote e.g. hdfs, copy jar to local path
-        //       then add local path to url class loader!
         val operation = Operation.get(taskConf)
         val localJarPath = createLocalPath(jobId, taskConf, operation) 
         operation.copyToLocal(new Path(urlString))(new Path(localJarPath))
+        LOG.info("File is copied to {}", localJarPath) 
         val url = normalizePath(localJarPath)
-        LOG.info("User jar path to be dynamically added "+url)
         val loader = Thread.currentThread.getContextClassLoader
-        val newLoader = new URLClassLoader(Array[URL](new URL(url)), loader) 
+        val newLoader = new URLClassLoader(Array[URL](url), loader) 
         taskConf.setClassLoader(newLoader) 
+        LOG.info("User jar {} is added to the newly created url class loader "+
+                 "for job {}", url, jobId)
         Some(newLoader)   
       }
     }
   }
 
-  protected def normalizePath(jarPath: String): String = "file:" + jarPath 
-
+  /**
+   * Normoalize user jar path to URL.
+   * @param jarPath is the path pointed to the jar downloaded from remote 
+   *                repository.
+   * @return URL translated from the jar path string.
+   */
+  protected def normalizePath(jarPath: String): URL = 
+    new File(jarPath).toURI.toURL
 
   def createLocalPath(jobId: BSPJobID, config: HamaConfiguration,
                       operation: Operation): String = {
