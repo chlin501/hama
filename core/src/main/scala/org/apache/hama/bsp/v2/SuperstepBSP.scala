@@ -125,10 +125,9 @@ protected class SuperstepBSP extends BSP with Configurable with Logger {
              peer.sync
              if(isCheckpointEnabled(commonConf(peer))) {
                if(peer.isInstanceOf[UncheckpointedData]) {
-                  checkpoint(peer.asInstanceOf[UncheckpointedData].
-                                  getUncheckpointedData,
-                             superstep)
-               }
+                  checkpoint(peer, superstep)
+               } else LOG.warn("Can't collect uncheckpointed data for "+
+                               superstep.getClass.getName)
              }
              findThenExecute(clazz.getName, peer, superstep.getVariables)
            }
@@ -139,11 +138,20 @@ protected class SuperstepBSP extends BSP with Configurable with Logger {
     }
   }
 
-  protected def checkpoint(data: Map[Long, Seq[PeerWithBundle[Writable]]], 
-                           superstep: Superstep) {
+  protected def checkpoint(peer: BSPPeer, superstep: Superstep) {
+    val data = peer.asInstanceOf[UncheckpointedData].getUncheckpointedData
+    // this is called after sync() which already increament superstep by 1 
+    val count = (peer.getSuperstepCount - 1) 
+    data.get(count) match {
+      case Some(seqOfPeerWithBundle) => {
+ 
+      }
+      case None => LOG.warn("Can't checkpoint for "+superstep.getClass.getName+
+                            " at the "+count+"-th superstep.")
+    }
     // checkpoint 1. peer messages 2. superstep class name 
     //            3. superstep variables
-    // 1. within peer.sync() it push msg bundle to superstepBSP.queue
+    // 1. within peer.sync() it pushes msg bundle to uncheckpointeddata map
     // 2. call worker ! Checkpoint(msg, superstep name, variable)
     // 3. within worker spawn another actor and save all info.
   }
