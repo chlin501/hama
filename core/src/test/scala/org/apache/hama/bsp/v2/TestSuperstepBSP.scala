@@ -87,6 +87,14 @@ class MockSuperstepBSP(testConf: HamaConfiguration) extends SuperstepBSP {
 
   override def commonConf(peer: BSPPeer): HamaConfiguration = testConf
 
+  // TODO: test will need to combine with Worker  
+  override def actorContext(): akka.actor.ActorContext = 
+    null.asInstanceOf[akka.actor.ActorContext]
+
+  // TODO: test will need to combine with Worker
+  override def taskAttemptId(): String = ""
+
+
   def getSupersteps(): Map[String, Superstep] = supersteps
 
 }

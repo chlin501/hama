@@ -17,16 +17,16 @@
  */
 package org.apache.hama.monitor
 
-import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
+import org.apache.hama.ProxyInfo
+import org.apache.hama.message.BSPMessageBundle
 
-trait Checkpointable {
+sealed trait PeerMessage
+final case class NoMoreMessages extends PeerMessage
+final case class Save[M <: Writable](
+  currentSuperspteCount: Long, peer: ProxyInfo, bundle: BSPMessageBundle[M]
+) extends PeerMessage
 
-  /**
-   * Checkpoint data to the destination path.
-   * @param data to be saved.
-   * @param dest points to the place where data to be saved.
-   */
-  def checkpoint(data: Writable, dest: Path) 
-  
-}
+/*
+className: String, superstepCount: Long, msgs: Seq[PeerWithBundle[M]], vars: Map[String, Writable]
+*/

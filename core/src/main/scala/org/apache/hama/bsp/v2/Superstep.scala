@@ -44,8 +44,8 @@ abstract class Superstep {
     variables ++= Map(key -> value)
 
   /**
-   * Obtain all variables that is set.
-   * Intended to be used by {@link SuperstepBSP} only.
+   * Obtain all variables that is preserved between supersteps.
+   * This is intended to be used by {@link SuperstepBSP} only.
    * @return Map that contains all variables.
    */
   protected[v2] def getVariables(): Map[String, Writable] = variables

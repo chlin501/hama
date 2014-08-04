@@ -43,12 +43,8 @@ object BSP {
     ReflectionUtils.newInstance(bsp, taskConf)
   }
 
-  def get(worker: ActorRef, conf: HamaConfiguration, 
-          taskConf: HamaConfiguration) : BSP = {
-    val bsp = get[SuperstepBSP](conf, taskConf, classOf[SuperstepBSP])
-    bsp.asInstanceOf[SuperstepBSP].setWorker(Some(worker))
-    bsp
-  }
+  def get(conf: HamaConfiguration, taskConf: HamaConfiguration) : BSP = 
+    get[SuperstepBSP](conf, taskConf, classOf[SuperstepBSP])
 
 }
 

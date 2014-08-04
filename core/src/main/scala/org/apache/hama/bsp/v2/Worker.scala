@@ -25,15 +25,20 @@ import java.net.URL
 import java.net.URLClassLoader
 import org.apache.hadoop.fs.Path
 import org.apache.hama.Agent
-import org.apache.hama.bsp.BSPJobID
-import org.apache.hama.HamaConfiguration
+import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.Operation
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.monitor.Save
+import org.apache.hama.monitor.NoMoreMessages
 
-final case class Bind(conf: HamaConfiguration, actorSystem: ActorSystem)
-final case class ConfigureFor(task: Task)
-final case class Execute(jobId: BSPJobID,
+sealed trait WorkerOperation
+final case class Bind(conf: HamaConfiguration, 
+                      actorSystem: ActorSystem) extends WorkerOperation
+final case class ConfigureFor(task: Task) extends WorkerOperation
+final case class Execute(taskAttemptId: String,
                          conf: HamaConfiguration, 
-                         taskConf: HamaConfiguration)
+                         taskConf: HamaConfiguration) extends WorkerOperation
+final case class Close extends WorkerOperation
 
 protected[v2] class Worker extends Agent {
 
@@ -42,7 +47,7 @@ protected[v2] class Worker extends Agent {
   protected def bind(old: Option[Coordinator], 
                      conf: HamaConfiguration, 
                      actorSystem: ActorSystem): Option[Coordinator] = 
-  old match { // TODO: check if bsp peer ie coordinator needs close first!
+  old match { 
     case None => Some(Coordinator(conf, actorSystem)) 
     case Some(peer) => old
   } 
@@ -73,19 +78,20 @@ protected[v2] class Worker extends Agent {
    * @return Receive id partial function.
    */
   def execute: Receive = {
-    case Execute(jobId, conf, taskConf) => doExecute(jobId, conf, taskConf)
+    case Execute(taskAttemptId, conf, taskConf) => 
+      doExecute(taskAttemptId, conf, taskConf)
   }
 
   /**
    * Execute supersteps according to the task configuration provided.
    * @param taskConf is HamaConfiguration specific to a pariticular task.
    */
-  protected def doExecute(jobId: BSPJobID, 
+  protected def doExecute(taskAttemptId: String, 
                           conf: HamaConfiguration, 
                           taskConf: HamaConfiguration) = peer match {
     case Some(found) => {
-      addJarToClasspath(jobId, taskConf)
-      val superstepBSP = BSP.get(self, conf, taskConf)
+      addJarToClasspath(taskAttemptId, taskConf)
+      val superstepBSP = BSP.get(conf, taskConf)
       superstepBSP.setup(found)
       superstepBSP.bsp(found)
     }
@@ -98,23 +104,23 @@ protected[v2] class Worker extends Agent {
    * @param taskConf is the configuration sepcific to a task.
    * @return Option[ClassLoader] contains class loader with client jar url.
    */
-  def addJarToClasspath(jobId: BSPJobID, 
+  def addJarToClasspath(taskAttemptId: String, 
                         taskConf: HamaConfiguration): Option[ClassLoader] = {
     val jar = taskConf.get("bsp.jar")
     LOG.info("Jar path found in task configuration is {}", jar)
     jar match {
       case null|"" => None
-      case urlString@_ => {
+      case remoteUrl@_ => {
         val operation = Operation.get(taskConf)
-        val localJarPath = createLocalPath(jobId, taskConf, operation) 
-        operation.copyToLocal(new Path(urlString))(new Path(localJarPath))
-        LOG.info("File is copied to {}", localJarPath) 
+        val localJarPath = createLocalPath(taskAttemptId, taskConf, operation) 
+        operation.copyToLocal(new Path(remoteUrl))(new Path(localJarPath))
+        LOG.info("remote file {} is copied to {}", remoteUrl, localJarPath) 
         val url = normalizePath(localJarPath)
         val loader = Thread.currentThread.getContextClassLoader
         val newLoader = new URLClassLoader(Array[URL](url), loader) 
         taskConf.setClassLoader(newLoader) 
         LOG.info("User jar {} is added to the newly created url class loader "+
-                 "for job {}", url, jobId)
+                 "for job {}", url, taskAttemptId)
         Some(newLoader)   
       }
     }
@@ -129,15 +135,46 @@ protected[v2] class Worker extends Agent {
   protected def normalizePath(jarPath: String): URL = 
     new File(jarPath).toURI.toURL
 
-  def createLocalPath(jobId: BSPJobID, config: HamaConfiguration,
+  /**
+   * Create path as dest for the jar to be downloaded based on 
+   * TaskAttemptID.
+   */
+  def createLocalPath(taskAttemptId: String, 
+                      config: HamaConfiguration,
                       operation: Operation): String = {
     val localDir = config.get("bsp.local.dir", "/tmp/bsp/local")
     val subDir = config.get("bsp.local.dir.sub_dir", "bspmaster")
     if(!operation.local.exists(new Path(localDir, subDir)))
       operation.local.mkdirs(new Path(localDir, subDir))
-    val localJarFilePath = "%s/%s/%s.jar".format(localDir, subDir, jobId)
-    localJarFilePath
+    "%s/%s/%s.jar".format(localDir, subDir, taskAttemptId.toString)
   }
 
-  override def receive = bind orElse configureFor orElse execute orElse unknown
+/*
+  def save: Receive = { 
+    case saveMsg: Save => 
+      getOrSpawn(saveMsg.currentSuperstepCount) forward saveMsg 
+  }
+
+  def noMoreMessages: Receive = {
+    case noMoreMsg: NoMoreMessages => 
+      getOrSpawn(noMoreMsg.currentSuperstepCount) forward noMoreMsg
+  }
+
+  def getOrSpawn(currentSuperstep: Long) = {
+    
+  }
+*/
+
+  /**
+   * Close underlying {@link BSPPeer} operations.
+   * @return Receive is partial function.
+   */
+  def close: Receive = {
+    case Close => peer match {
+      case None => 
+      case Some(found) => found.close
+    }
+  }
+
+  override def receive = bind orElse configureFor orElse execute orElse/* save orElse noMoreMessages orElse*/ close orElse unknown
 }

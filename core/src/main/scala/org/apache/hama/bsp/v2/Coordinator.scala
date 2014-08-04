@@ -17,6 +17,7 @@
  */
 package org.apache.hama.bsp.v2
 
+import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import java.io.IOException
 import java.net.InetAddress
@@ -33,15 +34,18 @@ import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
 //import org.apache.hama.io.IO
 import org.apache.hama.logging.Logger
-import org.apache.hama.monitor.UncheckpointedData
+import org.apache.hama.monitor.CheckpointerReceiver
 import org.apache.hama.ProxyInfo
 import org.apache.hama.sync.SyncException
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.MessageManager
 import org.apache.hama.message.PeerCommunicator
+import org.apache.hama.monitor.NoMoreMessages
+import org.apache.hama.monitor.Save
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncServiceFactory
 import scala.collection.JavaConversions._
+import scala.collection.immutable.Queue
 
 private[v2] final case class TaskWithStats(task: Task, counters: Counters) {
   if(null == task)
@@ -55,8 +59,11 @@ object Coordinator {
   /**
    * Create Coordinator with common configuration and child process's actor 
    * system.
+   * @param conf is the common configuration.
+   * @param actorSystem is the actor system created during process creation. 
    */
-  def apply(conf: HamaConfiguration, actorSystem: ActorSystem): Coordinator = 
+  def apply(conf: HamaConfiguration, 
+            actorSystem: ActorSystem): Coordinator = 
     new Coordinator(conf, actorSystem)
 }
 
@@ -84,7 +91,7 @@ object Coordinator {
  */
 class Coordinator(conf: HamaConfiguration, 
                   bspActorSystem: ActorSystem) extends BSPPeer 
-                                               with UncheckpointedData 
+                                               with CheckpointerReceiver
                                                with Logger {
 
   /* task and counters specific to a particular v2.Job. */
@@ -101,17 +108,23 @@ class Coordinator(conf: HamaConfiguration,
 
   override def configuration(): HamaConfiguration = conf
 
+  override def getCommonConf(): HamaConfiguration = configuration
+
+  override def currentTaskAttemptId(): String = getTask.getId.toString
+
+  override def currentSuperstepCount(): Long = getSuperstepCount
+
   // only for internal use.
-  private def getTask(): Task = {
-    if(null == taskWithStats)
+  private def getTask(): Task = taskWithStats match {
+    case null => 
       throw new IllegalStateException("TaskWithStats is not yet setup!")
-    taskWithStats.task
+    case _ => taskWithStats.task
   }
 
-  private def getCounters(): Counters = {
-    if(null == taskWithStats)
+  private def getCounters(): Counters = taskWithStats match {
+    case null =>
       throw new IllegalStateException("TaskWithStats is not yet setup!")
-    taskWithStats.counters 
+    case _ => taskWithStats.counters 
   }
 
   /**
@@ -274,8 +287,32 @@ class Coordinator(conf: HamaConfiguration,
     }
   }
 
+/*
+  protected[v2] def isCheckpointEnabled(): Boolean = 
+    configuration.getBoolean("bsp.checkpoint.enabled", true) 
+
+  protected[v2] def findCheckpointer(): Option[ActorRef] = 
+    ckptQueue.length match {
+      case 0 => {
+        LOG.warn("Checkpointer for "+getTask.getId.toString+" at "+
+                 "superstep "+getSuperstepCount+" not found!") 
+        None
+      }
+      case _ => {
+        val (first, rest) = ckptQueue.dequeue
+        ckptQueue = rest 
+        Some(first)
+      }
+    }
+
+*/
+
   @throws(classOf[IOException])
   override def sync() {
+    val ckpt = isCheckpointEnabled match { 
+      case true => findCheckpointer 
+      case false => None
+    }
     val it = messenger.getOutgoingBundles
     it match {
       case null =>
@@ -286,11 +323,19 @@ class Coordinator(conf: HamaConfiguration,
           val peer = entry.getKey
           val bundle = entry.getValue
           it.remove 
-          collect[Writable](getSuperstepCount, peer, bundle)
+          ckpt match {
+            case None => {
+              LOG.debug("Checkpoint is enabled? "+isCheckpointEnabled+". "+
+                        " for "+getTask.getId.toString+" at "+getSuperstepCount)
+            }
+            case Some(found) => 
+              found ! Save[Writable](getSuperstepCount, peer, bundle)
+          }
           doTransfer(peer, bundle)      
         })
       }
     }
+     
     enterBarrier()
     messenger.clearOutgoingMessages
     leaveBarrier()
@@ -330,5 +375,16 @@ class Coordinator(conf: HamaConfiguration,
   override def clear() = messenger.clearOutgoingMessages 
 
   override def getTaskAttemptId(): TaskAttemptID = getTask.getId
+
+  /**
+   * This is called after {@link BSP#bsp} finishs its execution in the end.
+   * It will close all necessary operations.
+   */
+  protected[v2] def close() = {
+   // TODO: close all operations, including io/ message/ sync/ local files in cache, etc.
+    this.clear 
+    this.syncClient.close
+    this.messenger.close
+  }
 
 }

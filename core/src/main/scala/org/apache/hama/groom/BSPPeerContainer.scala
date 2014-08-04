@@ -320,7 +320,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     val worker = context.actorOf(Props(classOf[Worker]))
     worker ! Bind(configuration, context.system) 
     worker ! ConfigureFor(task)
-    worker ! Execute(task.getId.getJobID, configuration, task.getConfiguration)
+    worker ! Execute(task.getId.toString, configuration, task.getConfiguration)
   }
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {

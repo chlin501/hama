@@ -17,7 +17,9 @@
  */
 package org.apache.hama.bsp.v2
 
+import akka.actor.ActorContext
 import akka.actor.ActorRef
+import akka.actor.Props
 import java.io.IOException
 import org.apache.hadoop.conf.Configurable
 import org.apache.hadoop.conf.Configuration
@@ -25,38 +27,46 @@ import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.Logger
-import org.apache.hama.monitor.UncheckpointedData
-import org.apache.hama.monitor.PeerWithBundle
+import org.apache.hama.monitor.Checkpointer
+import org.apache.hama.monitor.CheckpointerReceiver
 import org.apache.hama.sync.SyncException
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
+
 /**
  * This class manages all superstep and supersteps routing, started from the
  * first superstep, according to the execution instruction.
  */
-protected class SuperstepBSP extends BSP with Configurable with Logger {
+protected trait SuperstepBSP extends BSP with Configurable with Logger {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
-
-  protected[v2] var worker: Option[ActorRef] = None
 
   /**
    * This is configuration for a specific task. 
    */
   protected var taskConf = new HamaConfiguration
 
+  /**
+   * This is intended to be set by {@link Worker} only because directly spaw-
+   * ing checkpoint actors is eaiser.
+   * @return ActorContext is {@link Actor#context}
+   */
+  protected[v2] def actorContext(): ActorContext 
+
+  /**
+   * This is intended to be set by {@link Worker} only for identifying the
+   * checkpointer created. The checkpointer's name would be in a form of
+   * "checkpoint_"+taskAttemptId()+"_"+BSPPeer.getSuperstepCount()
+   * @return String of {@link TaskAttemptID}.
+   */
+  protected[v2] def taskAttemptId(): String
+
   override def setConf(conf: Configuration) = 
     this.taskConf = conf.asInstanceOf[HamaConfiguration]
 
   override def getConf(): Configuration = this.taskConf 
-
-  /**
-   * Worker is responsible for checkpoint tasks.
-   * @param worker refers to the {@link Worker} instance.
-   */
-  protected[v2] def setWorker(worker: Option[ActorRef]) = this.worker = worker
 
   /**
    * This function returns common configuration from BSPPeer.
@@ -122,13 +132,8 @@ protected class SuperstepBSP extends BSP with Configurable with Logger {
         next match {
            case null => eventually(peer)
            case clazz@_ => {
+             prepareForCheckpoint(peer)
              peer.sync
-             if(isCheckpointEnabled(commonConf(peer))) {
-               if(peer.isInstanceOf[UncheckpointedData]) {
-                  checkpoint(peer, superstep)
-               } else LOG.warn("Can't collect uncheckpointed data for "+
-                               superstep.getClass.getName)
-             }
              findThenExecute(clazz.getName, peer, superstep.getVariables)
            }
         }
@@ -138,16 +143,67 @@ protected class SuperstepBSP extends BSP with Configurable with Logger {
     }
   }
 
+  protected[v2] def prepareForCheckpoint(peer: BSPPeer) =
+    commonConf(peer).getBoolean("bsp.checkpoint.enabled", true) match {
+      case true => {
+        val ckpt = actorContext.actorOf(Props(classOf[Checkpointer]), 
+                                        "checkpoint_"+taskAttemptId+"_"+
+                                        peer.getSuperstepCount) 
+        LOG.debug("Checkpoint "+ckpt.path.name+" is created!")
+        peer.isInstanceOf[CheckpointerReceiver] match {
+          case true => peer.asInstanceOf[CheckpointerReceiver].put(ckpt)  
+          case false => LOG.warn("Checkpoint "+ckpt.path.name+" is created, "+
+                                 "but can't be assigned to BSPPeer because "+
+                                 " not an instance of CheckpointerReceiver!")
+        }
+      }
+      case false => LOG.debug("No checkpoint is needed for "+taskAttemptId)
+    }
+
+  /**
+   * Verify if checkpoint is needed. If true, do checkpoint; otherwise log 
+   * error.
+   * @param peer is the {@link BSPPeer}
+   * @param superstep is the {@link Superstep} current being executed.
+  protected def checkpointIfNeeded(peer: BSPPeer, superstep: Superstep) {
+    if(isCheckpointEnabled(commonConf(peer))) {
+      if(peer.isInstanceOf[UncheckpointedData]) {
+        checkpoint(peer, superstep)
+      } else LOG.warn("Can't collect uncheckpointed data for "+
+                      superstep.getClass.getName+" at the "+
+                      currentSuperstepCount(peer)+"-th superstep.")
+    }
+  }
+   */
+
+  /**
+   * This is called after sync() which should already increase superstep by 1.
+   * @param peeer is the {@link BSPPeer}
+  protected currentSuperstepCount(peer: BSPPeer): Long = 
+    (peer.getSuperstepCount - 1) 
+   */ 
+
+  /**
+   * Perform checkpoint. 
+   * @param peer is the {@link BSPPeer} class for specific task computation.
+   * @param superstep is the {@link Superstep} that is running at the moment.
   protected def checkpoint(peer: BSPPeer, superstep: Superstep) {
     val data = peer.asInstanceOf[UncheckpointedData].getUncheckpointedData
-    // this is called after sync() which already increament superstep by 1 
-    val count = (peer.getSuperstepCount - 1) 
-    data.get(count) match {
+    currentSuperstepCount(peer)
+    data.get(currentSuperstepCount) match {
       case Some(seqOfPeerWithBundle) => {
- 
+        worker match {
+          case Some(found) => found ! Save(superstep.getClass.getName,
+                                            currentSuperstepCount,
+                                            seqOfPeerWithBundle,
+                                            superstep.getVariables)
+          case None => LOG.error("Unlikely! But no worker found for "+
+                                 superstep.getClass.getName+" at the "+
+                                 currentSuperstepCount+"-th superstep.")
+        } 
       }
       case None => LOG.warn("Can't checkpoint for "+superstep.getClass.getName+
-                            " at the "+count+"-th superstep.")
+                            " at the "+currentSuperstepCount+"-th superstep.")
     }
     // checkpoint 1. peer messages 2. superstep class name 
     //            3. superstep variables
@@ -155,6 +211,7 @@ protected class SuperstepBSP extends BSP with Configurable with Logger {
     // 2. call worker ! Checkpoint(msg, superstep name, variable)
     // 3. within worker spawn another actor and save all info.
   }
+   */
 
   /**
    * Check common configuration if checkpoint is needed.
@@ -171,5 +228,4 @@ protected class SuperstepBSP extends BSP with Configurable with Logger {
       value.cleanup(peer)  
     }}
   }
-
 }

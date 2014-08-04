@@ -82,6 +82,8 @@ trait LocalService extends Service {
    */
   protected[hama] def create[A <: Actor](service: String, target: Class[A]): 
       LocalService = {
+// TODO: refactor to getOrCreate by checking services directly instead of 
+//       schedule message like remote lookup.
     val actor = context.actorOf(Props(target, configuration), service)
     import context.dispatcher
     val cancellable = 
@@ -169,19 +171,21 @@ trait LocalService extends Service {
 
   /**
    * A message signify that the mediator is up.
-   * TODO: move to Mediator trait.
    * @return Receive 
    */
   protected def mediatorIsUp: Receive = {
     case MediatorIsUp => {
-      val master = configuration.get("bsp.master.name", "bspmaster")
-      val groom = configuration.get("bsp.groom.name", "groomServer")
-      if(master.equals(sender.path.name) || groom.equals(sender.path.name)) {
-        LOG.debug("Mediator is {}.", sender.path.name)
-        mediator = sender
-        afterMediatorUp
-      } else 
-        LOG.warning(sender.path.name+" shouldn't send MediatorIsUp message!")
+      val MasterName = configuration.get("bsp.master.name", "bspmaster")
+      val GroomName = configuration.get("bsp.groom.name", "groomServer")
+      sender.path.name match {
+        case MasterName|GroomName => {
+          LOG.debug("Mediator is {}.", sender.path.name)
+          mediator = sender
+          afterMediatorUp
+        } 
+        case _ => LOG.warning(sender.path.name+" shouldn't send MediatorIsUp "+
+                              "message!")
+      }
     }
   }
 

@@ -78,10 +78,10 @@ class MockWorker1(tester: ActorRef) extends Worker {
 
   var captured = Map.empty[String, Superstep] 
 
-  override def doExecute(jobId: BSPJobID, conf: HamaConfiguration, 
+  override def doExecute(taskAttemptId: String, conf: HamaConfiguration, 
                          taskConf: HamaConfiguration) = peer match { 
     case Some(found) => { 
-      val superstepBSP = BSP.get(self, conf, taskConf)
+      val superstepBSP = BSP.get(conf, taskConf)
       superstepBSP.setup(found)
       superstepBSP.bsp(found)
       captured = superstepBSP.asInstanceOf[SuperstepBSP].supersteps 
@@ -145,7 +145,7 @@ class TestWorker extends TestEnv(ActorSystem("TestWorker"))
      val worker = createWithArgs("testWorker", classOf[MockWorker1], tester)
      worker ! Bind(testConfiguration, system)
      worker ! ConfigureFor(task)
-     worker ! Execute(task.getId.getJobID, 
+     worker ! Execute(task.getId.toString, 
                       testConfiguration, 
                       task.getConfiguration)
      worker ! GetCount
