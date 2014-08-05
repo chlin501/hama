@@ -151,7 +151,7 @@ protected trait SuperstepBSP extends BSP with Configurable with Logger {
                                         peer.getSuperstepCount) 
         LOG.debug("Checkpoint "+ckpt.path.name+" is created!")
         peer.isInstanceOf[CheckpointerReceiver] match {
-          case true => peer.asInstanceOf[CheckpointerReceiver].put(ckpt)  
+          case true => peer.asInstanceOf[CheckpointerReceiver].receive(ckpt)  
           case false => LOG.warn("Checkpoint "+ckpt.path.name+" is created, "+
                                  "but can't be assigned to BSPPeer because "+
                                  " not an instance of CheckpointerReceiver!")

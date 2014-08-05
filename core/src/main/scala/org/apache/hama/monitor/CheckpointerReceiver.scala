@@ -22,22 +22,54 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.Logger
 import scala.collection.immutable.Queue
 
+/**
+ * This is used to identify if the target needs {@link Checkpointer}. It is
+ * generally applied in {@link BSPPeer#sync} implementation.
+ */
 trait CheckpointerReceiver extends Logger {
 
+  /**
+   * The queue that stores checkpoint actor.
+   */
   protected var ckptQueue = Queue.empty[ActorRef]
 
-  def put(ckpt: ActorRef) = ckptQueue = ckptQueue.enqueue(ckpt)
+  /**
+   * The function that receive checkpointer, and store in queue.
+   * @param ckpt is the checkpointer actor.
+   */
+  def receive(ckpt: ActorRef) = ckptQueue = ckptQueue.enqueue(ckpt)
 
+  /**
+   * Used to retrieve setting stored in common confiuration.
+   */
   protected def getCommonConf(): HamaConfiguration 
 
+  /**
+   * Obtain current task atempt id for each task will only be specific to a 
+   * task id. 
+   * @return String of the task attempt id.
+   */
   protected def currentTaskAttemptId(): String
 
+  /**
+   * Identify the current superstep count value.
+   * @return Long of the superstep count.
+   */ 
   protected def currentSuperstepCount(): Long
 
+  /**
+   * Check if the checkpoint is enabled in {@link HamaConfiguration}; default 
+   * set to true.
+   * @return Boolean denote true if checkpoint is enabled; othwerwise false.
+   */
   protected def isCheckpointEnabled(): Boolean =
     getCommonConf.getBoolean("bsp.checkpoint.enabled", true)
 
-  protected def findCheckpointer(): Option[ActorRef] =
+  /**
+   * Retrieve the first checkpointer found in queue. 
+   * @return Option[ActorRef] of checkpoint actor.
+   */
+  protected def firstCheckpointerInQueue(): Option[ActorRef] =
     ckptQueue.length match {
       case 0 => {
         LOG.warn("Checkpointer for "+currentTaskAttemptId+" at "+
@@ -50,9 +82,4 @@ trait CheckpointerReceiver extends Logger {
         Some(first)
       }
     }
-
-  protected def getCkpt(): Option[ActorRef] = isCheckpointEnabled match {
-    case true => findCheckpointer
-    case false => None
-  }
 }

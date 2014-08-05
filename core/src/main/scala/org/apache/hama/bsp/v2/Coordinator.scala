@@ -310,7 +310,7 @@ class Coordinator(conf: HamaConfiguration,
   @throws(classOf[IOException])
   override def sync() {
     val ckpt = isCheckpointEnabled match { 
-      case true => findCheckpointer 
+      case true => firstCheckpointerInQueue 
       case false => None
     }
     val it = messenger.getOutgoingBundles
@@ -325,8 +325,9 @@ class Coordinator(conf: HamaConfiguration,
           it.remove 
           ckpt match {
             case None => {
-              LOG.debug("Checkpoint is enabled? "+isCheckpointEnabled+". "+
-                        " for "+getTask.getId.toString+" at "+getSuperstepCount)
+              LOG.debug("TaskAttemptID "+getTask.getId.toString+" at "+
+                        getSuperstepCount+" has checkpoint enabled? "+
+                        isCheckpointEnabled)
             }
             case Some(found) => 
               found ! Save[Writable](getSuperstepCount, peer, bundle)
