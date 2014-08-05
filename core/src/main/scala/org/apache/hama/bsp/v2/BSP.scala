@@ -43,9 +43,6 @@ object BSP {
     ReflectionUtils.newInstance(bsp, taskConf)
   }
 
-  def get(conf: HamaConfiguration, taskConf: HamaConfiguration) : BSP = 
-    get[SuperstepBSP](conf, taskConf, classOf[SuperstepBSP])
-
 }
 
 /**

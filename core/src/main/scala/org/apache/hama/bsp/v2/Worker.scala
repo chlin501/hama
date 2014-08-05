@@ -18,8 +18,10 @@
 package org.apache.hama.bsp.v2
 
 import akka.actor.Actor
+import akka.actor.ActorContext
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
+import akka.event.LoggingAdapter
 import java.io.File
 import java.net.URL
 import java.net.URLClassLoader
@@ -40,9 +42,17 @@ final case class Execute(taskAttemptId: String,
                          taskConf: HamaConfiguration) extends WorkerOperation
 final case class Close extends WorkerOperation
 
-protected[v2] class Worker extends Agent {
+protected[v2] class Worker extends SuperstepBSP with Agent {
 
   protected var peer: Option[Coordinator] = None
+
+  protected var currentTaskAttemptId: String = _
+
+  override protected[v2] def log(): LoggingAdapter = LOG
+
+  protected[v2] def actorContext: ActorContext = context
+
+  protected[v2] def taskAttemptId: String = currentTaskAttemptId
 
   protected def bind(old: Option[Coordinator], 
                      conf: HamaConfiguration, 
@@ -65,6 +75,9 @@ protected[v2] class Worker extends Agent {
     case ConfigureFor(task) => {
       peer match {
         case Some(found) => {
+          currentTaskAttemptId = task.getId.toString
+          LOG.info("Configure this worker to task attempt id {}", 
+                   currentTaskAttemptId)
           found.configureFor(task)
         }
         case None => LOG.warning("Unable to configure for task "+task+
@@ -91,9 +104,8 @@ protected[v2] class Worker extends Agent {
                           taskConf: HamaConfiguration) = peer match {
     case Some(found) => {
       addJarToClasspath(taskAttemptId, taskConf)
-      val superstepBSP = BSP.get(conf, taskConf)
-      superstepBSP.setup(found)
-      superstepBSP.bsp(found)
+      setup(found)
+      bsp(found)
     }
     case None => LOG.error("BSPPeer is missing!")
   }

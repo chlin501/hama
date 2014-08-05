@@ -20,13 +20,13 @@ package org.apache.hama.bsp.v2
 import akka.actor.ActorContext
 import akka.actor.ActorRef
 import akka.actor.Props
+import akka.event.LoggingAdapter
 import java.io.IOException
 import org.apache.hadoop.conf.Configurable
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.logging.Logger
 import org.apache.hama.monitor.Checkpointer
 import org.apache.hama.monitor.CheckpointerReceiver
 import org.apache.hama.sync.SyncException
@@ -39,7 +39,7 @@ import scala.util.Try
  * This class manages all superstep and supersteps routing, started from the
  * first superstep, according to the execution instruction.
  */
-protected trait SuperstepBSP extends BSP with Configurable with Logger {
+protected trait SuperstepBSP extends BSP with Configurable {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
@@ -47,6 +47,8 @@ protected trait SuperstepBSP extends BSP with Configurable with Logger {
    * This is configuration for a specific task. 
    */
   protected var taskConf = new HamaConfiguration
+
+  protected def log(): LoggingAdapter
 
   /**
    * This is intended to be set by {@link Worker} only because directly spaw-
@@ -82,9 +84,9 @@ protected trait SuperstepBSP extends BSP with Configurable with Logger {
   override def setup(peer: BSPPeer) { 
     val classes = commonConf(peer).get("hama.supersteps.class")
     val classNames = classes.split(",")
-    LOG.info(classNames.length+" superstep classes, including "+classes) 
+    log.info(classNames.length+" superstep classes, including "+classes) 
     classNames.foreach( className => {
-      LOG.debug("Instantiate "+className)
+      log.debug("Instantiate "+className)
       instantiate(className, peer) match {
         case Success(instance) => { 
           instance.setup(peer)
@@ -149,15 +151,15 @@ protected trait SuperstepBSP extends BSP with Configurable with Logger {
         val ckpt = actorContext.actorOf(Props(classOf[Checkpointer]), 
                                         "checkpoint_"+taskAttemptId+"_"+
                                         peer.getSuperstepCount) 
-        LOG.debug("Checkpoint "+ckpt.path.name+" is created!")
+        log.debug("Checkpoint "+ckpt.path.name+" is created!")
         peer.isInstanceOf[CheckpointerReceiver] match {
           case true => peer.asInstanceOf[CheckpointerReceiver].receive(ckpt)  
-          case false => LOG.warn("Checkpoint "+ckpt.path.name+" is created, "+
-                                 "but can't be assigned to BSPPeer because "+
+          case false => log.warning("Checkpoint "+ckpt.path.name+" is created"+
+                                 ", but can't be assigned to BSPPeer because "+
                                  " not an instance of CheckpointerReceiver!")
         }
       }
-      case false => LOG.debug("No checkpoint is needed for "+taskAttemptId)
+      case false => log.debug("No checkpoint is needed for "+taskAttemptId)
     }
 
   /**
@@ -169,7 +171,7 @@ protected trait SuperstepBSP extends BSP with Configurable with Logger {
     if(isCheckpointEnabled(commonConf(peer))) {
       if(peer.isInstanceOf[UncheckpointedData]) {
         checkpoint(peer, superstep)
-      } else LOG.warn("Can't collect uncheckpointed data for "+
+      } else log.warning("Can't collect uncheckpointed data for "+
                       superstep.getClass.getName+" at the "+
                       currentSuperstepCount(peer)+"-th superstep.")
     }
@@ -197,13 +199,14 @@ protected trait SuperstepBSP extends BSP with Configurable with Logger {
                                             currentSuperstepCount,
                                             seqOfPeerWithBundle,
                                             superstep.getVariables)
-          case None => LOG.error("Unlikely! But no worker found for "+
+          case None => log.error("Unlikely! But no worker found for "+
                                  superstep.getClass.getName+" at the "+
                                  currentSuperstepCount+"-th superstep.")
         } 
       }
-      case None => LOG.warn("Can't checkpoint for "+superstep.getClass.getName+
-                            " at the "+currentSuperstepCount+"-th superstep.")
+      case None => log.warning("Can't checkpoint for "+superstep.getClass.
+                               getName+" at the "+currentSuperstepCount+
+                               "-th superstep.")
     }
     // checkpoint 1. peer messages 2. superstep class name 
     //            3. superstep variables

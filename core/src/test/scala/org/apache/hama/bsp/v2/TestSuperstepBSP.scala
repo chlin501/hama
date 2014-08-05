@@ -21,7 +21,9 @@ import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.event.Logging
+import akka.event.LoggingAdapter
 import org.apache.hadoop.io.IntWritable
+import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.Logger
 import org.apache.hama.TestEnv
@@ -83,7 +85,10 @@ class End extends FinalSuperstep with Logger {
 
 }
 
-class MockSuperstepBSP(testConf: HamaConfiguration) extends SuperstepBSP {
+class MockSuperstepBSP(testConf: HamaConfiguration) extends SuperstepBSP 
+                                                    with Agent {
+
+  override def log(): LoggingAdapter = LOG
 
   override def commonConf(peer: BSPPeer): HamaConfiguration = testConf
 
@@ -96,6 +101,8 @@ class MockSuperstepBSP(testConf: HamaConfiguration) extends SuperstepBSP {
 
 
   def getSupersteps(): Map[String, Superstep] = supersteps
+
+  override def receive = unknown
 
 }
 

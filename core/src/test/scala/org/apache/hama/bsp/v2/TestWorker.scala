@@ -81,10 +81,9 @@ class MockWorker1(tester: ActorRef) extends Worker {
   override def doExecute(taskAttemptId: String, conf: HamaConfiguration, 
                          taskConf: HamaConfiguration) = peer match { 
     case Some(found) => { 
-      val superstepBSP = BSP.get(conf, taskConf)
-      superstepBSP.setup(found)
-      superstepBSP.bsp(found)
-      captured = superstepBSP.asInstanceOf[SuperstepBSP].supersteps 
+      setup(found)
+      bsp(found)
+      captured = asInstanceOf[SuperstepBSP].supersteps 
       LOG.info("Captured supersteps is "+captured)
     } 
     case None => LOG.warning("BSPPeer is missing!")
