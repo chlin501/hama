@@ -61,15 +61,13 @@ class HDFSLocal extends Operation {
   @throws(classOf[IOException])
   override def create(path: Path): OutputStream = {
     validate
-    var out: OutputStream = null
-    var created = false
-    if(!exists(path)) 
-      created = localfs.createNewFile(path)
-    else 
-      created = true
-    if(created) 
-      out = localfs.create(path)
-    out 
+    localfs.create(path, true)
+  }
+
+  @throws(classOf[IOException])
+  override def append(path: Path): OutputStream = {
+    validate
+    localfs.append(path)
   }
 
   @throws(classOf[IOException])

@@ -65,8 +65,11 @@ protected trait SuperstepBSP extends BSP with Configurable {
    */
   protected[v2] def taskAttemptId(): String
 
-  override def setConf(conf: Configuration) = 
-    this.taskConf = conf.asInstanceOf[HamaConfiguration]
+  override def setConf(conf: Configuration) = conf match {
+    case null => log.error("Task configuration is not provided for {}!",
+                           taskAttemptId) 
+    case _ => this.taskConf = conf.asInstanceOf[HamaConfiguration]
+  }
 
   override def getConf(): Configuration = this.taskConf 
 
@@ -135,6 +138,8 @@ protected trait SuperstepBSP extends BSP with Configurable {
            case null => eventually(peer)
            case clazz@_ => {
              prepareForCheckpoint(peer)
+             //TODO: 1. save current superstep.getClass.getName 
+             //      2. save superstep.getVariables
              peer.sync
              findThenExecute(clazz.getName, peer, superstep.getVariables)
            }
@@ -148,7 +153,10 @@ protected trait SuperstepBSP extends BSP with Configurable {
   protected[v2] def prepareForCheckpoint(peer: BSPPeer) =
     commonConf(peer).getBoolean("bsp.checkpoint.enabled", true) match {
       case true => {
-        val ckpt = actorContext.actorOf(Props(classOf[Checkpointer]), 
+        val ckpt = actorContext.actorOf(Props(classOf[Checkpointer], 
+                                              taskConf,
+                                              taskAttemptId,
+                                              peer.getSuperstepCount), 
                                         "checkpoint_"+taskAttemptId+"_"+
                                         peer.getSuperstepCount) 
         log.debug("Checkpoint "+ckpt.path.name+" is created!")

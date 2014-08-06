@@ -31,10 +31,11 @@ trait CheckpointerReceiver extends Logger {
   /**
    * The queue that stores checkpoint actor.
    */
-  protected var ckptQueue = Queue.empty[ActorRef]
+  protected[monitor] var ckptQueue = Queue.empty[ActorRef]
 
   /**
-   * The function that receive checkpointer, and store in queue.
+   * Receive checkpointer, and store it in a queue.
+   * This function is called by {@link SuperstepBSP}.
    * @param ckpt is the checkpointer actor.
    */
   def receive(ckpt: ActorRef) = ckptQueue = ckptQueue.enqueue(ckpt)
@@ -42,34 +43,38 @@ trait CheckpointerReceiver extends Logger {
   /**
    * Used to retrieve setting stored in common confiuration.
    */
-  protected def getCommonConf(): HamaConfiguration 
+  protected[monitor] def getCommonConf(): HamaConfiguration 
 
   /**
    * Obtain current task atempt id for each task will only be specific to a 
    * task id. 
    * @return String of the task attempt id.
    */
-  protected def currentTaskAttemptId(): String
+  protected[monitor] def currentTaskAttemptId(): String
 
   /**
    * Identify the current superstep count value.
    * @return Long of the superstep count.
    */ 
-  protected def currentSuperstepCount(): Long
+  protected[monitor] def currentSuperstepCount(): Long
 
   /**
    * Check if the checkpoint is enabled in {@link HamaConfiguration}; default 
    * set to true.
    * @return Boolean denote true if checkpoint is enabled; othwerwise false.
    */
-  protected def isCheckpointEnabled(): Boolean =
+  protected[monitor] def isCheckpointEnabled(): Boolean =
     getCommonConf.getBoolean("bsp.checkpoint.enabled", true)
 
   /**
    * Retrieve the first checkpointer found in queue. 
+   * This doesn't verify if 
+   * <pre>
+   * true == HamaConfiguration.get("bsp.checkpoint.enabled")
+   * </pre>
    * @return Option[ActorRef] of checkpoint actor.
    */
-  protected def firstCheckpointerInQueue(): Option[ActorRef] =
+  protected[monitor] def firstCheckpointerInQueue(): Option[ActorRef] =
     ckptQueue.length match {
       case 0 => {
         LOG.warn("Checkpointer for "+currentTaskAttemptId+" at "+
@@ -82,4 +87,14 @@ trait CheckpointerReceiver extends Logger {
         Some(first)
       }
     }
+
+  /**
+   * Verify if checkpoint is enabled in {@link HamaConfiguration}. If true, 
+   * return the first checkpoint in queue; otherwise {@link scala.None} is 
+   * returned.
+   */
+  def nextCheckpointer(): Option[ActorRef] = isCheckpointEnabled match {
+    case true => firstCheckpointerInQueue
+    case false => None
+  } 
 }

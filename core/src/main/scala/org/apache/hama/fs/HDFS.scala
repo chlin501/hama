@@ -67,6 +67,12 @@ class HDFS extends Operation {
   }
 
   @throws(classOf[IOException])
+  override def append(path: Path): OutputStream = {
+    validate
+    hdfs.append(path)
+  }
+
+  @throws(classOf[IOException])
   override def open(path: Path): InputStream = {
     validate
     hdfs.open(path) 

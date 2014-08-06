@@ -80,12 +80,20 @@ trait Operation {
   def mkdirs(path: Path): Boolean 
 
   /**
-   * Create a file based on the {@link Path} for writing.
+   * Create data based on the {@link Path} for writing.
    * @param path to be created.
    * @return OutputStream to which content will be written.
    */
   @throws(classOf[IOException])
   def create(path: Path): OutputStream
+
+  /**
+   * Append data for writing based on {@link Path}.
+   * @param path to which the data will be appended. 
+   * @return OutputStream is the target place where data to be written.
+   */
+  @throws(classOf[IOException])
+  def append(path: Path): OutputStream
 
   /**
    * Open a file based on the {@link Path} for reading.

@@ -42,6 +42,9 @@ final case class Execute(taskAttemptId: String,
                          taskConf: HamaConfiguration) extends WorkerOperation
 final case class Close extends WorkerOperation
 
+/**
+ * This is the actual class that perform {@link Superstep}s execution.
+ */
 protected[v2] class Worker extends SuperstepBSP with Agent {
 
   protected var peer: Option[Coordinator] = None
@@ -76,6 +79,7 @@ protected[v2] class Worker extends SuperstepBSP with Agent {
       peer match {
         case Some(found) => {
           currentTaskAttemptId = task.getId.toString
+          setConf(task.getConfiguration)
           LOG.info("Configure this worker to task attempt id {}", 
                    currentTaskAttemptId)
           found.configureFor(task)
@@ -160,22 +164,6 @@ protected[v2] class Worker extends SuperstepBSP with Agent {
       operation.local.mkdirs(new Path(localDir, subDir))
     "%s/%s/%s.jar".format(localDir, subDir, taskAttemptId.toString)
   }
-
-/*
-  def save: Receive = { 
-    case saveMsg: Save => 
-      getOrSpawn(saveMsg.currentSuperstepCount) forward saveMsg 
-  }
-
-  def noMoreMessages: Receive = {
-    case noMoreMsg: NoMoreMessages => 
-      getOrSpawn(noMoreMsg.currentSuperstepCount) forward noMoreMsg
-  }
-
-  def getOrSpawn(currentSuperstep: Long) = {
-    
-  }
-*/
 
   /**
    * Close underlying {@link BSPPeer} operations.

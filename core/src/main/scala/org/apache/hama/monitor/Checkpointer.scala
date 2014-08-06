@@ -20,32 +20,84 @@ package org.apache.hama.monitor
 import java.io.DataOutputStream
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
+import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.Agent
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.ProxyInfo
-
-sealed trait CkptOp
-final case class CommonConfig(conf: HamaConfiguration) extends CkptOp
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 /**
- * Checkpoint data to HDFS.
+ * Checkpoint related superstep data to HDFS.
+ * @param taskConf is the task configuration.
+ * @param taskAttemptId denotes with which task content this checkpointer will
+ *                      save.
+ * @param superstepCount indicates at which superstep this task right now is.
  */
-class Checkpointer extends Agent {
+class Checkpointer(taskConf: HamaConfiguration, 
+                   taskAttemptId: String, 
+                   superstepCount: Long) extends Agent {
 
-  protected var conf: Option[HamaConfiguration] = None
+  protected val operation = Operation.get(taskConf) 
 
-  def commonConfig: Receive = {
-    case CommonConfig(conf) => this.conf = config(conf)
+  /**
+   * Save {@link BSPMessageBundle} to HDFS with path pointed to 
+   * <pre>
+   * ${bsp.checkpoint.root.path}/<job_id>/<superstep>/<task_attepmt_id>.ckpt
+   * </pre>
+   */
+  def saveBundle: Receive = {
+    case Save(peer, bundle) => doSave(taskConf, taskAttemptId, superstepCount,
+                                      peer, bundle)
   }
-  
-  protected[monitor] def config(conf: HamaConfiguration): 
-    Option[HamaConfiguration] = conf match {
-      case null => None
-      case _ => Some(conf)
+
+  protected def doSave[M <: Writable](taskConf: HamaConfiguration,
+                                      aTaskAttemptId: String,
+                                      aSuperstepCount: Long,
+                                      peer: ProxyInfo, 
+                                      bundle: BSPMessageBundle[M]) {
+    val rootPath = taskConf.get("bsp.checkpoint.root.path", 
+                                "/tmp/bsp/checkpoint") 
+    val currentTaskAttemptId = TaskAttemptID.forName(aTaskAttemptId)      
+    val jobId = currentTaskAttemptId.getJobID.toString
+    rootPath match {
+      case null|"" => LOG.warning("Root path is missing for {} at {}", 
+                                  aTaskAttemptId, aSuperstepCount)
+      case path@_ => { 
+        val ckptPath = "%s/%s/%s/%s.ckpt".format(path, jobId, aSuperstepCount,
+                                                 aTaskAttemptId)
+        LOG.debug("Save peer and bundle data to {}", ckptPath)
+        Try(createOrAppend(new Path(ckptPath))) match {
+          case Success(out) => {
+            peer.write(out)
+            bundle.write(out)
+            out.close 
+          }
+          case Failure(cause) => {
+            LOG.error("Unable to creat/ append data at {} for {}", 
+                      ckptPath, cause)
+          }
+        } 
+      }
+    } 
   }
 
-  override def receive = commonConfig orElse unknown
+  protected def createOrAppend(targetPath: Path): DataOutputStream = {
+    operation.exists(targetPath) match {
+      case true => operation.append(targetPath).asInstanceOf[DataOutputStream]
+      case false => {
+        operation.mkdirs(targetPath)
+        operation.create(targetPath).asInstanceOf[DataOutputStream]
+      }
+    }
+  }
+
+  //def saveVariables
+  //def saveSuperstep
+
+  override def receive = saveBundle orElse unknown
   
 }

@@ -21,12 +21,8 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.ProxyInfo
 import org.apache.hama.message.BSPMessageBundle
 
-sealed trait PeerMessage
-final case class NoMoreMessages extends PeerMessage
+sealed trait CheckpointMessage
+final case class NoMoreMessages extends CheckpointMessage
 final case class Save[M <: Writable](
-  currentSuperspteCount: Long, peer: ProxyInfo, bundle: BSPMessageBundle[M]
-) extends PeerMessage
-
-/*
-className: String, superstepCount: Long, msgs: Seq[PeerWithBundle[M]], vars: Map[String, Writable]
-*/
+  peer: ProxyInfo, bundle: BSPMessageBundle[M]
+) extends CheckpointMessage

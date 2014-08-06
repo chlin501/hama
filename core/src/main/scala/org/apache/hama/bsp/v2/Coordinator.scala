@@ -181,7 +181,6 @@ class Coordinator(conf: HamaConfiguration,
       }
     } 
   }
-
   
   /**
    * Setup message service for a specific task.
@@ -287,32 +286,9 @@ class Coordinator(conf: HamaConfiguration,
     }
   }
 
-/*
-  protected[v2] def isCheckpointEnabled(): Boolean = 
-    configuration.getBoolean("bsp.checkpoint.enabled", true) 
-
-  protected[v2] def findCheckpointer(): Option[ActorRef] = 
-    ckptQueue.length match {
-      case 0 => {
-        LOG.warn("Checkpointer for "+getTask.getId.toString+" at "+
-                 "superstep "+getSuperstepCount+" not found!") 
-        None
-      }
-      case _ => {
-        val (first, rest) = ckptQueue.dequeue
-        ckptQueue = rest 
-        Some(first)
-      }
-    }
-
-*/
-
   @throws(classOf[IOException])
   override def sync() {
-    val ckpt = isCheckpointEnabled match { 
-      case true => firstCheckpointerInQueue 
-      case false => None
-    }
+    val ckpt = nextCheckpointer
     val it = messenger.getOutgoingBundles
     it match {
       case null =>
@@ -323,17 +299,11 @@ class Coordinator(conf: HamaConfiguration,
           val peer = entry.getKey
           val bundle = entry.getValue
           it.remove 
-          ckpt match {
-            case None => {
-              LOG.debug("TaskAttemptID "+getTask.getId.toString+" at "+
-                        getSuperstepCount+" has checkpoint enabled? "+
-                        isCheckpointEnabled)
-            }
-            case Some(found) => 
-              found ! Save[Writable](getSuperstepCount, peer, bundle)
-          }
+          saveBundle(ckpt, getTask.getId.toString, getSuperstepCount,
+                     peer, bundle)
           doTransfer(peer, bundle)      
         })
+        noMoreMessages(ckpt, getTask.getId.toString, getSuperstepCount)
       }
     }
      
@@ -345,6 +315,28 @@ class Coordinator(conf: HamaConfiguration,
     //updateStatus(configuration, getTask) 
   } 
 
+  protected def noMoreMessages(ckpt: Option[ActorRef],
+                               taskAttemptId: String,
+                               superstepCount: Long) = ckpt match {
+    case None => LOG.debug("Checkpointer for "+taskAttemptId+" at "+
+                           superstepCount+" is missing!")
+    case Some(found) => found ! NoMoreMessages
+  }
+
+  protected def saveBundle[M <: Writable](checkpointer: Option[ActorRef], 
+                                          taskAttemptId: String, 
+                                          superstepCount: Long,
+                                          peer: ProxyInfo, 
+                                          bundle: BSPMessageBundle[M]) = 
+    checkpointer match {
+      case None => {
+        LOG.debug("TaskAttemptID "+taskAttemptId+" at "+ superstepCount+
+                  " has checkpoint enabled? "+ isCheckpointEnabled)
+      }
+      case Some(found) => 
+        found ! Save[M](peer, bundle)
+    }
+  
   override def getSuperstepCount(): Long = 
     getTask.getCurrentSuperstep
 
