@@ -151,5 +151,5 @@ class Checkpointer(taskConf: HamaConfiguration,
   }
 
   override def receive = savePeerMessages orElse saveSuperstep orElse unknown
-// TODO: think if task's superstep is needed to be refactored by setting superstep value in task conf?
+// TODO: we also need to checkpoint bsp.v2.Task!!!
 }
