@@ -17,7 +17,6 @@
  */
 package org.apache.hama.monitor
 
-import akka.actor.ActorRef
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.Logger
 import scala.collection.immutable.Queue
@@ -31,14 +30,14 @@ trait CheckpointerReceiver extends Logger {
   /**
    * The queue that stores checkpoint actor.
    */
-  protected[monitor] var ckptQueue = Queue.empty[ActorRef]
+  protected[monitor] var packQueue = Queue.empty[Pack]
 
   /**
    * Receive checkpointer, and store it in a queue.
    * This function is called by {@link SuperstepBSP}.
-   * @param ckpt is the checkpointer actor.
+   * @param pack is the checkpointer actor.
    */
-  def receive(ckpt: ActorRef) = ckptQueue = ckptQueue.enqueue(ckpt)
+  def receive(pack: Pack) = packQueue = packQueue.enqueue(pack)
 
   /**
    * Used to retrieve setting stored in common confiuration.
@@ -66,35 +65,36 @@ trait CheckpointerReceiver extends Logger {
   protected[monitor] def isCheckpointEnabled(): Boolean =
     getCommonConf.getBoolean("bsp.checkpoint.enabled", true)
 
+  protected def queueLength(): Int = packQueue.length
+
   /**
    * Retrieve the first checkpointer found in queue. 
    * This doesn't verify if 
    * <pre>
    * true == HamaConfiguration.get("bsp.checkpoint.enabled")
    * </pre>
-   * @return Option[ActorRef] of checkpoint actor.
+   * @return Option[Pack] of checkpoint actor.
    */
-  protected[monitor] def firstCheckpointerInQueue(): Option[ActorRef] =
-    ckptQueue.length match {
-      case 0 => {
-        LOG.warn("Checkpointer for "+currentTaskAttemptId+" at "+
-                 "superstep "+currentSuperstepCount+" not found!")
-        None
-      }
-      case _ => {
-        val (first, rest) = ckptQueue.dequeue
-        ckptQueue = rest
-        Some(first)
-      }
+  protected[monitor] def firstPackInQueue(): Option[Pack] = queueLength match {
+    case 0 => {
+      LOG.warn("Checkpointer for "+currentTaskAttemptId+" at "+
+               "superstep "+currentSuperstepCount+" not found!")
+      None
     }
+    case _ => {
+      val (first, rest) = packQueue.dequeue
+      packQueue = rest
+      Some(first)
+    }
+  }
 
   /**
    * Verify if checkpoint is enabled in {@link HamaConfiguration}. If true, 
    * return the first checkpoint in queue; otherwise {@link scala.None} is 
    * returned.
    */
-  def nextCheckpointer(): Option[ActorRef] = isCheckpointEnabled match {
-    case true => firstCheckpointerInQueue
+  def nextPack(): Option[Pack] = isCheckpointEnabled match {
+    case true => firstPackInQueue
     case false => None
   } 
 }

@@ -29,6 +29,7 @@ import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.monitor.Checkpointer
 import org.apache.hama.monitor.CheckpointerReceiver
+import org.apache.hama.monitor.Pack
 import org.apache.hama.sync.SyncException
 import scala.util.Failure
 import scala.util.Success
@@ -81,6 +82,8 @@ protected trait SuperstepBSP extends BSP with Configurable {
    */
   protected[v2] def commonConf(peer: BSPPeer): HamaConfiguration = 
     peer.configuration
+
+  
   
   @throws(classOf[IOException])
   @throws(classOf[SyncException])
@@ -137,9 +140,7 @@ protected trait SuperstepBSP extends BSP with Configurable {
         next match {
            case null => eventually(peer)
            case clazz@_ => {
-             prepareForCheckpoint(peer)
-             //TODO: 1. save current superstep.getClass.getName 
-             //      2. save superstep.getVariables
+             prepareForCheckpoint(peer, superstep)
              peer.sync
              findThenExecute(clazz.getName, peer, superstep.getVariables)
            }
@@ -150,8 +151,21 @@ protected trait SuperstepBSP extends BSP with Configurable {
     }
   }
 
-  protected[v2] def prepareForCheckpoint(peer: BSPPeer) =
-    commonConf(peer).getBoolean("bsp.checkpoint.enabled", true) match {
+/*
+  //TODO: 1. save current superstep.getClass.getName 
+  //      2. save superstep.getVariables
+  protected[v2] def checkpoint(ckpt: Option[ActorRef], sueprstep: Superstep) {
+    val className = sueprstep.getClas.getName
+    val variables = superstep.getVariables
+    ckpt match {
+      case Some(found) => found ! Checkpoint()
+      case None => 
+    } 
+  }
+*/
+
+  protected[v2] def prepareForCheckpoint(peer: BSPPeer, superstep: Superstep): 
+    Option[ActorRef] = isCheckpointEnabled(commonConf(peer)) match {
       case true => {
         val ckpt = actorContext.actorOf(Props(classOf[Checkpointer], 
                                               taskConf,
@@ -161,13 +175,18 @@ protected trait SuperstepBSP extends BSP with Configurable {
                                         peer.getSuperstepCount) 
         log.debug("Checkpoint "+ckpt.path.name+" is created!")
         peer.isInstanceOf[CheckpointerReceiver] match {
-          case true => peer.asInstanceOf[CheckpointerReceiver].receive(ckpt)  
+          case true => peer.asInstanceOf[CheckpointerReceiver].
+                            receive(Pack(Some(ckpt), superstep))
           case false => log.warning("Checkpoint "+ckpt.path.name+" is created"+
                                  ", but can't be assigned to BSPPeer because "+
                                  " not an instance of CheckpointerReceiver!")
         }
+        Some(ckpt)
       }
-      case false => log.debug("No checkpoint is needed for "+taskAttemptId)
+      case false => {
+        log.debug("No checkpoint is needed for "+taskAttemptId)
+        None
+      }
     }
 
   /**

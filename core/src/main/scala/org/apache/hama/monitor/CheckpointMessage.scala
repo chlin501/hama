@@ -17,12 +17,19 @@
  */
 package org.apache.hama.monitor
 
+import akka.actor.ActorRef
 import org.apache.hadoop.io.Writable
+import org.apache.hama.bsp.v2.Superstep
 import org.apache.hama.ProxyInfo
 import org.apache.hama.message.BSPMessageBundle
 
 sealed trait CheckpointMessage
 final case class NoMoreMessages extends CheckpointMessage
-final case class Save[M <: Writable](
+final case class SavePeerMessages[M <: Writable](
   peer: ProxyInfo, bundle: BSPMessageBundle[M]
 ) extends CheckpointMessage
+final case class SaveSuperstep(
+  className: String, variables: Map[String, Writable]
+) extends CheckpointMessage
+final case class Pack(ckpt: Option[ActorRef], 
+                      superstep: Superstep) extends CheckpointMessage

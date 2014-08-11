@@ -41,7 +41,9 @@ import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.MessageManager
 import org.apache.hama.message.PeerCommunicator
 import org.apache.hama.monitor.NoMoreMessages
-import org.apache.hama.monitor.Save
+import org.apache.hama.monitor.Pack
+import org.apache.hama.monitor.SavePeerMessages
+import org.apache.hama.monitor.SaveSuperstep
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncServiceFactory
 import scala.collection.JavaConversions._
@@ -288,7 +290,7 @@ class Coordinator(conf: HamaConfiguration,
 
   @throws(classOf[IOException])
   override def sync() {
-    val ckpt = nextCheckpointer
+    val pack = nextPack
     val it = messenger.getOutgoingBundles
     it match {
       case null =>
@@ -299,42 +301,68 @@ class Coordinator(conf: HamaConfiguration,
           val peer = entry.getKey
           val bundle = entry.getValue
           it.remove 
-          saveBundle(ckpt, getTask.getId.toString, getSuperstepCount,
+          saveBundle(pack, getTask.getId.toString, getSuperstepCount,
                      peer, bundle)
           doTransfer(peer, bundle)      
         })
-        noMoreMessages(ckpt, getTask.getId.toString, getSuperstepCount)
+        noMoreMessages(pack, getTask.getId.toString, getSuperstepCount)
       }
     }
      
     enterBarrier()
     messenger.clearOutgoingMessages
+    checkpoint(pack)
     leaveBarrier()
     // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
     getTask.increatmentSuperstep
     //updateStatus(configuration, getTask) 
   } 
 
-  protected def noMoreMessages(ckpt: Option[ActorRef],
-                               taskAttemptId: String,
-                               superstepCount: Long) = ckpt match {
-    case None => LOG.debug("Checkpointer for "+taskAttemptId+" at "+
-                           superstepCount+" is missing!")
-    case Some(found) => found ! NoMoreMessages
+  protected def checkpoint(pack: Option[Pack]) {
+    pack match {
+      case Some(pack) => {
+        pack.ckpt match {
+          case Some(ckpt) => {
+            val className = pack.superstep.getClass.getName
+            val variables = pack.superstep.getVariables
+            ckpt ! SaveSuperstep(className, variables)
+          }
+          case None => 
+            LOG.warn("Checkpointer not found!")
+        }
+      }
+
+      case None => LOG.warn("Checkpointer not found!")
+    }
   }
 
-  protected def saveBundle[M <: Writable](checkpointer: Option[ActorRef], 
+  protected def noMoreMessages(pack: Option[Pack],
+                               taskAttemptId: String,
+                               superstepCount: Long) = pack match {
+    case None => LOG.warn("Checkpointer for "+taskAttemptId+" at "+
+                          superstepCount+" is missing!")
+    case Some(pack) => pack.ckpt match {
+      case Some(found) => found ! NoMoreMessages
+      case None => LOG.warn("Checkpointer for "+taskAttemptId+" at "+
+                            superstepCount+" is missing!")
+    }
+  }
+
+  protected def saveBundle[M <: Writable](pack: Option[Pack], 
                                           taskAttemptId: String, 
                                           superstepCount: Long,
                                           peer: ProxyInfo, 
                                           bundle: BSPMessageBundle[M]) = 
-    checkpointer match {
-      case None => {
+    pack match {
+      case None => 
         LOG.debug("TaskAttemptID "+taskAttemptId+" at "+ superstepCount+
                   " has checkpoint enabled? "+ isCheckpointEnabled)
+      case Some(pack) => pack.ckpt match {
+        case Some(found) => found ! SavePeerMessages[M](peer, bundle)
+        case None => LOG.debug("TaskAttemptID "+taskAttemptId+" at "+ 
+                               superstepCount+" has checkpoint enabled? "+ 
+                               isCheckpointEnabled)
       }
-      case Some(found) => 
-        found ! Save[M](peer, bundle)
     }
   
   override def getSuperstepCount(): Long = 

@@ -30,8 +30,6 @@ import org.apache.hama.Agent
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.monitor.Save
-import org.apache.hama.monitor.NoMoreMessages
 
 sealed trait WorkerOperation
 final case class Bind(conf: HamaConfiguration, 

@@ -32,6 +32,9 @@ import scala.util.Try
 
 /**
  * Checkpoint related superstep data to HDFS.
+ * This class is created corresponded to a particular task attempt id, so 
+ * sending to the same Checkpointer instance indicates checkpointing to the 
+ * same task.
  * @param taskConf is the task configuration.
  * @param taskAttemptId denotes with which task content this checkpointer will
  *                      save.
@@ -49,16 +52,17 @@ class Checkpointer(taskConf: HamaConfiguration,
    * ${bsp.checkpoint.root.path}/<job_id>/<superstep>/<task_attepmt_id>.ckpt
    * </pre>
    */
-  def saveBundle: Receive = {
-    case Save(peer, bundle) => doSave(taskConf, taskAttemptId, superstepCount,
-                                      peer, bundle)
+  def savePeerMessages: Receive = {
+    case SavePeerMessages(peer, bundle) => 
+      doSavePeerMessages(taskConf, taskAttemptId, superstepCount,
+                         peer, bundle)
   }
 
-  protected def doSave[M <: Writable](taskConf: HamaConfiguration,
-                                      aTaskAttemptId: String,
-                                      aSuperstepCount: Long,
-                                      peer: ProxyInfo, 
-                                      bundle: BSPMessageBundle[M]) {
+  protected def doSavePeerMessages[M <: Writable](taskConf: HamaConfiguration,
+                                                  aTaskAttemptId: String,
+                                                  aSuperstepCount: Long,
+                                                  peer: ProxyInfo, 
+                                                  bundle: BSPMessageBundle[M]) {
     val rootPath = taskConf.get("bsp.checkpoint.root.path", 
                                 "/tmp/bsp/checkpoint") 
     val currentTaskAttemptId = TaskAttemptID.forName(aTaskAttemptId)      
@@ -95,9 +99,15 @@ class Checkpointer(taskConf: HamaConfiguration,
     }
   }
 
-  //def saveVariables
-  //def saveSuperstep
+  protected def saveSuperstep: Receive = {
+    case SaveSuperstep(className, variables) => 
+      doSaveSuperstep(className, variables)
+  }
 
-  override def receive = saveBundle orElse unknown
+  protected def doSaveSuperstep(className: String, 
+                                variables: Map[String, Writable]) {
+  }
+
+  override def receive = savePeerMessages orElse saveSuperstep orElse unknown
   
 }

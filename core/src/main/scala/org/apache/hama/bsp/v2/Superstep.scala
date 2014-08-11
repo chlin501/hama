@@ -25,6 +25,9 @@ import org.apache.hadoop.io.Writable
  */
 abstract class Superstep {
 
+  /**
+   * This variable will be saved to external storage so it can be restored.
+   */
   protected var variables = Map.empty[String, Writable]
 
   /**
