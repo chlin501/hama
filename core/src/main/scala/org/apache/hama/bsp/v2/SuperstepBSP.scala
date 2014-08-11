@@ -151,19 +151,6 @@ protected trait SuperstepBSP extends BSP with Configurable {
     }
   }
 
-/*
-  //TODO: 1. save current superstep.getClass.getName 
-  //      2. save superstep.getVariables
-  protected[v2] def checkpoint(ckpt: Option[ActorRef], sueprstep: Superstep) {
-    val className = sueprstep.getClas.getName
-    val variables = superstep.getVariables
-    ckpt match {
-      case Some(found) => found ! Checkpoint()
-      case None => 
-    } 
-  }
-*/
-
   protected[v2] def prepareForCheckpoint(peer: BSPPeer, superstep: Superstep): 
     Option[ActorRef] = isCheckpointEnabled(commonConf(peer)) match {
       case true => {
@@ -188,60 +175,6 @@ protected trait SuperstepBSP extends BSP with Configurable {
         None
       }
     }
-
-  /**
-   * Verify if checkpoint is needed. If true, do checkpoint; otherwise log 
-   * error.
-   * @param peer is the {@link BSPPeer}
-   * @param superstep is the {@link Superstep} current being executed.
-  protected def checkpointIfNeeded(peer: BSPPeer, superstep: Superstep) {
-    if(isCheckpointEnabled(commonConf(peer))) {
-      if(peer.isInstanceOf[UncheckpointedData]) {
-        checkpoint(peer, superstep)
-      } else log.warning("Can't collect uncheckpointed data for "+
-                      superstep.getClass.getName+" at the "+
-                      currentSuperstepCount(peer)+"-th superstep.")
-    }
-  }
-   */
-
-  /**
-   * This is called after sync() which should already increase superstep by 1.
-   * @param peeer is the {@link BSPPeer}
-  protected currentSuperstepCount(peer: BSPPeer): Long = 
-    (peer.getSuperstepCount - 1) 
-   */ 
-
-  /**
-   * Perform checkpoint. 
-   * @param peer is the {@link BSPPeer} class for specific task computation.
-   * @param superstep is the {@link Superstep} that is running at the moment.
-  protected def checkpoint(peer: BSPPeer, superstep: Superstep) {
-    val data = peer.asInstanceOf[UncheckpointedData].getUncheckpointedData
-    currentSuperstepCount(peer)
-    data.get(currentSuperstepCount) match {
-      case Some(seqOfPeerWithBundle) => {
-        worker match {
-          case Some(found) => found ! Save(superstep.getClass.getName,
-                                            currentSuperstepCount,
-                                            seqOfPeerWithBundle,
-                                            superstep.getVariables)
-          case None => log.error("Unlikely! But no worker found for "+
-                                 superstep.getClass.getName+" at the "+
-                                 currentSuperstepCount+"-th superstep.")
-        } 
-      }
-      case None => log.warning("Can't checkpoint for "+superstep.getClass.
-                               getName+" at the "+currentSuperstepCount+
-                               "-th superstep.")
-    }
-    // checkpoint 1. peer messages 2. superstep class name 
-    //            3. superstep variables
-    // 1. within peer.sync() it pushes msg bundle to uncheckpointeddata map
-    // 2. call worker ! Checkpoint(msg, superstep name, variable)
-    // 3. within worker spawn another actor and save all info.
-  }
-   */
 
   /**
    * Check common configuration if checkpoint is needed.
