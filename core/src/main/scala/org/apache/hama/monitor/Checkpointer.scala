@@ -24,10 +24,12 @@ import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.Agent
+import org.apache.hama.Close
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.ProxyInfo
+import org.apache.hama.util.Curator
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
@@ -45,9 +47,11 @@ import scala.collection.JavaConversions._
  */
 class Checkpointer(taskConf: HamaConfiguration, 
                    taskAttemptId: String, 
-                   superstepCount: Long) extends Agent {
+                   superstepCount: Long) extends Agent with Curator {
 
   protected val operation = Operation.get(taskConf) 
+
+  override def log(message: String) = LOG.info(message)
 
   /**
    * Save {@link BSPMessageBundle} to HDFS with path pointed to 
@@ -64,18 +68,24 @@ class Checkpointer(taskConf: HamaConfiguration,
   protected def getRootPath(): String = taskConf.get("bsp.checkpoint.root.path",
                                                      "/bsp/checkpoint") 
 
+  // TODO: we may need to subdivid <superstep> into sub category because 
+  //       more than 10k znodes may lead to performance slow down for zk 
+  //       in the final step where writing ok znode.
   protected def getCkptPath(rootPath: String,
                             jobId: String, 
                             aSuperstepCount: Long,
-                            aTaskAttemptId: String): String = 
-    "%s/%s/%s/%s.ckpt".format(rootPath, jobId, aSuperstepCount, aTaskAttemptId)
+                            aTaskAttemptId: String, 
+                            suffix: String = "ckpt"): String = 
+    "%s/%s/%s/%s.%s".format(rootPath, jobId, aSuperstepCount, aTaskAttemptId,
+                            suffix)
 
   protected def formCheckpointPath(aSuperstepCount: Long, 
-                                   aTaskAttemptId: String): String = {
+                                   aTaskAttemptId: String,
+                                   suffix: String = "ckpt"): String = {
     val rootPath = getRootPath
     val currentTaskAttemptId = TaskAttemptID.forName(aTaskAttemptId)      
     val jobId = currentTaskAttemptId.getJobID.toString
-    getCkptPath(rootPath, jobId, aSuperstepCount, aTaskAttemptId)
+    getCkptPath(rootPath, jobId, aSuperstepCount, aTaskAttemptId, suffix)
   }
 
   protected def doSavePeerMessages[M <: Writable](taskConf: HamaConfiguration,
@@ -146,10 +156,27 @@ class Checkpointer(taskConf: HamaConfiguration,
           text.write(out)
           mapWritable.write(out)
         })
+        markFinish(formCheckpointPath(aSuperstep, aTaskAttemptId, "ok"))
       }
     }
+    doClose
   }
 
-  override def receive = savePeerMessages orElse saveSuperstep orElse unknown
-// TODO: we also need to checkpoint bsp.v2.Task!!!
+  /**
+   * Write to znode denoting the checkpoint process is completed!
+   * @param destPath denotes the path at zk and checkpoint process is completed.
+   */
+  protected def markFinish(destPath: String) = create(destPath)      
+
+  protected def doClose() = self ! Close
+
+  /**
+   * Close this checkpointer.
+   * @param Receive is a partial function.
+   */
+  def close: Receive = {
+    case Close => context.stop(self)
+  }
+
+  override def receive = savePeerMessages orElse saveSuperstep orElse close orElse unknown
 }

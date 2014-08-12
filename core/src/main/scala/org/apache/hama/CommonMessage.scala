@@ -17,9 +17,40 @@
  */
 package org.apache.hama
 
+sealed trait CommonMessage
+
+/**
+ * Request service for processing a particular message.
+ * @param service name to which the message will be sent.
+ * @param message contains data will be consumed.
+ */
+final case class Request(service: String, message: Any) extends CommonMessage
+
+/**
+ * Notify when the system is in Normal state.
+ * @param systemName of the server.
+ */
+final case class Ready(systemName: String) extends CommonMessage
+
+/**
+ * Client checks if the server is ready for service.
+ */
+final case object IsServiceReady extends CommonMessage
+
+/**
+ * Notify when the servicde is in Stopped state.
+ * @param systemName denotes the name of the system.
+ */
+final case class Halt(systemName: String) extends CommonMessage
+
 /**
  * Inidicate timeout when looking up proxy with name and path specificed.
  * @param name is the name of the proxy
  * @param path is the path pointed to the target proxy.
  */
-final case class Timeout(name: String, path: String)
+final case class Timeout(name: String, path: String) extends CommonMessage
+
+/**
+ * Signfy a close operation message.
+ */
+final case object Close extends CommonMessage
