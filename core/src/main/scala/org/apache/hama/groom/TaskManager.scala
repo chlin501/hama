@@ -29,9 +29,9 @@ import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
-import org.apache.hama.lang.Executor
-import org.apache.hama.lang.Fork
-import org.apache.hama.lang.StopProcess
+//import org.apache.hama.lang.Executor
+//import org.apache.hama.lang.Fork
+//import org.apache.hama.lang.StopProcess
 import org.apache.hama.master._
 import org.apache.hama.master.Directive._
 import org.apache.hama.master.Directive.Action._

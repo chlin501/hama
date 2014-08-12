@@ -17,7 +17,14 @@
  */
 package org.apache.hama.groom
 
+sealed trait ContainerMessage
+
 /**
- * Singnify BSPPeerContainer actor is ready.
+ * {@link Executor} notifies {@link BSPPeerContainer} to stop.
  */
-final case object ContainerReady
+final case object StopContainer extends ContainerMessage
+
+/**
+ * Shutdown {@link BSPPeerContainer} system.
+ */
+final case object ShutdownContainer extends ContainerMessage

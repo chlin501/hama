@@ -15,8 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.lang
+package org.apache.hama.groom
 
 import org.apache.hama.HamaConfiguration
 
-final case class Fork(slotSeq: Int)
+sealed trait ExecutorMessage
+
+private[groom] final case class Fork(slotSeq: Int) extends ExecutorMessage
+
+/**
+ * {@link TaskManager} notifies {@link Executor} to stop
+ * {@link BSPPeerContainer}.
+ */
+private[groom] final case object StopProcess extends ExecutorMessage

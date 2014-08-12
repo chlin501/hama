@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.lang 
+package org.apache.hama.groom
 
 import akka.actor.Actor
 import akka.actor.ActorRef
@@ -35,6 +35,7 @@ import java.io.OutputStream
 import java.lang.ProcessBuilder
 import org.apache.commons.lang.math.NumberUtils
 import org.apache.hadoop.io.IOUtils
+/*
 import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.groom.ContainerReady
 import org.apache.hama.groom.ContainerStopped
@@ -47,6 +48,7 @@ import org.apache.hama.groom.ResumeAck
 import org.apache.hama.groom.ResumeTask
 import org.apache.hama.groom.StopContainer
 import org.apache.hama.groom.ShutdownContainer
+*/
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.fs.Operation
 import org.apache.hama.util.BSPNetUtils

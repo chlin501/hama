@@ -111,7 +111,7 @@ private[groom] final class TaskLogger(conf: HamaConfiguration) extends Actor {
   }
 }
 
-private[groom] trait Logger {
+private[groom] trait Logger { // TODO: unify with logging.Logger
 
   def info(message: String, args: Any*) 
 
@@ -227,7 +227,8 @@ object BSPPeerContainer {
       throw new IllegalArgumentException("No arguments supplied when "+
                                          "BSPPeerContainer is forked.")
     val actorSystemName = args(0)
-    val listeningTo = args(1) // it may binds to 0.0.0.0 for all inet.
+    // N.B.: it may binds to 0.0.0.0 for all inet.
+    val listeningTo = args(1) 
     val port = args(2).toInt
     val seq = args(3).toInt
     val config = toConfig(listeningTo, port) 
@@ -242,7 +243,7 @@ object BSPPeerContainer {
     defaultConf.set("bsp.groom.actor-system.name", arguments.actorSystemName)
     val listeningTo = defaultConf.get("bsp.peer.hostname", 
                                       arguments.listeningTo)
-    // if default listening to 0.0.0.0, changes host by obtaining host name.
+    // N.B.: if default listening to 0.0.0.0, change host to host name.
     if("0.0.0.0".equals(listeningTo)) { 
        defaultConf.set("bsp.peer.hostname", 
                        InetAddress.getLocalHost.getHostName)
@@ -328,15 +329,6 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     LOG.debug("LaunchAck is sent back!")
   }
 
-  /** 
-   * Prepare necessary information and data before actually executing a bsp 
-   * task.
-   */
-  def setupTask(task: Task) {
-
-  }
-    
-
   /**
    * - Asynchronouly create task with an actor.
    * - When that actor finishes setup, sending ack back to executor.
@@ -376,23 +368,6 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
   def postKill(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = 
     from ! new KillAck(slotSeq, taskAttemptId)
-
-  /**
-   * Start executing task dispatched to the container.
-   * @return Receive is partial function.
-  def processTask: Receive = {
-    case task: Task => {
-      LOG.info("Start processing task {}", task.getId)
-      logger.asInstanceOf[DefaultLogger].initialize(task.getId)
-      // not yet implemented ... 
-      // initialize bsp peer interface
-      // add logger variable
-      // initializze logger (logger ! Initialize(task.getId))
-      // load jar into actor  // need security mechanism
-      // perform bsp() w/ another actor
-    }
-  }
-   */
 
   /**
    * A function to close all necessary operations before shutting down the 
