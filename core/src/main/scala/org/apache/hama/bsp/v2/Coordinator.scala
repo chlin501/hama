@@ -320,17 +320,16 @@ class Coordinator(conf: HamaConfiguration,
 
   protected def checkpoint(pack: Option[Pack]) {
     pack match {
-      case Some(pack) => {
-        pack.ckpt match {
-          case Some(ckpt) => {
-            val className = pack.superstep.getClass.getName
-            val variables = pack.superstep.getVariables
-            ckpt ! SaveSuperstep(className, variables)
-          }
-          case None => 
-            LOG.warn("Checkpointer not found!")
+      case Some(pack) => pack.ckpt match {
+        case Some(ckpt) => {
+          val className = pack.superstep.getClass.getName
+          val variables = pack.superstep.getVariables
+          ckpt ! SaveSuperstep(className, variables)
         }
+        case None => 
+          LOG.warn("Checkpointer not found!")
       }
+      
 
       case None => LOG.warn("Checkpointer not found!")
     }

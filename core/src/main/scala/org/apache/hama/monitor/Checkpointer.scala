@@ -38,8 +38,10 @@ import scala.collection.JavaConversions._
 /**
  * Checkpoint related superstep data to HDFS.
  * This class is created corresponded to a particular task attempt id, so 
- * sending to the same Checkpointer instance indicates checkpointing to the 
+ * sending to the same Checkpointer ActorRef indicates checkpointing for the 
  * same task.
+ * N.B.: Checkpointer will not be recovered because we assume at least some   
+ *       checkpoint will success.
  * @param taskConf is the task configuration.
  * @param taskAttemptId denotes with which task content this checkpointer will
  *                      save.
@@ -49,6 +51,8 @@ class Checkpointer(taskConf: HamaConfiguration,
                    taskAttemptId: String, 
                    superstepCount: Long) extends Agent with Curator {
 
+  // TODO: may need a more netural interface for saving messages, etc. 
+  //       to different external storage.
   protected val operation = Operation.get(taskConf) 
 
   override def log(message: String) = LOG.info(message)
@@ -68,9 +72,9 @@ class Checkpointer(taskConf: HamaConfiguration,
   protected def getRootPath(): String = taskConf.get("bsp.checkpoint.root.path",
                                                      "/bsp/checkpoint") 
 
-  // TODO: we may need to subdivid <superstep> into sub category because 
+  // TODO: we may need to divide <superstep> into sub category because 
   //       more than 10k znodes may lead to performance slow down for zk 
-  //       in the final step where writing ok znode.
+  //       at the final step marking with ok znode.
   protected def getCkptPath(rootPath: String,
                             jobId: String, 
                             aSuperstepCount: Long,
@@ -97,13 +101,17 @@ class Checkpointer(taskConf: HamaConfiguration,
       case null|"" => 
       case ckptPath@_ => {
         LOG.debug("Save peer and bundle data to {}", ckptPath)
-        write(new Path(ckptPath), (out) => { 
-          peer.write(out)
-          bundle.write(out)
-        })
+        writePeerAndMessages(new Path(ckptPath), peer, bundle)
       }
     }
   }
+
+  protected def writePeerAndMessages[M <: Writable](
+    ckptPath: Path, peer: ProxyInfo, bundle: BSPMessageBundle[M]) = 
+  write(ckptPath, (out) => { 
+    peer.write(out)
+    bundle.write(out)
+  })
 
   protected def write(ckptPath: Path, writeTo: (DataOutputStream) => Unit) = 
     Try(createOrAppend(ckptPath)) match {
@@ -126,6 +134,14 @@ class Checkpointer(taskConf: HamaConfiguration,
     case SaveSuperstep(className, variables) => 
       doSaveSuperstep(className, variables, superstepCount, taskAttemptId)
   }
+
+  protected def writeClassNameAndVariables(ckptPath: Path, 
+                                           className: Text,
+                                           variables: MapWritable) = 
+    write(ckptPath, (out) => { 
+      className.write(out)
+      variables.write(out)
+    })
 
   protected def doSaveSuperstep(className: String, 
                                 variables: Map[String, Writable],
@@ -152,10 +168,7 @@ class Checkpointer(taskConf: HamaConfiguration,
       case ckptPath@_ => {
         LOG.debug("Save superstep class name and variables data to {}", 
                   ckptPath)
-        write(new Path(ckptPath), (out) => { 
-          text.write(out)
-          mapWritable.write(out)
-        })
+        writeClassNameAndVariables(new Path(ckptPath), text, mapWritable) 
         markFinish(formCheckpointPath(aSuperstep, aTaskAttemptId, "ok"))
       }
     }

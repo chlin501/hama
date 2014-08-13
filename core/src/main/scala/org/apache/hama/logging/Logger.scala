@@ -20,6 +20,9 @@ package org.apache.hama.logging
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
 
+// TODO: need to refactor by merging BSPPeerContainer logger interface with
+//       one so that we have unify api for logging. Instead of switching between
+//       common logging and akka actor logging.
 trait Logger {
   
   val LOG = LogFactory.getLog(getClass.getName)
