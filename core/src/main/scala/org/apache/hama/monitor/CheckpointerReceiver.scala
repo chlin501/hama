@@ -59,11 +59,11 @@ trait CheckpointerReceiver extends Logger {
 
   /**
    * Check if the checkpoint is enabled in {@link HamaConfiguration}; default 
-   * set to true.
+   * set to false.
    * @return Boolean denote true if checkpoint is enabled; othwerwise false.
    */
   protected[monitor] def isCheckpointEnabled(): Boolean =
-    getCommonConf.getBoolean("bsp.checkpoint.enabled", true)
+    getCommonConf.getBoolean("bsp.checkpoint.enabled", false)
 
   protected def queueLength(): Int = packQueue.length
 

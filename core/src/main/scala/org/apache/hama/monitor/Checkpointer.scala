@@ -107,8 +107,8 @@ class Checkpointer(taskConf: HamaConfiguration,
   }
 
   protected def writePeerAndMessages[M <: Writable](
-    ckptPath: Path, peer: ProxyInfo, bundle: BSPMessageBundle[M]) = 
-  write(ckptPath, (out) => { 
+    ckptPath: Path, peer: ProxyInfo, bundle: BSPMessageBundle[M]
+  ) = write(ckptPath, (out) => { 
     peer.write(out)
     bundle.write(out)
   })

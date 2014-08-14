@@ -53,7 +53,7 @@ class MockWorker(conf: HamaConfiguration,
   def createPeer(sys: ActorSystem, 
                  conf: HamaConfiguration,
                  task: Task): BSPPeer = {
-    val p = Coordinator(conf, sys)
+    val p = Coordinator(conf, sys, LOG)
     p.configureFor(task)
     p 
   }

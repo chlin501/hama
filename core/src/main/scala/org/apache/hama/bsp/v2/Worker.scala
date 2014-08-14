@@ -59,7 +59,7 @@ protected[v2] class Worker extends SuperstepBSP with Agent {
                      conf: HamaConfiguration, 
                      actorSystem: ActorSystem): Option[Coordinator] = 
   old match { 
-    case None => Some(Coordinator(conf, actorSystem)) 
+    case None => Some(Coordinator(conf, actorSystem, LOG))
     case Some(peer) => old
   } 
 

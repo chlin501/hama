@@ -19,6 +19,7 @@ package org.apache.hama.bsp.v2
 
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
+import akka.event.LoggingAdapter
 import java.io.IOException
 import java.net.InetAddress
 import java.net.URLClassLoader
@@ -33,18 +34,21 @@ import org.apache.hama.fs.CacheService
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
 //import org.apache.hama.io.IO
-import org.apache.hama.logging.Logger
-import org.apache.hama.monitor.CheckpointerReceiver
+//import org.apache.hama.logging.Logger
 import org.apache.hama.ProxyInfo
-import org.apache.hama.sync.SyncException
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.MessageManager
 import org.apache.hama.message.PeerCommunicator
-import org.apache.hama.monitor.NoMoreMessages
+import org.apache.hama.monitor.CheckpointerReceiver
+import org.apache.hama.monitor.Checkpointable
+/*
+import org.apache.hama.monitor.NoMoreBundle
 import org.apache.hama.monitor.Pack
 import org.apache.hama.monitor.SavePeerMessages
 import org.apache.hama.monitor.SaveSuperstep
+*/
 import org.apache.hama.sync.PeerSyncClient
+import org.apache.hama.sync.SyncException
 import org.apache.hama.sync.SyncServiceFactory
 import scala.collection.JavaConversions._
 import scala.collection.immutable.Queue
@@ -63,10 +67,12 @@ object Coordinator {
    * system.
    * @param conf is the common configuration.
    * @param actorSystem is the actor system created during process creation. 
+   * @param log is actor event's logging adapter.
    */
   def apply(conf: HamaConfiguration, 
-            actorSystem: ActorSystem): Coordinator = 
-    new Coordinator(conf, actorSystem)
+            actorSystem: ActorSystem, 
+            log: LoggingAdapter): Coordinator = 
+    new Coordinator(conf, actorSystem, log)
 }
 
 /**
@@ -90,11 +96,13 @@ object Coordinator {
  * @param bspActorSystem is the actor system of bsp process; it is responsible 
  *                       for launching peer messenger for coordinating between
  *                       peers.
+ * @param logger is actor event's logging adapter.
  */
 class Coordinator(conf: HamaConfiguration, 
-                  bspActorSystem: ActorSystem) extends BSPPeer 
-                                               with CheckpointerReceiver
-                                               with Logger {
+                  bspActorSystem: ActorSystem, 
+                  logger: LoggingAdapter) extends BSPPeer 
+                                       with CheckpointerReceiver 
+                                       with Checkpointable {
 
   /* task and counters specific to a particular v2.Job. */
   protected var taskWithStats: TaskWithStats = _
@@ -107,6 +115,8 @@ class Coordinator(conf: HamaConfiguration,
   protected val syncClient = SyncServiceFactory.getPeerSyncClient(configuration)
 
   private var allPeers: Array[String] = _
+
+  override def log(): LoggingAdapter = logger
 
   override def configuration(): HamaConfiguration = conf
 
@@ -175,9 +185,9 @@ class Coordinator(conf: HamaConfiguration,
     )
     val libjars = CacheService.moveJarsAndGetClasspath(conf) 
     libjars match {
-      case null => LOG.warn("No jars to be included for "+task.getId)
+      case null => log.warning("No jars to be included for "+task.getId)
       case _ => {
-        LOG.info("Jars to be included in classpath are "+libjars.mkString(", "))
+        log.info("Jars to be included in classpath are "+libjars.mkString(", "))
         taskConf.setClassLoader(new URLClassLoader(libjars, 
                                                    taskConf.getClassLoader))
       }
@@ -283,7 +293,7 @@ class Coordinator(conf: HamaConfiguration,
       messenger.transfer(peer, bundle) 
     } catch {
       case ioe: IOException => 
-        LOG.error("Fail transferring messages to {} for {}", 
+        log.error("Fail transferring messages to {} for {}", 
                   peer, ioe)
     }
   }
@@ -301,24 +311,24 @@ class Coordinator(conf: HamaConfiguration,
           val peer = entry.getKey
           val bundle = entry.getValue
           it.remove 
-          saveBundle(pack, getTask.getId.toString, getSuperstepCount,
-                     peer, bundle)
+          savePeerBundle(pack, getTask.getId.toString, getSuperstepCount,
+                         peer, bundle)
           doTransfer(peer, bundle)      
         })
-        noMoreMessages(pack, getTask.getId.toString, getSuperstepCount)
+        //noMoreBundle(pack, getTask.getId.toString, getSuperstepCount)
       }
     }
      
     enterBarrier()
     messenger.clearOutgoingMessages
-    checkpoint(pack)
+    saveSuperstep(pack)
     leaveBarrier()
     // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
     getTask.increatmentSuperstep
     //updateStatus(configuration, getTask) 
   } 
-
-  protected def checkpoint(pack: Option[Pack]) {
+/*
+  protected def saveSuperstep(pack: Option[Pack]) {
     pack match {
       case Some(pack) => pack.ckpt match {
         case Some(ckpt) => {
@@ -327,42 +337,43 @@ class Coordinator(conf: HamaConfiguration,
           ckpt ! SaveSuperstep(className, variables)
         }
         case None => 
-          LOG.warn("Checkpointer not found!")
+          log.warning("Checkpointer not found!")
       }
       
 
-      case None => LOG.warn("Checkpointer not found!")
+      case None => log.warning("Checkpointer not found!")
     }
   }
 
-  protected def noMoreMessages(pack: Option[Pack],
+  protected def noMoreBundle(pack: Option[Pack],
                                taskAttemptId: String,
                                superstepCount: Long) = pack match {
-    case None => LOG.warn("Checkpointer for "+taskAttemptId+" at "+
+    case None => log.warning("Checkpointer for "+taskAttemptId+" at "+
                           superstepCount+" is missing!")
     case Some(pack) => pack.ckpt match {
-      case Some(found) => found ! NoMoreMessages
-      case None => LOG.warn("Checkpointer for "+taskAttemptId+" at "+
+      case Some(found) => found ! NoMoreBundle
+      case None => log.warning("Checkpointer for "+taskAttemptId+" at "+
                             superstepCount+" is missing!")
     }
   }
 
-  protected def saveBundle[M <: Writable](pack: Option[Pack], 
-                                          taskAttemptId: String, 
-                                          superstepCount: Long,
-                                          peer: ProxyInfo, 
-                                          bundle: BSPMessageBundle[M]) = 
+  protected def savePeerBundle[M <: Writable](pack: Option[Pack], 
+                                              taskAttemptId: String, 
+                                              superstepCount: Long,
+                                              peer: ProxyInfo, 
+                                              bundle: BSPMessageBundle[M]) = 
     pack match {
       case None => 
-        LOG.debug("TaskAttemptID "+taskAttemptId+" at "+ superstepCount+
+        log.debug("TaskAttemptID "+taskAttemptId+" at "+ superstepCount+
                   " has checkpoint enabled? "+ isCheckpointEnabled)
       case Some(pack) => pack.ckpt match {
         case Some(found) => found ! SavePeerMessages[M](peer, bundle)
-        case None => LOG.debug("TaskAttemptID "+taskAttemptId+" at "+ 
+        case None => log.debug("TaskAttemptID "+taskAttemptId+" at "+ 
                                superstepCount+" has checkpoint enabled? "+ 
                                isCheckpointEnabled)
       }
     }
+*/
   
   override def getSuperstepCount(): Long = 
     getTask.getCurrentSuperstep
