@@ -113,6 +113,8 @@ class Checkpointer(taskConf: HamaConfiguration,
     bundle.write(out)
   })
 
+  // TODO: consider to open ckptPath stream at the beginning, then close stream
+  //       when receiving NoMoreBundle message would increase performance.
   protected def write(ckptPath: Path, writeTo: (DataOutputStream) => Unit) = 
     Try(createOrAppend(ckptPath)) match {
       case Success(out) => try { writeTo(out) } finally { out.close }

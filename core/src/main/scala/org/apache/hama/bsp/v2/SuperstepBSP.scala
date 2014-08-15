@@ -44,6 +44,8 @@ protected trait SuperstepBSP extends BSP with Configurable {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
+  protected def getTask(): Task
+
   /**
    * This is configuration for a specific task. 
    */
@@ -82,8 +84,6 @@ protected trait SuperstepBSP extends BSP with Configurable {
    */
   protected[v2] def commonConf(peer: BSPPeer): HamaConfiguration = 
     peer.configuration
-
-  
   
   @throws(classOf[IOException])
   @throws(classOf[SyncException])

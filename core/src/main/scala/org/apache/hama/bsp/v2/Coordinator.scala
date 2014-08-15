@@ -34,19 +34,12 @@ import org.apache.hama.fs.CacheService
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
 //import org.apache.hama.io.IO
-//import org.apache.hama.logging.Logger
 import org.apache.hama.ProxyInfo
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.MessageManager
 import org.apache.hama.message.PeerCommunicator
 import org.apache.hama.monitor.CheckpointerReceiver
 import org.apache.hama.monitor.Checkpointable
-/*
-import org.apache.hama.monitor.NoMoreBundle
-import org.apache.hama.monitor.Pack
-import org.apache.hama.monitor.SavePeerMessages
-import org.apache.hama.monitor.SaveSuperstep
-*/
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncException
 import org.apache.hama.sync.SyncServiceFactory
@@ -76,8 +69,8 @@ object Coordinator {
 }
 
 /**
- * This class purely implements BSPPeer interface. With a separated 
- * @{link BSPPeerExecutor} serves for executing worker logic.
+ * This class purely implements BSPPeer interface, and is intended to be used  
+ * by @{link Worker} for executing superstep logic.
  *
  * {@link Coordinator} is responsible for providing related services, 
  * including:
@@ -156,7 +149,6 @@ class Coordinator(conf: HamaConfiguration,
     localize(configuration, getTask)
     settingForTask(configuration, getTask)
     syncService(configuration, getTask)
-    //updateStatus(configuration, getTask)
     firstSync(getTask.getCurrentSuperstep)
   }
 
@@ -255,14 +247,6 @@ class Coordinator(conf: HamaConfiguration,
 
   protected def port(): Int = configuration.getInt("bsp.peer.port", 61000)
 
-  /**
-   * TODO: task phase update needs to be done in e.g. BSPTask.java
-   * Update current task status
-   * (Async actor) report status back to master.
-  def updateStatus(conf: HamaConfiguration, task: Task) {
-  }
-   */ 
-
   //override def getIO[I, O](): IO[I, O] = this.io.asInstanceOf[IO[I, O]]
 
   @throws(classOf[IOException])
@@ -300,6 +284,7 @@ class Coordinator(conf: HamaConfiguration,
 
   @throws(classOf[IOException])
   override def sync() {
+    getTask.transitToSync
     val pack = nextPack
     val it = messenger.getOutgoingBundles
     it match {
@@ -325,55 +310,7 @@ class Coordinator(conf: HamaConfiguration,
     leaveBarrier()
     // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
     getTask.increatmentSuperstep
-    //updateStatus(configuration, getTask) 
   } 
-/*
-  protected def saveSuperstep(pack: Option[Pack]) {
-    pack match {
-      case Some(pack) => pack.ckpt match {
-        case Some(ckpt) => {
-          val className = pack.superstep.getClass.getName
-          val variables = pack.superstep.getVariables
-          ckpt ! SaveSuperstep(className, variables)
-        }
-        case None => 
-          log.warning("Checkpointer not found!")
-      }
-      
-
-      case None => log.warning("Checkpointer not found!")
-    }
-  }
-
-  protected def noMoreBundle(pack: Option[Pack],
-                               taskAttemptId: String,
-                               superstepCount: Long) = pack match {
-    case None => log.warning("Checkpointer for "+taskAttemptId+" at "+
-                          superstepCount+" is missing!")
-    case Some(pack) => pack.ckpt match {
-      case Some(found) => found ! NoMoreBundle
-      case None => log.warning("Checkpointer for "+taskAttemptId+" at "+
-                            superstepCount+" is missing!")
-    }
-  }
-
-  protected def savePeerBundle[M <: Writable](pack: Option[Pack], 
-                                              taskAttemptId: String, 
-                                              superstepCount: Long,
-                                              peer: ProxyInfo, 
-                                              bundle: BSPMessageBundle[M]) = 
-    pack match {
-      case None => 
-        log.debug("TaskAttemptID "+taskAttemptId+" at "+ superstepCount+
-                  " has checkpoint enabled? "+ isCheckpointEnabled)
-      case Some(pack) => pack.ckpt match {
-        case Some(found) => found ! SavePeerMessages[M](peer, bundle)
-        case None => log.debug("TaskAttemptID "+taskAttemptId+" at "+ 
-                               superstepCount+" has checkpoint enabled? "+ 
-                               isCheckpointEnabled)
-      }
-    }
-*/
   
   override def getSuperstepCount(): Long = 
     getTask.getCurrentSuperstep

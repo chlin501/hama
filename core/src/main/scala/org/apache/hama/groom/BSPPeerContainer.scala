@@ -156,22 +156,11 @@ private[groom] class DefaultLogger(logger: ActorRef) extends Logger {
 
   /**
    * Format string.
-   * The string to be formatted is in a form of %1$s, %2$s, etc. where %N 
-   * indicates the <i>N</i>th position and $s says it's a string format.
-   * For example, 
-   * <pre>
-   *   format("select count, name from accounts where name = %1$s and " \
-   *          "gender = %2$s", "'john'", "'male'")
-   * </pre>
-   * produces the result 
-   * <pre>
-   *   "select count, name from accounts where name = 'john' and "\
-   *   "gender = 'male'"
-   * </pre>
    * @param msg contains place holder to be formatted.
    * @param args are values used to  
    */
-  private def format(msg: String, args: Any*): String = msg.format(args:_*)
+  private def format(msg: String, args: Any*): String = 
+    msg.replace("{}", "%s").format(args:_*)
  
 }
 

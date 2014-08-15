@@ -48,6 +48,13 @@ protected[v2] class Worker extends SuperstepBSP with Agent {
   protected var peer: Option[Coordinator] = None
 
   protected var currentTaskAttemptId: String = _
+ 
+  protected var task: Option[Task] = None
+
+  override def getTask(): Task = task match {
+    case None => throw new NullPointerException("Task is not yet ready!")
+    case Some(found) => found
+  }
 
   override protected[v2] def log(): LoggingAdapter = LOG
 
