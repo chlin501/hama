@@ -18,10 +18,17 @@
 package org.apache.hama.logging
 
 import akka.actor.Actor
+import akka.actor.ActorRef
 import akka.actor.ActorSystem
+import akka.actor.Props
+
+import java.io.File
+import java.io.FileWriter
 
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
+
+import org.apache.hama.bsp.TaskAttemptID
 
 object Logging {
 
@@ -42,6 +49,29 @@ object Logging {
   def apply(clazz: Class[_]): LoggingAdapter = 
     new CommonLogging(LogFactory.getLog(clazz))
 
+  /**
+   * This is intended to be used by {@link BSPPeerContainer} only.
+   */
+  def apply(taskLogParam: TaskLogParam): LoggingAdapter = {
+    val sys = taskLogParam.system
+    checkIfExist(sys) 
+    val logDir = taskLogParam.logDir
+    checkIfEmpty(logDir)
+    val log = sys.actorOf(Props(classOf[TaskLogger], logDir), 
+                          "taskLogger%s".format(taskLogParam.slotSeq))
+    new TaskLogging(log)
+  }
+ 
+  def checkIfExist(arg: Any) = arg match {
+    case null => throw new IllegalArgumentException("ActorSystem not provided!")
+    case _ =>
+  }
+
+  def checkIfEmpty(arg: String) = arg match {
+    case null|"" => 
+      throw new IllegalArgumentException("Task logDir not provided!")
+    case _ =>
+  }
 }
 
 /**
@@ -94,6 +124,42 @@ class CommonLogging(log: Log) extends LoggingAdapter {
    
 }
 
+object TaskLogging {
+
+  final case class Initialize(taskAttemptId: TaskAttemptID)
+  final case class Info(message: String)
+  final case class Debug(message: String)
+  final case class Warning(message: String)
+  final case class Error(message: String)
+  final case class Close(taskAttemptId: TaskAttemptID)
+
+}
+
+/** 
+ * Wrapper for task logger.
+ */
+protected[logging] class TaskLogging(log: ActorRef) extends LoggingAdapter {
+
+  import TaskLogging._
+
+  def initialize(taskAttemptId: TaskAttemptID) = log ! Initialize(taskAttemptId)
+
+  override def info(msg: String, args: Any*) = log ! Info(format(msg, args))
+
+  override def debug(msg: String, args: Any*) = log ! Debug(format(msg, args))
+
+  override def warning(msg: String, args: Any*) = 
+    log ! Warning(format(msg, args))
+
+  override def error(msg: String, args: Any*) = log ! Error(format(msg, args))
+
+  def close(taskAttemptId: TaskAttemptID) = log ! Close(taskAttemptId)
+
+}
+
+/**
+ * Actual client will <b>extends</b> (or <b>with</b>) sub-trait of this one.
+ */
 trait HamaLog {
 
   def log(): LoggingAdapter
@@ -115,5 +181,120 @@ trait ActorLog extends HamaLog { self: Actor =>
 trait CommonLog extends HamaLog {
   
   override def log(): LoggingAdapter = Logging(getClass)
+
+}
+
+protected[logging] class TaskLogger(logDir: String) extends Actor {
+
+  import TaskLogging._
+
+  type StdOutWriter = FileWriter
+  type StdErrWriter = FileWriter
+  type JobIDPath = String
+
+  protected var out: Option[StdOutWriter] = None
+  protected var err: Option[StdErrWriter] = None
+  protected var taskAttemptId: Option[TaskAttemptID] = None
+
+  override def receive = {
+    case Initialize(taskAttemptId) => {
+      this.taskAttemptId = taskAttemptId match {
+        case null => None
+        case _ => Some(taskAttemptId)  
+      }
+      val (stdout, stderr) = mkPathAndWriters(logDir, taskAttemptId, mkdirs)
+      out = stdout
+      err = stderr
+    }
+    case Info(msg) => write(out, msg) 
+    case Debug(msg) => write(out, msg)
+    case Warning(msg) => write(err, msg)
+    case Error(msg) => write(err, msg)
+    case Close(attemptId) => {
+      attemptId match {
+        case null => println("Don't know close which task attempt id for it's"+
+                             " missing!")
+        case id@_ => taskAttemptId match {
+          case Some(targetId) => closeIfMatched(id.toString, targetId.toString)
+          case None => System.err.println("Task attempt id not matched=> id: "+
+                                          id+", task attempt id: None")
+        }
+      }
+    }
+    case msg@_ => println("Unknown msg "+msg+" found for task attempt id "+
+                          taskAttemptId.getOrElse("'unknown'"))
+  }
+
+  protected def closeIfMatched(id: String, 
+                               targetId: String) = id.equals(targetId) match {
+    case true => {
+      out match {
+        case Some(found) => try {} finally { found.close }
+        case None =>
+      } 
+      err match {
+        case Some(found) => try {} finally { found.close }
+        case None =>
+      }
+    }
+    case false => println("Id "+id+" doesn't match current task attempt id "+
+                          this.taskAttemptId.toString)
+  }
+
+  protected def write(writer: Option[FileWriter], msg: String) = writer match {
+    case Some(found) => found.write(msg+"\n")
+    case None => println("Unlikely! But either StdOut or StdErr is missing!")
+  }
+
+  protected def mkdirs(logDir: String, jobId: String): (JobIDPath, Boolean) = {
+    val jobDir = new File(logDir, jobId)
+    val ret = jobDir.exists match {
+      case false => jobDir.mkdirs
+      case true => true 
+    }
+    (jobDir.toString, ret)
+  }
+
+  protected def mkPathAndWriters(logDir: String,
+                                 taskAttemptId: TaskAttemptID, 
+                                 mkdirs: (String, String) => 
+                                         (JobIDPath, Boolean)): 
+      (Option[StdOutWriter], Option[StdErrWriter]) = {
+    val jobId = taskAttemptId.getJobID.toString
+    mkdirs(logDir, jobId) match {
+      case (jobDir, true) => 
+        (Some(getWriter(jobDir, taskAttemptId.toString)),
+         Some(getWriter(jobDir, taskAttemptId.toString, ".err")))
+      case (jobDir, false) => (None, None)
+    }
+  }
+
+  protected def getWriter(jobDir: String, 
+                          taskAttemptId: String, 
+                          ext: String = "log",
+                          append: Boolean = true): FileWriter = 
+    new FileWriter(new File(jobDir, taskAttemptId+"."+ext), append)
+
+}
+
+final case class TaskLogParam(system: ActorSystem, 
+                              logDir: String, 
+                              slotSeq: Int)
+
+/**
+ * Used by TaskLog and underlying Task actor.
+ */
+protected trait TaskLogParameter {
+
+  def getTaskLogParam(): TaskLogParam 
+}
+
+/**
+ * Intended to be used by {@link BSPPeerContainer}.
+ */
+trait TaskLog extends HamaLog { self: TaskLogParameter =>
+
+  override def log(): LoggingAdapter = 
+    Logging(getTaskLogParam)
 
 }
