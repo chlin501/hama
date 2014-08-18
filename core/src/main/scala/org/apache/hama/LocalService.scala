@@ -73,17 +73,13 @@ trait LocalService extends Service {
 
 
   /**
-   * Create a service actor and schedule message checking if it's ready.
-   * Another service must be in the same jvm as actor that creates the service,
-   * so keep sending message instead of scheduleOnce.
+   * Create a service and schedule message checking if it's ready.
    *
    * @param service is the name of the service actor.
    * @param target denotes the class name of that actor.
    */
   protected[hama] def create[A <: Actor](service: String, target: Class[A]): 
       LocalService = {
-// TODO: refactor to getOrCreate by checking services directly instead of 
-//       schedule message like remote lookup.
     val actor = context.actorOf(Props(target, configuration), service)
     import context.dispatcher
     val cancellable = 
