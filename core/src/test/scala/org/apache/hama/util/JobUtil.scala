@@ -181,7 +181,15 @@ trait JobUtil extends Logger {
     tmpJobFile
   }
 
-  def createTaskAttemptId(identifier: String, id: Int, taskId: Int, 
+  def createTaskAttemptIdString(identifier: String = "test", 
+                                id: Int = 1, 
+                                taskId: Int = 1, 
+                                taskAttemptId: Int = 1): String = 
+    createTaskAttemptId(identifier, id, taskId, taskAttemptId).toString
+
+  def createTaskAttemptId(identifier: String, 
+                          id: Int, 
+                          taskId: Int, 
                           taskAttemptId: Int): TaskAttemptID = {
     val jobId = createJobId(identifier, id)
     createTaskAttemptId(jobId, taskId, taskAttemptId)

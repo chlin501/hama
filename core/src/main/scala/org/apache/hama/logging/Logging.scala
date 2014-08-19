@@ -58,18 +58,20 @@ object Logging {
    *                     slot seq, indicating to which slot this task logger
    *                     belongs.
    */
-  def apply(taskLogParam: TaskLogParam): LoggingAdapter = {
+  def apply[L <: TaskLogger](taskLogParam: TaskLogParam, 
+                             taskLoggerClass: Class[L]): LoggingAdapter = {
     val sys = taskLogParam.system
-    checkIfExist(sys) 
+    checkIfNull("ActorSystem", sys) 
     val logDir = taskLogParam.logDir
     checkIfEmpty(logDir)
-    val log = sys.actorOf(Props(classOf[TaskLogger], logDir), 
+    val log = sys.actorOf(Props(taskLoggerClass, logDir), 
                           "taskLogger%s".format(taskLogParam.slotSeq))
+    checkIfNull("TaskLogger", log)
     new TaskLogging(log)
   }
  
-  private def checkIfExist(arg: Any) = arg match {
-    case null => throw new IllegalArgumentException("ActorSystem not provided!")
+  private def checkIfNull(msg: String, arg: Any) = arg match {
+    case null => throw new IllegalArgumentException(msg+" not provided!")
     case _ =>
   }
 
@@ -102,15 +104,17 @@ trait LoggingAdapter {
  * A class that wraps actor logging.
  * @param log is an instance of {@link akka.event.Logging}.
  */
-class ActorLogging(log: akka.event.LoggingAdapter) extends LoggingAdapter {
+protected[logging] class ActorLogging(log: akka.event.LoggingAdapter) 
+      extends LoggingAdapter {
 
-  override def info(msg: String, args: Any*) = log.info(format(msg, args))
+  override def info(msg: String, args: Any*) = log.info(format(msg, args:_*))
 
-  override def debug(msg: String, args: Any*) = log.debug(format(msg, args))
+  override def debug(msg: String, args: Any*) = log.debug(format(msg, args:_*))
 
-  override def warning(msg: String, args: Any*) = log.warning(format(msg, args))
+  override def warning(msg: String, args: Any*) = 
+    log.warning(format(msg, args:_*))
 
-  override def error(msg: String, args: Any*) = log.error(format(msg, args))
+  override def error(msg: String, args: Any*) = log.error(format(msg, args:_*))
  
 }
 
@@ -118,26 +122,26 @@ class ActorLogging(log: akka.event.LoggingAdapter) extends LoggingAdapter {
  * A class that wraps common logging.
  * @param log is an instance of {@link org.apache.commons.logging.Log}.
  */
-class CommonLogging(log: Log) extends LoggingAdapter {
+protected[logging] class CommonLogging(log: Log) extends LoggingAdapter {
 
-  override def info(msg: String, args: Any*) = log.info(format(msg, args))
+  override def info(msg: String, args: Any*) = log.info(format(msg, args:_*))
 
-  override def debug(msg: String, args: Any*) = log.debug(format(msg, args))
+  override def debug(msg: String, args: Any*) = log.debug(format(msg, args:_*))
 
-  override def warning(msg: String, args: Any*) = log.warn(format(msg, args))
+  override def warning(msg: String, args: Any*) = log.warn(format(msg, args:_*))
 
-  override def error(msg: String, args: Any*) = log.error(format(msg, args))
+  override def error(msg: String, args: Any*) = log.error(format(msg, args:_*))
    
 }
 
 object TaskLogging {
 
-  final case class Initialize(taskAttemptId: TaskAttemptID)
-  final case class Info(message: String)
-  final case class Debug(message: String)
-  final case class Warning(message: String)
-  final case class Error(message: String)
-  final case class Close(taskAttemptId: TaskAttemptID)
+  final protected[logging] case class Initialize(taskAttemptId: TaskAttemptID)
+  final protected[logging] case class Info(message: String)
+  final protected[logging] case class Debug(message: String)
+  final protected[logging] case class Warning(message: String)
+  final protected[logging] case class Error(message: String)
+  final protected[logging] case class Close(taskAttemptId: TaskAttemptID)
 
 }
 
@@ -150,14 +154,16 @@ protected[logging] class TaskLogging(log: ActorRef) extends LoggingAdapter {
 
   def initialize(taskAttemptId: TaskAttemptID) = log ! Initialize(taskAttemptId)
 
-  override def info(msg: String, args: Any*) = log ! Info(format(msg, args))
+  override def info(msg: String, args: Any*) = log ! Info(format(msg, args:_*))
 
-  override def debug(msg: String, args: Any*) = log ! Debug(format(msg, args))
+  override def debug(msg: String, args: Any*) = 
+    log ! Debug(format(msg, args:_*))
 
   override def warning(msg: String, args: Any*) = 
-    log ! Warning(format(msg, args))
+    log ! Warning(format(msg, args:_*))
 
-  override def error(msg: String, args: Any*) = log ! Error(format(msg, args))
+  override def error(msg: String, args: Any*) = 
+    log ! Error(format(msg, args:_*))
 
   def close(taskAttemptId: TaskAttemptID) = log ! Close(taskAttemptId)
 
@@ -229,10 +235,10 @@ protected[logging] class TaskLogger(logDir: String) extends Actor {
       attemptId match {
         case null => println("Don't know close which task attempt id for it's"+
                              " missing!")
-        case id@_ => taskAttemptId match {
+        case id@_ => this.taskAttemptId match {
           case Some(targetId) => closeIfMatched(id.toString, targetId.toString)
-          case None => System.err.println("Task attempt id not matched=> id: "+
-                                          id+", task attempt id: None")
+          case None => System.err.println("TaskAttemptId not matched => id: "+
+                                          id+", task attempt id: None.")
         }
       }
     }
@@ -241,24 +247,24 @@ protected[logging] class TaskLogger(logDir: String) extends Actor {
   }
 
   protected def closeIfMatched(id: String, 
-                               targetId: String) = id.equals(targetId) match {
+                               currentId: String) = id.equals(currentId) match {
     case true => {
-      out match {
-        case Some(found) => try {} finally { found.close }
-        case None =>
-      } 
-      err match {
-        case Some(found) => try {} finally { found.close }
-        case None =>
-      }
+      closeIfNotNull(out)
+      closeIfNotNull(err)
     }
     case false => println("Id "+id+" doesn't match current task attempt id "+
-                          this.taskAttemptId.toString)
+                          currentId)
+  }
+
+  protected def closeIfNotNull(fw: Option[FileWriter]) = fw match {
+    case Some(found) => try {} finally { found.close }
+    case None =>
   }
 
   protected def write(writer: Option[FileWriter], msg: String) = writer match {
     case Some(found) => found.write(msg+"\n")
-    case None => println("Unlikely! But either StdOut or StdErr is missing!")
+    case None => 
+      System.err.println("Unlikely! But either stdout or stderr is missing!")
   }
 
   protected def mkdirs(logDir: String, jobId: String): (JobIDPath, Boolean) = {
@@ -299,7 +305,7 @@ final case class TaskLogParam(system: ActorSystem,
 /**
  * Used by TaskLog and underlying Task actor.
  */
-protected trait TaskLogParameter {
+protected[logging] trait TaskLogParameter {
 
   def getTaskLogParam(): TaskLogParam 
 }
@@ -310,6 +316,6 @@ protected trait TaskLogParameter {
 trait TaskLog extends HamaLog { self: TaskLogParameter =>
 
   override def log(): LoggingAdapter = 
-    Logging(getTaskLogParam)
+    Logging[TaskLogger](getTaskLogParam, classOf[TaskLogger])
 
 }

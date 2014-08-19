@@ -17,15 +17,27 @@
  */
 package org.apache.hama.logging
 
+import akka.actor.ActorRef
+import java.io.FileWriter
 import org.apache.commons.logging.Log
 import org.apache.hama.TestEnv
+import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
+
+final case class Expect(msg: String)
 
 final case class InfoMsg(msg: String)
 final case class DebugMsg(msg: String)
 final case class WarnMsg(msg: String)
 final case class ErrMsg(msg: String)
+
+class MockTaskLogger(logDir: String, 
+                     tester: ActorRef) extends TaskLogger(logDir) {
+
+  override def write(out: Option[FileWriter], msg: String) = tester ! msg
+
+}
 
 trait TestMsg extends LoggingAdapter {
 
@@ -69,19 +81,13 @@ class MockActorLogging(adptr: akka.event.LoggingAdapter)
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestLogging extends TestEnv("TestLogging") {
+class TestLogging extends TestEnv("TestLogging") with JobUtil {
+
+  import TaskLogging._
 
   val testMsg = "{}: test msg!"
 
-  it("test logging mechanism.") {
-    LOG.info("Test logging")
-    val actorLog = new MockActorLogging(null)
-    LOG.info("Test actor logging ...")
-    assertFor(actorLog)
-    val commonLog = new MockCommonLogging(null)
-    LOG.info("Test common logging ...")
-    assertFor(commonLog)
-  }
+  val tasklogsPath = "logs/tasklogs"
 
   @throws(classOf[Exception]) 
   def assertFor(actorLog: TestMsg) {
@@ -104,6 +110,56 @@ class TestLogging extends TestEnv("TestLogging") {
     val errResult = actorLog.errMsg.msg
     LOG.info("error log result: "+errResult)
     assert("error: test msg!".equals(errResult))
+  }  
+
+  def getLogDir(): String = "%s/%s".format(testRoot, tasklogsPath)
+
+/*
+  def createTaskLogging(): TaskLogging = {
+    val mockTaskLogger = 
+      createWithArgs("mockTaskLogger", classOf[MockTaskLogger], getLogDir,
+                     tester)
+    new TaskLogging(mockTaskLogger)
+  }
+*/
+  def f(msg: String, args: Any*): String = 
+    msg.replace("{}", "%s").format(args:_*)
+
+  it("test logging mechanism.") {
+    LOG.info("Test logging")
+    val actorLog = new MockActorLogging(null)
+    LOG.info("Test actor logging ...")
+    assertFor(actorLog)
+    val commonLog = new MockCommonLogging(null)
+    LOG.info("Test common logging ...")
+    assertFor(commonLog)
+
+    LOG.info("Test task logging ...")
+    val taskAttemptId = createTaskAttemptId("test", 1, 1, 1)
+
+    val mockTaskLogger = 
+      createWithArgs("mockTaskLogger", classOf[MockTaskLogger], getLogDir,
+                     tester)
+
+    mockTaskLogger ! Initialize(taskAttemptId)
+
+    // Note: expectMsg may fail for unknown reason
+    mockTaskLogger ! Info(f(testMsg, "info"))
+    expectAnyOf(f(testMsg, "info")) 
+
+    mockTaskLogger ! Debug(f(testMsg, "debug"))
+    expectAnyOf(f(testMsg, "debug"))
+
+    mockTaskLogger ! Warning(f(testMsg, "warning"))
+    expectAnyOf(f(testMsg, "warning"))
+
+    mockTaskLogger ! Error(f(testMsg, "error"))
+    expectAnyOf(f(testMsg, "error"))
+
+    mockTaskLogger ! Close(taskAttemptId)
+
+    LOG.info("Done with TestLogging ...")
+    
   }
 
 }
