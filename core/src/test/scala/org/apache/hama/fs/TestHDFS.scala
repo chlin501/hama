@@ -17,7 +17,6 @@
  */
 package org.apache.hama.fs
 
-import akka.actor.ActorSystem
 import akka.util.ByteString
 import akka.util.ByteStringBuilder
 import akka.util.ByteIterator
@@ -28,7 +27,7 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
-class TestHDFS extends TestEnv(ActorSystem("TestHDFS")) {
+class TestHDFS extends TestEnv("TestHDFS") {
 
   var operation: Operation = _
 

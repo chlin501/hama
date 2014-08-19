@@ -22,6 +22,8 @@ import akka.actor.ActorRef
 import akka.actor.Props
 import akka.testkit.TestKit
 import akka.testkit.TestProbe
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
 import java.io.File
 import org.apache.commons.io.FileUtils
 import org.apache.hama.logging.Logger
@@ -31,25 +33,61 @@ import org.scalatest.ShouldMatchers
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
+object TestEnv {
+
+  /**
+   * Used to parse config string to {@link Config}.
+   * @param str is config content.
+   * @return Config object.
+   */
+  def parseString(str: String): Config = ConfigFactory.parseString(str)
+}
+
 class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem) 
                                            with FunSpecLike 
                                            with ShouldMatchers 
                                            with BeforeAndAfterAll 
                                            with Logger {
 
+
   val probe = TestProbe()
   val conf = new HamaConfiguration()
+  val testRootPath = "/tmp/hama"
 
+  /**
+   * Instantiate test environment with name only.
+   * @param name is the actor system name.
+   */
+  def this(name: String) = this(ActorSystem(name))
+
+  /**
+   * Instantiate test environment with name and {@link Config} object.
+   * @param name of the actor system.
+   * @param config object.
+   */
+  def this(name: String, config: Config) = this(ActorSystem(name, config))
+
+  /**
+   * This creates a folder for testing.
+   * All files within this folder 
+   * @return File points to the test root path "/tmp/hama".
+   */
   def testRoot: File = {
-    val tmpRoot = new File("/tmp/hama")
+    val tmpRoot = new File(testRootPath)
     if(!tmpRoot.exists) tmpRoot.mkdirs
     tmpRoot
   }
 
+  /**
+   * Delete test root path if the path exists.
+   */
   def deleteTestRoot {
-    if(testRoot.exists) {
-      LOG.info("Delete test root path: "+testRoot.getCanonicalPath)
-      FileUtils.deleteDirectory(testRoot)
+    testRoot.exists match {
+      case true => {
+        LOG.info("Delete test root path: "+testRoot.getCanonicalPath)
+        FileUtils.deleteDirectory(testRoot)
+      }
+      case false =>
     }
   }
 

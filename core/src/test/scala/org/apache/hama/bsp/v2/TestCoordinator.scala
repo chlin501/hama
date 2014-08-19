@@ -133,9 +133,8 @@ class MockWorker(conf: HamaConfiguration,
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestCoordinator extends TestEnv(ActorSystem("TestCoordinator")) 
-                      with JobUtil 
-                      with LocalZooKeeper {
+class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil 
+                                                         with LocalZooKeeper {
 
   var conf1 = new HamaConfiguration(testConfiguration)
   var conf2 = new HamaConfiguration(testConfiguration)

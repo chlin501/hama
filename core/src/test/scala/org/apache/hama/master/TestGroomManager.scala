@@ -17,7 +17,6 @@
  */
 package org.apache.hama.master
 
-import akka.actor.ActorSystem
 import akka.actor.ActorRef
 import akka.event.Logging
 import org.apache.hama.bsp.BSPJobID
@@ -100,7 +99,7 @@ class MockGroomManager(conf: HamaConfiguration) extends GroomManager(conf) {
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestGroomManager extends TestEnv(ActorSystem("TestGroomManager")) {
+class TestGroomManager extends TestEnv("TestGroomManager") {
 
   it("test enroll groom servers to groom manager.") {
     LOG.info("Test GroomManager logic...")

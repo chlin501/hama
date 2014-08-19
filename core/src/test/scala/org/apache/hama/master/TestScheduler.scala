@@ -18,7 +18,6 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
-import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.event.Logging
 import org.apache.hama.bsp.BSPJobID
@@ -105,8 +104,7 @@ class MockScheduler(conf: HamaConfiguration, tester: ActorRef)
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestScheduler extends TestEnv(ActorSystem("TestScheduler")) 
-                    with JobUtil {
+class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
   it("test schedule tasks") {
     LOG.info("Test scheduler active and passive functions ...")

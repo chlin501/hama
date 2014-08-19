@@ -92,8 +92,8 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
   override def receive = super.receive
 } 
 
-object WithRemoteSetting {
-  def toConfig: Config = {
+object Setting {
+  def toConfig: Config = { // TODO:
     ConfigFactory.parseString("""
       testExecutor {
         akka {
@@ -122,9 +122,8 @@ object WithRemoteSetting {
 } 
 
 @RunWith(classOf[JUnitRunner])
-class TestExecutor extends TestEnv(ActorSystem("TestExecutor", 
-                                               WithRemoteSetting.toConfig.
-                                               getConfig("testExecutor"))) 
+class TestExecutor extends TestEnv("TestExecutor", 
+                                   Setting.toConfig.getConfig("testExecutor"))
                    with JobUtil {
 
   override protected def beforeAll = {

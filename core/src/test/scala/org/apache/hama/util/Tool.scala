@@ -28,6 +28,9 @@ import java.util.jar.Manifest
 import scala.tools.nsc.{Global, Settings}
 import scala.collection.immutable.Stream
 
+/**
+ * TODO: apply this for testing add jar to classpath.
+ */
 object Tool {
 
   /*

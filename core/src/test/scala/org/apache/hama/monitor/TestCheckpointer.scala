@@ -18,7 +18,6 @@
 package org.apache.hama.monitor
 
 import akka.actor.ActorRef
-import akka.actor.ActorSystem
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.BooleanWritable
 import org.apache.hadoop.io.LongWritable
@@ -92,9 +91,8 @@ class MockSuperstep extends Superstep {
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestCheckpointer extends TestEnv(ActorSystem("TestCheckpointer")) 
-                       with LocalZooKeeper 
-                       with JobUtil {
+class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper 
+                                                           with JobUtil {
   val rootPath = "/bsp/checkpoint"
   val superstepCount: Long = 6
   val jobIdentifier = "test"

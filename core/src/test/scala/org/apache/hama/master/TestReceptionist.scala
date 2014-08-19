@@ -17,7 +17,6 @@
  */
 package org.apache.hama.master
 
-import akka.actor.ActorSystem
 import akka.actor.ActorRef
 import akka.event.Logging
 import org.apache.hama.bsp.BSPJobID
@@ -66,8 +65,7 @@ class MockReceptionist(conf: HamaConfiguration) extends Receptionist(conf) {
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestReceptionist extends TestEnv(ActorSystem("TestReceptionist")) 
-                          with JobUtil {
+class TestReceptionist extends TestEnv("TestReceptionist") with JobUtil {
 
   var receptionist: ActorRef = _
 

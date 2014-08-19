@@ -17,7 +17,6 @@
  */
 package org.apache.hama.util
 
-import akka.actor.ActorSystem
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
 import org.apache.hama.TestEnv
@@ -34,8 +33,7 @@ class MockCurator extends Curator {
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestCurator extends TestEnv(ActorSystem("TestCurator")) 
-                  with LocalZooKeeper {
+class TestCurator extends TestEnv("TestCurator") with LocalZooKeeper {
 
   override protected def beforeAll = launchZk
 

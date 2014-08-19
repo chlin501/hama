@@ -18,7 +18,6 @@
 package org.apache.hama.message
 
 import akka.actor.ActorRef
-import akka.actor.ActorSystem
 import java.net.InetAddress
 import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.Writable
@@ -31,9 +30,8 @@ import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
 @RunWith(classOf[JUnitRunner])
-class TestMessageManager extends TestEnv(ActorSystem("TestMessageManager")) 
-                         with JobUtil 
-                         with Logger {
+class TestMessageManager extends TestEnv("TestMessageManager") with JobUtil 
+                                                               with Logger {
 
   val seq = 2
   val host = InetAddress.getLocalHost.getHostName

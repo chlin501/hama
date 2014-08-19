@@ -18,7 +18,6 @@
 package org.apache.hama.message
 
 import akka.actor.ActorRef
-import akka.actor.ActorSystem
 import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
@@ -28,8 +27,7 @@ import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
 @RunWith(classOf[JUnitRunner])
-class TestOutgoingMessageManager 
-      extends TestEnv(ActorSystem("TestOutgoingMessageManager")) {
+class TestOutgoingMessageManager extends TestEnv("TestOutgoingMessageManager") {
 
   it("test outgoing pojo message bundle.") {
     val outgoing = OutgoingMessageManager.get[IntWritable](testConfiguration)

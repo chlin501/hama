@@ -18,7 +18,6 @@
 package org.apache.hama.message
 
 import akka.actor.ActorRef
-import akka.actor.ActorSystem
 import java.util.concurrent.BlockingQueue
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.Callable
@@ -65,7 +64,7 @@ class LocalPeerMessenger(tester: ActorRef) extends PeerMessenger {
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestPeerMessenger extends TestEnv(ActorSystem("TestPeerMessenger")) {
+class TestPeerMessenger extends TestEnv("TestPeerMessenger") {
 
   val localMsgQueue = new LinkedBlockingQueue[BSPMessageBundle[Writable]]()
   val executor = Executors.newSingleThreadExecutor()

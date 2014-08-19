@@ -18,7 +18,6 @@
 package org.apache.hama.bsp.v2
 
 import akka.actor.ActorRef
-import akka.actor.ActorSystem
 import java.net.InetAddress
 import org.apache.hadoop.io.IntWritable
 import org.apache.hama.bsp.BSPJobID
@@ -105,9 +104,8 @@ class MockWorker1(tester: ActorRef) extends Worker {
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestWorker extends TestEnv(ActorSystem("TestWorker")) 
-                 with JobUtil 
-                 with LocalZooKeeper {
+class TestWorker extends TestEnv("TestWorker") with JobUtil 
+                                               with LocalZooKeeper {
 
   override def beforeAll { 
     super.beforeAll    

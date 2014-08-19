@@ -30,6 +30,9 @@ import org.apache.commons.logging.LogFactory
 
 import org.apache.hama.bsp.TaskAttemptID
 
+/**
+ * This is used to create different log instances.
+ */
 object Logging {
 
   /**
@@ -51,6 +54,9 @@ object Logging {
 
   /**
    * This is intended to be used by {@link BSPPeerContainer} only.
+   * @param taskLogParam contains {@link ActorSystem}, log dir path, and 
+   *                     slot seq, indicating to which slot this task logger
+   *                     belongs.
    */
   def apply(taskLogParam: TaskLogParam): LoggingAdapter = {
     val sys = taskLogParam.system
@@ -62,12 +68,12 @@ object Logging {
     new TaskLogging(log)
   }
  
-  def checkIfExist(arg: Any) = arg match {
+  private def checkIfExist(arg: Any) = arg match {
     case null => throw new IllegalArgumentException("ActorSystem not provided!")
     case _ =>
   }
 
-  def checkIfEmpty(arg: String) = arg match {
+  private def checkIfEmpty(arg: String) = arg match {
     case null|"" => 
       throw new IllegalArgumentException("Task logDir not provided!")
     case _ =>
@@ -184,6 +190,11 @@ trait CommonLog extends HamaLog {
 
 }
 
+/**
+ * This is intended to be used by {@link BSPPeerContainer} for task logging.
+ * @param logDir points to the log path directory, under which job id dirs 
+ *               with differrent task attempt ids would be created for logging.
+ */
 protected[logging] class TaskLogger(logDir: String) extends Actor {
 
   import TaskLogging._
