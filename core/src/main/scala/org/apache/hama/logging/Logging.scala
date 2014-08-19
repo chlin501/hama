@@ -164,10 +164,14 @@ protected[logging] class TaskLogging(log: ActorRef) extends LoggingAdapter {
 }
 
 /**
- * Actual client will <b>extends</b> (or <b>with</b>) sub-trait of this one.
+ * Client should inherit sub-trait of this one.
  */
 trait HamaLog {
 
+  /**
+   * Adapter for logging.
+   * @return LoggingAdapter that provides logging.
+   */
   def log(): LoggingAdapter
 
 }
