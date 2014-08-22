@@ -64,10 +64,10 @@ object Logging {
     checkIfNull("ActorSystem", sys) 
     val logDir = taskLogParam.logDir
     checkIfEmpty(logDir)
-    val log = sys.actorOf(Props(taskLoggerClass, logDir), 
+    val logger = sys.actorOf(Props(taskLoggerClass, logDir), 
                           "taskLogger%s".format(taskLogParam.slotSeq))
-    checkIfNull("TaskLogger", log)
-    new TaskLogging(log)
+    checkIfNull("TaskLogger", logger)
+    new TaskLogging(logger)
   }
  
   private def checkIfNull(msg: String, arg: Any) = arg match {
@@ -102,35 +102,41 @@ trait LoggingAdapter {
 
 /**
  * A class that wraps actor logging.
- * @param log is an instance of {@link akka.event.Logging}.
+ * @param logger is an instance of {@link akka.event.Logging}.
  */
-protected[logging] class ActorLogging(log: akka.event.LoggingAdapter) 
+protected[logging] class ActorLogging(logger: akka.event.LoggingAdapter) 
       extends LoggingAdapter {
 
-  override def info(msg: String, args: Any*) = log.info(format(msg, args:_*))
+  override def info(msg: String, args: Any*) = 
+    logger.info(format(msg, args:_*))
 
-  override def debug(msg: String, args: Any*) = log.debug(format(msg, args:_*))
+  override def debug(msg: String, args: Any*) = 
+    logger.debug(format(msg, args:_*))
 
   override def warning(msg: String, args: Any*) = 
-    log.warning(format(msg, args:_*))
+    logger.warning(format(msg, args:_*))
 
-  override def error(msg: String, args: Any*) = log.error(format(msg, args:_*))
+  override def error(msg: String, args: Any*) = 
+    logger.error(format(msg, args:_*))
  
 }
 
 /**
  * A class that wraps common logging.
- * @param log is an instance of {@link org.apache.commons.logging.Log}.
+ * @param logger is an instance of {@link org.apache.commons.logging.Log}.
  */
-protected[logging] class CommonLogging(log: Log) extends LoggingAdapter {
+protected[logging] class CommonLogging(logger: Log) extends LoggingAdapter {
 
-  override def info(msg: String, args: Any*) = log.info(format(msg, args:_*))
+  override def info(msg: String, args: Any*) = logger.info(format(msg, args:_*))
 
-  override def debug(msg: String, args: Any*) = log.debug(format(msg, args:_*))
+  override def debug(msg: String, args: Any*) = 
+    logger.debug(format(msg, args:_*))
 
-  override def warning(msg: String, args: Any*) = log.warn(format(msg, args:_*))
+  override def warning(msg: String, args: Any*) = 
+    logger.warn(format(msg, args:_*))
 
-  override def error(msg: String, args: Any*) = log.error(format(msg, args:_*))
+  override def error(msg: String, args: Any*) = 
+    logger.error(format(msg, args:_*))
    
 }
 
@@ -148,24 +154,26 @@ object TaskLogging {
 /** 
  * Wrapper for task logger.
  */
-protected[logging] class TaskLogging(log: ActorRef) extends LoggingAdapter {
+protected[logging] class TaskLogging(logger: ActorRef) extends LoggingAdapter {
 
   import TaskLogging._
 
-  def initialize(taskAttemptId: TaskAttemptID) = log ! Initialize(taskAttemptId)
+  def initialize(taskAttemptId: TaskAttemptID) = 
+    logger ! Initialize(taskAttemptId)
 
-  override def info(msg: String, args: Any*) = log ! Info(format(msg, args:_*))
+  override def info(msg: String, args: Any*) = 
+    logger ! Info(format(msg, args:_*))
 
   override def debug(msg: String, args: Any*) = 
-    log ! Debug(format(msg, args:_*))
+    logger ! Debug(format(msg, args:_*))
 
   override def warning(msg: String, args: Any*) = 
-    log ! Warning(format(msg, args:_*))
+    logger ! Warning(format(msg, args:_*))
 
   override def error(msg: String, args: Any*) = 
-    log ! Error(format(msg, args:_*))
+    logger ! Error(format(msg, args:_*))
 
-  def close(taskAttemptId: TaskAttemptID) = log ! Close(taskAttemptId)
+  def close(taskAttemptId: TaskAttemptID) = logger ! Close(taskAttemptId)
 
 }
 
@@ -178,7 +186,7 @@ trait HamaLog {
    * Adapter for logging.
    * @return LoggingAdapter that provides logging.
    */
-  def log(): LoggingAdapter
+  def LOG: LoggingAdapter
 
 }
 
@@ -187,7 +195,7 @@ trait HamaLog {
  */
 trait ActorLog extends HamaLog { self: Actor =>
 
-  override def log(): LoggingAdapter = Logging(context.system, this)
+  override def LOG: LoggingAdapter = Logging(context.system, this)
 
 }
 
@@ -196,9 +204,20 @@ trait ActorLog extends HamaLog { self: Actor =>
  */
 trait CommonLog extends HamaLog {
   
-  override def log(): LoggingAdapter = Logging(getClass)
+  override def LOG: LoggingAdapter = Logging(getClass)
 
 }
+
+/*
+trait ExecutorLogger {
+
+  def write conf, ext, f: () => Unit...
+
+} TODO
+
+StdOut extends Actor with ExecutorLogger
+StdErr extends Actor with ExecutorLogger
+*/
 
 /**
  * This is intended to be used by {@link BSPPeerContainer} for task logging.
@@ -313,9 +332,9 @@ protected[logging] trait TaskLogParameter {
 /**
  * Intended to be used by {@link BSPPeerContainer}.
  */
-trait TaskLog extends HamaLog { self: TaskLogParameter =>
+trait TaskLog extends HamaLog { self: TaskLogParameter => // TODO:change to Actor?
 
-  override def log(): LoggingAdapter = 
+  override def LOG: LoggingAdapter = 
     Logging[TaskLogger](getTaskLogParam, classOf[TaskLogger])
 
 }

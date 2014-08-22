@@ -19,7 +19,6 @@ package org.apache.hama.bsp.v2
 
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
-import akka.event.LoggingAdapter
 import java.io.IOException
 import java.net.InetAddress
 import java.net.URLClassLoader
@@ -60,12 +59,10 @@ object Coordinator {
    * system.
    * @param conf is the common configuration.
    * @param actorSystem is the actor system created during process creation. 
-   * @param log is actor event's logging adapter.
    */
   def apply(conf: HamaConfiguration, 
-            actorSystem: ActorSystem, 
-            log: LoggingAdapter): Coordinator = 
-    new Coordinator(conf, actorSystem, log)
+            actorSystem: ActorSystem): Coordinator = 
+    new Coordinator(conf, actorSystem)
 }
 
 /**
@@ -89,13 +86,10 @@ object Coordinator {
  * @param bspActorSystem is the actor system of bsp process; it is responsible 
  *                       for launching peer messenger for coordinating between
  *                       peers.
- * @param logger is actor event's logging adapter.
  */
-class Coordinator(conf: HamaConfiguration, 
-                  bspActorSystem: ActorSystem, 
-                  logger: LoggingAdapter) extends BSPPeer 
-                                       with CheckpointerReceiver 
-                                       with Checkpointable {
+class Coordinator(conf: HamaConfiguration, bspActorSystem: ActorSystem) 
+      extends BSPPeer with CheckpointerReceiver with Checkpointable {
+// TODO: self: Actor =>
 
   /* task and counters specific to a particular v2.Job. */
   protected var taskWithStats: TaskWithStats = _
@@ -108,8 +102,6 @@ class Coordinator(conf: HamaConfiguration,
   protected val syncClient = SyncServiceFactory.getPeerSyncClient(configuration)
 
   private var allPeers: Array[String] = _
-
-  override def log(): LoggingAdapter = logger
 
   override def configuration(): HamaConfiguration = conf
 
@@ -177,9 +169,9 @@ class Coordinator(conf: HamaConfiguration,
     )
     val libjars = CacheService.moveJarsAndGetClasspath(conf) 
     libjars match {
-      case null => log.warning("No jars to be included for "+task.getId)
+      case null => LOG.warning("No jars to be included for "+task.getId)
       case _ => {
-        log.info("Jars to be included in classpath are "+libjars.mkString(", "))
+        LOG.info("Jars to be included in classpath are "+libjars.mkString(", "))
         taskConf.setClassLoader(new URLClassLoader(libjars, 
                                                    taskConf.getClassLoader))
       }
@@ -277,7 +269,7 @@ class Coordinator(conf: HamaConfiguration,
       messenger.transfer(peer, bundle) 
     } catch {
       case ioe: IOException => 
-        log.error("Fail transferring messages to {} for {}", 
+        LOG.error("Fail transferring messages to {} for {}", 
                   peer, ioe)
     }
   }

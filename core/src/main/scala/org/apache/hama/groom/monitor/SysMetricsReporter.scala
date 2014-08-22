@@ -50,18 +50,6 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
   private var tracker: ActorRef = _
   private var cancellable: Cancellable = _
 
-/*
-  def sysMetricsTrackerInfo: ProxyInfo =
-    new ProxyInfo.MasterBuilder("sysMetricsTracker", configuration). 
-                  createActorPath.
-                  appendRootPath("bspmaster").
-                  appendChildPath("monitor").
-                  appendChildPath("sysMetricsTracker").
-                  build
-  
-  val sysMetricsTrackerPath = sysMetricsTrackerInfo.getPath
-*/
-
   val groomServerHost = conf.get("bsp.groom.address", "127.0.0.1")
   val groomServerPort = conf.getInt("bsp.groom.port", 50000)
   val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
@@ -79,7 +67,6 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
   override def name: String = "sysMetricsReporter"
 
   override def initializeServices {
-    //lookup("sysMetricsTracker", sysMetricsTrackerPath)
     lookup("sysMetricsTracker", 
            locate(SysMetricsTrackerLocator(configuration)))
   }

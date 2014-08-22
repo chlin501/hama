@@ -23,6 +23,7 @@ import akka.actor.ActorSystem
 import akka.event.Logging
 import java.net.InetAddress
 import org.apache.hadoop.fs.Path
+import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
@@ -44,16 +45,14 @@ final case object SyncThenValidateSuperstep
 
 class MockWorker(conf: HamaConfiguration, 
                  tester: ActorRef, 
-                 task: Task) extends Actor {
-
-  val LOG = Logging(context.system, this)
+                 task: Task) extends Agent {
 
   var peer: BSPPeer = _
 
   def createPeer(sys: ActorSystem, 
                  conf: HamaConfiguration,
                  task: Task): BSPPeer = {
-    val p = Coordinator(conf, sys, LOG)
+    val p = Coordinator(conf, sys)
     p.configureFor(task)
     p 
   }
@@ -123,10 +122,6 @@ class MockWorker(conf: HamaConfiguration,
       LOG.info("Finish sync barrier, taking around {} milli secs.", elapsed)
       tester ! peer.getSuperstepCount
     }
-  }
-
-  def unknown: Receive = {
-    case msg@_ => LOG.warning("Unknown message {} received by worker.", msg)
   }
 
   override def receive = init orElse getPeerName orElse getAllPeers orElse getNumPeers orElse getTaskAttemptId orElse peerNameAt orElse getSuperstepCount orElse getPeerIndex orElse syncThenValidateSuperstep orElse unknown

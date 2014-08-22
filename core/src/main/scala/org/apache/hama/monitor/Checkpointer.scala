@@ -55,8 +55,6 @@ class Checkpointer(taskConf: HamaConfiguration,
   //       to different external storage.
   protected val operation = Operation.get(taskConf) 
 
-  override def log(message: String) = LOG.info(message)
-
   /**
    * Save {@link BSPMessageBundle} to HDFS with path pointed to 
    * <pre>

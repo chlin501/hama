@@ -65,9 +65,7 @@ object GroomRunner {
   }
 }
 
-class GroomRunner(conf: HamaConfiguration) extends Actor {
-  
-  val LOG = Logging(context.system, this)
+class GroomRunner(conf: HamaConfiguration) extends Agent {
 
   var groom: ActorRef = _
 
@@ -80,7 +78,7 @@ class GroomRunner(conf: HamaConfiguration) extends Actor {
   }
 
   def receive = {
-    case Ready(systemName) =>  LOG.info("{} is in Normal state!", systemName) 
+    case Ready(systemName) => LOG.info("{} is in Normal state!", systemName) 
     case Halt(systemName) => {
       LOG.info("{} services are stopped. Shutdown the system...", systemName)
       context.system.shutdown       

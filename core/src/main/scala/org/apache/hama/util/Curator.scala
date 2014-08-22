@@ -20,13 +20,14 @@ package org.apache.hama.util
 import akka.event.Logging
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.logging.CommonLog
 import org.apache.curator.framework.CuratorFramework
 import org.apache.curator.framework.CuratorFrameworkFactory
 import org.apache.curator.framework.recipes.barriers.DistributedDoubleBarrier
 import org.apache.curator.retry.RetryNTimes
 import org.apache.zookeeper.data.Stat
 
-trait Curator extends Conversion {
+trait Curator extends Conversion with CommonLog {
 
   protected var curatorFramework: CuratorFramework = _
 
@@ -51,20 +52,14 @@ trait Curator extends Conversion {
     val retriesN = conf.getInt("bsp.zookeeper.client.retry_n_times", 10)
     val sleepBetweenRetries =
       conf.getInt("bsp.zookeeper.client.sleep_between_delay", 1000)
-    log(("Properties for ZooKeeper connection: connectString: %s,"+
-        "sessionTimeout: %s, retriesN: %s, sleepBetweenRetires: %s.").
-        format(connectString, sessionTimeout, retriesN, sleepBetweenRetries))
+    LOG.info("Properties for ZooKeeper connection: connectString: {},"+
+             "sessionTimeout: {}, retriesN: {}, sleepBetweenRetires: {}.",
+             connectString, sessionTimeout, retriesN, sleepBetweenRetries)
     curatorFramework = build(connectString, sessionTimeout,
                              retriesN, sleepBetweenRetries)
     curatorFramework.start
-    log("CuratorFramework is started!")
+    LOG.info("CuratorFramework is started!")
   }
-
-  /**
-   * Abstract method for log message.
-   * @param message to be logged.
-   */
-  def log(message: String)
 
   /**
    * Recursively create znode.
@@ -272,5 +267,4 @@ trait Curator extends Conversion {
       }
     }
   }
-
 }

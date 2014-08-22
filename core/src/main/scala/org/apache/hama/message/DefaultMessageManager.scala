@@ -46,7 +46,7 @@ import org.apache.hama.message.queue.SingleLockQueue
 import org.apache.hama.message.queue.SynchronizedQueue
 import org.apache.hama.ProxyInfo
 import org.apache.hama.util.LRUCache
-import org.apache.hama.logging.Logger
+import org.apache.hama.logging.CommonLog
 import scala.collection.JavaConversions._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -74,7 +74,7 @@ trait PeerCommunicator {
  */
 class DefaultMessageManager[M <: Writable] extends MessageManager[M] 
                                            with PeerCommunicator
-                                           with Logger {
+                                           with CommonLog {
 
   protected var configuration: HamaConfiguration = _
   protected var taskAttemptId: TaskAttemptID = _
@@ -204,8 +204,8 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     }
     cleanupDiskQueue match {
       case Success(yOrN) => LOG.debug("Need to cleanup disk queue? "+yOrN)
-      case Failure(ioe) => LOG.warn("Fail cleaning up disk queue for "+
-                                    taskAttemptId+"!",ioe)
+      case Failure(ioe) => LOG.warning("Fail cleaning up disk queue for "+
+                                       taskAttemptId+"!",ioe)
     }
   }
 

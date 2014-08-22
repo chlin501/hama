@@ -24,14 +24,12 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
-import org.apache.hama.logging.Logger
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
 @RunWith(classOf[JUnitRunner])
-class TestMessageManager extends TestEnv("TestMessageManager") with JobUtil 
-                                                               with Logger {
+class TestMessageManager extends TestEnv("TestMessageManager") with JobUtil {
 
   val seq = 2
   val host = InetAddress.getLocalHost.getHostName

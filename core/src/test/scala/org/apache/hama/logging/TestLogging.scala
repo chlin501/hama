@@ -114,14 +114,6 @@ class TestLogging extends TestEnv("TestLogging") with JobUtil {
 
   def getLogDir(): String = "%s/%s".format(testRoot, tasklogsPath)
 
-/*
-  def createTaskLogging(): TaskLogging = {
-    val mockTaskLogger = 
-      createWithArgs("mockTaskLogger", classOf[MockTaskLogger], getLogDir,
-                     tester)
-    new TaskLogging(mockTaskLogger)
-  }
-*/
   def f(msg: String, args: Any*): String = 
     msg.replace("{}", "%s").format(args:_*)
 

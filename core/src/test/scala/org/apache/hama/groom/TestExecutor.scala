@@ -181,6 +181,6 @@ class TestExecutor extends TestEnv("TestExecutor",
     expect(None)
     expect(None)
 
-    LOG.info("Done!")
+    LOG.info("Done TestExecutor!")
   }
 }

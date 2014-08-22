@@ -38,24 +38,11 @@ final class GroomReporter(conf: HamaConfiguration) extends LocalService
                                                    with ActorLocator {
   var tracker: ActorRef = _
 
-/*
-  val groomTasksTrackerInfo =
-    new ProxyInfo.Builder().withConfiguration(conf).
-                            withActorName("groomTasksTracker").
-                            appendRootPath("bspmaster").
-                            appendChildPath("monitor").
-                            appendChildPath("groomTasksTracker").
-                            buildProxyAtMaster
-
-  val groomTasksTrackerPath = groomTasksTrackerInfo.getPath
-*/
-
   override def configuration: HamaConfiguration = conf
 
   override def name: String = "groomReporter"
 
   override def initializeServices {
-    //lookup("groomTasksTracker", groomTasksTrackerPath)
     lookup("groomTasksTracker", 
            locate(GroomTasksTrackerLocator(configuration)))
   }

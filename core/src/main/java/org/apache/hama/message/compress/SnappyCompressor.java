@@ -23,11 +23,15 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.commons.io.IOUtils;
 import org.xerial.snappy.SnappyInputStream;
 import org.xerial.snappy.SnappyOutputStream;
 
 public class SnappyCompressor extends BSPMessageCompressor {
+
+  static final Log LOG = LogFactory.getLog(SnappyCompressor.class);
 
   @Override
   public byte[] compress(byte[] bytes) {
@@ -47,13 +51,13 @@ public class SnappyCompressor extends BSPMessageCompressor {
       compressedBytes = bos.toByteArray();
 
     } catch (IOException ioe) {
-      getLog().error("Unable to compress", ioe);
+      LOG.error("Unable to compress", ioe);
     } finally {
       try {
         sos.close();
         bos.close();
       } catch (IOException e) {
-        getLog().warn("Failed to close compression streams.", e);
+        LOG.warn("Failed to close compression streams {}.", e);
       }
     }
     return compressedBytes;
@@ -80,14 +84,14 @@ public class SnappyCompressor extends BSPMessageCompressor {
 
       bytes = IOUtils.toByteArray(dis);
     } catch (IOException ioe) {
-      getLog().error("Unable to decompress.", ioe);
+      LOG.error("Unable to decompress due to {}", ioe);
     } finally {
       try {
         dis.close();
         sis.close();
         bis.close();
       } catch (IOException e) {
-        getLog().warn("Failed to close decompression streams.", e);
+        LOG.warn("Failed to close decompression streams because {}", e);
       }
     }
 

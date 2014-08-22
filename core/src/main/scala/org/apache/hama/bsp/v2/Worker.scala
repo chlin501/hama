@@ -30,6 +30,9 @@ import org.apache.hama.Agent
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.logging.TaskLog
+import org.apache.hama.logging.TaskLogParam
+import org.apache.hama.logging.TaskLogParameter
 
 sealed trait WorkerOperation
 final case class Bind(conf: HamaConfiguration, 
@@ -40,10 +43,21 @@ final case class Execute(taskAttemptId: String,
                          taskConf: HamaConfiguration) extends WorkerOperation
 final case class Close extends WorkerOperation
 
+object Worker {
+
+  val tasklogsPath = "/logs/taskslogs"
+
+}
+
 /**
  * This is the actual class that perform {@link Superstep}s execution.
  */
-protected[v2] class Worker extends SuperstepBSP with Agent {
+protected[v2] class Worker extends SuperstepBSP 
+                           with Agent 
+                           with TaskLog 
+                           with TaskLogParameter {
+
+  import Worker._ 
 
   protected var peer: Option[Coordinator] = None
 
@@ -51,14 +65,20 @@ protected[v2] class Worker extends SuperstepBSP with Agent {
  
   protected var task: Option[Task] = None
 
+  protected var slotSeq: Int = -1 
+
+  override def getTaskLogParam(): TaskLogParam = 
+    TaskLogParam(context.system, getLogDir(hamaHome), slotSeq) 
+
+  // TODO: check if any better way to set hama home. 
+  protected def hamaHome: String = System.getProperty("hama.home.dir")
+
+  protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
+
   override def getTask(): Task = task match {
     case None => throw new NullPointerException("Task is not yet ready!")
     case Some(found) => found
   }
-
-  override protected[v2] def log(): LoggingAdapter = LOG
-
-  protected[v2] def actorContext: ActorContext = context
 
   protected[v2] def taskAttemptId: String = currentTaskAttemptId
 
@@ -66,12 +86,13 @@ protected[v2] class Worker extends SuperstepBSP with Agent {
                      conf: HamaConfiguration, 
                      actorSystem: ActorSystem): Option[Coordinator] = 
   old match { 
-    case None => Some(Coordinator(conf, actorSystem, LOG))
+    case None => Some(Coordinator(conf, actorSystem))
     case Some(peer) => old
   } 
 
   def bind: Receive = {
     case Bind(conf, actorSystem) => {
+      slotSeq = conf.getInt("bsp.child.slot.seq", 1)
       this.peer = bind(this.peer, conf, actorSystem) 
     }
   }

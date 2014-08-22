@@ -28,8 +28,8 @@ import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.compress.BSPMessageCompressor
+import org.apache.hama.logging.CommonLog
 import org.apache.hama.TestEnv
-import org.apache.hama.logging.Logger
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
@@ -72,7 +72,7 @@ class TestPeerMessenger extends TestEnv("TestPeerMessenger") {
                              new IntWritable(23))
   var forVerification: BSPMessageBundle[IntWritable] = _
 
-  class MessageConsumer extends Callable[Boolean] with Logger {
+  class MessageConsumer extends Callable[Boolean] with CommonLog {
     override def call(): Boolean = {
       var flag = true
       while(!Thread.currentThread().isInterrupted() && flag) {

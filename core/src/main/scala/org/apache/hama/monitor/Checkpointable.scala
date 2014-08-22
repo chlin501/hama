@@ -17,12 +17,12 @@
  */
 package org.apache.hama.monitor
 
-import akka.event.LoggingAdapter
 import org.apache.hadoop.io.Writable
-import org.apache.hama.ProxyInfo
+import org.apache.hama.logging.CommonLog
 import org.apache.hama.message.BSPMessageBundle
+import org.apache.hama.ProxyInfo
 
-trait Checkpointable {
+trait Checkpointable extends CommonLog {
 
   protected def savePeerBundle[M <: Writable](pack: Option[Pack],
                                               taskAttemptId: String,
@@ -31,12 +31,12 @@ trait Checkpointable {
                                               bundle: BSPMessageBundle[M]) =
     pack match {
       case None =>
-        log.debug("No checkpointer found for TaskAttemptID "+taskAttemptId+
+        LOG.debug("No checkpointer found for TaskAttemptID "+taskAttemptId+
                   " at "+ superstepCount)
       case Some(pack) => pack.ckpt match {
         case Some(found) => found ! SavePeerMessages[M](peer, bundle)
         case None => 
-          log.debug("No checkpointer for TaskAttemptID "+ taskAttemptId+" at "+
+          LOG.debug("No checkpointer for TaskAttemptID "+ taskAttemptId+" at "+
                     superstepCount)
       }
     }
@@ -48,24 +48,22 @@ trait Checkpointable {
         val variables = pack.superstep.getVariables
         ckpt ! SaveSuperstep(className, variables)
       }
-      case None => log.warning("Checkpointer not found!")
+      case None => LOG.warning("Checkpointer not found!")
     }
-    case None => log.warning("Checkpointer not found!")
+    case None => LOG.warning("Checkpointer not found!")
   }
  
   protected def noMoreBundle(pack: Option[Pack],
                              taskAttemptId: String,
                              superstepCount: Long) = pack match {
-    case None => log.warning("Checkpointer for "+taskAttemptId+" at "+
+    case None => LOG.warning("Checkpointer for "+taskAttemptId+" at "+
                           superstepCount+" is missing!")
     case Some(pack) => pack.ckpt match {
       case Some(found) => found ! NoMoreBundle
-      case None => log.warning("Checkpointer for "+taskAttemptId+" at "+
+      case None => LOG.warning("Checkpointer for "+taskAttemptId+" at "+
                             superstepCount+" is missing!")
     }
   }
-
-  protected def log(): LoggingAdapter 
 
 }
 

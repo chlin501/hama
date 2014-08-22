@@ -17,20 +17,12 @@
  */
 package org.apache.hama.util
 
-import org.apache.commons.logging.Log
-import org.apache.commons.logging.LogFactory
 import org.apache.hama.TestEnv
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 
-class MockCurator extends Curator {
-
-  val LOG = LogFactory.getLog(classOf[MockCurator])
-
-  override def log(message: String) = LOG.info(message)
-
-}
+class MockCurator extends Curator 
 
 @RunWith(classOf[JUnitRunner])
 class TestCurator extends TestEnv("TestCurator") with LocalZooKeeper {
@@ -55,6 +47,5 @@ class TestCurator extends TestEnv("TestCurator") with LocalZooKeeper {
     val seq = curator.getOrElse(jobSeqPath, 1)
     LOG.info("The job seq value is "+seq)
     assert(1 == seq)
-    //expect(Result(true, true, "barrier1"))
   }
 }

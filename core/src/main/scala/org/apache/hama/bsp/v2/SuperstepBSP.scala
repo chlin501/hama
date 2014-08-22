@@ -17,16 +17,16 @@
  */
 package org.apache.hama.bsp.v2
 
-import akka.actor.ActorContext
+import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Props
-import akka.event.LoggingAdapter
 import java.io.IOException
 import org.apache.hadoop.conf.Configurable
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.logging.ActorLog
 import org.apache.hama.monitor.Checkpointer
 import org.apache.hama.monitor.CheckpointerReceiver
 import org.apache.hama.monitor.Pack
@@ -40,7 +40,9 @@ import scala.util.Try
  * This class manages all superstep and supersteps routing, started from the
  * first superstep, according to the execution instruction.
  */
-protected trait SuperstepBSP extends BSP with Configurable {
+protected trait SuperstepBSP extends BSP with Configurable with ActorLog {
+
+  self: Actor =>
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
@@ -51,14 +53,12 @@ protected trait SuperstepBSP extends BSP with Configurable {
    */
   protected var taskConf = new HamaConfiguration
 
-  protected def log(): LoggingAdapter
-
   /**
    * This is intended to be set by {@link Worker} only because directly spaw-
    * ing checkpoint actors is eaiser.
    * @return ActorContext is {@link Actor#context}
+  //protected[v2] def actorContext(): ActorContext 
    */
-  protected[v2] def actorContext(): ActorContext 
 
   /**
    * This is intended to be set by {@link Worker} only for identifying the
@@ -69,7 +69,7 @@ protected trait SuperstepBSP extends BSP with Configurable {
   protected[v2] def taskAttemptId(): String
 
   override def setConf(conf: Configuration) = conf match {
-    case null => log.error("Task configuration is not provided for {}!",
+    case null => LOG.error("Task configuration is not provided for {}!",
                            taskAttemptId) 
     case _ => this.taskConf = conf.asInstanceOf[HamaConfiguration]
   }
@@ -90,9 +90,9 @@ protected trait SuperstepBSP extends BSP with Configurable {
   override def setup(peer: BSPPeer) { 
     val classes = commonConf(peer).get("hama.supersteps.class")
     val classNames = classes.split(",")
-    log.info(classNames.length+" superstep classes, including "+classes) 
+    LOG.info(classNames.length+" superstep classes, including "+classes) 
     classNames.foreach( className => {
-      log.debug("Instantiate "+className)
+      LOG.debug("Instantiate "+className)
       instantiate(className, peer) match {
         case Success(instance) => { 
           instance.setup(peer)
@@ -154,24 +154,24 @@ protected trait SuperstepBSP extends BSP with Configurable {
   protected[v2] def prepareForCheckpoint(peer: BSPPeer, superstep: Superstep): 
     Option[ActorRef] = isCheckpointEnabled(commonConf(peer)) match {
       case true => {
-        val ckpt = actorContext.actorOf(Props(classOf[Checkpointer], 
+        val ckpt = context.actorOf(Props(classOf[Checkpointer], 
                                               taskConf,
                                               taskAttemptId,
                                               peer.getSuperstepCount), 
                                         "checkpoint_"+taskAttemptId+"_"+
                                         peer.getSuperstepCount) 
-        log.debug("Checkpoint "+ckpt.path.name+" is created!")
+        LOG.debug("Checkpoint "+ckpt.path.name+" is created!")
         peer.isInstanceOf[CheckpointerReceiver] match {
           case true => peer.asInstanceOf[CheckpointerReceiver].
                             receive(Pack(Some(ckpt), superstep))
-          case false => log.warning("Checkpoint "+ckpt.path.name+" is created"+
+          case false => LOG.warning("Checkpoint "+ckpt.path.name+" is created"+
                                  ", but can't be assigned to BSPPeer because "+
                                  " not an instance of CheckpointerReceiver!")
         }
         Some(ckpt)
       }
       case false => {
-        log.debug("No checkpoint is needed for "+taskAttemptId)
+        LOG.debug("No checkpoint is needed for "+taskAttemptId)
         None
       }
     }

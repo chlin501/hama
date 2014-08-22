@@ -42,7 +42,7 @@ import org.apache.hama.bsp.TrackedRecordReader
 import org.apache.hama.bsp.TextOutputFormat
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.logging.Logger
+import org.apache.hama.logging.CommonLog
 
 object DefaultIO {
 
@@ -54,7 +54,7 @@ object DefaultIO {
 //       bsp peer interface provides getStat which has access to counter.
 class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]] 
                 with Configurable 
-                with Logger {
+                with CommonLog {
 
   import DefaultIO._
  
@@ -157,9 +157,8 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
 
     var reader: RecordReader[_,_] = null
     if (null != inputSplit) {
-      if(LOG.isDebugEnabled())
-        LOG.debug(split.getClass().getName()+" stores "+split.bytes().length+
-                  " as FileSplit.")
+      LOG.debug(split.getClass().getName()+" stores "+split.bytes().length+
+                " as FileSplit.")
       var splitBuffer: DataInputStream = null
       try {
         val bin = new ByteArrayInputStream(split.bytes())
@@ -217,7 +216,7 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
   def outputPath(timestamp: Long, partitionId: Int): Path = {
     val parentPath = configuration().get("bsp.output.dir", 
                                          "tmp-" + timestamp)
-    if(LOG.isDebugEnabled()) LOG.debug("Output parent path is "+parentPath)
+    LOG.debug("Output parent path is "+parentPath)
     new Path(parentPath, childPath(partitionId))
   }
  
@@ -272,8 +271,7 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
     val timestamp = System.currentTimeMillis()
     val dir = outputPath(timestamp, split.partitionId())
     val output = Operation.get(configuration()).makeQualified(dir)
-    if(LOG.isDebugEnabled()) LOG.debug("Writer's output path "+output)
+    LOG.debug("Writer's output path "+output)
     outputCollector(output)
   }
 }
-

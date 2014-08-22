@@ -35,20 +35,7 @@ import java.io.OutputStream
 import java.lang.ProcessBuilder
 import org.apache.commons.lang.math.NumberUtils
 import org.apache.hadoop.io.IOUtils
-/*
-import org.apache.hama.groom.BSPPeerContainer
-import org.apache.hama.groom.ContainerReady
-import org.apache.hama.groom.ContainerStopped
-import org.apache.hama.groom.KillAck
-import org.apache.hama.groom.KillTask
-import org.apache.hama.groom.LaunchAck
-import org.apache.hama.groom.LaunchTask
-import org.apache.hama.groom.PullForExecution
-import org.apache.hama.groom.ResumeAck
-import org.apache.hama.groom.ResumeTask
-import org.apache.hama.groom.StopContainer
-import org.apache.hama.groom.ShutdownContainer
-*/
+import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.fs.Operation
 import org.apache.hama.util.BSPNetUtils
@@ -58,7 +45,7 @@ import scala.collection.JavaConversions._
 final case class Command(msg: Any, recipient: ActorRef)
 final case object StreamClosed
 
-trait TaskLog {
+trait ExecutorLog { // TODO: refactor this after all log is switched 
 
   def log(name: String, input: InputStream, conf: HamaConfiguration, 
           executor: ActorRef, ext: String, error: (String, Any*) => Unit) {
@@ -90,9 +77,9 @@ trait TaskLog {
 }
 
 class StdOut(input: InputStream, conf: HamaConfiguration, executor: ActorRef) 
-      extends Actor with TaskLog { 
+      extends Actor with ExecutorLog { 
 
-  val LOG = Logging(context.system, this)
+  val LOG = Logging(context.system, this) // TODO: refactor
   
   override def preStart = 
     log(self.path.name, input, conf, executor, "log", LOG.error)
@@ -103,8 +90,8 @@ class StdOut(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
 }
 
 class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef) 
-      extends Actor with TaskLog {
-  val LOG = Logging(context.system, this)
+      extends Actor with ExecutorLog {
+  val LOG = Logging(context.system, this) // TODO: refactor
 
   override def preStart = 
     log(self.path.name, input, conf, executor, "err", LOG.error)
@@ -119,9 +106,8 @@ class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
  * @param conf cntains necessary setting for launching the child process.
  */
 class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef) 
-      extends Actor {
+      extends Agent {
  
-  val LOG = Logging(context.system, this)
   val pathSeparator = System.getProperty("path.separator")
   val fileSeparator = System.getProperty("file.separator")
   val javaHome = System.getProperty("java.home")
@@ -150,8 +136,8 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
     port
   }
 
-  // Bug: it seems using conf.get the stack lost track
-  //      following execution e.g. LOG.info after conf.get disappers 
+  // Note: it seems when using conf.get the stack lost track, e.g. LOG.info, 
+  //       after conf.get  
   def defaultOpts: String = conf.get("bsp.child.java.opts", "-Xmx200m")
 
   /**
@@ -386,10 +372,6 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
         }
       }
     }
-  }
-
-  def unknown: Receive = {
-    case msg@_=> LOG.warning("Unknown message {} for Executor", msg)
   }
 
   def terminated: Receive = {

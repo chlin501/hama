@@ -18,9 +18,9 @@
 package org.apache.hama.zk
 
 import org.apache.curator.test.TestingServer
-import org.apache.hama.logging.Logger
+import org.apache.hama.logging.CommonLog
 
-trait LocalZooKeeper extends Logger {
+trait LocalZooKeeper extends CommonLog {
 
   protected var server: TestingServer = _
   

@@ -18,7 +18,6 @@
 package org.apache.hama.util
 
 import org.apache.hama.HamaConfiguration
-//import org.apache.hama.groom.Executor
 import org.apache.hama.master.monitor.SysMetricsTracker
 import org.apache.hama.master.monitor.GroomTasksTracker
 import org.apache.hama.master.monitor.JobTasksTracker

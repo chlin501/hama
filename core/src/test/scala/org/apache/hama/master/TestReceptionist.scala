@@ -45,8 +45,6 @@ class MockMaster(conf: HamaConfiguration) extends Master(conf) {
 
 class MockReceptionist(conf: HamaConfiguration) extends Receptionist(conf) {
 
-  override val LOG = Logging(context.system, this)
-
   def getJob: Receive = {
     case GetJob(tester) => {
       if(waitQueue.isEmpty) 

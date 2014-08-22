@@ -28,13 +28,13 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.compress.BSPMessageCompressor
 import org.apache.hama.ProxyInfo
 import org.apache.hama.util.ReflectionUtils
-import org.apache.hama.logging.Logger
+import org.apache.hama.logging.CommonLog
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 
 class OutgoingPOJOMessageBundle[M <: Writable] 
-      extends OutgoingMessageManager[M] with Logger {
+      extends OutgoingMessageManager[M] with CommonLog {
 
   type PeerAndBundleIter = Iterator[Entry[ProxyInfo, BSPMessageBundle[M]]] 
 

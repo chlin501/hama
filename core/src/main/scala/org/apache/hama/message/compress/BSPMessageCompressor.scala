@@ -19,7 +19,6 @@ package org.apache.hama.message.compress;
 
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.logging.Logger
 
 object BSPMessageCompressor {
 
@@ -42,7 +41,7 @@ object BSPMessageCompressor {
 /**
  * Provides utilities for compressing and decompressing byte array.
  */
-abstract class BSPMessageCompressor extends Logger {
+abstract class BSPMessageCompressor {
 
   type Compressed = Array[Byte]
   type Uncompressed = Array[Byte]

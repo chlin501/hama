@@ -126,8 +126,6 @@ final case class MessageFrom(msg: BSPMessageBundle[_ <: Writable],
  * An messenger on behalf of {@link BSPPeer} sends messages to other peers.
  */
 class PeerMessenger extends Actor with RemoteService {
-//TODO: create another RemoteService with LRUCache replacing proxies instead.
-  override val LOG = Logging(context.system, this)
 
   /* This holds information to BSPPeer actors. */
   protected var maxCachedConnections: Int = 100

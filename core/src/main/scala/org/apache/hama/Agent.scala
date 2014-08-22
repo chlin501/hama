@@ -18,13 +18,12 @@
 package org.apache.hama
 
 import akka.actor.Actor
-import akka.event.Logging
+import org.apache.hama.logging.ActorLog
 
-trait Agent extends Actor {
-  
-  protected val LOG = Logging(context.system, this)
+trait Agent extends Actor with ActorLog {
 
-  protected def name: String = self.path.name
+
+  protected def name: String = self.path.name // TODO: remove this method (?)
 
   protected def unknown: Receive = {
     case msg@_ => {

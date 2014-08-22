@@ -26,7 +26,7 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import java.io.File
 import org.apache.commons.io.FileUtils
-import org.apache.hama.logging.Logger
+import org.apache.hama.logging.CommonLog
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.FunSpecLike
 import org.scalatest.ShouldMatchers
@@ -47,7 +47,7 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                                            with FunSpecLike 
                                            with ShouldMatchers 
                                            with BeforeAndAfterAll 
-                                           with Logger {
+                                           with CommonLog {
 
 
   val probe = TestProbe()

@@ -25,8 +25,7 @@ import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.util.concurrent.Callable
 import org.apache.hadoop.io.Writable
-import org.apache.commons.logging.Log
-import org.apache.commons.logging.LogFactory
+import org.apache.hama.logging.CommonLog
 import org.apache.hama.io.serialization.WritableSerializer.CurrentSystem
 import scala.util.DynamicVariable
 
@@ -41,9 +40,8 @@ object WritableSerializer {
   }
 }
 
-class WritableSerializer(val system: ExtendedActorSystem) extends Serializer {
-
-  val LOG: Log = LogFactory.getLog(classOf[WritableSerializer])
+class WritableSerializer(val system: ExtendedActorSystem) extends Serializer 
+                                                          with CommonLog {
 
   override def includeManifest: Boolean = true
  
@@ -72,7 +70,7 @@ class WritableSerializer(val system: ExtendedActorSystem) extends Serializer {
     var writable: Writable = null
     clazz match {
       case Some(clz) => {
-        try {
+        try { // TODO: switch to functional Try()
           val cls = Class.forName(clz.getName)
           val instance = cls.newInstance
           if(!instance.isInstanceOf[Writable])   

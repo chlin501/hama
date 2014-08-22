@@ -18,14 +18,14 @@
 package org.apache.hama.monitor
 
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.logging.Logger
+import org.apache.hama.logging.CommonLog
 import scala.collection.immutable.Queue
 
 /**
  * This is used to identify if the target needs {@link Checkpointer}. It is
  * generally applied in {@link BSPPeer#sync} implementation.
  */
-trait CheckpointerReceiver extends Logger {
+trait CheckpointerReceiver extends CommonLog {
 
   /**
    * The queue that stores checkpoint actor.
@@ -77,8 +77,8 @@ trait CheckpointerReceiver extends Logger {
    */
   protected[monitor] def firstPackInQueue(): Option[Pack] = queueLength match {
     case 0 => {
-      LOG.warn("Checkpointer for "+currentTaskAttemptId+" at "+
-               "superstep "+currentSuperstepCount+" not found!")
+      LOG.warning("Checkpointer for "+currentTaskAttemptId+" at "+
+                  "superstep "+currentSuperstepCount+" not found!")
       None
     }
     case _ => {

@@ -21,12 +21,12 @@ import java.io.IOException
 import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.logging.Logger
+import org.apache.hama.logging.CommonLog
 
 /**
  * This is intended to be used in test purpose only.
  */
-protected class DummyBSPPeer extends BSPPeer with Logger {
+protected class DummyBSPPeer extends BSPPeer with CommonLog {
 
   @throws(classOf[IOException])
   override def send(peerName: String, msg: Writable) = 

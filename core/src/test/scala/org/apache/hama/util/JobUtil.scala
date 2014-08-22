@@ -32,7 +32,7 @@ import org.apache.hama.bsp.v2.IDCreator._
 import org.apache.hama.fs.Operation
 import org.apache.hama.fs.HDFS
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.logging.Logger
+import org.apache.hama.logging.CommonLog
 
 class MockHDFS extends HDFS {
 
@@ -40,7 +40,7 @@ class MockHDFS extends HDFS {
 
 }
 
-trait JobUtil extends Logger {
+trait JobUtil extends CommonLog  {
 
   val sampleJobFileContent: String = """
 <?xml version="3.0" encoding="UTF-8" standalone="no"?><configuration>

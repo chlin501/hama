@@ -59,10 +59,9 @@ import scala.concurrent.duration.DurationInt
 final case class Args(actorSystemName: String, listeningTo: String, port: Int, 
                       seq: Int, config: Config)
 
-private final case class Initialize(taskAttemptId: TaskAttemptID)
 /**
+private final case class Initialize(taskAttemptId: TaskAttemptID)
  * Following log levels are only intended for container use.
- */
 private final case class Info(message: String)
 private final case class Debug(message: String)
 private final case class Warning(message: String)
@@ -111,7 +110,7 @@ private[groom] final class TaskLogger(conf: HamaConfiguration) extends Actor {
   }
 }
 
-private[groom] trait Logger { // TODO: unify with logging.Logger
+private[groom] trait Logger { 
 
   def info(message: String, args: Any*) 
 
@@ -154,11 +153,9 @@ private[groom] class DefaultLogger(logger: ActorRef) extends Logger {
                                               "close logging.")
     }
 
-  /**
    * Format string.
    * @param msg contains place holder to be formatted.
    * @param args are values used to  
-   */
   private def format(msg: String, args: Any*): String = 
     msg.replace("{}", "%s").format(args:_*)
  
@@ -180,6 +177,7 @@ private[groom] object TaskLogging {
   }
  
 }
+ */
 
 object BSPPeerContainer {
 
@@ -264,7 +262,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
                                                 with RemoteService 
                                                 with ActorLocator {
  
-  val logger = TaskLogging(context, conf, slotSeq)
+  //val logger = TaskLogging(context, conf, slotSeq)
 
   protected var executor: ActorRef = _
 
