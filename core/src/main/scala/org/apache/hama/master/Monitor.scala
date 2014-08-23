@@ -24,12 +24,10 @@ import org.apache.hama.master.monitor.JobTasksTracker
 import org.apache.hama.master.monitor.GroomTasksTracker
 import org.apache.hama.master.monitor.SysMetricsTracker
 
-// TODO: rename to Auditor?
+// TODO: rename to Auditor/ Tracker?
 class Monitor(conf: HamaConfiguration) extends LocalService {
 
   override def configuration: HamaConfiguration = conf
-
-  override def name: String = "monitor"
 
   override def initializeServices {
     create("jobTasksTracker", classOf[JobTasksTracker])

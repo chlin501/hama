@@ -76,25 +76,24 @@ trait ExecutorLog { // TODO: refactor this after all log is switched
 
 }
 
+// TODO: refactor using logging.Logging
 class StdOut(input: InputStream, conf: HamaConfiguration, executor: ActorRef) 
-      extends Actor with ExecutorLog { 
-
-  val LOG = Logging(context.system, this) // TODO: refactor
+      extends Agent with ExecutorLog { 
   
   override def preStart = 
-    log(self.path.name, input, conf, executor, "log", LOG.error)
+    log(name, input, conf, executor, "log", LOG.error)
 
   override def receive = { 
     case msg@_ => LOG.warning("Unknown stdout message {}", msg)
   }
 }
 
+// TODO: refactor using logging.Logging
 class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef) 
-      extends Actor with ExecutorLog {
-  val LOG = Logging(context.system, this) // TODO: refactor
+      extends Agent with ExecutorLog {
 
   override def preStart = 
-    log(self.path.name, input, conf, executor, "err", LOG.error)
+    log(name, input, conf, executor, "err", LOG.error)
 
   override def receive = { 
     case msg@_ => LOG.warning("Unknown stderr message {}", msg)

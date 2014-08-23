@@ -87,8 +87,6 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "taskManager"
-
   /**
    * Initialize slots with default slots value to 3, which comes from maxTasks,
    * or "bsp.tasks.maximum".

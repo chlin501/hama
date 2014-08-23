@@ -27,8 +27,6 @@ final class GroomTasksTracker(conf: HamaConfiguration) extends LocalService {
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "groomTasksTracker"
-
   /**
    * Receive {@link GroomServerStat} report from {@link GroomReporter}.
    */

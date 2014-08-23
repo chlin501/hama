@@ -88,8 +88,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "sched"
-
   override def afterMediatorUp {
     taskAssignQueueChecker = request(self, NextPlease) 
   }

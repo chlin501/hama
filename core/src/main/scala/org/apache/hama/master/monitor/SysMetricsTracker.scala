@@ -28,8 +28,6 @@ class SysMetricsTracker(conf: HamaConfiguration) extends LocalService {
   private var sysMetricsStat = Set.empty[MetricsRecord]
 
   override def configuration: HamaConfiguration = conf
-
-  override def name: String = "sysMetricsTracker"
  
   def metricsRecord: Receive = {
     case stat: MetricsRecord => {

@@ -37,8 +37,6 @@ final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = conf.get("bsp.groom.name", "groomServer") 
-
   override def initializeServices {
     create("taskManager", classOf[TaskManager]) 
     create("monitor", classOf[Monitor]) 

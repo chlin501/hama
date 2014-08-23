@@ -75,7 +75,7 @@ trait Hermes {
 
 }
 
-class Iris extends Hermes {
+class Iris extends Hermes { // instead of using TypedActor, use self: Actor =>
 
   protected var actor: ActorRef = _
 

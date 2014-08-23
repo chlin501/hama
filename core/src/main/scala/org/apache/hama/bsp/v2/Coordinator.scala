@@ -89,7 +89,8 @@ object Coordinator {
  */
 class Coordinator(conf: HamaConfiguration, bspActorSystem: ActorSystem) 
       extends BSPPeer with CheckpointerReceiver with Checkpointable {
-// TODO: self: Actor =>
+
+// TODO: self: Actor => 
 
   /* task and counters specific to a particular v2.Job. */
   protected var taskWithStats: TaskWithStats = _

@@ -51,8 +51,6 @@ class Aggregator(conf: HamaConfiguration, tester: ActorRef)
   private def decrement = command -= 1
   private def isZero: Boolean = (command == 0)
 
-  override def name: String = "MockTaskManager"
-
   override def initializeServices {
     initializeSlots(getMaxTasks)
     LOG.info("Done initializing {} with {} slots ...", self, getMaxTasks)

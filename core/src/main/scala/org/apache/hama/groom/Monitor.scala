@@ -20,11 +20,9 @@ package org.apache.hama.groom
 import org.apache.hama._
 import org.apache.hama.groom.monitor._
 
-class Monitor(conf: HamaConfiguration) extends LocalService {
+class Monitor(conf: HamaConfiguration) extends LocalService {// TODO: rename to Reporter?
 
   override def configuration: HamaConfiguration = conf
-
-  override def name: String = "monitor"
 
   override def initializeServices {
     create("tasksReporter", classOf[TasksReporter])

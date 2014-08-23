@@ -332,9 +332,13 @@ protected[logging] trait TaskLogParameter {
 /**
  * Intended to be used by {@link BSPPeerContainer}.
  */
-trait TaskLog extends HamaLog { self: TaskLogParameter => // TODO:change to Actor?
+trait TaskLog extends HamaLog { self: TaskLogParameter => // TODO:change to Actor? so we can use context.actorOf to create log actor ref
 
-  override def LOG: LoggingAdapter = 
+  override def LOG: LoggingAdapter = {
+    // val logger = context.actorOf(Props(classOf[TaskLogger], logDir), 
+    //                              "taskLogger%s".format(slotSeq))
+    // Logging(logger)
     Logging[TaskLogger](getTaskLogParam, classOf[TaskLogger])
+  }
 
 }

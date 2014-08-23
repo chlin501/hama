@@ -37,8 +37,6 @@ final class TasksReporter(conf: HamaConfiguration) extends LocalService
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "tasksReporter"
-
   override def initializeServices {
     lookup("jobTasksTracker", locate(JobTasksTrackerLocator(configuration)))
   }

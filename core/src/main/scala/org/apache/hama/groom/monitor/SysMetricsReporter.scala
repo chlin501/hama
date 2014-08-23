@@ -64,8 +64,6 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "sysMetricsReporter"
-
   override def initializeServices {
     lookup("sysMetricsTracker", 
            locate(SysMetricsTrackerLocator(configuration)))

@@ -55,8 +55,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
  
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "receptionist"
-
   /**
    * Calculate maxTasks of all GroomServers.
    * @return Int the number of slots for all GroomServers.

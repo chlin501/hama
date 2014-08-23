@@ -28,8 +28,6 @@ final class JobTasksTracker(conf: HamaConfiguration) extends LocalService {
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "jobTasksTracker"
-
   def reportTask: Receive = {
     case newTask: Task => {  // report
       val bspJobId = newTask.getId.getJobID

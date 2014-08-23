@@ -272,8 +272,6 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", 1)
 
   def executorName: String = groomName+"_executor_"+slotSeq
-
-  override def name: String = "bspPeerContainer%s".format(slotSeq)
  
   override def initializeServices {
     lookup(executorName, locate(ExecutorLocator(configuration)))
@@ -387,7 +385,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     case ShutdownContainer => {
       LOG.debug("Unwatch remote executro {} ...", executor)
       context.unwatch(executor) 
-      //LOG.debug("Stop {} itself ...", self.path.name)
+      //LOG.debug("Stop {} itself ...", name)
       //context.stop(self)
       LOG.info("Completely shutdown BSPContainer system ...")
       context.system.shutdown

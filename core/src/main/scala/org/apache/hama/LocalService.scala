@@ -189,7 +189,7 @@ trait LocalService extends Service {
    * Forward message to a specific service.
    * Request case class comprises service name and message object.
    */
-  def forward: Receive = {
+  def forward: Receive = { // TODO: use actorSelection instead e.g. ../groom/..
     case Request(service, message) => {
       services.find(p => service.equals(p.path.name)) match {
         case Some(found) => found forward message

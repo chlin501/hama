@@ -40,8 +40,6 @@ final class GroomReporter(conf: HamaConfiguration) extends LocalService
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "groomReporter"
-
   override def initializeServices {
     lookup("groomTasksTracker", 
            locate(GroomTasksTrackerLocator(configuration)))

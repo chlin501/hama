@@ -64,8 +64,6 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
 
   override def configuration: HamaConfiguration = conf
 
-  override def name: String = "groomManager"
-
   /**
    * Quarantine offline GroomServer.
    */

@@ -22,8 +22,11 @@ import org.apache.hama.logging.ActorLog
 
 trait Agent extends Actor with ActorLog {
 
-
-  protected def name: String = self.path.name // TODO: remove this method (?)
+  /**
+   * The name for this actor. 
+   * @return String is the name of this actor when created.
+   */
+  final def name(): String = self.path.name
 
   protected def unknown: Receive = {
     case msg@_ => {
