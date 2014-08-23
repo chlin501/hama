@@ -261,8 +261,6 @@ object BSPPeerContainer {
 class BSPPeerContainer(conf: HamaConfiguration) extends LocalService 
                                                 with RemoteService 
                                                 with ActorLocator {
- 
-  //val logger = TaskLogging(context, conf, slotSeq)
 
   protected var executor: ActorRef = _
 
@@ -306,6 +304,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    */
   def doLaunch(task: Task) { 
     val worker = context.actorOf(Props(classOf[Worker]))
+    context.watch(worker)
     worker ! Bind(configuration, context.system) 
     worker ! ConfigureFor(task)
     worker ! Execute(task.getId.toString, configuration, task.getConfiguration)
