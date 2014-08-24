@@ -50,7 +50,11 @@ class MockReceptionist(conf: HamaConfiguration) extends Receptionist(conf) {
                                        "empty!");
       val job = waitQueue.dequeue._1
       LOG.info("GetJob: job -> {}", job)
-      tester ! JobContent(job.getId, job.getLocalJarFile)
+      job.getLocalJarFile match {
+        case null => tester ! JobContent(job.getId, null)
+        case _ => throw new Error("Jar file path is created by BSPJobClient."+
+                                   "So this should be empty!")
+      }
     }
   }
   
@@ -76,14 +80,10 @@ class TestReceptionist extends TestEnv("TestReceptionist") with JobUtil {
     receptionist ! GroomStat("groom1", 3)
     receptionist ! GroomStat("groom4", 2)
     receptionist ! GroomStat("groom5", 7)
-    LOG.info("Wait 1 sec ...")
-    sleep(1.seconds)
     receptionist ! Submit(jobId, jobFilePath)
-    LOG.info("Wait 5 secs ...")
-    sleep(5.seconds)
     receptionist ! GetJob(tester)
-    expect(
-      JobContent(jobId, "/tmp/local/bspmaster/job_test-receptionist_1533.jar")
-    )
+    // N.B.: the second parameter is "bsp.jar" and it should be null because
+    //       jar path is originally configured by BSPJobClient.
+    expect(JobContent(jobId, null)) 
   }
 }
