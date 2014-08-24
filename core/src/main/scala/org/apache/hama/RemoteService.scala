@@ -52,7 +52,7 @@ trait RemoteService extends Service {
    * indicating timeout if no reply.
    * When timeout, the actor needs to explicitly lookup again, so we use
    * scheduleOnce instead of schedule function. This is due to proxy is inter-
-   * jvm, which is different from create().
+   * jvm, which is different from getOrCreate().
    *
    * @param target denotes the remote target actor name.
    * @param path indicate the path of target actor.
@@ -124,15 +124,22 @@ trait RemoteService extends Service {
    * @param proxy is the remote actor reference to be used.
    * @return (String, ActorRef) as tuple where the formor is the name of the 
    *                            actor and the latter is the remote reference.
-   */
   protected def beforeLinked(target: String, proxy: ActorRef): 
       (String, ActorRef) = (target, proxy)
+   */
+
+  override protected def remoteReply(target: String, remote: ActorRef) {
+    LOG.info("Proxy {} is ready: {}", target, remote)
+    context.watch(remote) // TODO: watch proxy instead?
+    val proxy = link(target, remote)//remote.path.name
+    afterLinked(remote) // TODO: need to switch using proxy ReliableProxy
+    afterLinked(target, remote)
+  }
 
   /**
    * A reply from the remote actor indicating if the remote actor is ready to 
    * provide its service.
    * @param Receive is paritual function.
-   */
   protected def isProxyReady: Receive = {
     case ActorIdentity(target, Some(remote)) => {
       LOG.info("Proxy {} is ready.", target)
@@ -150,6 +157,7 @@ trait RemoteService extends Service {
     case ActorIdentity(target, None) => 
       LOG.warning("Proxy {} is not yet available!", target)
   }
+   */
 
   /**
    * Timeout reply when looking up a specific remote proxy.

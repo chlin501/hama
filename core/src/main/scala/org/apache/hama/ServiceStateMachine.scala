@@ -65,7 +65,9 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
     stateChecker = check(WhichState)
   }
 
-  protected def afterLoaded(service: ActorRef) { }
+  /**
+  protected def afterLoaded(service: ActorRef) { } // TODO: remove this!
+   */
 
   startWith(StartUp, Cache(Set.empty[ActorRef]))
 
@@ -73,6 +75,10 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
    * Handle events in StartUp state.
    */
   when(StartUp) {
+    case Event(Next, s @ Cache(subServices)) => {
+      goto(Normal) using s
+    }
+/*
     case Event(Load, s @ Cache(subServices)) => {
       LOG.info("Loading service {}", sender.path.name)  
       val currentServices = subServices ++ Set(sender)
@@ -88,12 +94,19 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
         stay using cache
       }
     }
+*/
   }
 
   /**
    * Handle events in Normal state.
    */
   when(Normal) {
+    case Event(Next, s @ Cache(subServices)) => {
+      //broadcast(Normal)
+      //notify(Normal)(Ready(name)) 
+      goto(CleanUp) using s
+    }
+/*
     case Event(Shutdown, s @ Cache(subServices)) => {
       LOG.info("Shutting down server ...")
       subServices.view.foreach {
@@ -107,12 +120,17 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
       }
       goto(CleanUp) using s
     }
+*/
   }
 
   /**
    * Handle events in CleanUp state.
    */
   when(CleanUp) {
+    case Event(Next, s @ Cache(subServices)) => {
+      goto(Stopped) using s
+    }
+/*
     case Event(Unload, s @ Cache(subServices)) => {
       val currentServices = subServices - sender 
       context.unwatch(sender) // unwatch sub service
@@ -123,6 +141,7 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
         stay using cache
       }
     }
+*/
   }
 
   /**
@@ -134,6 +153,31 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
    * ready.
    */
   whenUnhandled {
+    case Event(WhichState, s @ Cache(subServices)) => stateName match {
+      case Normal => {
+        if(!isNotifiedInNormal) {
+          broadcast(Normal)
+          notify(Normal)(Ready(name)) 
+          isNotifiedInNormal = true
+        }
+        stay using s // FSM State
+      }
+      case Stopped => {
+        if(!isNotifiedInStopped) { 
+          stateChecker.cancel
+          notify(Stopped)(Halt(name))
+          isNotifiedInStopped = true
+        }
+        stay using s // FSM State
+      }
+      case state@_ => stay using s // FSM State
+    }
+    case Event(e, s) => {
+      LOG.warning("CurrentState {}, unknown event {}, services {}.", 
+                  stateName, e, s)
+      stay using s
+    }
+/*
     case Event(WhichState, s @ Cache(subServices)) => {
       var tmp: State = stay using s // FSM State
       if(Normal.equals(stateName) && !isNotifiedInNormal && isConditionEmpty) { 
@@ -150,48 +194,42 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
       }
       tmp
     } 
-    /**
      * Event such as Load, SubscribeState may go to here
-     */
     case Event(e, s) => {
       LOG.warning("CurrentState {}, unknown event {}, services {}.", 
                   stateName, e, s)
       stay using s
     }
+*/
   }
 
   /**
-   * Broadcast to sub services that master receives all loaded messages.
+   * Broadcast to sub services.
    * @param state denotes which state the service is in now.
    */
   protected def broadcast(state: ServiceState) {
-    if(Normal.equals(state)) services.foreach(service => service ! MediatorIsUp)
+    state match {
+      case StartUp => 
+      case Normal => services.foreach(service => service ! MediatorIsUp)
+      case CleanUp =>
+      case Stopped =>
+      case s@_ => LOG.warning("Can't broadcast because unknown state {}", s)
+    }
   }
 
   protected def serviceStateListenerManagement: Receive = {
-    case SubscribeState(state, ref) => {
-      stateListeners.get(state) match {
-        case Some(foundRefs) => {
-          stateListeners = stateListeners.mapValues { 
-            refs => refs + ref 
-          }
-        }
-        case None => {
-          stateListeners ++= Map(state -> Set(ref))
-        }
+    case SubscribeState(state, ref) => stateListeners.get(state) match {
+      case Some(foundRefs) => stateListeners = stateListeners.mapValues { 
+          refs => refs + ref 
       }
-      LOG.debug("Mapping: {}", stateListeners.mkString(", "))
+      case None => stateListeners ++= Map(state -> Set(ref))
     }
-    case UnsubscribeState(state, ref) => {
-      stateListeners.get(state) match {
-        case Some(foundRefs) => {
-          stateListeners = stateListeners.mapValues { 
-            refs => refs - ref 
-          }
-        }
-        case None => 
-          LOG.warning("No matching actor to unsubscribe with state {}.", state) 
+    case UnsubscribeState(state, ref) => stateListeners.get(state) match {
+      case Some(foundRefs) => stateListeners = stateListeners.mapValues { 
+        refs => refs - ref 
       }
+      case None => 
+        LOG.warning("Actor not matched to unsubscribe with state {}.", state) 
     }
   }
 

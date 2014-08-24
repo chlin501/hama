@@ -29,7 +29,6 @@ import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.master.monitor.AskGroomServerStat
 import org.apache.hama.RemoteService
-import org.apache.hama.Request
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -50,8 +49,8 @@ final case object NextPlease
  *   so it's illegal/ wrong to schedule more than 2 tasks to groom1.
  *   only (max) 2 tasks are allowed to be scheduled groom1.
  */
-class Scheduler(conf: HamaConfiguration) extends LocalService 
-                                         with RemoteService {
+class Scheduler(conf: HamaConfiguration, receptionist: ActorRef) 
+      extends LocalService with RemoteService {
 
   type GroomServerName = String
   type TaskManagerRef = ActorRef
@@ -88,10 +87,6 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
 
   override def configuration: HamaConfiguration = conf
 
-  override def afterMediatorUp {
-    taskAssignQueueChecker = request(self, NextPlease) 
-  }
-
   def isTaskAssignQueueEmpty: Boolean = taskAssignQueue.isEmpty
 
   /**
@@ -100,11 +95,7 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
    */
   def nextPlease: Receive = {
     case NextPlease => {
-      if(isTaskAssignQueueEmpty) {
-        if(null == mediator) 
-          throw new IllegalStateException("Mediator shouldn't be null!")
-        mediator ! Request("receptionist", TakeFromWaitQueue)
-      }
+      if(isTaskAssignQueueEmpty) receptionist ! TakeFromWaitQueue 
     }
   }
 
@@ -315,5 +306,5 @@ class Scheduler(conf: HamaConfiguration) extends LocalService
     }
   }
 */
-  override def receive = requestTask orElse dispense orElse nextPlease orElse enrollment orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse unknown
+  override def receive = requestTask orElse dispense orElse nextPlease orElse enrollment orElse actorReply orElse timeout orElse unknown
 }

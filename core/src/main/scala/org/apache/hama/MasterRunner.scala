@@ -69,22 +69,25 @@ object MasterRunner {
   }
 }
 
-class MasterRunner(conf: HamaConfiguration) extends Agent {
-
-  var master: ActorRef = _
+class MasterRunner(conf: HamaConfiguration) extends Agent { //TODO: replace this with Master.
 
   override def preStart {
-    val masterName = conf.get("bsp.master.name", "bspmaster")
-    master = context.system.actorOf(Props(classOf[Master], conf), masterName)
+// TODO: perhaps find other way to give the name. reigster name to zk.
+    val master = context.system.actorOf(Props(classOf[Master], conf), 
+                                        "bspmaster")
     LOG.info("Subscribe to receive notificaiton when master is in ready "+ 
              "state.")
     master ! SubscribeState(Normal, self)
   }
 
   def receive = {
-    case Ready(systemName) => LOG.info("{} is in Normal state!", systemName) 
+    case Ready(systemName) => {
+      LOG.info("{} is in Normal state!", systemName) 
+      // TODO: notify client
+    }
     case Halt(systemName) => {
       LOG.info("{} services are stopped. Shutdown the system...", systemName)
+      // TODO: notify client
       context.system.shutdown       
     }
   }

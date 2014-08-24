@@ -22,7 +22,6 @@ import akka.event.Logging
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.groom._
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.Request
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
@@ -32,13 +31,12 @@ import scala.concurrent.duration.FiniteDuration
 
 private final case class GetJob(tester: ActorRef)
 private final case class JobContent(jobId: BSPJobID, 
-                                    localJarFile: String/*, 
-                                    localJobFile: String*/)
+                                    localJarFile: String)
 
 class MockMaster(conf: HamaConfiguration) extends Master(conf) {
 
   override def initializeServices {
-    create("receptionist", classOf[MockReceptionist])
+    getOrCreate("receptionist", classOf[MockReceptionist], configuration)
   }
   
 }
@@ -52,9 +50,7 @@ class MockReceptionist(conf: HamaConfiguration) extends Receptionist(conf) {
                                        "empty!");
       val job = waitQueue.dequeue._1
       LOG.info("GetJob: job -> {}", job)
-      tester ! JobContent(job.getId, 
-                          job.getLocalJarFile
-                          /*, job.getLocalJobFile*/)
+      tester ! JobContent(job.getId, job.getLocalJarFile)
     }
   }
   
@@ -69,7 +65,7 @@ class TestReceptionist extends TestEnv("TestReceptionist") with JobUtil {
 
   it("test submit job to receptionist") {
     LOG.info("Test submit job to Receptionist")
-    val master = create("bspmaster", classOf[MockMaster])
+    val receptionist = create("receptionist", classOf[MockReceptionist])
     val jobId = createJobId("test-receptionist", 1533)
     // set target GroomServers
     testConfiguration.setStrings("bsp.sched.targets.grooms", 
@@ -77,19 +73,17 @@ class TestReceptionist extends TestEnv("TestReceptionist") with JobUtil {
                                  "groom1") 
     val jobFilePath = createJobFile(testConfiguration)
     LOG.info("Submit job id "+jobId.toString+" job.xml: "+jobFilePath)
-    master ! Request("receptionist", GroomStat("groom1", 3))
-    master ! Request("receptionist", GroomStat("groom4", 2))
-    master ! Request("receptionist", GroomStat("groom5", 7))
+    receptionist ! GroomStat("groom1", 3)
+    receptionist ! GroomStat("groom4", 2)
+    receptionist ! GroomStat("groom5", 7)
     LOG.info("Wait 1 sec ...")
     sleep(1.seconds)
-    master ! Request("receptionist", Submit(jobId, jobFilePath))
+    receptionist ! Submit(jobId, jobFilePath)
     LOG.info("Wait 5 secs ...")
     sleep(5.seconds)
-    master ! Request("receptionist", GetJob(tester))
+    receptionist ! GetJob(tester)
     expect(
-      JobContent(jobId, 
-                 "/tmp/local/bspmaster/job_test-receptionist_1533.jar"/*, 
-                 "/tmp/local/bspmaster/job_test-receptionist_1533.xml"*/)
+      JobContent(jobId, "/tmp/local/bspmaster/job_test-receptionist_1533.jar")
     )
   }
 }

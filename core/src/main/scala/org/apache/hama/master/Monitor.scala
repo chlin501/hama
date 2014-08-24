@@ -18,7 +18,6 @@
 package org.apache.hama.master
 
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.Load
 import org.apache.hama.LocalService
 import org.apache.hama.master.monitor.JobTasksTracker
 import org.apache.hama.master.monitor.GroomTasksTracker
@@ -30,18 +29,11 @@ class Monitor(conf: HamaConfiguration) extends LocalService {
   override def configuration: HamaConfiguration = conf
 
   override def initializeServices {
-    create("jobTasksTracker", classOf[JobTasksTracker])
-    create("groomTasksTracker", classOf[GroomTasksTracker])
-    create("sysMetricsTracker", classOf[SysMetricsTracker])
+    getOrCreate("jobTasksTracker", classOf[JobTasksTracker], configuration)
+    getOrCreate("groomTasksTracker", classOf[GroomTasksTracker], configuration)
+    getOrCreate("sysMetricsTracker", classOf[SysMetricsTracker], configuration)
   }
 
-  def loadPlugin: Receive = {  
-    case Load => {
-      LOG.debug("Receiveing {} plugin.", sender.path.name)
-      cacheService(sender) 
-    }
-  }
-
-  override def receive = forward orElse areSubServicesReady orElse mediatorIsUp orElse loadPlugin orElse unknown
+  override def receive = unknown
 
 }

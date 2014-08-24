@@ -261,6 +261,6 @@ class PeerMessenger extends Actor with RemoteService {
     }
   }
 
-  override def receive = initialize orElse transfer orElse messageFromRemote orElse isProxyReady orElse timeout orElse unknown
+  override def receive = initialize orElse transfer orElse messageFromRemote orElse actorReply orElse timeout orElse unknown
 
 }

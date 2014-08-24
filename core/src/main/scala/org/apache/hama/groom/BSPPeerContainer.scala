@@ -402,5 +402,5 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     self ! ShutdownContainer
   }
 
-  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer /*orElse processTask*/ orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer /*orElse processTask*/ orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
 }

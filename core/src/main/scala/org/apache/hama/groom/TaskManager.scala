@@ -508,6 +508,6 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   def preContainerStopped(executor: ActorRef) {}
   def postContainerStopped(executor: ActorRef) {}
 
-  override def receive = launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse taskRequest orElse receiveDirective orElse isServiceReady orElse mediatorIsUp orElse isProxyReady orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse taskRequest orElse receiveDirective orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
 
 }

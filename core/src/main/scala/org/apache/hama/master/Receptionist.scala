@@ -28,7 +28,6 @@ import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.io.PartitionedSplit
 import org.apache.hama.LocalService
-import org.apache.hama.Request
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -261,6 +260,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = submitJob orElse takeFromWaitQueue orElse updateGroomStat orElse isServiceReady orElse mediatorIsUp orElse unknown
+  override def receive = submitJob orElse takeFromWaitQueue orElse updateGroomStat orElse unknown
 
 }

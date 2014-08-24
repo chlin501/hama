@@ -40,6 +40,6 @@ final class JobTasksTracker(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = isServiceReady orElse reportTask orElse unknown
+  override def receive = reportTask orElse unknown
 
 }

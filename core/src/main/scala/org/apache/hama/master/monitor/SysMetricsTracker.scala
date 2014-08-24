@@ -37,5 +37,5 @@ class SysMetricsTracker(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = isServiceReady orElse metricsRecord orElse unknown
+  override def receive = metricsRecord orElse unknown
 }

@@ -24,7 +24,6 @@ import akka.actor.SupervisorStrategy.Stop
 import java.text.SimpleDateFormat
 import java.util.Date
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.Request
 import org.apache.hama.ServiceStateMachine
 import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
@@ -36,6 +35,9 @@ object Master {
 
   val defaultMasterId = 
     new SimpleDateFormat("yyyyMMddHHmm").format(new Date())
+
+  val masterPath = (name: String) => "/bsp/masters/%s/id".format(name)
+ 
 }
 
 class Master(conf: HamaConfiguration) extends ServiceStateMachine 
@@ -47,6 +49,7 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine
 
   override def configuration: HamaConfiguration = conf
  
+  // TODO: define Exception, etc. for different level recovery.
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
       case _: NullPointerException     => Restart
@@ -54,33 +57,21 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine
       case _: Exception                => Restart
     }
 
-  def createMasterId: String = {
-    val masterPath = "/bsp/masters/%s/id".format(name)
-    getOrElse(masterPath, defaultMasterId)
-  }
+  def createMasterId: String = getOrElse(masterPath(name), defaultMasterId)
 
   override def initializeServices {
     initializeCurator(configuration)
     identifier = createMasterId
     LOG.info("Master identifier is {}", identifier)
-    create("receptionist", classOf[Receptionist]) 
-    //create("groomManager", classOf[GroomManager]) 
-    create("monitor", classOf[Monitor]) 
-    create("sched", classOf[Scheduler]) 
+    val receptionist = getOrCreate("receptionist", classOf[Receptionist], 
+                                   configuration) 
+    getOrCreate("monitor", classOf[Monitor], configuration) 
+    val sched = getOrCreate("sched", classOf[Scheduler], configuration, 
+                            receptionist) 
+    getOrCreate("groomManager", classOf[Scheduler], configuration, 
+                receptionist, sched) 
   }
 
-  override def afterLoaded(service: ActorRef) {
-    val serviceName = service.path.name
-    serviceName match {
-      case "receptionist" => 
-      case "groomManager" => 
-      case "monitor" => 
-      case "sched" =>  
-      //case "storage" => 
-      case _ => LOG.warning("Unknown service {} ", serviceName)
-    }
-  }
-
-  override def receive = forward orElse serviceStateListenerManagement orElse super.receive orElse unknown 
+  override def receive = serviceStateListenerManagement orElse super.receive orElse unknown
   
 }

@@ -21,7 +21,7 @@ import akka.actor.ActorRef
 import akka.actor.Cancellable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
-import org.apache.hama.Request
+//import org.apache.hama.Request
 import org.apache.hama.bsp.v2.GroomServerStat
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -31,7 +31,6 @@ final case class GroomRegistration(groomServerName: String,
                                    taskManager: ActorRef, 
                                    maxTasks: Int,
                                    var notified: Boolean = false) 
-private[master] final case object Notifying
 
 /**
  * A service that manages a set of {@link org.apache.hama.groom.GroomServer}s.
@@ -40,7 +39,8 @@ private[master] final case object Notifying
  * - Notify Scheduler by sending TaskManager actor reference.
  * @param conf contains specific configuration for this service. 
  */
-class GroomManager(conf: HamaConfiguration) extends LocalService {
+class GroomManager(conf: HamaConfiguration, receptionist: ActorRef, 
+                   sched: ActorRef) extends LocalService {
 
   type GroomServerName = String
   type CrashCount = Int
@@ -90,14 +90,8 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
    * @param stat contains all tasks in failure GroomServer.
    */
   def offlineReaction(groomServerName: GroomServerName) { 
-    if(null != mediator) { 
-      mediator ! Request("sched", RescheduleTasks(groomServerName))
-      mediator ! Request("receptionist", GroomStat(groomServerName, 0))
-    } else {
-      // TODO: put Requests to queue and notify when mediator is up  
-      LOG.warning("No mediator so offline reaction for {} is impossible!", 
-                  groomServerName)
-    }
+    sched !  RescheduleTasks(groomServerName)
+    receptionist ! GroomStat(groomServerName, 0) 
   }
 
   override def offline(taskManager: ActorRef) {
@@ -112,6 +106,8 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
    * @param maxTasks tells the capacity, max tasks allowed, of the GroomServer.
    */
   def register(from: ActorRef, groomServerName: String, maxTasks: Int) {
+    LOG.debug("{} registers {} with capacity set to {}.", 
+             from, groomServerName, maxTasks)
     grooms.find(p=>p.groomServerName.equals(groomServerName)) match {
       case Some(found) => {   
         grooms -= found
@@ -120,57 +116,35 @@ class GroomManager(conf: HamaConfiguration) extends LocalService {
       case None => 
         grooms ++= Set(GroomRegistration(groomServerName, from, maxTasks))
     }
+    LOG.debug("Current registered groom servers {}.", grooms.mkString(", "))
     // TODO: 
     // 1. specific stat info recording groom crash info.
     // 2. if stat is with refresh hardware, reset crashed count to 0
   }
-  
-  override def afterMediatorUp {
-    import context.dispatcher
-    registrationWatcher =  // TODO: cancel watcher when shutting down. 
-      context.system.scheduler.schedule(0.seconds, 3.seconds, self, Notifying)
-  }
 
   /**
    * GroomServer's TaskManager enroll itself for being monitored.
-   * N.B.: Mediator may not be up at this momeent.
    * @return Actor.Receive 
    */
   def enroll: Receive = {
     case reg: Register => {
-      LOG.info("{} requests to renroll {}, which allows {} max tasks.", 
+      LOG.info("{} requests to enroll {}, which allows {} max tasks.", 
                sender.path.name, reg.getGroomServerName, reg.getMaxTasks) 
       register(sender, reg.getGroomServerName, reg.getMaxTasks)
       context.watch(sender) // watch remote taskManager
+      notifying()
     }
   }
-
-  /**
-   * Periodically notify Scheduler GroomServers enroll.
-   * Also update the flag notified if the taskManager actor is passed to 
-   * {@link Scheduler}. {@link Receptionist} will also be notified with 
-   * GroomServer's maxTasks.
-   */
-  def notifying: Receive = {
-    case Notifying => {
-      grooms.filter(groom => !groom.notified) match {
-        case fresh: Set[GroomRegistration] => fresh.foreach( newjoin => {
-          if(null == mediator)
-            throw new RuntimeException("Impossible no mediator after it's up!")
-          mediator ! Request("sched", GroomEnrollment(newjoin.groomServerName, 
-                                                      newjoin.taskManager,
-                                                      newjoin.maxTasks))
-          
-          mediator ! Request("receptionist", 
-                             GroomStat(newjoin.groomServerName, 
-                                       newjoin.maxTasks))
-          newjoin.notified = true
-        })
-        case _ => 
-      }
-    } 
+ 
+  protected def notifying() = grooms.filter(groom => !groom.notified) match {
+    case fresh: Set[GroomRegistration] => fresh.foreach( newjoin => {
+      sched ! GroomEnrollment(newjoin.groomServerName, newjoin.taskManager,
+                              newjoin.maxTasks)
+      receptionist ! GroomStat(newjoin.groomServerName, newjoin.maxTasks)
+    })
+    case _ => 
   }
 
-  override def receive = enroll orElse notifying orElse isServiceReady orElse mediatorIsUp orElse superviseeIsTerminated orElse unknown
+  override def receive = enroll orElse superviseeIsTerminated orElse unknown
 
 }

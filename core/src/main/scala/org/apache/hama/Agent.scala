@@ -18,6 +18,8 @@
 package org.apache.hama
 
 import akka.actor.Actor
+import akka.actor.ActorRef
+import akka.actor.ActorIdentity
 import org.apache.hama.logging.ActorLog
 
 trait Agent extends Actor with ActorLog {
@@ -33,4 +35,33 @@ trait Agent extends Actor with ActorLog {
       LOG.warning("Unknown message {} for {}.", msg, name)
     }
   }
+ 
+  /**
+   * Remote actor reply to actor selection.
+   * @param target denotes the name of the <b>remote</b> actor reference.
+   * @param actor is the instance of ActoRef pointed to a <b>remote</b> actor.
+   */
+  protected def remoteReply(target: String, actor: ActorRef) { }
+  
+  /**
+   * Local actor reply to actorSelection.  
+   * @param target denotes the name of the actor reference.
+   * @param actor is the instance of ActoRef pointed to a local actor.
+  protected def localReply(target: String, actor: ActorRef) { }
+   */
+
+  /**
+   * Another actor reply the query of actorSelection, either local or remote.
+   * @param target is the value of Identify when performing actorSelection.
+   * @param actor is the instance of ActoRef.
+   */
+  protected def actorReply: Receive = {
+    case ActorIdentity(target, Some(actor)) => {
+      remoteReply(target.toString, actor)
+      //localReply(target, actor)
+    }
+    case ActorIdentity(target, None) => LOG.warning("{} is not yet available!",
+                                                    target)
+  }
+
 }

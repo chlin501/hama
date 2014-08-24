@@ -25,18 +25,12 @@ class Monitor(conf: HamaConfiguration) extends LocalService {// TODO: rename to 
   override def configuration: HamaConfiguration = conf
 
   override def initializeServices {
-    create("tasksReporter", classOf[TasksReporter])
-    create("groomReporter", classOf[GroomReporter])
-    create("sysMetricsReporter", classOf[SysMetricsReporter])
+    getOrCreate("tasksReporter", classOf[TasksReporter], configuration)
+    getOrCreate("groomReporter", classOf[GroomReporter], configuration)
+    getOrCreate("sysMetricsReporter", classOf[SysMetricsReporter], 
+                configuration)
   }
 
-  def loadPlugin: Receive = {
-    case Load => {
-      LOG.debug("Receiveing {} plugin.", sender.path.name)
-      cacheService(sender)
-    }
-  }
-
-  def receive = areSubServicesReady orElse mediatorIsUp orElse loadPlugin orElse unknown
+  def receive = unknown
 
 }

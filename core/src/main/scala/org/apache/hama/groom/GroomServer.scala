@@ -38,8 +38,8 @@ final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
   override def configuration: HamaConfiguration = conf
 
   override def initializeServices {
-    create("taskManager", classOf[TaskManager]) 
-    create("monitor", classOf[Monitor]) 
+    getOrCreate("taskManager", classOf[TaskManager], configuration) 
+    getOrCreate("monitor", classOf[Monitor], configuration) 
   }
 
   override def receive = serviceStateListenerManagement orElse super.receive orElse unknown

@@ -43,9 +43,9 @@ final class TasksReporter(conf: HamaConfiguration) extends LocalService
 
   override def afterLinked(proxy: ActorRef) = tracker = proxy
 
-  override def receive = {
-    isServiceReady orElse
-    ({case newTask: Task => tracker ! newTask
-    }: Receive) orElse isProxyReady orElse timeout orElse unknown
-  } 
+  def aNewTask: Receive = {
+    case newTask: Task => tracker ! newTask
+  }
+
+  override def receive = aNewTask orElse actorReply orElse timeout orElse unknown
 }

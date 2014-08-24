@@ -33,14 +33,19 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
+/*
 class MockMaster2(conf: HamaConfiguration) extends Master(conf) {
 
   override def initializeServices {
-    create("sched", classOf[MockScheduler])
-    create("taskManager", classOf[MockTaskMgr])
+    val receptionist = getOrCreate("receptionist", classOf[Receptionist], 
+                                   configuration)
+    getOrCreate("sched", classOf[MockScheduler], configuration, tester, 
+                receptionist)
+    getOrCreate("taskManager", classOf[MockTaskMgr], configuration)
   }
 
 }
+*/
 
 class MockTaskMgr(conf: HamaConfiguration, mockSched: ActorRef, 
                       name: String, constraint: Int) 
@@ -66,8 +71,9 @@ class MockTaskMgr(conf: HamaConfiguration, mockSched: ActorRef,
   override def receive = super.receive
 }
 
-class MockScheduler(conf: HamaConfiguration, tester: ActorRef) 
-    extends Scheduler(conf) {
+class MockScheduler(conf: HamaConfiguration, tester: ActorRef, 
+                    receptionist: ActorRef) 
+    extends Scheduler(conf, receptionist) {
 
   override def dispatch(from: ActorRef, action: Action, task: Task) {
     LOG.debug("Task will be dispatched to {} via actor {}", 

@@ -54,5 +54,5 @@ final class GroomTasksTracker(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  override def receive = renewGroomServerStat orElse askGroomServerStat orElse isServiceReady orElse unknown
+  override def receive = renewGroomServerStat orElse askGroomServerStat orElse unknown
 }
