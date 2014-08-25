@@ -114,10 +114,13 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
   it("test schedule tasks") {
     LOG.info("Test scheduler active and passive functions ...")
+    val receptionist = createWithArgs("receptionist", classOf[Receptionist], 
+                                      testConfiguration)
     val sched = createWithArgs("TestScheduler", 
                            classOf[MockScheduler], 
-                           conf, 
-                           tester)
+                           testConfiguration, 
+                           tester, 
+                           receptionist)
     val job = createJob("test-active-sched", 7, "test-scheduler", 
                         Array("groom5", "groom2", "groom5", "groom9"), 7)
     sched ! GroomEnrollment("groom5", null, 2)
