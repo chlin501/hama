@@ -310,7 +310,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
         isStdoutClosed = true
       } else if(sender.path.name.equals("stderr%s".format(slotSeq))) {
         isStderrClosed = true
-      } else LOG.warning("Unknown sender ask for closing stream {}.", 
+      } else LOG.warning("[Warning] Sender {} asks for closing stream.", 
                          sender.path.name)
       if(isStdoutClosed && isStderrClosed) self ! StopProcess
     }

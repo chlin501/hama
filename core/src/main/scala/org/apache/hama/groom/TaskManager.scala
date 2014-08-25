@@ -151,8 +151,8 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
    */
   def taskRequest: Receive = {
     case TaskRequest => {
-      LOG.debug("In TaskRequest, sched: {}, hasTaskInQueue: {}"+
-               ", hasFreeSlots: {}", sched, hasTaskInQueue, hasFreeSlots)
+      LOG.debug("In TaskRequest, sched: {}, hasTaskInQueue: {}, "+
+                "hasFreeSlots: {}", sched, hasTaskInQueue, hasFreeSlots)
       if(hasFreeSlots) { 
         if(!hasTaskInQueue) { 
           LOG.debug("Request {} for assigning new tasks ...", getSchedulerPath)
@@ -225,7 +225,7 @@ class TaskManager(conf: HamaConfiguration) extends LocalService
   def initializeExecutor(master: String) {
     pickUp match {
       case Some(slot) => { 
-        LOG.debug("Initialize executor for slot seq {}, slot {}", slot.seq)
+        LOG.debug("Initialize executor for slot seq {}.", slot.seq)
         val executorName = configuration.get("bsp.groom.name", "groomServer") +
                            "_executor_" + slot.seq 
         // TODO: move to spawn()

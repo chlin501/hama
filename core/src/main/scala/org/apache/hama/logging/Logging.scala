@@ -24,11 +24,12 @@ import akka.actor.Props
 
 import java.io.File
 import java.io.FileWriter
-
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
-
 import org.apache.hama.bsp.TaskAttemptID
+import scala.util.Try
+import scala.util.Success
+import scala.util.Failure
 
 /**
  * This is used to create different log instances.
@@ -95,7 +96,16 @@ trait LoggingAdapter {
 
   def error(msg: String, args: Any*)
 
-  def format(msg: String, args: Any*): String = 
+  def format(msg: String, args: Any*): String = f(msg, args:_*)/*Try(f(msg, args:_*)) match {
+    case Success(result) => result 
+    case Failure(cause) => cause.getMessage match {
+      case "Format specifier 's'" => 
+        "[Warning] The number of {} and its values specified doesn't match!"
+      case errMsg@_ => errMsg
+    }
+  } */
+
+  private def f(msg: String, args: Any*): String =
     msg.replace("{}", "%s").format(args:_*)
 
 }
