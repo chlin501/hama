@@ -46,20 +46,12 @@ protected trait SuperstepBSP extends BSP with Configurable with ActorLog {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
-  protected def getTask(): Task
+  protected def getTask(): Task // TODO: doIfExists
 
   /**
    * This is configuration for a specific task. 
    */
   protected var taskConf = new HamaConfiguration
-
-  /**
-   * This is intended to be set by {@link Worker} only for identifying the
-   * checkpointer created. The checkpointer's name would be in a form of
-   * "checkpoint_"+taskAttemptId()+"_"+BSPPeer.getSuperstepCount()
-   * @return String of {@link TaskAttemptID}.
-  protected[v2] def taskAttemptId(): String
-   */
 
   override def setConf(conf: Configuration) = conf match {
     case null => LOG.error("Task configuration is not provided for {}!",
@@ -144,6 +136,7 @@ protected trait SuperstepBSP extends BSP with Configurable with ActorLog {
     }
   }
 
+  // TODO: move to checkpointer receiver?
   protected[v2] def prepareForCheckpoint(peer: BSPPeer, superstep: Superstep): 
     Option[ActorRef] = isCheckpointEnabled(commonConf(peer)) match {
       case true => {

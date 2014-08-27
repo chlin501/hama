@@ -52,18 +52,15 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.{Try, Failure, Success}
 
-
 /**
  * A bridge device enables bsp peers communication through TypedActor.
  */
 trait PeerCommunicator {
   
   /**
-   * Initialize setting in allowing MessageManager to communicate with other 
-   * {BSPPeer}s through TypedActor.
-  def initialize(sys: ActorSystem)
+   * Bind {@link PeerMessenger} with its underlying implementation.
+   * @param peerMessenger
    */
-
   def communicator(peerMessenger: ActorRef)
 
 }
@@ -84,12 +81,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   protected var localQueue: MessageQueue[M] = _
   protected var localQueueForNextIteration: SynchronizedQueue[M] = _
   protected var peerMessenger: Option[ActorRef] = None
-
-  /**
-   * An interface calls underlying PeerMessenger.
-   */
-  //protected var hermes: Hermes = _
-  
+ 
   /**
    * {@link PeerMessenger} address information.
    */
@@ -98,13 +90,13 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   /**
    * This is used for receiving loopback message {@link #loopBackMessages} 
    */ 
-  protected val loopbackMessageQueue = 
+  protected val loopbackMessageQueue =  // TODO: remove this
     new LinkedBlockingQueue[BSPMessageBundle[M]]() 
 
   /**
    * Only for receiving local messages purpose.
    */
-  protected val executor = Executors.newSingleThreadExecutor()
+  protected val executor = Executors.newSingleThreadExecutor() // TODO: remove this
 
   /**
    * A class that is responsible for receiving BSPMessageBundle for local 
@@ -112,7 +104,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
    * messages.
    * @param receiver is the implementation of messenge manager.
    */
-  class Loopback[M <: Writable](receiver: MessageManager[M]) 
+  class Loopback[M <: Writable](receiver: MessageManager[M])// TODO: remove this 
       extends Callable[Boolean] {
     
     override def call(): Boolean = {
@@ -127,20 +119,6 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   }
 
   override def communicator(mgr: ActorRef) = peerMessenger = Some(mgr)
-
-/*
-  override def initialize(sys: ActorSystem) {
-    if(null == sys)
-      throw new IllegalArgumentException("ActorSystem is missin!")
-    this.hermes = TypedActor(sys).typedActorOf(TypedProps[Iris]())
-    if(null == this.hermes)
-      throw new RuntimeException("Fail initializing bridge on behalf of "+
-                                 "DefaultMessageManager sends messages.")
-    if(null == this.configuration)
-      throw new RuntimeException("Common configuration is not yet set!")
-    this.hermes.initialize[M](configuration, loopbackMessageQueue)
-  }
-*/
 
   /**
    * Indicate the local peer.
@@ -291,7 +269,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   @throws(classOf[IOException])
   override def send(peerName: String, msg: M) {
     outgoingMessageManager.addMessage(Peer.at(peerName), msg); 
-    // TODO: increment counter by 1
+    // TODO: increment counter by 1 / aggregate to stats api.
     // peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_SENT, 1L)
   }
 
@@ -311,19 +289,10 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
       case Some(found) =>  found ! Transfer(peer, bundle)
       case None =>
     }
-/*
-    import ExecutionContext.Implicits.global
-    this.hermes.transfer(peer, bundle) onComplete {
-      case Failure(failure) => 
-        LOG.error("["+failure+"] Fail transferring message to "+peer.getPath)
-      case Success(result) => 
-        LOG.info("Successful transferring message to "+peer.getPath)
-    }
-*/
 
   @throws(classOf[IOException])
   override def loopBackMessages(bundle: BSPMessageBundle[M]) = 
-    this.synchronized {
+    this.synchronized { // TODO: remove queue then get rid of synchronized
     val threshold =
       configuration.getLong("hama.messenger.compression.threshold", 128) 
     bundle.setCompressor(BSPMessageCompressor.get(configuration), threshold)

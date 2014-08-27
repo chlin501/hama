@@ -17,9 +17,7 @@
  */
 package org.apache.hama.bsp.v2
 
-import akka.actor.Actor
 import akka.actor.ActorRef
-import akka.actor.ActorSystem
 import java.io.IOException
 import java.net.InetAddress
 import java.net.URLClassLoader
@@ -43,7 +41,6 @@ import org.apache.hama.sync.BarrierClient
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncException
 import scala.collection.JavaConversions._
-import scala.collection.immutable.Queue
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
@@ -236,7 +233,7 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
    * @param f is the function to be executed.
    * @param default is the value to applied if the task not found.
    */
-  protected def doIfExists[A, B <: Any](task: Option[A], 
+  protected def doIfExists[A, B <: Any](task: Option[A],  // TODO: replace by Utils.doIfExists
                                      f: (A) => B, 
                                      default: B): B = task match {
     case Some(found) => f(found)

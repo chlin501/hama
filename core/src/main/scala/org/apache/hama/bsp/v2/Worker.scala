@@ -77,7 +77,7 @@ protected[v2] class Worker(container: ActorRef) extends SuperstepBSP
 
   protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
 
-  override def getTask(): Task = task match {
+  override def getTask(): Task = task match { // TODO: doIfExists
     case None => throw new NullPointerException("Task is not yet ready!")
     case Some(found) => found
   }
