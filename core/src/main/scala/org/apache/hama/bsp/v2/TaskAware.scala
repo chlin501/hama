@@ -15,25 +15,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama.bsp.v2
 
+import org.apache.hama.bsp.Counters
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
-import org.apache.hama.groom.monitor.TasksReporter
-import org.apache.hama.groom.monitor.GroomReporter
-import org.apache.hama.groom.monitor.SysMetricsReporter
 
-class Monitor(conf: HamaConfiguration) extends LocalService {// TODO: rename to Reporter?
+protected[v2] case class TaskWithStats(task: Option[Task], 
+                                       counters: Option[Counters]) 
 
-  override def configuration: HamaConfiguration = conf
+trait TaskAware {
 
-  override def initializeServices {
-    getOrCreate("tasksReporter", classOf[TasksReporter], configuration)
-    getOrCreate("groomReporter", classOf[GroomReporter], configuration)
-    getOrCreate("sysMetricsReporter", classOf[SysMetricsReporter], 
-                configuration)
-  }
+  protected[v2] var taskWithStats: TaskWithStats = TaskWithStats(None, None)
 
-  def receive = unknown
+  def task(): Option[Task] = taskWithStats.task
+
+  def counters(): Option[Counters] = taskWithStats.counters
 
 }

@@ -43,10 +43,27 @@ class TestMessageManager extends TestEnv("TestMessageManager") with JobUtil {
     testConfiguration.setInt("bsp.peer.port", port)
   }
 
+  def identifier(conf: HamaConfiguration): String = {
+    conf.getInt("bsp.child.slot.seq", -1) match {
+      case -1 => throw new RuntimeException("Slot seq is -1!")
+      case seq@_ => {
+        val host = conf.get("bsp.peer.hostname",
+                            InetAddress.getLocalHost.getHostName)
+        val port = conf.getInt("bsp.peer.port", 61000)
+        "BSPPeerSystem%d@%s:%d".format(seq, host, port)
+      }
+    }
+  }
+
+
   it("test message manager.") {
     val jobId = createJobId("test", 2)
     val taskAttemptId = createTaskAttemptId(jobId, 3, 2)
-    val messageManager = MessageManager.get[IntWritable](testConfiguration)
+    val id = identifier(testConfiguration)
+    val peerMessenger = createWithArgs("peerMessenger_"+id, 
+                                       classOf[PeerMessenger])
+    val messageManager = 
+      MessageManager.get[IntWritable](testConfiguration, peerMessenger)
     assert(null != messageManager)
     messageManager.init(testConfiguration, taskAttemptId)
 

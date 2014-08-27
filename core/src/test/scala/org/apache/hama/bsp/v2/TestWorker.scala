@@ -22,6 +22,7 @@ import java.net.InetAddress
 import org.apache.hadoop.io.IntWritable
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
 import org.apache.hama.zk.LocalZooKeeper
@@ -73,19 +74,20 @@ class C extends Superstep {
   override def next(): Class[_<:Superstep] = classOf[A]
 }
 
-class MockWorker1(tester: ActorRef) extends Worker {
+class MockWorker1(container: ActorRef, tester: ActorRef) 
+      extends Worker(container) {
 
   var captured = Map.empty[String, Superstep] 
 
   override def doExecute(taskAttemptId: String, conf: HamaConfiguration, 
-                         taskConf: HamaConfiguration) = peer match { 
-    case Some(found) => { 
-      setup(found)
-      bsp(found)
+                         taskConf: HamaConfiguration) = {//peer match { 
+    //case Some(found) => { 
+      setup(peer)
+      bsp(peer)
       captured = asInstanceOf[SuperstepBSP].supersteps 
       LOG.info("Captured supersteps is "+captured)
-    } 
-    case None => LOG.warning("BSPPeer is missing!")
+    //} 
+    //case None => LOG.warning("BSPPeer is missing!")
   }
   
   def getCount: Receive = {
@@ -138,10 +140,12 @@ class TestWorker extends TestEnv("TestWorker") with JobUtil
   }
 
   it("test bsp worker function.") {
+     val container = createWithArgs("container", classOf[BSPPeerContainer])
      val task = createTask("testworker", 1, 1, 1, testConfiguration)
-     val worker = createWithArgs("testWorker", classOf[MockWorker1], tester)
+     val worker = createWithArgs("testWorker", classOf[MockWorker1], 
+                                 container, tester)
      worker ! Bind(testConfiguration, system)
-     worker ! ConfigureFor(task)
+     worker ! ConfigureFor(testConfiguration, task)
      worker ! Execute(task.getId.toString, 
                       testConfiguration, 
                       task.getConfiguration)

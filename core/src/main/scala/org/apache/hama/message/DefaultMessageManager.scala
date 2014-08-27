@@ -61,8 +61,10 @@ trait PeerCommunicator {
   /**
    * Initialize setting in allowing MessageManager to communicate with other 
    * {BSPPeer}s through TypedActor.
-   */
   def initialize(sys: ActorSystem)
+   */
+
+  def communicator(peerMessenger: ActorRef)
 
 }
 
@@ -81,11 +83,12 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   protected var outgoingMessageManager: OutgoingMessageManager[M] = _
   protected var localQueue: MessageQueue[M] = _
   protected var localQueueForNextIteration: SynchronizedQueue[M] = _
+  protected var peerMessenger: Option[ActorRef] = None
 
   /**
    * An interface calls underlying PeerMessenger.
    */
-  protected var hermes: Hermes = _
+  //protected var hermes: Hermes = _
   
   /**
    * {@link PeerMessenger} address information.
@@ -123,6 +126,9 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     }
   }
 
+  override def communicator(mgr: ActorRef) = peerMessenger = Some(mgr)
+
+/*
   override def initialize(sys: ActorSystem) {
     if(null == sys)
       throw new IllegalArgumentException("ActorSystem is missin!")
@@ -134,6 +140,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
       throw new RuntimeException("Common configuration is not yet set!")
     this.hermes.initialize[M](configuration, loopbackMessageQueue)
   }
+*/
 
   /**
    * Indicate the local peer.
@@ -299,7 +306,12 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
    * @param bundle are messages to be sent.
    */
   @throws(classOf[IOException])
-  override def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M]) {
+  override def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M]) = 
+    peerMessenger match {
+      case Some(found) =>  found ! Transfer(peer, bundle)
+      case None =>
+    }
+/*
     import ExecutionContext.Implicits.global
     this.hermes.transfer(peer, bundle) onComplete {
       case Failure(failure) => 
@@ -307,7 +319,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
       case Success(result) => 
         LOG.info("Successful transferring message to "+peer.getPath)
     }
-  }
+*/
 
   @throws(classOf[IOException])
   override def loopBackMessages(bundle: BSPMessageBundle[M]) = 

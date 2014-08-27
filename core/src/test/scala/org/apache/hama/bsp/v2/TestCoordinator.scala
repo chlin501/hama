@@ -24,6 +24,7 @@ import akka.event.Logging
 import java.net.InetAddress
 import org.apache.hadoop.fs.Path
 import org.apache.hama.Agent
+import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
@@ -45,23 +46,26 @@ final case object SyncThenValidateSuperstep
 
 class MockWorker(conf: HamaConfiguration, 
                  tester: ActorRef, 
-                 task: Task) extends Agent {
+                 task: Task, 
+                 container: ActorRef) extends Worker(container) {
 
+/*
   var peer: BSPPeer = _
 
-  def createPeer(sys: ActorSystem, 
-                 conf: HamaConfiguration,
+  def createPeer(conf: HamaConfiguration,
                  task: Task): BSPPeer = {
-    val p = Coordinator(conf, sys)
-    p.configureFor(task)
+    //val p = Coordinator(conf, sys)
+    val p = new Coordinator()
+    p.configureFor(conf, task, createPeerMessenger(conf))
     p 
   }
  
   def init: Receive = {
     case Init => {
-      peer = createPeer(context.system, conf, task)
+      peer = createPeer(conf, task)
     }
   }
+*/
 
   // getPeerName shouldn't return 0.0.0.0 
   def getPeerName: Receive = {
@@ -124,7 +128,7 @@ class MockWorker(conf: HamaConfiguration,
     }
   }
 
-  override def receive = init orElse getPeerName orElse getAllPeers orElse getNumPeers orElse getTaskAttemptId orElse peerNameAt orElse getSuperstepCount orElse getPeerIndex orElse syncThenValidateSuperstep orElse unknown
+  override def receive = /*init orElse*/ getPeerName orElse getAllPeers orElse getNumPeers orElse getTaskAttemptId orElse peerNameAt orElse getSuperstepCount orElse getPeerIndex orElse syncThenValidateSuperstep orElse unknown
 }
 
 @RunWith(classOf[JUnitRunner])
@@ -170,21 +174,26 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
 
 
   it("test bsp peer coordinator function.") {
+
+    val container = createWithArgs("container", classOf[BSPPeerContainer],
+                                   testConfiguration)
     // job id should be the same, so peers can sync
     val JOB2 = 2 
 
     val task1 = createTask("test", JOB2, 23, 3)
     assert(null != task1)
     val worker1 = createWithArgs("worker1", classOf[MockWorker], 
-                                 conf1, tester, task1) 
+                                 conf1, tester, task1, container) 
 
     val task2 = createTask("test", JOB2, 2, 2)
     assert(null != task2)
     val worker2 = createWithArgs("worker2", classOf[MockWorker], 
-                                 conf2, tester, task2) 
+                                 conf2, tester, task2, container) 
 
-    worker1 ! Init
-    worker2 ! Init
+    //worker1 ! Init
+    //worker2 ! Init
+    worker1 ! ConfigureFor(testConfiguration, task1)
+    worker2 ! ConfigureFor(testConfiguration, task2)
 
     worker1 ! GetAllPeers
     worker2 ! GetAllPeers

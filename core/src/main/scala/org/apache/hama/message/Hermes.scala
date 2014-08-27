@@ -55,21 +55,16 @@ final case class Transfer[M <: Writable](peer: ProxyInfo, msg: BSPMessageBundle[
 
 /**
  * A bridge for BSPPeer and message transfer actor.
- */
 trait Hermes {
 
-  /**
    * Initialize necessary services with common configuration.
    * @param conf is common setting from container.
-   */
   def initialize[M <: Writable](conf: HamaConfiguration, 
                                 q: BlockingQueue[BSPMessageBundle[M]])
 
-  /**
    * A function transfer message bundle to another bsp peer.
    * @param is destination bsp peer.
    * @param msg contains messages to be transferred to the destination.
-   */
   def transfer[M <: Writable](peer: ProxyInfo, msg: BSPMessageBundle[M]): 
     Future[TransferredState]
 
@@ -118,6 +113,7 @@ class Iris extends Hermes { // instead of using TypedActor, use self: Actor =>
     (getActor ? Transfer[M](peer, msg)).mapTo[TransferredState]
 
 }
+ */
 
 final case class MessageFrom(msg: BSPMessageBundle[_ <: Writable], 
                              from: ActorRef)
@@ -125,7 +121,7 @@ final case class MessageFrom(msg: BSPMessageBundle[_ <: Writable],
 /**
  * An messenger on behalf of {@link BSPPeer} sends messages to other peers.
  */
-class PeerMessenger extends Actor with RemoteService {
+class PeerMessenger extends RemoteService {
 
   /* This holds information to BSPPeer actors. */
   protected var maxCachedConnections: Int = 100

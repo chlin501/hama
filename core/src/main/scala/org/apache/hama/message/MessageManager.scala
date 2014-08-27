@@ -17,6 +17,7 @@
  */
 package org.apache.hama.message
 
+import akka.actor.ActorRef
 import java.io.IOException
 import java.util.Iterator
 import java.util.Map.Entry
@@ -34,11 +35,17 @@ object MessageManager {
    * @param conf is common configuration.
    * @return MessageMenager without tight to any tasks.
    */
-  def get[M <: Writable](conf: HamaConfiguration): MessageManager[M] = {
+  def get[M <: Writable](conf: HamaConfiguration, 
+                         peerMessenger: ActorRef): MessageManager[M] = {
     val name = conf.get("hama.messenger.class", 
                         classOf[DefaultMessageManager[M]].getCanonicalName())
-    ReflectionUtils.newInstance(conf.getClassByName(name), conf).
-                    asInstanceOf[MessageManager[M]] 
+    val mgr = ReflectionUtils.newInstance(conf.getClassByName(name), conf)
+    mgr.isInstanceOf[PeerCommunicator] match { 
+      case true => mgr.asInstanceOf[PeerCommunicator].
+                       communicator(peerMessenger)
+      case false =>
+    }
+    mgr.asInstanceOf[MessageManager[M]]
   }
 
 }

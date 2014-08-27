@@ -54,23 +54,16 @@ protected trait SuperstepBSP extends BSP with Configurable with ActorLog {
   protected var taskConf = new HamaConfiguration
 
   /**
-   * This is intended to be set by {@link Worker} only because directly spaw-
-   * ing checkpoint actors is eaiser.
-   * @return ActorContext is {@link Actor#context}
-  //protected[v2] def actorContext(): ActorContext 
-   */
-
-  /**
    * This is intended to be set by {@link Worker} only for identifying the
    * checkpointer created. The checkpointer's name would be in a form of
    * "checkpoint_"+taskAttemptId()+"_"+BSPPeer.getSuperstepCount()
    * @return String of {@link TaskAttemptID}.
-   */
   protected[v2] def taskAttemptId(): String
+   */
 
   override def setConf(conf: Configuration) = conf match {
     case null => LOG.error("Task configuration is not provided for {}!",
-                           taskAttemptId) 
+                           getTask.getId) 
     case _ => this.taskConf = conf.asInstanceOf[HamaConfiguration]
   }
 
@@ -156,9 +149,9 @@ protected trait SuperstepBSP extends BSP with Configurable with ActorLog {
       case true => {
         val ckpt = context.actorOf(Props(classOf[Checkpointer], 
                                               taskConf,
-                                              taskAttemptId,
+                                              getTask.getId,
                                               peer.getSuperstepCount), 
-                                        "checkpoint_"+taskAttemptId+"_"+
+                                        "checkpoint_"+getTask.getId+"_"+
                                         peer.getSuperstepCount) 
         LOG.debug("Checkpoint "+ckpt.path.name+" is created!")
         peer.isInstanceOf[CheckpointerReceiver] match {
@@ -171,7 +164,7 @@ protected trait SuperstepBSP extends BSP with Configurable with ActorLog {
         Some(ckpt)
       }
       case false => {
-        LOG.debug("No checkpoint is needed for "+taskAttemptId)
+        LOG.debug("No checkpoint is needed for "+getTask.getId)
         None
       }
     }

@@ -15,25 +15,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama.message
 
+import akka.actor.Actor
+import akka.actor.ActorRef
+import org.apache.hadoop.io.Writable
+import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
-import org.apache.hama.groom.monitor.TasksReporter
-import org.apache.hama.groom.monitor.GroomReporter
-import org.apache.hama.groom.monitor.SysMetricsReporter
 
-class Monitor(conf: HamaConfiguration) extends LocalService {// TODO: rename to Reporter?
+trait Messenger {
 
-  override def configuration: HamaConfiguration = conf
-
-  override def initializeServices {
-    getOrCreate("tasksReporter", classOf[TasksReporter], configuration)
-    getOrCreate("groomReporter", classOf[GroomReporter], configuration)
-    getOrCreate("sysMetricsReporter", classOf[SysMetricsReporter], 
-                configuration)
+  def configureForMessenger[M <: Writable](conf: HamaConfiguration, 
+                                           task: Option[Task], 
+                                           peerMessenger: ActorRef): 
+      Option[MessageManager[M]] = task match { 
+    case Some(found) => {
+      val mgr = MessageManager.get[M](conf, peerMessenger)
+      mgr.init(conf, found.getId)
+      Some(mgr)
+    }
+    case None => None
   }
-
-  def receive = unknown
 
 }

@@ -41,29 +41,30 @@ trait CheckpointerReceiver extends CommonLog {
 
   /**
    * Used to retrieve setting stored in common confiuration.
-   */
   protected[monitor] def getCommonConf(): HamaConfiguration 
+   */
 
   /**
    * Obtain current task atempt id for each task will only be specific to a 
    * task id. 
    * @return String of the task attempt id.
-   */
   protected[monitor] def currentTaskAttemptId(): String
+   */
 
   /**
    * Identify the current superstep count value.
    * @return Long of the superstep count.
-   */ 
   protected[monitor] def currentSuperstepCount(): Long
+   */ 
 
   /**
    * Check if the checkpoint is enabled in {@link HamaConfiguration}; default 
    * set to false.
+   * @param conf is common configuration.
    * @return Boolean denote true if checkpoint is enabled; othwerwise false.
    */
-  protected[monitor] def isCheckpointEnabled(): Boolean =
-    getCommonConf.getBoolean("bsp.checkpoint.enabled", false)
+  protected[monitor] def isCheckpointEnabled(conf: HamaConfiguration): Boolean =
+    conf.getBoolean("bsp.checkpoint.enabled", false)
 
   protected def queueLength(): Int = packQueue.length
 
@@ -77,8 +78,6 @@ trait CheckpointerReceiver extends CommonLog {
    */
   protected[monitor] def firstPackInQueue(): Option[Pack] = queueLength match {
     case 0 => {
-      LOG.warning("Checkpointer for "+currentTaskAttemptId+" at "+
-                  "superstep "+currentSuperstepCount+" not found!")
       None
     }
     case _ => {
@@ -93,7 +92,8 @@ trait CheckpointerReceiver extends CommonLog {
    * return the first checkpoint in queue; otherwise {@link scala.None} is 
    * returned.
    */
-  def nextPack(): Option[Pack] = isCheckpointEnabled match {
+  def nextPack(conf: HamaConfiguration): Option[Pack] = 
+      isCheckpointEnabled(conf) match {
     case true => firstPackInQueue
     case false => None
   } 

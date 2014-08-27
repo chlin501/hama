@@ -42,8 +42,8 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-class Aggregator(conf: HamaConfiguration, tester: ActorRef) 
-      extends TaskManager(conf) {
+class Aggregator(conf: HamaConfiguration, monitor: ActorRef, tester: ActorRef) 
+      extends TaskManager(conf, monitor) {
 
   var command: Int = _
 
@@ -142,7 +142,9 @@ class TestExecutor extends TestEnv("TestExecutor",
     val taskManagerName = 
       testConfiguration.get("bsp.groom.taskmanager.name", "taskManager")
 
-    val aggregator = createWithTester(taskManagerName, classOf[Aggregator]) 
+    val monitor = createWithArgs("monitor", classOf[Monitor])
+    val aggregator = createWithArgs(taskManagerName, classOf[Aggregator],
+                                    monitor, tester) 
   
     /* jobid, taskId, taskAttemptId */
     val task1 = createTask("test", 1, 7, 2) 

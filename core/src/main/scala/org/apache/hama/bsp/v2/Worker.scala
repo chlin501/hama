@@ -21,8 +21,10 @@ import akka.actor.Actor
 import akka.actor.ActorContext
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
+import akka.actor.Props
 import akka.event.LoggingAdapter
 import java.io.File
+import java.net.InetAddress
 import java.net.URL
 import java.net.URLClassLoader
 import org.apache.hadoop.fs.Path
@@ -33,11 +35,13 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLog
 import org.apache.hama.logging.TaskLogParam
 import org.apache.hama.logging.TaskLogParameter
+import org.apache.hama.message.PeerMessenger
 
 sealed trait WorkerOperation
 final case class Bind(conf: HamaConfiguration, 
                       actorSystem: ActorSystem) extends WorkerOperation
-final case class ConfigureFor(task: Task) extends WorkerOperation
+final case class ConfigureFor(conf: HamaConfiguration,
+                              task: Task) extends WorkerOperation
 final case class Execute(taskAttemptId: String,
                          conf: HamaConfiguration, 
                          taskConf: HamaConfiguration) extends WorkerOperation
@@ -52,16 +56,15 @@ object Worker {
 /**
  * This is the actual class that perform {@link Superstep}s execution.
  */
-protected[v2] class Worker extends SuperstepBSP 
-                           with Agent 
-                           with TaskLog 
-                           with TaskLogParameter {
+protected[v2] class Worker(container: ActorRef) extends SuperstepBSP 
+                                                with Agent 
+                                                with TaskLog 
+                                                with TaskLogParameter {
 
   import Worker._ 
 
-  protected var peer: Option[Coordinator] = None
-
-  protected var currentTaskAttemptId: String = _
+  //protected var peer: Option[Coordinator] = None
+  protected val peer = new Coordinator
  
   protected var task: Option[Task] = None
 
@@ -80,8 +83,8 @@ protected[v2] class Worker extends SuperstepBSP
     case Some(found) => found
   }
 
-  protected[v2] def taskAttemptId: String = currentTaskAttemptId
 
+/*
   protected def bind(old: Option[Coordinator], 
                      conf: HamaConfiguration, 
                      actorSystem: ActorSystem): Option[Coordinator] = 
@@ -96,25 +99,40 @@ protected[v2] class Worker extends SuperstepBSP
       this.peer = bind(this.peer, conf, actorSystem) 
     }
   }
+*/
 
   /**
    * This ties coordinator to a particular task.
    */
   def configureFor: Receive = {
-    case ConfigureFor(task) => {
-      peer match {
-        case Some(found) => {
-          currentTaskAttemptId = task.getId.toString
-          setConf(task.getConfiguration)
-          LOG.info("Configure this worker to task attempt id {}", 
-                   currentTaskAttemptId)
-          found.configureFor(task)
-        }
-        case None => LOG.warning("Unable to configure for task "+task+
-                                 " because BSPPeer is missing!")
+    case ConfigureFor(conf, task) => {
+      
+      setConf(task.getConfiguration)
+      LOG.info("Configure this worker to task attempt id {}", 
+               task.getId.toString)
+      val peerMessenger = createPeerMessenger(conf)
+      LOG.info("Peer messenger {} is created! ", peerMessenger.path.name)
+      configureFor(conf, task, peerMessenger)
+    }
+  }
+
+  protected def createPeerMessenger(conf: HamaConfiguration): ActorRef = {
+    val id = identifier(conf) 
+    context.actorOf(Props(classOf[PeerMessenger]), "peerMessenger_"+id)
+  }
+
+  protected def identifier(conf: HamaConfiguration): String = {
+    conf.getInt("bsp.child.slot.seq", -1) match {
+      case -1 => throw new RuntimeException("Slot seq is -1!") 
+      case seq@_ => {
+        val host = conf.get("bsp.peer.hostname",
+                            InetAddress.getLocalHost.getHostName)
+        val port = conf.getInt("bsp.peer.port", 61000)
+        "BSPPeerSystem%d@%s:%d".format(seq, host, port)
       }
     }
   }
+
 
   /**
    * Start executing {@link Superstep}s accordingly.
@@ -131,13 +149,10 @@ protected[v2] class Worker extends SuperstepBSP
    */
   protected def doExecute(taskAttemptId: String, 
                           conf: HamaConfiguration, 
-                          taskConf: HamaConfiguration) = peer match {
-    case Some(found) => {
-      addJarToClasspath(taskAttemptId, taskConf)
-      setup(found)
-      bsp(found)
-    }
-    case None => LOG.error("BSPPeer is missing!")
+                          taskConf: HamaConfiguration) {
+    addJarToClasspath(taskAttemptId, taskConf)
+    setup(peer)
+    bsp(peer)
   }
 
   /**
@@ -196,11 +211,8 @@ protected[v2] class Worker extends SuperstepBSP
    * @return Receive is partial function.
    */
   def close: Receive = {
-    case Close => peer match {
-      case None => 
-      case Some(found) => found.close
-    }
+    case Close => close
   }
 
-  override def receive = bind orElse configureFor orElse execute orElse/* save orElse noMoreMessages orElse*/ close orElse unknown
+  override def receive = configureFor orElse execute orElse close orElse unknown
 }

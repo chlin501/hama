@@ -17,6 +17,7 @@
  */
 package org.apache.hama.bsp.v2
 
+import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import java.io.IOException
@@ -36,22 +37,32 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.ProxyInfo
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.MessageManager
+import org.apache.hama.message.Messenger
 import org.apache.hama.message.PeerCommunicator
 import org.apache.hama.monitor.CheckpointerReceiver
 import org.apache.hama.monitor.Checkpointable
+import org.apache.hama.sync.BarrierClient
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncException
+/*
 import org.apache.hama.sync.SyncServiceFactory
+*/
 import scala.collection.JavaConversions._
 import scala.collection.immutable.Queue
+import scala.util.Try
+import scala.util.Success
+import scala.util.Failure
 
+/*
 private[v2] final case class TaskWithStats(task: Task, counters: Counters) {
   if(null == task)
     throw new IllegalArgumentException("Task is not provided.")
   if(null == counters) 
     throw new IllegalArgumentException("Counters is not provided!")
 }
+*/
 
+/*
 object Coordinator {
 
   /**
@@ -64,6 +75,7 @@ object Coordinator {
             actorSystem: ActorSystem): Coordinator = 
     new Coordinator(conf, actorSystem)
 }
+*/
 
 /**
  * This class purely implements BSPPeer interface, and is intended to be used  
@@ -83,47 +95,27 @@ object Coordinator {
  * when necessary.
  * 
  * @param conf contains the common configuration.
- * @param bspActorSystem is the actor system of bsp process; it is responsible 
- *                       for launching peer messenger for coordinating between
- *                       peers.
  */
-class Coordinator(conf: HamaConfiguration, bspActorSystem: ActorSystem) 
-      extends BSPPeer with CheckpointerReceiver with Checkpointable {
-
-// TODO: self: Actor => 
+/*(conf: HamaConfiguration, bspActorSystem: ActorSystem)*/
+class Coordinator extends BSPPeer 
+                                    with CheckpointerReceiver 
+                                    with Checkpointable 
+                                    with TaskAware 
+                                    with Messenger 
+                                    with BarrierClient {
 
   /* task and counters specific to a particular v2.Job. */
-  protected var taskWithStats: TaskWithStats = _
+  //protected var taskWithStats: TaskWithStats = _
 
   /* services for a particular v2.Task. */
-  protected var messenger = MessageManager.get[Writable](configuration)
-  // TODO: we need a new io interface for reader/ writer which are not bound to
-  //       key value pair.
+  //protected var messenger = MessageManager.get[Writable](configuration)
+  protected var messenger: Option[MessageManager[Writable]] = None
   //protected var io = IO.get[_, _](configuration)
-  protected val syncClient = SyncServiceFactory.getPeerSyncClient(configuration)
-
-  private var allPeers: Array[String] = _
+  //protected val syncClient = SyncServiceFactory.getPeerSyncClient(configuration)
+  protected var syncClient: Option[PeerSyncClient] = None
+  protected var conf: HamaConfiguration = new HamaConfiguration
 
   override def configuration(): HamaConfiguration = conf
-
-  override def getCommonConf(): HamaConfiguration = configuration
-
-  override def currentTaskAttemptId(): String = getTask.getId.toString
-
-  override def currentSuperstepCount(): Long = getSuperstepCount
-
-  // only for internal use.
-  private def getTask(): Task = taskWithStats match {
-    case null => 
-      throw new IllegalStateException("TaskWithStats is not yet setup!")
-    case _ => taskWithStats.task
-  }
-
-  private def getCounters(): Counters = taskWithStats match {
-    case null =>
-      throw new IllegalStateException("TaskWithStats is not yet setup!")
-    case _ => taskWithStats.counters 
-  }
 
   /**
    * Configure necessary services for a specific task, including
@@ -135,25 +127,39 @@ class Coordinator(conf: HamaConfiguration, bspActorSystem: ActorSystem)
    * @param task contains setting for a specific job; its configuration differs
    *             from conf provided by {@link Container}.
    */
-  protected[v2] def configureFor(task: Task) {
-    this.taskWithStats = TaskWithStats(task, new Counters())
-    this.messenger = messengingService(this.messenger, configuration, getTask) 
+  protected[v2] def configureFor(commonConf: HamaConfiguration, 
+                                 bspTask: Task,
+                                 peerMessenger: ActorRef) {
+    taskWithStats = TaskWithStats(Some(bspTask), Some(new Counters()))
+    //this.messenger = messengingService(this.messenger, configuration, getTask)
+    this.conf = commonConf;
+    messenger = configureForMessenger(configuration, task, peerMessenger) // TODO: magnet pattern
     //this.io = ioService[_, _](io, configuration, taskWithStats) 
-    localize(configuration, getTask)
-    settingForTask(configuration, getTask)
-    syncService(configuration, getTask)
-    firstSync(getTask.getCurrentSuperstep)
+    localize(configuration, task)
+    settingForTask(configuration, task)
+    //syncService(configuration, getTask)
+    syncClient = configureForBarrier(configuration, task, host, port) // TODO: magnet pattern
+    firstSync(doIfExists[Task, Int](task, { (found) =>
+      found.getCurrentSuperstep
+    }, 0))
   }
 
   /**
    * Internal sync to ensure all peers is registered/ ready.
    * @param superstep indicate the curent superstep value.
    */
-  protected def firstSync(superstep: Long) {
-    //TODO: should the task's superstep be confiured to 0 instead?
-    syncClient.enterBarrier(getTask.getId.getJobID, getTask.getId, superstep)
-    syncClient.leaveBarrier(getTask.getId.getJobID, getTask.getId, superstep)
-    getTask.increatmentSuperstep
+  //TODO: should the task's superstep be confiured to 0 instead?
+  protected def firstSync(superstep: Long) = task match {
+    case Some(found) => {
+      doIfExists[PeerSyncClient, Unit](syncClient, { (client) => 
+        client.enterBarrier(found.getId.getJobID, found.getId, superstep)
+      }, Unit)
+      doIfExists[PeerSyncClient, Unit](syncClient, { (client) => 
+        client.leaveBarrier(found.getId.getJobID, found.getId, superstep)
+      }, Unit)
+      found.increatmentSuperstep 
+    }
+    case None =>
   }
 
   /** 
@@ -163,25 +169,26 @@ class Coordinator(conf: HamaConfiguration, bspActorSystem: ActorSystem)
    * @param conf is the common setting from bsp peer container.
    * @param task is contains setting for particular job computation.
    */
-  protected def settingForTask(conf: HamaConfiguration, task: Task) {
-    val taskConf = task.getConfiguration
-    Operation.get(taskConf).setWorkingDirectory(
-      new Path(Operation.defaultWorkingDirectory(taskConf))
-    )
-    val libjars = CacheService.moveJarsAndGetClasspath(conf) 
-    libjars match {
-      case null => LOG.warning("No jars to be included for "+task.getId)
-      case _ => {
-        LOG.info("Jars to be included in classpath are "+libjars.mkString(", "))
-        taskConf.setClassLoader(new URLClassLoader(libjars, 
-                                                   taskConf.getClassLoader))
-      }
-    } 
-  }
+  protected def settingForTask(conf: HamaConfiguration, task: Option[Task]) = 
+    doIfExists[Task, Unit](task, { (found) => {
+      val taskConf = found.getConfiguration
+      Operation.get(taskConf).setWorkingDirectory(
+        new Path(Operation.defaultWorkingDirectory(taskConf))
+      )
+      val libjars = CacheService.moveJarsAndGetClasspath(conf) 
+      libjars match {
+        case null => LOG.warning("No jars to be included for "+found.getId)
+        case _ => {
+          LOG.info("Jars to be included in classpath are "+
+                   libjars.mkString(", "))
+          taskConf.setClassLoader(new URLClassLoader(libjars, 
+                                                     taskConf.getClassLoader))
+        }
+      } 
+    }}, Unit)
   
   /**
    * Setup message service for a specific task.
-   */
   protected def messengingService(old: MessageManager[Writable], 
                                   conf: HamaConfiguration, 
                                   task: Task): MessageManager[Writable] = {
@@ -191,11 +198,13 @@ class Coordinator(conf: HamaConfiguration, bspActorSystem: ActorSystem)
     }
     val mgr = MessageManager.get[Writable](conf)
     mgr.init(conf, task.getId)
-    if(mgr.isInstanceOf[PeerCommunicator]) {
-      mgr.asInstanceOf[PeerCommunicator].initialize(bspActorSystem)
+    mgr.isInstanceOf[PeerCommunicator]) match { 
+      case true => mgr.asInstanceOf[PeerCommunicator].initialize(context.system)
+      case false =>
     }
     mgr
   }
+   */
 
   /**
    * Setup io service for a specific task.
@@ -217,17 +226,17 @@ class Coordinator(conf: HamaConfiguration, bspActorSystem: ActorSystem)
    * Copy necessary files to local (file) system so to speed up computation.
    * @param conf should contain related cache files if any.
    */
-  protected def localize(conf: HamaConfiguration, task: Task) = 
+  protected def localize(conf: HamaConfiguration, task: Option[Task]) = 
     CacheService.moveCacheToLocal(conf)
 
   /**
    * Instantiate ZooKeeper sync service for BarrierSynchronization according to
    * a specific task.
-   */
   protected def syncService(conf: HamaConfiguration, task: Task) {
     this.syncClient.init(conf, task.getId.getJobID, task.getId)
     this.syncClient.register(task.getId.getJobID, task.getId, host, port)
   }
+   */
 
   /**
    * The host this actor runs on. It may be different from the host that remote 
@@ -243,43 +252,74 @@ class Coordinator(conf: HamaConfiguration, bspActorSystem: ActorSystem)
   //override def getIO[I, O](): IO[I, O] = this.io.asInstanceOf[IO[I, O]]
 
   @throws(classOf[IOException])
-  override def send(peerName: String, msg: Writable) = 
-    messenger.send(peerName, msg.asInstanceOf[Writable])
+  override def send(peerName: String, msg: Writable) = messenger match {
+    case Some(found) => found.send(peerName, msg.asInstanceOf[Writable])
+    case None =>
+  }
 
   override def getCurrentMessage(): Writable = 
-    messenger.getCurrentMessage.asInstanceOf[Writable]
+    doIfExists[MessageManager[Writable], Writable](messenger, { (mgr) =>
+      mgr.getCurrentMessage.asInstanceOf[Writable]
+    }, null.asInstanceOf[Writable])
+    
 
-  override def getNumCurrentMessages(): Int = messenger.getNumCurrentMessages
+  override def getNumCurrentMessages(): Int = 
+    doIfExists[MessageManager[Writable], Int](messenger, { (mgr) =>
+      mgr.getNumCurrentMessages
+    }, 0)
 
   @throws(classOf[SyncException])
-  protected def enterBarrier() {
-    syncClient.enterBarrier(getTask.getId.getJobID, 
-                            getTask.getId, 
-                            getTask.getCurrentSuperstep)
-  }
+  protected def enterBarrier() = doIfExists[Task, Unit](task, { (found) => 
+    doIfExists[PeerSyncClient, Unit](syncClient, { (client) => 
+      client.enterBarrier(found.getId.getJobID, found.getId, 
+                          found.getCurrentSuperstep)
+    }, Unit) 
+  }, Unit)
 
   @throws(classOf[SyncException])
-  protected def leaveBarrier() {
-    syncClient.leaveBarrier(getTask.getId.getJobID, 
-                            getTask.getId,
-                            getTask.getCurrentSuperstep)
-  }
+  protected def leaveBarrier() = doIfExists[Task, Unit](task, { (found) => 
+    doIfExists[PeerSyncClient, Unit](syncClient, { (client) => 
+      client.leaveBarrier(found.getId.getJobID, found.getId,
+                          found.getCurrentSuperstep)
+    }, Unit)
+  }, Unit)
 
-  def doTransfer(peer: ProxyInfo, bundle: BSPMessageBundle[Writable]) {
-    try {
-      messenger.transfer(peer, bundle) 
-    } catch {
-      case ioe: IOException => 
-        LOG.error("Fail transferring messages to {} for {}", 
-                  peer, ioe)
+  protected def doTransfer(peer: ProxyInfo, 
+                           bundle: BSPMessageBundle[Writable]): Try[Boolean] = 
+    Try(checkThenTransfer(peer, bundle))
+
+  protected def checkThenTransfer(peer: ProxyInfo, 
+                                  bundle: BSPMessageBundle[Writable]): Boolean =
+       messenger match { 
+    case Some(found) => {
+      found.transfer(peer, bundle)
+      true
     }
+    case None => false
   }
+
+  /**
+   * Used to reduce redundant code for checking if task exists.
+   * @param task to be applied. 
+   * @param f is the function to be executed.
+   * @param default is the value to applied if the task not found.
+   */
+  protected def doIfExists[A, B <: Any](task: Option[A], 
+                                     f: (A) => B, 
+                                     default: B): B = task match {
+    case Some(found) => f(found)
+    case None => default
+  }
+
+  protected def getBundles(messenger: Option[MessageManager[Writable]]) = 
+    doIfExists[MessageManager[Writable], java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[Writable]]]](messenger, { (mgr) => mgr.getOutgoingBundles }, null.asInstanceOf[java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[Writable]]]])
 
   @throws(classOf[IOException])
   override def sync() {
-    getTask.transitToSync
-    val pack = nextPack
-    val it = messenger.getOutgoingBundles
+    doIfExists[Task, Unit](task, {(found) => found.transitToSync }, Unit)
+    val pack = nextPack(conf)
+    val it = getBundles(messenger)
+
     it match {
       case null =>
         throw new IllegalStateException("MessageManager's outgoing bundles is "+
@@ -289,53 +329,70 @@ class Coordinator(conf: HamaConfiguration, bspActorSystem: ActorSystem)
           val peer = entry.getKey
           val bundle = entry.getValue
           it.remove 
-          savePeerBundle(pack, getTask.getId.toString, getSuperstepCount,
-                         peer, bundle)
-          doTransfer(peer, bundle)      
+          savePeerBundle(pack, doIfExists[Task, String](task, { (found) => 
+            found.getId.toString
+          }, null.asInstanceOf[String]), getSuperstepCount, peer, bundle)
+/*
+          doTransfer(peer, bundle) match {
+            case Success(result) => LOG.debug("Successfully transfer messages!")
+            case Failure(cause) => LOG.error("Fail transferring messages due "+
+                                             "to {}", cause)
+          }
+*/
         })
         //noMoreBundle(pack, getTask.getId.toString, getSuperstepCount)
       }
     }
      
     enterBarrier()
-    messenger.clearOutgoingMessages
+    clear()
     saveSuperstep(pack)
     leaveBarrier()
     // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
-    getTask.increatmentSuperstep
+    doIfExists[Task, Unit](task, { (found) => 
+      found.increatmentSuperstep 
+    }, Unit)
   } 
   
   override def getSuperstepCount(): Long = 
-    getTask.getCurrentSuperstep
+    doIfExists[Task, Long](task, { (found) => found.getCurrentSuperstep }, 0)
 
-  private def initPeerNames() {
-    if (null == allPeers) {
-      allPeers = syncClient.getAllPeerNames(getTask.getId);
-    }
+  private def initPeers(): Option[Array[String]] = 
+    doIfExists[Task, Option[Array[String]]](task, { (found) =>
+      doIfExists[PeerSyncClient, Option[Array[String]]](syncClient, { (client)=>
+        Some(client.getAllPeerNames(found.getId))
+      }, Some(Array[String]()))
+    }, Some(Array[String]()))
+
+  override def getPeerName(): String = 
+    doIfExists[PeerSyncClient, String](syncClient, { (client) => 
+      client.getPeerName
+    }, "")
+
+  override def getPeerName(index: Int): String = initPeers match {
+    case Some(found) => found(index)
+    case None => null
   }
 
-  override def getPeerName(): String = syncClient.getPeerName
+  override def getPeerIndex(): Int = doIfExists[Task, Int](task, { (found) => {
+    found.getId.getTaskID.getId 
+  }}, -1)
 
-  override def getPeerName(index: Int): String = {
-    initPeerNames
-    allPeers(index)
+  override def getAllPeerNames(): Array[String] = initPeers.getOrElse(null)
+
+  override def getNumPeers(): Int = initPeers match {
+    case Some(found) => found.length
+    case None => 0
   }
 
-  override def getPeerIndex(): Int = getTask.getId.getTaskID.getId
+  override def clear() = doIfExists[MessageManager[Writable], Unit](
+    messenger, { (mgr) => mgr.clearOutgoingMessages }, Unit
+  )
 
-  override def getAllPeerNames(): Array[String] = {
-    initPeerNames
-    allPeers
-  }
-
-  override def getNumPeers(): Int = {
-    initPeerNames
-    allPeers.length
-  }
-
-  override def clear() = messenger.clearOutgoingMessages 
-
-  override def getTaskAttemptId(): TaskAttemptID = getTask.getId
+  override def getTaskAttemptId(): TaskAttemptID = 
+    doIfExists[Task, TaskAttemptID](task, { (found) => 
+      found.getId 
+    }, null.asInstanceOf[TaskAttemptID])
 
   /**
    * This is called after {@link BSP#bsp} finishs its execution in the end.
@@ -343,9 +400,13 @@ class Coordinator(conf: HamaConfiguration, bspActorSystem: ActorSystem)
    */
   protected[v2] def close() = {
    // TODO: close all operations, including io/ message/ sync/ local files in cache, etc.
-    this.clear 
-    this.syncClient.close
-    this.messenger.close
+    clear 
+    doIfExists[PeerSyncClient, Unit](syncClient, { (client) => 
+      client.close 
+    }, Unit)
+    doIfExists[MessageManager[Writable], Unit](messenger, { (mgr) => 
+      mgr.close
+    }, Unit)
   }
 
 }

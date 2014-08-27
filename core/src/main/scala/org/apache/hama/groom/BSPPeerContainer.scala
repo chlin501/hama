@@ -262,26 +262,28 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
                                                 with RemoteService 
                                                 with ActorLocator {
 
-  protected var executor: ActorRef = _
-
-  // TODO: read from zk?
-  val groomName = configuration.get("bsp.groom.name", "groomServer")
+  protected var executor: Option[ActorRef] = None
 
   override def configuration: HamaConfiguration = conf
 
   def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", 1)
 
-  def executorName: String = groomName+"_executor_"+slotSeq
+  def executorName: String = "groomServer_executor_"+slotSeq
  
   override def initializeServices {
     lookup(executorName, locate(ExecutorLocator(configuration)))
   }
 
   override def afterLinked(proxy: ActorRef) {
-    executor = proxy
-    executor ! ContainerReady
-    LOG.info("Slot seq {} sends ContainerReady to {}", 
-              slotSeq, executor.path.name)
+    executor = Some(proxy)
+    executor match {
+      case Some(found) => {
+        found ! ContainerReady
+        LOG.info("Slot seq {} sends ContainerReady to {}", 
+                 slotSeq, found.path.name)
+      }
+      case None => 
+    }
   }
 
   /**
@@ -301,10 +303,10 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * @param task that is supplied to be executed.
    */
   def doLaunch(task: Task) { 
-    val worker = context.actorOf(Props(classOf[Worker]))
+    val worker = context.actorOf(Props(classOf[Worker], self))
     context.watch(worker)
-    worker ! Bind(configuration, context.system) 
-    worker ! ConfigureFor(task)
+    //worker ! Bind(configuration, context.system) 
+    worker ! ConfigureFor(configuration, task)
     worker ! Execute(task.getId.toString, configuration, task.getConfiguration)
   }
 
@@ -372,8 +374,11 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    */
   def stopContainer: Receive = {
    case StopContainer => {
-      executor ! ContainerStopped  
-      LOG.info("Send ContainerStopped message ...")
+      executor match {
+        case Some(found) => found ! ContainerStopped  
+        case None =>
+      }
+      LOG.debug("ContainerStopped message is sent ...")
     }
   }
 
@@ -384,7 +389,10 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   def shutdownContainer: Receive = {
     case ShutdownContainer => {
       LOG.debug("Unwatch remote executro {} ...", executor)
-      context.unwatch(executor) 
+      executor match {
+        case Some(found) => context.unwatch(found) 
+        case None =>
+      }
       //LOG.debug("Stop {} itself ...", name)
       //context.stop(self)
       LOG.info("Completely shutdown BSPContainer system ...")
@@ -402,5 +410,5 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     self ! ShutdownContainer
   }
 
-  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer /*orElse processTask*/ orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
 }

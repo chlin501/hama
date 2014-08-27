@@ -47,9 +47,9 @@ class MockMaster2(conf: HamaConfiguration) extends Master(conf) {
 }
 */
 
-class MockTaskMgr(conf: HamaConfiguration, mockSched: ActorRef, 
-                      name: String, constraint: Int) 
-      extends TaskManager(conf) {
+class MockTaskMgr(conf: HamaConfiguration, reporter: ActorRef, 
+                  mockSched: ActorRef, name: String, constraint: Int) 
+      extends TaskManager(conf, reporter) {
 
   /**
    * Disable remote lookup sched.
@@ -96,8 +96,12 @@ class MockScheduler(conf: HamaConfiguration, tester: ActorRef,
     case GroomEnrollment(groomServerName, tm, maxTasks) => {
       if(null != tm) 
         throw new IllegalArgumentException("Parameter tm should be null!")
+      val reporter = 
+         context.actorOf(Props(classOf[org.apache.hama.groom.Monitor],
+                               configuration))
       val taskManager = context.actorOf(Props(classOf[MockTaskMgr], 
                                               conf, 
+                                              reporter,
                                               self,
                                               groomServerName,
                                               maxTasks), 

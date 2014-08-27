@@ -15,25 +15,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama.sync
 
+import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
-import org.apache.hama.groom.monitor.TasksReporter
-import org.apache.hama.groom.monitor.GroomReporter
-import org.apache.hama.groom.monitor.SysMetricsReporter
 
-class Monitor(conf: HamaConfiguration) extends LocalService {// TODO: rename to Reporter?
+trait BarrierClient {
 
-  override def configuration: HamaConfiguration = conf
-
-  override def initializeServices {
-    getOrCreate("tasksReporter", classOf[TasksReporter], configuration)
-    getOrCreate("groomReporter", classOf[GroomReporter], configuration)
-    getOrCreate("sysMetricsReporter", classOf[SysMetricsReporter], 
-                configuration)
+// TODO: magnet pattern
+  def configureForBarrier(conf: HamaConfiguration, task: Option[Task], 
+                          host: String, port: Int): 
+      Option[PeerSyncClient] = task match { 
+    case Some(found) => {
+      val syncClient = SyncServiceFactory.getPeerSyncClient(conf)
+      syncClient.init(conf, found.getId.getJobID, found.getId)
+      syncClient.register(found.getId.getJobID, found.getId, host, port)
+      Some(syncClient)
+    }
+    case None => None
   }
-
-  def receive = unknown
 
 }

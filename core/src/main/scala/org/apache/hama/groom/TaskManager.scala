@@ -42,9 +42,8 @@ import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-class TaskManager(conf: HamaConfiguration) extends LocalService 
-                                           with RemoteService 
-                                           with ActorLocator {
+class TaskManager(conf: HamaConfiguration, monitor: ActorRef) 
+      extends LocalService with RemoteService with ActorLocator {
 
   type ForkedChild = String
 
