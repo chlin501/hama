@@ -63,7 +63,6 @@ protected[v2] class Worker(container: ActorRef) extends SuperstepBSP
 
   import Worker._ 
 
-  //protected var peer: Option[Coordinator] = None
   protected val peer = new Coordinator
  
   protected var task: Option[Task] = None
@@ -82,24 +81,6 @@ protected[v2] class Worker(container: ActorRef) extends SuperstepBSP
     case None => throw new NullPointerException("Task is not yet ready!")
     case Some(found) => found
   }
-
-
-/*
-  protected def bind(old: Option[Coordinator], 
-                     conf: HamaConfiguration, 
-                     actorSystem: ActorSystem): Option[Coordinator] = 
-  old match { 
-    case None => Some(Coordinator(conf, actorSystem))
-    case Some(peer) => old
-  } 
-
-  def bind: Receive = {
-    case Bind(conf, actorSystem) => {
-      slotSeq = conf.getInt("bsp.child.slot.seq", 1)
-      this.peer = bind(this.peer, conf, actorSystem) 
-    }
-  }
-*/
 
   /**
    * This ties coordinator to a particular task.

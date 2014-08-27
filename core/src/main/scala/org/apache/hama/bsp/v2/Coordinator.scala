@@ -28,8 +28,6 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.Counters
 import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.bsp.RecordReader
-import org.apache.hama.bsp.OutputCollector
 import org.apache.hama.fs.CacheService
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
@@ -44,38 +42,11 @@ import org.apache.hama.monitor.Checkpointable
 import org.apache.hama.sync.BarrierClient
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncException
-/*
-import org.apache.hama.sync.SyncServiceFactory
-*/
 import scala.collection.JavaConversions._
 import scala.collection.immutable.Queue
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
-
-/*
-private[v2] final case class TaskWithStats(task: Task, counters: Counters) {
-  if(null == task)
-    throw new IllegalArgumentException("Task is not provided.")
-  if(null == counters) 
-    throw new IllegalArgumentException("Counters is not provided!")
-}
-*/
-
-/*
-object Coordinator {
-
-  /**
-   * Create Coordinator with common configuration and child process's actor 
-   * system.
-   * @param conf is the common configuration.
-   * @param actorSystem is the actor system created during process creation. 
-   */
-  def apply(conf: HamaConfiguration, 
-            actorSystem: ActorSystem): Coordinator = 
-    new Coordinator(conf, actorSystem)
-}
-*/
 
 /**
  * This class purely implements BSPPeer interface, and is intended to be used  
@@ -86,32 +57,21 @@ object Coordinator {
  * - messenging
  * - io 
  * - sync
- * 
- * And update task information such as
- * - status
- * - start time
- * - finish time
- * - progress 
- * when necessary.
- * 
- * @param conf contains the common configuration.
  */
-/*(conf: HamaConfiguration, bspActorSystem: ActorSystem)*/
-class Coordinator extends BSPPeer 
-                                    with CheckpointerReceiver 
-                                    with Checkpointable 
-                                    with TaskAware 
-                                    with Messenger 
-                                    with BarrierClient {
-
-  /* task and counters specific to a particular v2.Job. */
-  //protected var taskWithStats: TaskWithStats = _
+// TODO: Task information such as
+//  - status
+//  - start time
+//  - finish time
+//  - progress 
+// need to find an independent way to update those info. 
+class Coordinator extends BSPPeer with CheckpointerReceiver 
+                                  with Checkpointable 
+                                  with TaskAware 
+                                  with Messenger 
+                                  with BarrierClient {
 
   /* services for a particular v2.Task. */
-  //protected var messenger = MessageManager.get[Writable](configuration)
   protected var messenger: Option[MessageManager[Writable]] = None
-  //protected var io = IO.get[_, _](configuration)
-  //protected val syncClient = SyncServiceFactory.getPeerSyncClient(configuration)
   protected var syncClient: Option[PeerSyncClient] = None
   protected var conf: HamaConfiguration = new HamaConfiguration
 
@@ -131,14 +91,14 @@ class Coordinator extends BSPPeer
                                  bspTask: Task,
                                  peerMessenger: ActorRef) {
     taskWithStats = TaskWithStats(Some(bspTask), Some(new Counters()))
-    //this.messenger = messengingService(this.messenger, configuration, getTask)
     this.conf = commonConf;
-    messenger = configureForMessenger(configuration, task, peerMessenger) // TODO: magnet pattern
+    // TODO: magnet pattern for messenger
+    messenger = configureForMessenger(configuration, task, peerMessenger) 
     //this.io = ioService[_, _](io, configuration, taskWithStats) 
     localize(configuration, task)
     settingForTask(configuration, task)
-    //syncService(configuration, getTask)
-    syncClient = configureForBarrier(configuration, task, host, port) // TODO: magnet pattern
+    // TODO: magnet pattern for sync client
+    syncClient = configureForBarrier(configuration, task, host, port) 
     firstSync(doIfExists[Task, Int](task, { (found) =>
       found.getCurrentSuperstep
     }, 0))
@@ -186,25 +146,6 @@ class Coordinator extends BSPPeer
         }
       } 
     }}, Unit)
-  
-  /**
-   * Setup message service for a specific task.
-  protected def messengingService(old: MessageManager[Writable], 
-                                  conf: HamaConfiguration, 
-                                  task: Task): MessageManager[Writable] = {
-    old match {
-      case null => 
-      case _ => old.close 
-    }
-    val mgr = MessageManager.get[Writable](conf)
-    mgr.init(conf, task.getId)
-    mgr.isInstanceOf[PeerCommunicator]) match { 
-      case true => mgr.asInstanceOf[PeerCommunicator].initialize(context.system)
-      case false =>
-    }
-    mgr
-  }
-   */
 
   /**
    * Setup io service for a specific task.
@@ -230,24 +171,15 @@ class Coordinator extends BSPPeer
     CacheService.moveCacheToLocal(conf)
 
   /**
-   * Instantiate ZooKeeper sync service for BarrierSynchronization according to
-   * a specific task.
-  protected def syncService(conf: HamaConfiguration, task: Task) {
-    this.syncClient.init(conf, task.getId.getJobID, task.getId)
-    this.syncClient.register(task.getId.getJobID, task.getId, host, port)
-  }
-   */
-
-  /**
    * The host this actor runs on. It may be different from the host that remote 
    * module listens to.
    * @return String name of the host.
    */
-  protected def host(): String = 
+  protected def host(): String =  // TODO: move to net package?
     configuration.get("bsp.peer.hostname", 
                       InetAddress.getLocalHost.getHostName) 
 
-  protected def port(): Int = configuration.getInt("bsp.peer.port", 61000)
+  protected def port(): Int = configuration.getInt("bsp.peer.port", 61000) // TODO: move to net pkg?
 
   //override def getIO[I, O](): IO[I, O] = this.io.asInstanceOf[IO[I, O]]
 
@@ -311,6 +243,7 @@ class Coordinator extends BSPPeer
     case None => default
   }
 
+  // TODO: need more concise expression. perhaps refactor interface. return java iterator with entry containing peer and bundle looks stupid.
   protected def getBundles(messenger: Option[MessageManager[Writable]]) = 
     doIfExists[MessageManager[Writable], java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[Writable]]]](messenger, { (mgr) => mgr.getOutgoingBundles }, null.asInstanceOf[java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[Writable]]]])
 
@@ -332,13 +265,11 @@ class Coordinator extends BSPPeer
           savePeerBundle(pack, doIfExists[Task, String](task, { (found) => 
             found.getId.toString
           }, null.asInstanceOf[String]), getSuperstepCount, peer, bundle)
-/*
           doTransfer(peer, bundle) match {
             case Success(result) => LOG.debug("Successfully transfer messages!")
             case Failure(cause) => LOG.error("Fail transferring messages due "+
                                              "to {}", cause)
           }
-*/
         })
         //noMoreBundle(pack, getTask.getId.toString, getSuperstepCount)
       }
@@ -398,8 +329,8 @@ class Coordinator extends BSPPeer
    * This is called after {@link BSP#bsp} finishs its execution in the end.
    * It will close all necessary operations.
    */
-  protected[v2] def close() = {
    // TODO: close all operations, including io/ message/ sync/ local files in cache, etc.
+  protected[v2] def close() = {
     clear 
     doIfExists[PeerSyncClient, Unit](syncClient, { (client) => 
       client.close 

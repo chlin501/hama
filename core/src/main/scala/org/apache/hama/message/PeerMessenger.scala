@@ -42,6 +42,7 @@ import scala.concurrent.Future
  * Denote to initialize messenger's services for transfer messages over wire. 
  * @param conf is common configuration.
  */
+// TODO: remove blocking queue for we don't use typed actor any more.
 final case class Setup[M <: Writable](conf: HamaConfiguration, 
                                       q: BlockingQueue[BSPMessageBundle[M]])
 
@@ -52,68 +53,6 @@ final case class Setup[M <: Writable](conf: HamaConfiguration,
  * @param msg is the actual data.
  */
 final case class Transfer[M <: Writable](peer: ProxyInfo, msg: BSPMessageBundle[M])
-
-/**
- * A bridge for BSPPeer and message transfer actor.
-trait Hermes {
-
-   * Initialize necessary services with common configuration.
-   * @param conf is common setting from container.
-  def initialize[M <: Writable](conf: HamaConfiguration, 
-                                q: BlockingQueue[BSPMessageBundle[M]])
-
-   * A function transfer message bundle to another bsp peer.
-   * @param is destination bsp peer.
-   * @param msg contains messages to be transferred to the destination.
-  def transfer[M <: Writable](peer: ProxyInfo, msg: BSPMessageBundle[M]): 
-    Future[TransferredState]
-
-}
-
-class Iris extends Hermes { // instead of using TypedActor, use self: Actor =>
-
-  protected var actor: ActorRef = _
-
-  protected var id: String = _
-
-  private def getActor(): ActorRef = {
-    if(null == this.actor) {
-      val ctx = TypedActor.context
-      if(null == id) 
-        throw new IllegalStateException("Id for peerMessenger name is missing!")
-      this.actor = ctx.actorOf(Props(classOf[PeerMessenger]), 
-                               "peerMessenger_"+id)
-    }
-    this.actor
-  }
-
-  private def identifier(conf: HamaConfiguration): String = {
-    val seq = conf.getInt("bsp.child.slot.seq", -1)
-    if(-1 == seq)
-      throw new RuntimeException("Invalid slot seq "+seq+" for constructing "+
-                                 "peer info!")
-    val host = conf.get("bsp.peer.hostname",
-                        InetAddress.getLocalHost.getHostName)
-    val port = conf.getInt("bsp.peer.port", 61000)
-    "BSPPeerSystem%d@%s:%d".format(seq, host, port)
-  }
-
-  override def initialize[M <: Writable](conf: HamaConfiguration, 
-                                         q: BlockingQueue[BSPMessageBundle[M]]){
-
-    this.id = identifier(conf) 
-    getActor ! Setup(conf, q)
-  }
-
-  implicit val timeout = Timeout(30 seconds)
-
-  override def transfer[M <: Writable](peer: ProxyInfo, 
-                                       msg: BSPMessageBundle[M]): 
-      Future[TransferredState] = 
-    (getActor ? Transfer[M](peer, msg)).mapTo[TransferredState]
-
-}
- */
 
 final case class MessageFrom(msg: BSPMessageBundle[_ <: Writable], 
                              from: ActorRef)
@@ -128,7 +67,8 @@ class PeerMessenger extends RemoteService {
   protected var peersLRUCache: LRUCache[ProxyInfo, ActorRef] = _
   protected var initialized: Boolean = false
   protected var conf: HamaConfiguration = new HamaConfiguration() 
-  protected var loopbackQueue: BlockingQueue[BSPMessageBundle[_]] = _
+  protected var loopbackQueue: BlockingQueue[BSPMessageBundle[_]] = _  // TODO: remove this one! for we've removed TypedActor
+ 
   protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
 
   override def configuration(): HamaConfiguration = this.conf
