@@ -23,6 +23,8 @@ import org.apache.hadoop.io.IntWritable
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.groom.BSPPeerContainer
+import org.apache.hama.message.PeerMessenger
+import org.apache.hama.message.LocalTarget
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
 import org.apache.hama.zk.LocalZooKeeper
@@ -74,8 +76,8 @@ class C extends Superstep {
   override def next(): Class[_<:Superstep] = classOf[A]
 }
 
-class MockWorker1(container: ActorRef, tester: ActorRef) 
-      extends Worker(container) {
+class MockWorker1(container: ActorRef, peerMessenger: ActorRef, 
+                  tester: ActorRef) extends Worker(container, peerMessenger) {
 
   var captured = Map.empty[String, Superstep] 
 
@@ -139,12 +141,28 @@ class TestWorker extends TestEnv("TestWorker") with JobUtil
     conf
   }
 
+  def identifier(conf: HamaConfiguration): String = {
+    conf.getInt("bsp.child.slot.seq", -1) match {
+      case -1 => throw new RuntimeException("Slot seq shouldn't be -1!")
+      case seq@_ => {
+        val host = conf.get("bsp.peer.hostname",
+                            InetAddress.getLocalHost.getHostName)
+        val port = conf.getInt("bsp.peer.port", 61000)
+        "BSPPeerSystem%d@%s:%d".format(seq, host, port)
+      }
+    }
+  }
+
   it("test bsp worker function.") {
+     val id = identifier(testConfiguration)
+     val peerMessenger = createWithArgs("peerMessenger_"+id, 
+                                        classOf[PeerMessenger])
      val container = createWithArgs("container", classOf[BSPPeerContainer])
      val task = createTask("testworker", 1, 1, 1, testConfiguration)
      val worker = createWithArgs("testWorker", classOf[MockWorker1], 
-                                 container, tester)
-     worker ! Bind(testConfiguration, system)
+                                 container, peerMessenger, tester)
+     peerMessenger ! LocalTarget(worker)
+     //worker ! Bind(testConfiguration, system)
      worker ! ConfigureFor(testConfiguration, task)
      worker ! Execute(task.getId.toString, 
                       testConfiguration, 

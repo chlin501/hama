@@ -37,7 +37,7 @@ import org.apache.hama.io.PartitionedSplit;
  * A view to task information. 
  * Task building should be done through factory method. 
  */
-public final class Task implements Writable {
+public final class Task implements Writable { // TODO: make Task immutable.
 
   final Log LOG = LogFactory.getLog(Task.class);
 

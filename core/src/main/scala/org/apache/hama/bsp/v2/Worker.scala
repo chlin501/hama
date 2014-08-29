@@ -28,6 +28,7 @@ import java.net.InetAddress
 import java.net.URL
 import java.net.URLClassLoader
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.io.Writable
 import org.apache.hama.Agent
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.Operation
@@ -35,17 +36,21 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLog
 import org.apache.hama.logging.TaskLogParam
 import org.apache.hama.logging.TaskLogParameter
-import org.apache.hama.message.PeerMessenger
+import org.apache.hama.message.BSPMessageBundle
 
 sealed trait WorkerOperation
+/*
 final case class Bind(conf: HamaConfiguration, 
                       actorSystem: ActorSystem) extends WorkerOperation
+*/
 final case class ConfigureFor(conf: HamaConfiguration,
                               task: Task) extends WorkerOperation
 final case class Execute(taskAttemptId: String,
                          conf: HamaConfiguration, 
                          taskConf: HamaConfiguration) extends WorkerOperation
 final case class Close extends WorkerOperation
+
+final case class LocalMessages[M <: Writable](bundle: BSPMessageBundle[M])
 
 object Worker {
 
@@ -56,10 +61,8 @@ object Worker {
 /**
  * This is the actual class that perform {@link Superstep}s execution.
  */
-protected[v2] class Worker(container: ActorRef) extends SuperstepBSP 
-                                                with Agent 
-                                                with TaskLog 
-                                                with TaskLogParameter {
+protected[v2] class Worker(container: ActorRef, peerMessenger: ActorRef)
+      extends SuperstepBSP with Agent with TaskLog with TaskLogParameter {
 
   import Worker._ 
 
@@ -91,29 +94,9 @@ protected[v2] class Worker(container: ActorRef) extends SuperstepBSP
       setConf(task.getConfiguration)
       LOG.info("Configure this worker to task attempt id {}", 
                task.getId.toString)
-      val peerMessenger = createPeerMessenger(conf)
-      LOG.info("Peer messenger {} is created! ", peerMessenger.path.name)
       configureFor(conf, task, peerMessenger)
     }
   }
-
-  protected def createPeerMessenger(conf: HamaConfiguration): ActorRef = {
-    val id = identifier(conf) 
-    context.actorOf(Props(classOf[PeerMessenger]), "peerMessenger_"+id)
-  }
-
-  protected def identifier(conf: HamaConfiguration): String = {
-    conf.getInt("bsp.child.slot.seq", -1) match {
-      case -1 => throw new RuntimeException("Slot seq is -1!") 
-      case seq@_ => {
-        val host = conf.get("bsp.peer.hostname",
-                            InetAddress.getLocalHost.getHostName)
-        val port = conf.getInt("bsp.peer.port", 61000)
-        "BSPPeerSystem%d@%s:%d".format(seq, host, port)
-      }
-    }
-  }
-
 
   /**
    * Start executing {@link Superstep}s accordingly.
@@ -195,5 +178,9 @@ protected[v2] class Worker(container: ActorRef) extends SuperstepBSP
     case Close => close
   }
 
-  override def receive = configureFor orElse execute orElse close orElse unknown
+  def localMessages: Receive = {
+    case LocalMessages(bundle) => peer.localMessages(bundle)
+  }
+
+  override def receive = configureFor orElse execute orElse close orElse localMessages orElse unknown
 }

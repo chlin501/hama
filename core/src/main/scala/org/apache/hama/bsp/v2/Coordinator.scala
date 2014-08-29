@@ -40,6 +40,7 @@ import org.apache.hama.monitor.Checkpointable
 import org.apache.hama.sync.BarrierClient
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncException
+import org.apache.hama.util.Utils._
 import scala.collection.JavaConversions._
 import scala.util.Try
 import scala.util.Success
@@ -232,13 +233,13 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
    * @param task to be applied. 
    * @param f is the function to be executed.
    * @param default is the value to applied if the task not found.
-   */
   protected def doIfExists[A, B <: Any](task: Option[A],  // TODO: replace by Utils.doIfExists
                                      f: (A) => B, 
                                      default: B): B = task match {
     case Some(found) => f(found)
     case None => default
   }
+   */
 
   // TODO: need more concise expression. perhaps refactor interface. return java iterator with entry containing peer and bundle looks stupid.
   protected def getBundles(messenger: Option[MessageManager[Writable]]) = 
@@ -337,4 +338,9 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
     }, Unit)
   }
 
+  // this is intended to be used by Worker only.
+  protected[v2] def localMessages(bundle: BSPMessageBundle[Writable]) = 
+    doIfExists[MessageManager[Writable], Unit](messenger, { (found) => 
+      found.loopBackMessages(bundle) 
+    }, Unit)
 }

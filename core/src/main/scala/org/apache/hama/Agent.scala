@@ -20,6 +20,7 @@ package org.apache.hama
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorIdentity
+import akka.actor.Props
 import org.apache.hama.logging.ActorLog
 
 trait Agent extends Actor with ActorLog {
@@ -64,4 +65,17 @@ trait Agent extends Actor with ActorLog {
                                                     target)
   }
 
+  /**
+   * Spawn a child actor.
+   * @param childName is the name of child actor. 
+   * @param actorClass is the actor class to be spawned.
+   * @param args is variable args to be used by the actor.
+   * @return ActorRef is the created actor instance.
+   */
+  protected def spawn[A <: Actor](childName: String, actorClass: Class[A],
+                                  args: Any*): ActorRef = {
+    LOG.debug("Spawn child {} actor as {} with args {}", 
+              actorClass, childName, args.mkString(", "))
+    context.actorOf(Props(actorClass, args:_*), childName)
+  }
 }

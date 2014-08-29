@@ -17,7 +17,7 @@
  */
 package org.apache.hama.groom
 
-import akka.actor.ActorContext
+//import akka.actor.ActorContext
 import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.actor.Actor
@@ -30,13 +30,15 @@ import java.io.File
 import java.io.FileWriter
 import java.net.InetAddress
 import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.bsp.v2.Bind
+//import org.apache.hama.bsp.v2.Bind
 import org.apache.hama.bsp.v2.ConfigureFor
 import org.apache.hama.bsp.v2.Execute
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.v2.Worker
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
+import org.apache.hama.message.PeerMessenger
+import org.apache.hama.message.LocalTarget
 import org.apache.hama.RemoteService
 import org.apache.hama.util.ActorLocator
 import org.apache.hama.util.ExecutorLocator
@@ -58,126 +60,6 @@ import scala.concurrent.duration.DurationInt
  */
 final case class Args(actorSystemName: String, listeningTo: String, port: Int, 
                       seq: Int, config: Config)
-
-/**
-private final case class Initialize(taskAttemptId: TaskAttemptID)
- * Following log levels are only intended for container use.
-private final case class Info(message: String)
-private final case class Debug(message: String)
-private final case class Warning(message: String)
-private final case class Error(message: String)
-private final case class Close(taskAttemptId: TaskAttemptID)
-
-private[groom] final class TaskLogger(conf: HamaConfiguration) extends Actor {
-
-  private val log = Logging(context.system, this)
-  private val hamaHome = System.getProperty("hama.home.dir")
-  private var taskAttemptId: TaskAttemptID = _
-  private val logDir = new File(conf.get("bsp.child.log.dir", 
-                                hamaHome+"/logs/tasklogs"))
-  private var stdout: FileWriter = _
-  private var stderr: FileWriter = _
-  val Append = true
-
-  override def receive = {
-    case Initialize(attemptId) => {
-      taskAttemptId = attemptId
-      val jobId = taskAttemptId.getJobID.toString
-      val jobIdDir = new File(logDir, jobId)
-      if(!jobIdDir.exists) jobIdDir.mkdirs
-      stdout = new FileWriter(new File(jobIdDir, taskAttemptId.toString+".log"),
-                              Append)
-      stderr = new FileWriter(new File(jobIdDir, taskAttemptId.toString+".err"),
-                              Append)
-    }
-    case Info(msg) => stdout.write(msg+"\n")
-    case Debug(msg) => stdout.write(msg+"\n")
-    case Warning(msg) => stderr.write(msg+"\n")
-    case Error(msg) => stderr.write(msg+"\n")
-    case Close(attemptId) => {
-      if(null != taskAttemptId) {
-        if(taskAttemptId.equals(attemptId)) {
-           try { } finally { stdout.close; stderr.close }
-        } else {
-          log.error("Try closing task logging but id {} not matched "+
-                    "current {}", attemptId.toString, taskAttemptId.toString)
-        }
-      } else log.warning("Attempt to close log for task {} but {} not "+
-                         "matched.", taskAttemptId.toString, attemptId.toString)
-    }
-    case msg@_ => log.warning("Unknown message "+msg+" for taksAttemptId "+
-                              taskAttemptId.toString)
-  }
-}
-
-private[groom] trait Logger { 
-
-  def info(message: String, args: Any*) 
-
-  def debug(message: String, args: Any*) 
-
-  def warning(message: String, args: Any*) 
-
-  def error(message: String, args: Any*) 
-}
-
-private[groom] class DefaultLogger(logger: ActorRef) extends Logger {
-
-  protected[groom] def initialize(taskAttemptId: TaskAttemptID) = 
-    if(null != logger) {
-      if(null != taskAttemptId) logger ! Initialize(taskAttemptId)
-      else throw new IllegalArgumentException("TaskAttemptId not provided to "+
-                                              "intialize logging.")
-    }
-
-  override def info(message: String, args: Any*) = if(null != logger) {
-    logger ! Info(format(message, args))
-  }
-
-  override def debug(message: String, args: Any*) = if(null != logger) {
-    logger ! Debug(format(message, args))
-  }
-
-  override def warning(message: String, args: Any*) = if(null != logger) {
-    logger ! Warning(format(message, args))
-  }
-
-  override def error(message: String, args: Any*) = if(null != logger) {
-    logger ! Error(format(message, args))
-  }
-
-  protected[groom] def close(taskAttemptId: TaskAttemptID) = 
-    if(null != logger) {
-      if(null != taskAttemptId) logger ! Close(taskAttemptId)
-      else throw new IllegalArgumentException("TaskAttemptId not provided to "+
-                                              "close logging.")
-    }
-
-   * Format string.
-   * @param msg contains place holder to be formatted.
-   * @param args are values used to  
-  private def format(msg: String, args: Any*): String = 
-    msg.replace("{}", "%s").format(args:_*)
- 
-}
-
-private[groom] object TaskLogging {
- 
-  def apply(cxt: ActorContext, conf: HamaConfiguration, slotSeq: Int): 
-      Logger = {
-    if(null == cxt) 
-      throw new IllegalArgumentException("ActorContext is missing!")
-    if(null == conf)
-      throw new IllegalArgumentException("HamaConfiguration not provided!")
-    if(0 >= slotSeq)
-      throw new IllegalArgumentException("Slot seq should be larger than 0.")
-    val logger = cxt.actorOf(Props(classOf[TaskLogger], conf), 
-                             "taskLogger%s".format(slotSeq))
-    new DefaultLogger(logger)
-  }
- 
-}
- */
 
 object BSPPeerContainer {
 
@@ -262,6 +144,11 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
                                                 with RemoteService 
                                                 with ActorLocator {
 
+  /**
+   * This serves as internal communicator between peers.
+   */
+  protected val peerMessenger: ActorRef = createPeerMessenger(identifier(conf))
+
   protected var executor: Option[ActorRef] = None
 
   override def configuration: HamaConfiguration = conf
@@ -298,14 +185,29 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     }
   }
 
+  protected def createPeerMessenger(id: String): ActorRef = 
+    spawn("peerMessenger_"+id, classOf[PeerMessenger])
+
+  protected def identifier(conf: HamaConfiguration): String = {
+    conf.getInt("bsp.child.slot.seq", -1) match {
+      case -1 => throw new RuntimeException("Slot seq shouldn't be -1!")
+      case seq@_ => {
+        val host = conf.get("bsp.peer.hostname",
+                            InetAddress.getLocalHost.getHostName)
+        val port = conf.getInt("bsp.peer.port", 61000)
+        "BSPPeerSystem%d@%s:%d".format(seq, host, port)
+      }
+    }
+  }
+
   /**
    * Start executing the task in another actor.
    * @param task that is supplied to be executed.
    */
   def doLaunch(task: Task) { 
-    val worker = context.actorOf(Props(classOf[Worker], self))
+    val worker = spawn("taskWoker", classOf[Worker], self, peerMessenger)
+    peerMessenger ! LocalTarget(worker)
     context.watch(worker)
-    //worker ! Bind(configuration, context.system) 
     worker ! ConfigureFor(configuration, task)
     worker ! Execute(task.getId.toString, configuration, task.getConfiguration)
   }

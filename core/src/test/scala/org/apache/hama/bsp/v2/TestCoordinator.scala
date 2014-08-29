@@ -25,6 +25,7 @@ import java.net.InetAddress
 import org.apache.hadoop.fs.Path
 import org.apache.hama.Agent
 import org.apache.hama.groom.BSPPeerContainer
+import org.apache.hama.message.PeerMessenger
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
@@ -44,10 +45,9 @@ final case object PeerNameAt
 final case object GetPeerIndex
 final case object SyncThenValidateSuperstep
 
-class MockWorker(conf: HamaConfiguration, 
-                 tester: ActorRef, 
-                 task: Task, 
-                 container: ActorRef) extends Worker(container) {
+class MockWorker(conf: HamaConfiguration, tester: ActorRef, task: Task, 
+                 container: ActorRef, peerMessenger: ActorRef) 
+      extends Worker(container, peerMessenger) {
 
 /*
   var peer: BSPPeer = _
@@ -172,9 +172,22 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     name
   }
 
+  def identifier(conf: HamaConfiguration): String = {
+    conf.getInt("bsp.child.slot.seq", -1) match {
+      case -1 => throw new RuntimeException("Slot seq shouldn't be -1!")
+      case seq@_ => {
+        val host = conf.get("bsp.peer.hostname",
+                            InetAddress.getLocalHost.getHostName)
+        val port = conf.getInt("bsp.peer.port", 61000)
+        "BSPPeerSystem%d@%s:%d".format(seq, host, port)
+      }
+    }
+  }
 
   it("test bsp peer coordinator function.") {
-
+    val id = identifier(testConfiguration)
+    val peerMessenger = createWithArgs("peerMessenger_"+id, 
+                                      classOf[PeerMessenger])
     val container = createWithArgs("container", classOf[BSPPeerContainer],
                                    testConfiguration)
     // job id should be the same, so peers can sync
@@ -183,12 +196,12 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     val task1 = createTask("test", JOB2, 23, 3)
     assert(null != task1)
     val worker1 = createWithArgs("worker1", classOf[MockWorker], 
-                                 conf1, tester, task1, container) 
+                                 conf1, tester, task1, container, peerMessenger)
 
     val task2 = createTask("test", JOB2, 2, 2)
     assert(null != task2)
     val worker2 = createWithArgs("worker2", classOf[MockWorker], 
-                                 conf2, tester, task2, container) 
+                                 conf2, tester, task2, container, peerMessenger)
 
     //worker1 ! Init
     //worker2 ! Init

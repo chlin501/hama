@@ -17,34 +17,40 @@
  */
 package org.apache.hama.message
 
-import akka.actor.Actor
+//import akka.actor.Actor
 import akka.actor.ActorRef
-import akka.actor.ActorSystem
-import akka.actor.Props
+//import akka.actor.ActorSystem
 import akka.actor.TypedActor
-import akka.event.Logging
-import akka.pattern.ask
+//import akka.event.Logging
+//import akka.pattern.ask
 import akka.util.Timeout
 import java.net.InetAddress
-import java.util.concurrent.BlockingQueue
+//import java.util.concurrent.BlockingQueue
 import java.util.Map.Entry
 import org.apache.hadoop.io.Writable
+import org.apache.hama.bsp.v2.LocalMessages
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.util.LRUCache
+import org.apache.hama.util.Utils._
 import scala.collection.JavaConversions._
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.Future
+//import scala.concurrent.Future
 
 /**
  * Denote to initialize messenger's services for transfer messages over wire. 
  * @param conf is common configuration.
- */
 // TODO: remove blocking queue for we don't use typed actor any more.
 final case class Setup[M <: Writable](conf: HamaConfiguration, 
                                       q: BlockingQueue[BSPMessageBundle[M]])
+ */
+
+/**
+ * Indicate to which target local messages will be sent.  
+ */
+final case class LocalTarget(worker: ActorRef) 
 
 /**
  * An object that contains peer and message bundle. The bundle will be sent 
@@ -60,30 +66,39 @@ final case class MessageFrom(msg: BSPMessageBundle[_ <: Writable],
 /**
  * An messenger on behalf of {@link BSPPeer} sends messages to other peers.
  */
-class PeerMessenger extends RemoteService {
+class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
 
   /* This holds information to BSPPeer actors. */
-  protected var maxCachedConnections: Int = 100
-  protected var peersLRUCache: LRUCache[ProxyInfo, ActorRef] = _
-  protected var initialized: Boolean = false
-  protected var conf: HamaConfiguration = new HamaConfiguration() 
-  protected var loopbackQueue: BlockingQueue[BSPMessageBundle[_]] = _  // TODO: remove this one! for we've removed TypedActor
+  protected val maxCachedConnections: Int = 
+    conf.getInt("hama.messenger.max.cached.connections", 100)
+  protected var peersLRUCache = initializeLRUCache(maxCachedConnections)
+  //protected var initialized: Boolean = false
+  //protected var conf: HamaConfiguration = new HamaConfiguration() 
+  //protected var loopbackQueue: BlockingQueue[BSPMessageBundle[_]] = _  // TODO: remove this one! for we've removed TypedActor
+
+  protected var taskWorker: Option[ActorRef] = None
  
+  /**
+   * Peer may not be available immediately, so store it in waiting list first.
+   */
   protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
 
   override def configuration(): HamaConfiguration = this.conf
 
+/*
   def initializeService[M <: Writable](conf: HamaConfiguration, 
                                        q: BlockingQueue[BSPMessageBundle[M]]) {
     this.conf = conf
     if(null == q)
       throw new RuntimeException("Loopback message queue is empty!") 
     loopbackQueue = q.asInstanceOf[BlockingQueue[BSPMessageBundle[_]]]
+
     this.maxCachedConnections =
       this.conf.getInt("hama.messenger.max.cached.connections", 100)
     this.peersLRUCache = initializeLRUCache(maxCachedConnections)
     this.initialized = true
   }
+*/
 
   protected def initializeLRUCache(maxCachedConnections: Int):
       LRUCache[ProxyInfo,ActorRef] = {
@@ -100,9 +115,11 @@ class PeerMessenger extends RemoteService {
     }
   }
 
+/*
   def initialize: Receive = {
     case Setup(conf, q) => initializeService(conf, q)
   }
+*/
  
   /**
    * Cache message bundle and {@link BSPPeer} in waiting list.
@@ -112,14 +129,17 @@ class PeerMessenger extends RemoteService {
    * @param from is the bsp peer who issues the transfer request.
    */
   protected def findWith[M <: Writable](peer: ProxyInfo, 
-                                        msg: BSPMessageBundle[M],
-                                        from: ActorRef) {
-    if(null == msg || null == from)
-      throw new RuntimeException("Messeage bundle or remote PeerMessenger "+
-                                 " is missing!")
-    addToWaitingList(peer, MessageFrom(msg, from))
-    LOG.info("Look up remote peer "+peer.getActorName+" at "+peer.getPath)
-    lookupPeer(peer.getActorName, peer.getPath)
+                                        msgs: BSPMessageBundle[M],
+                                        from: ActorRef) = msgs match {
+    case null => LOG.warning("Messages for {} not found", peer)
+    case bundle@_ => from match {
+      case null =>
+      case f@_ => {
+        addToWaitingList(peer, MessageFrom(msgs, f))
+        LOG.info("Look up remote peer "+peer.getActorName+" at "+peer.getPath)
+        lookupPeer(peer.getActorName, peer.getPath)     
+      }
+    }
   }
 
   protected def addToWaitingList(peer: ProxyInfo, msgFrom: MessageFrom) =
@@ -166,7 +186,7 @@ class PeerMessenger extends RemoteService {
   protected def doTransfer[M <: Writable](peer: ProxyInfo, 
                                           bundle: BSPMessageBundle[M], 
                                           from: ActorRef) {
-    if(initialized) {
+    //if(initialized) {
       mapAsScalaMap(peersLRUCache).find( 
         entry => entry._1.equals(peer)
       ) match {
@@ -177,10 +197,12 @@ class PeerMessenger extends RemoteService {
         }
         case None => findWith(peer, bundle, from)
       }
+/*
     } else {
       LOG.warning("PeerMessenger is not initialized!") 
       from ! MessengerUninitialized 
     }
+*/
   }
 
   /**
@@ -193,10 +215,20 @@ class PeerMessenger extends RemoteService {
     case bundle: BSPMessageBundle[_] => {
       LOG.info("Message received from {} is putting to loopback queue!", 
                sender)
-      loopbackQueue.put(bundle)
+      doIfExists[ActorRef, Unit](taskWorker, { (found) => 
+        found ! LocalMessages(bundle) 
+      }, Unit)
+      //loopbackQueue.put(bundle) 
     }
   }
 
-  override def receive = initialize orElse transfer orElse messageFromRemote orElse actorReply orElse timeout orElse unknown
+  def localTarget: Receive = {
+    case LocalTarget(worker) => worker match {
+      case null => LOG.warning("Local worker is missing!")
+      case w@_ => taskWorker = Some(w)
+    }
+  }
+
+  override def receive = transfer orElse messageFromRemote orElse actorReply orElse timeout orElse localTarget orElse unknown
 
 }

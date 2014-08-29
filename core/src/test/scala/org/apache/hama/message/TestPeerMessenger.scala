@@ -18,11 +18,11 @@
 package org.apache.hama.message
 
 import akka.actor.ActorRef
-import java.util.concurrent.BlockingQueue
-import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.Callable
-import java.util.concurrent.Executors
-import java.util.concurrent.ExecutorService
+//import java.util.concurrent.BlockingQueue
+//import java.util.concurrent.LinkedBlockingQueue
+//import java.util.concurrent.Callable
+//import java.util.concurrent.Executors
+//import java.util.concurrent.ExecutorService
 import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
@@ -34,7 +34,8 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
-class RemotePeerMessenger(tester: ActorRef) extends PeerMessenger 
+class RemotePeerMessenger(conf: HamaConfiguration, 
+                          tester: ActorRef) extends PeerMessenger(conf) 
 
 object LocalPeerMessenger {
 
@@ -42,7 +43,8 @@ object LocalPeerMessenger {
 
 }
 
-class LocalPeerMessenger(tester: ActorRef) extends PeerMessenger {
+class LocalPeerMessenger(conf: HamaConfiguration, 
+                         tester: ActorRef) extends PeerMessenger(conf) {
 
   import LocalPeerMessenger._
 
@@ -66,12 +68,13 @@ class LocalPeerMessenger(tester: ActorRef) extends PeerMessenger {
 @RunWith(classOf[JUnitRunner])
 class TestPeerMessenger extends TestEnv("TestPeerMessenger") {
 
-  val localMsgQueue = new LinkedBlockingQueue[BSPMessageBundle[Writable]]()
-  val executor = Executors.newSingleThreadExecutor()
+  //val localMsgQueue = new LinkedBlockingQueue[BSPMessageBundle[Writable]]()
+  //val executor = Executors.newSingleThreadExecutor()
   val seq = Seq[IntWritable](new IntWritable(1), new IntWritable(99), 
                              new IntWritable(23))
   var forVerification: BSPMessageBundle[IntWritable] = _
 
+/*
   class MessageConsumer extends Callable[Boolean] with CommonLog {
     override def call(): Boolean = {
       var flag = true
@@ -87,24 +90,28 @@ class TestPeerMessenger extends TestEnv("TestPeerMessenger") {
       true
     } 
   }
+*/
 
+/*
   override def beforeAll {
     super.beforeAll
-    executor.submit(new MessageConsumer())
+    //executor.submit(new MessageConsumer())
   }
 
   override def afterAll {
-    executor.shutdown
+    //executor.shutdown
     super.afterAll
   }
+*/
 
   def createPeer[M <: Writable](name: String,
-                                queue: BlockingQueue[BSPMessageBundle[M]],
-                                clazz: Class[_]): ActorRef = { 
-    val actor = createWithArgs(name, clazz, tester)
-    actor ! Setup(testConfiguration, queue)
-    actor
-  }
+                                //queue: BlockingQueue[BSPMessageBundle[M]],
+                                clazz: Class[_]): ActorRef = //{ 
+    //val actor = 
+    createWithArgs(name, clazz, testConfiguration, tester)
+    //actor ! Setup(testConfiguration, queue)
+    //actor
+  //}
 
   def createBundle[M <: Writable](msgs: M*): BSPMessageBundle[M] = {
     val threshold = 
@@ -120,16 +127,16 @@ class TestPeerMessenger extends TestEnv("TestPeerMessenger") {
   it("test peer messenger function.") {
 
     val localPeer = createPeer[Writable]("localPeer", 
-                                         localMsgQueue, 
+                                         //localMsgQueue, 
                                          classOf[LocalPeerMessenger])
     val remoteActorName = LocalPeerMessenger.dummyPeer.getActorName
     LOG.info("Remote actor name "+remoteActorName+" is created.")
     createPeer[Writable](remoteActorName, 
-                         localMsgQueue,
+                         //localMsgQueue,
                          classOf[RemotePeerMessenger])
     val bundle = createBundle[IntWritable](seq(0), seq(1), seq(2))
     localPeer ! Transfer(LocalPeerMessenger.dummyPeer, bundle)
-    Thread.sleep(1*1000)
+    //Thread.sleep(1*1000)
     LOG.info("Bundle "+forVerification+" size "+forVerification.size)
     assert(null != forVerification)
     var idx = 0
