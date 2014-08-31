@@ -60,6 +60,8 @@ protected trait SuperstepBSP extends BSP
 
   protected[v2] var task: Option[Task] = None
 
+  protected[v2] def setTask(aTask: Task) = this.task = Option(aTask)
+
 /*
 // beg // move to container, let container/ context create instead of context.system.
   override def getTaskLogParam(): TaskLogParam = 

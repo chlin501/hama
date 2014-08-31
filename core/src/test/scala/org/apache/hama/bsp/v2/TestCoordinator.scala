@@ -27,6 +27,8 @@ import org.apache.hama.Agent
 import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.message.PeerMessenger
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.logging.TaskLogger
+import org.apache.hama.logging.TaskLogging
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
 import org.apache.hama.zk.LocalZooKeeper
@@ -111,7 +113,7 @@ class MockWorker(conf: HamaConfiguration, tester: ActorRef, task: Task,
     }
   }
 
-  override def receive = /*init orElse*/ getPeerName orElse getAllPeers orElse getNumPeers orElse getTaskAttemptId orElse peerNameAt orElse getSuperstepCount orElse getPeerIndex orElse syncThenValidateSuperstep orElse unknown
+  override def receive = getPeerName orElse getAllPeers orElse getNumPeers orElse getTaskAttemptId orElse peerNameAt orElse getSuperstepCount orElse getPeerIndex orElse syncThenValidateSuperstep orElse super.receive orElse unknown
 }
 
 @RunWith(classOf[JUnitRunner])
@@ -123,6 +125,7 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
 
   override def beforeAll {
     super.beforeAll
+    testConfiguration.setInt("bsp.child.slot.seq", 3)
     conf1 = configure(conf1)
     conf2 = configure(conf2, 2, 2, 62000)
     launchZk
@@ -167,10 +170,15 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     }
   }
 
+  def slotSeq: Int = testConfiguration.getInt("bsp.child.slot.seq", 3)
+
   it("test bsp peer coordinator function.") {
+     val tasklog = createWithArgs("taskLogger"+slotSeq, classOf[TaskLogger],
+                                  testRootPath+"/tasklogs")
+
     val id = identifier(testConfiguration)
     val peerMessenger = createWithArgs("peerMessenger_"+id, 
-                                      classOf[PeerMessenger])
+                                      classOf[PeerMessenger], testConfiguration)
     val container = createWithArgs("container", classOf[BSPPeerContainer],
                                    testConfiguration)
     // job id should be the same, so peers can sync
@@ -179,12 +187,14 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     val task1 = createTask("test", JOB2, 23, 3)
     assert(null != task1)
     val worker1 = createWithArgs("worker1", classOf[MockWorker], 
-                                 conf1, tester, task1, container, peerMessenger)
+                                 conf1, tester, task1, container, peerMessenger,
+                                 tasklog)
 
     val task2 = createTask("test", JOB2, 2, 2)
     assert(null != task2)
     val worker2 = createWithArgs("worker2", classOf[MockWorker], 
-                                 conf2, tester, task2, container, peerMessenger)
+                                 conf2, tester, task2, container, peerMessenger,
+                                 tasklog)
 
     worker1 ! ConfigureFor(task1)
     worker2 ! ConfigureFor(task2)

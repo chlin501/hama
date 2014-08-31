@@ -53,24 +53,28 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
                            peerMessenger: ActorRef,
                            tasklog: ActorRef) extends SuperstepBSP {
 
+
   protected val peer = new Coordinator
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
-  //override def loggerRef(): ActorRef = tasklog
 
   /**
    * This ties coordinator to a particular task.
    */
   def configFor: Receive = {
     case ConfigureFor(aTask) => {
-      task = Some(aTask)
-      if(LOG.isInstanceOf[TaskLogging]) 
-        LOG.asInstanceOf[TaskLogging].initialize(aTask.getId)
-      setConf(aTask.getConfiguration)
-      LOG.info("Configure this worker to task attempt id {}", 
-               aTask.getId.toString)
-      peer.configureFor(conf, aTask, peerMessenger)
+      doConfigFor(aTask)
     }
+  }
+
+  protected def doConfigFor(aTask: Task) {
+    setTask(aTask)
+    if(LOG.isInstanceOf[TaskLogging]) 
+      LOG.asInstanceOf[TaskLogging].initialize(aTask.getId)
+    setConf(aTask.getConfiguration)
+    LOG.info("Configure this worker to task attempt id {}", 
+             aTask.getId.toString)
+    peer.configureFor(conf, aTask, peerMessenger)
   }
 
   /**
@@ -103,20 +107,20 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
   def addJarToClasspath(taskAttemptId: String, 
                         taskConf: HamaConfiguration): Option[ClassLoader] = {
     val jar = taskConf.get("bsp.jar")
-    //LOG.info("Jar path found in task configuration is {}", jar)
+    LOG.info("Jar path found in task configuration is {}", jar)
     jar match {
       case null|"" => None
       case remoteUrl@_ => {
         val operation = Operation.get(taskConf)
         val localJarPath = createLocalPath(taskAttemptId, taskConf, operation) 
         operation.copyToLocal(new Path(remoteUrl))(new Path(localJarPath))
-        //LOG.info("remote file {} is copied to {}", remoteUrl, localJarPath) 
+        LOG.info("Remote file {} is copied to {}", remoteUrl, localJarPath) 
         val url = normalizePath(localJarPath)
         val loader = Thread.currentThread.getContextClassLoader
         val newLoader = new URLClassLoader(Array[URL](url), loader) 
         taskConf.setClassLoader(newLoader) 
-        //LOG.info("User jar {} is added to the newly created url class loader "+
-                 //"for job {}", url, taskAttemptId)
+        LOG.info("User jar {} is added to the newly created url class loader "+
+                 "for job {}", url, taskAttemptId)
         Some(newLoader)   
       }
     }

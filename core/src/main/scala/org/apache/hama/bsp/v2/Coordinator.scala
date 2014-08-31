@@ -31,6 +31,7 @@ import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
 //import org.apache.hama.io.IO
 import org.apache.hama.ProxyInfo
+import org.apache.hama.logging.CommonLog
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.MessageManager
 import org.apache.hama.message.Messenger
@@ -117,7 +118,7 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
       }, Unit)
       found.increatmentSuperstep 
     }
-    case None =>
+    case None => 
   }
 
   /** 
@@ -227,19 +228,6 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
     }
     case None => false
   }
-
-  /**
-   * Used to reduce redundant code for checking if task exists.
-   * @param task to be applied. 
-   * @param f is the function to be executed.
-   * @param default is the value to applied if the task not found.
-  protected def doIfExists[A, B <: Any](task: Option[A],  // TODO: replace by Utils.doIfExists
-                                     f: (A) => B, 
-                                     default: B): B = task match {
-    case Some(found) => f(found)
-    case None => default
-  }
-   */
 
   // TODO: need more concise expression. perhaps refactor interface. return java iterator with entry containing peer and bundle looks stupid.
   protected def getBundles(messenger: Option[MessageManager[Writable]]) = 
