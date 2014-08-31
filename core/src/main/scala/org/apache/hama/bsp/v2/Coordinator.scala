@@ -338,9 +338,4 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
     }, Unit)
   }
 
-  // this is intended to be used by Worker only.
-  protected[v2] def localMessages(bundle: BSPMessageBundle[Writable]) = 
-    doIfExists[MessageManager[Writable], Unit](messenger, { (found) => 
-      found.loopBackMessages(bundle) 
-    }, Unit)
 }

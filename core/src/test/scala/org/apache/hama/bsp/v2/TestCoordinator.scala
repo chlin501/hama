@@ -47,7 +47,7 @@ final case object SyncThenValidateSuperstep
 
 class MockWorker(conf: HamaConfiguration, tester: ActorRef, task: Task, 
                  container: ActorRef, peerMessenger: ActorRef) 
-      extends Worker(container, peerMessenger) {
+      extends Worker(conf, container, peerMessenger) {
 
 /*
   var peer: BSPPeer = _
@@ -205,8 +205,8 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
 
     //worker1 ! Init
     //worker2 ! Init
-    worker1 ! ConfigureFor(testConfiguration, task1)
-    worker2 ! ConfigureFor(testConfiguration, task2)
+    worker1 ! ConfigureFor(/*testConfiguration,*/ task1)
+    worker2 ! ConfigureFor(/*testConfiguration,*/ task2)
 
     worker1 ! GetAllPeers
     worker2 ! GetAllPeers

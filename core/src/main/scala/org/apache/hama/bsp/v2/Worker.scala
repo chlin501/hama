@@ -29,13 +29,15 @@ import java.net.URL
 import java.net.URLClassLoader
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
-import org.apache.hama.Agent
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.Operation
+import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.logging.TaskLog
-import org.apache.hama.logging.TaskLogParam
-import org.apache.hama.logging.TaskLogParameter
+//import org.apache.hama.logging.TaskLog
+//import org.apache.hama.logging.TaskLogger
+//import org.apache.hama.logging.TaskLoggerRef
+//import org.apache.hama.logging.TaskLogParam
+//import org.apache.hama.logging.TaskLogParameter
 import org.apache.hama.message.BSPMessageBundle
 
 sealed trait WorkerOperation
@@ -43,7 +45,7 @@ sealed trait WorkerOperation
 final case class Bind(conf: HamaConfiguration, 
                       actorSystem: ActorSystem) extends WorkerOperation
 */
-final case class ConfigureFor(conf: HamaConfiguration,
+final case class ConfigureFor(/*conf: HamaConfiguration,*/
                               task: Task) extends WorkerOperation
 final case class Execute(taskAttemptId: String,
                          conf: HamaConfiguration, 
@@ -52,49 +54,67 @@ final case class Close extends WorkerOperation
 
 final case class LocalMessages[M <: Writable](bundle: BSPMessageBundle[M])
 
+/*
 object Worker {
 
   val tasklogsPath = "/logs/taskslogs"
 
 }
+*/
 
 /**
  * This is the actual class that perform {@link Superstep}s execution.
  */
-protected[v2] class Worker(container: ActorRef, peerMessenger: ActorRef)
-      extends SuperstepBSP with Agent with TaskLog with TaskLogParameter {
+protected[v2] class Worker(conf: HamaConfiguration,  // common conf
+                           container: ActorRef, 
+                           peerMessenger: ActorRef)
+      extends SuperstepBSP {//with Actor //with TaskLog with TaskLoggerRef with TaskLogParameter {
 
-  import Worker._ 
+  //val logger = akka.event.Logging(context.system, this)
+
+  //import Worker._ 
 
   protected val peer = new Coordinator
  
-  protected var task: Option[Task] = None
+  //protected var task: Option[Task] = None
 
-  protected var slotSeq: Int = -1 
+  override def slotSeq: Int = conf.getInt("bsp.child.slot.seq", -1)
 
+/*
+  override def loggerRef(): ActorRef = {
+    context.actorOf(Props(classOf[TaskLogger], getLogDir(hamaHome)), 
+                    "taskLogger"+slotSeq)
+  }
+*/
+
+/*
   override def getTaskLogParam(): TaskLogParam = 
     TaskLogParam(context.system, getLogDir(hamaHome), slotSeq) 
+*/
 
+/*
   // TODO: check if any better way to set hama home. 
   protected def hamaHome: String = System.getProperty("hama.home.dir")
 
   protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
+*/
 
+/*
   override def getTask(): Task = task match { // TODO: doIfExists
     case None => throw new NullPointerException("Task is not yet ready!")
     case Some(found) => found
   }
+*/
 
   /**
    * This ties coordinator to a particular task.
    */
-  def configureFor: Receive = {
-    case ConfigureFor(conf, task) => {
-      
+  def configFor: Receive = {
+    case ConfigureFor(/*conf,*/ task) => {
       setConf(task.getConfiguration)
-      LOG.info("Configure this worker to task attempt id {}", 
-               task.getId.toString)
-      configureFor(conf, task, peerMessenger)
+      //LOG.info("Configure this worker to task attempt id {}", 
+               //task.getId.toString)
+      peer.configureFor(conf, task, peerMessenger)
     }
   }
 
@@ -128,20 +148,20 @@ protected[v2] class Worker(container: ActorRef, peerMessenger: ActorRef)
   def addJarToClasspath(taskAttemptId: String, 
                         taskConf: HamaConfiguration): Option[ClassLoader] = {
     val jar = taskConf.get("bsp.jar")
-    LOG.info("Jar path found in task configuration is {}", jar)
+    //LOG.info("Jar path found in task configuration is {}", jar)
     jar match {
       case null|"" => None
       case remoteUrl@_ => {
         val operation = Operation.get(taskConf)
         val localJarPath = createLocalPath(taskAttemptId, taskConf, operation) 
         operation.copyToLocal(new Path(remoteUrl))(new Path(localJarPath))
-        LOG.info("remote file {} is copied to {}", remoteUrl, localJarPath) 
+        //LOG.info("remote file {} is copied to {}", remoteUrl, localJarPath) 
         val url = normalizePath(localJarPath)
         val loader = Thread.currentThread.getContextClassLoader
         val newLoader = new URLClassLoader(Array[URL](url), loader) 
         taskConf.setClassLoader(newLoader) 
-        LOG.info("User jar {} is added to the newly created url class loader "+
-                 "for job {}", url, taskAttemptId)
+        //LOG.info("User jar {} is added to the newly created url class loader "+
+                 //"for job {}", url, taskAttemptId)
         Some(newLoader)   
       }
     }
@@ -178,9 +198,11 @@ protected[v2] class Worker(container: ActorRef, peerMessenger: ActorRef)
     case Close => close
   }
 
-  def localMessages: Receive = {
-    case LocalMessages(bundle) => peer.localMessages(bundle)
+/*
+  def unknown: Receive = {
+    case msg@_ => println(getClass.getSimpleName+" receives message "+msg)
   }
+*/
 
-  override def receive = configureFor orElse execute orElse close orElse localMessages orElse unknown
+  override def receive = configFor orElse execute orElse close orElse unknown
 }

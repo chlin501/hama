@@ -38,7 +38,6 @@ import org.apache.hama.bsp.v2.Worker
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.message.PeerMessenger
-import org.apache.hama.message.LocalTarget
 import org.apache.hama.RemoteService
 import org.apache.hama.util.ActorLocator
 import org.apache.hama.util.ExecutorLocator
@@ -186,7 +185,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   }
 
   protected def createPeerMessenger(id: String): ActorRef = 
-    spawn("peerMessenger_"+id, classOf[PeerMessenger])
+    spawn("peerMessenger_"+id, classOf[PeerMessenger], conf)
 
   protected def identifier(conf: HamaConfiguration): String = {
     conf.getInt("bsp.child.slot.seq", -1) match {
@@ -205,11 +204,13 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * @param task that is supplied to be executed.
    */
   def doLaunch(task: Task) { 
-    val worker = spawn("taskWoker", classOf[Worker], self, peerMessenger)
-    peerMessenger ! LocalTarget(worker)
-    context.watch(worker)
-    worker ! ConfigureFor(configuration, task)
-    worker ! Execute(task.getId.toString, configuration, task.getConfiguration)
+LOG.info("=================== doLaunch ...")
+    val taskWorker = spawn("taskWoker", classOf[Worker], configuration, self, 
+                       peerMessenger)
+    context.watch(taskWorker)
+    taskWorker ! ConfigureFor(/*configuration,*/ task)
+    taskWorker ! Execute(task.getId.toString, configuration, 
+                         task.getConfiguration)
   }
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {

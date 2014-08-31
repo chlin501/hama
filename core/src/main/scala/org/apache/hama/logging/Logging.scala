@@ -53,6 +53,12 @@ object Logging {
   def apply(clazz: Class[_]): LoggingAdapter = 
     new CommonLogging(LogFactory.getLog(clazz))
 
+  //def apply[L <: TaskLogger](ref: ActorRef) = new TaskLogging(ref)
+
+  var count = 0
+
+  //var logger: ActorRef = _
+
   /**
    * This is intended to be used by {@link BSPPeerContainer} only.
    * @param taskLogParam contains {@link ActorSystem}, log dir path, and 
@@ -65,8 +71,17 @@ object Logging {
     checkIfNull("ActorSystem", sys) 
     val logDir = taskLogParam.logDir
     checkIfEmpty(logDir)
+    count += 1
+println("xxxxxxxxxxxxxxxxxxxxxx task logger count: "+count)
     val logger = sys.actorOf(Props(taskLoggerClass, logDir), 
-                          "taskLogger%s".format(taskLogParam.slotSeq))
+                               "taskLogger%s".format(taskLogParam.slotSeq))
+/*
+    logger = logger match {
+      case null => sys.actorOf(Props(taskLoggerClass, logDir), 
+                               "taskLogger%s".format(taskLogParam.slotSeq))
+      case ref@_ => ref
+    }
+*/
     checkIfNull("TaskLogger", logger)
     new TaskLogging(logger)
   }
@@ -234,7 +249,7 @@ StdErr extends Actor with ExecutorLogger
  * @param logDir points to the log path directory, under which job id dirs 
  *               with differrent task attempt ids would be created for logging.
  */
-protected[logging] class TaskLogger(logDir: String) extends Actor {
+/*protected[logging]*/ class TaskLogger(logDir: String) extends Actor {
 
   import TaskLogging._
 
@@ -339,16 +354,23 @@ protected[logging] trait TaskLogParameter {
   def getTaskLogParam(): TaskLogParam 
 }
 
+/*
+protected[logging] trait TaskLoggerRef {
+
+  def loggerRef(): ActorRef
+
+}
+*/
+
 /**
  * Intended to be used by {@link BSPPeerContainer}.
  */
-trait TaskLog extends HamaLog { self: TaskLogParameter => // TODO:change to Actor? so we can use context.actorOf to create log actor ref
+trait TaskLog extends HamaLog { 
+  self: TaskLogParameter => // TODO:change to Actor? so we can use context.actorOf to create log actor ref
 
-  override def LOG: LoggingAdapter = {
-    // val logger = context.actorOf(Props(classOf[TaskLogger], logDir), 
-    //                              "taskLogger%s".format(slotSeq))
-    // Logging(logger)
+  //self: TaskLoggerRef =>
+
+  override def LOG: LoggingAdapter = //Logging[TaskLogger](loggerRef)
     Logging[TaskLogger](getTaskLogParam, classOf[TaskLogger])
-  }
 
 }

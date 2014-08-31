@@ -25,7 +25,8 @@ import akka.actor.TypedActor
 //import akka.pattern.ask
 import akka.util.Timeout
 import java.net.InetAddress
-//import java.util.concurrent.BlockingQueue
+import java.util.concurrent.BlockingQueue
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.Map.Entry
 import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.v2.LocalMessages
@@ -49,8 +50,8 @@ final case class Setup[M <: Writable](conf: HamaConfiguration,
 
 /**
  * Indicate to which target local messages will be sent.  
- */
 final case class LocalTarget(worker: ActorRef) 
+ */
 
 /**
  * An object that contains peer and message bundle. The bundle will be sent 
@@ -63,10 +64,18 @@ final case class Transfer[M <: Writable](peer: ProxyInfo, msg: BSPMessageBundle[
 final case class MessageFrom(msg: BSPMessageBundle[_ <: Writable], 
                              from: ActorRef)
 
+object PeerMessenger {
+
+  val loopbackQueue = new LinkedBlockingQueue[BSPMessageBundle[_]]()
+
+}
+
 /**
  * An messenger on behalf of {@link BSPPeer} sends messages to other peers.
  */
 class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
+
+  import PeerMessenger._
 
   /* This holds information to BSPPeer actors. */
   protected val maxCachedConnections: Int = 
@@ -75,8 +84,6 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
   //protected var initialized: Boolean = false
   //protected var conf: HamaConfiguration = new HamaConfiguration() 
   //protected var loopbackQueue: BlockingQueue[BSPMessageBundle[_]] = _  // TODO: remove this one! for we've removed TypedActor
-
-  protected var taskWorker: Option[ActorRef] = None
  
   /**
    * Peer may not be available immediately, so store it in waiting list first.
@@ -215,20 +222,10 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
     case bundle: BSPMessageBundle[_] => {
       LOG.info("Message received from {} is putting to loopback queue!", 
                sender)
-      doIfExists[ActorRef, Unit](taskWorker, { (found) => 
-        found ! LocalMessages(bundle) 
-      }, Unit)
-      //loopbackQueue.put(bundle) 
+      loopbackQueue.put(bundle) 
     }
   }
 
-  def localTarget: Receive = {
-    case LocalTarget(worker) => worker match {
-      case null => LOG.warning("Local worker is missing!")
-      case w@_ => taskWorker = Some(w)
-    }
-  }
-
-  override def receive = transfer orElse messageFromRemote orElse actorReply orElse timeout orElse localTarget orElse unknown
+  override def receive = transfer orElse messageFromRemote orElse actorReply orElse timeout orElse unknown
 
 }

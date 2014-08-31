@@ -25,28 +25,54 @@ import org.apache.hadoop.conf.Configurable
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
+import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.logging.ActorLog
 import org.apache.hama.monitor.Checkpointer
 import org.apache.hama.monitor.CheckpointerReceiver
 import org.apache.hama.monitor.Pack
 import org.apache.hama.sync.SyncException
+import org.apache.hama.logging.TaskLog
+import org.apache.hama.logging.TaskLogParam
+import org.apache.hama.logging.TaskLogParameter
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
+object SuperstepBSP {
+
+  val tasklogsPath = "/logs/taskslogs"
+
+}
 
 /**
  * This class manages all superstep and supersteps routing, started from the
  * first superstep, according to the execution instruction.
  */
-protected trait SuperstepBSP extends BSP with Configurable with ActorLog {
+protected trait SuperstepBSP extends BSP 
+                             with Agent 
+                             with TaskLog 
+                             with TaskLogParameter
+                             with Configurable {
+ 
+  //self: Actor with TaskLog with TaskParameter =>
 
-  self: Actor =>
+  import SuperstepBSP._
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
-  protected def getTask(): Task // TODO: doIfExists
+  protected[v2] var task: Option[Task] = None
+
+  //protected def getTask(): Task // TODO: doIfExists
+
+  override def getTaskLogParam(): TaskLogParam = 
+    TaskLogParam(context.system, getLogDir(hamaHome), slotSeq) 
+
+  // TODO: check if any better way to set hama home. 
+  protected def hamaHome: String = System.getProperty("hama.home.dir")
+
+  protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
+
+  protected def slotSeq: Int //= conf.getInt("bsp.child.slot.seq", -1)
 
   /**
    * This is configuration for a specific task. 
@@ -54,8 +80,8 @@ protected trait SuperstepBSP extends BSP with Configurable with ActorLog {
   protected var taskConf = new HamaConfiguration
 
   override def setConf(conf: Configuration) = conf match {
-    case null => LOG.error("Task configuration is not provided for {}!",
-                           getTask.getId) 
+    case null => //LOG.error("Task configuration is not provided for {}!",
+                  //         getTask.getId) 
     case _ => this.taskConf = conf.asInstanceOf[HamaConfiguration]
   }
 
@@ -74,10 +100,11 @@ protected trait SuperstepBSP extends BSP with Configurable with ActorLog {
   @throws(classOf[SyncException])
   override def setup(peer: BSPPeer) { 
     val classes = commonConf(peer).get("hama.supersteps.class")
+    //LOG.info("Supersteps to be instantiated include {}", classes)
     val classNames = classes.split(",")
-    LOG.info(classNames.length+" superstep classes, including "+classes) 
+    //LOG.info(classNames.length+" superstep classes, including "+classes) 
     classNames.foreach( className => {
-      LOG.debug("Instantiate "+className)
+      //LOG.debug("Instantiate "+className)
       instantiate(className, peer) match {
         case Success(instance) => { 
           instance.setup(peer)
@@ -136,28 +163,50 @@ protected trait SuperstepBSP extends BSP with Configurable with ActorLog {
     }
   }
 
+  protected def createCheckpointer(peer: BSPPeer, 
+                                   superstep: Superstep): Option[ActorRef] = 
+      task match { 
+    case Some(found) => {
+      val superstepCount = peer.getSuperstepCount
+      val taskAttemptId = found.getId
+      val actorName = "checkpoint_"+taskAttemptId+"_"+superstepCount
+      Some(context.actorOf(Props(classOf[Checkpointer], 
+                                 taskConf, 
+                                 taskAttemptId, 
+                                 superstepCount), 
+                           actorName))
+    }
+    case None => None
+  }
+    
+
   // TODO: move to checkpointer receiver?
   protected[v2] def prepareForCheckpoint(peer: BSPPeer, superstep: Superstep): 
     Option[ActorRef] = isCheckpointEnabled(commonConf(peer)) match {
       case true => {
+        val ckpt = createCheckpointer(peer, superstep)
+/*
         val ckpt = context.actorOf(Props(classOf[Checkpointer], 
-                                              taskConf,
-                                              getTask.getId,
-                                              peer.getSuperstepCount), 
-                                        "checkpoint_"+getTask.getId+"_"+
+                                         taskConf,
+                                         doIfExists[Task, Unit](task, { (f) => 
+                                           f.getId
+                                         }, Unit)
+                                         peer.getSuperstepCount), 
+                                    "checkpoint_"+getTask.getId+"_"+
                                         peer.getSuperstepCount) 
-        LOG.debug("Checkpoint "+ckpt.path.name+" is created!")
+*/
+        //LOG.debug("Checkpoint "+ckpt.path.name+" is created!")
         peer.isInstanceOf[CheckpointerReceiver] match {
           case true => peer.asInstanceOf[CheckpointerReceiver].
-                            receive(Pack(Some(ckpt), superstep))
-          case false => LOG.warning("Checkpoint "+ckpt.path.name+" is created"+
-                                 ", but can't be assigned to BSPPeer because "+
-                                 " not an instance of CheckpointerReceiver!")
+                            receive(Pack(ckpt, superstep))
+          case false => //LOG.warning("Checkpoint "+ckpt.path.name+" is created"+
+                         //        ", but can't be assigned to BSPPeer because "+
+                          //       " not an instance of CheckpointerReceiver!")
         }
-        Some(ckpt)
+        ckpt
       }
       case false => {
-        LOG.debug("No checkpoint is needed for "+getTask.getId)
+        //LOG.debug("No checkpoint is needed for "+getTask.getId)
         None
       }
     }
