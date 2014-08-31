@@ -36,6 +36,7 @@ import org.apache.hama.bsp.v2.Execute
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.v2.Worker
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.logging.TaskLogger
 import org.apache.hama.LocalService
 import org.apache.hama.message.PeerMessenger
 import org.apache.hama.RemoteService
@@ -61,6 +62,8 @@ final case class Args(actorSystemName: String, listeningTo: String, port: Int,
                       seq: Int, config: Config)
 
 object BSPPeerContainer {
+
+  val tasklogsPath = "/logs/taskslogs"
 
   // TODO: all config need to post to zk
   def toConfig(listeningTo: String, port: Int): Config = {
@@ -143,6 +146,8 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
                                                 with RemoteService 
                                                 with ActorLocator {
 
+  import BSPPeerContainer._
+
   /**
    * This serves as internal communicator between peers.
    */
@@ -152,9 +157,14 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
   override def configuration: HamaConfiguration = conf
 
-  def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", 1)
+  // TODO: check if any better way to set hama home.
+  protected def hamaHome: String = System.getProperty("hama.home.dir")
 
-  def executorName: String = "groomServer_executor_"+slotSeq
+  protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
+
+  protected def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", 1)
+
+  protected def executorName: String = "groomServer_executor_"+slotSeq
  
   override def initializeServices {
     lookup(executorName, locate(ExecutorLocator(configuration)))
@@ -199,16 +209,23 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     }
   }
 
+  protected def createTaskLogger[A <: TaskLogger](logger: Class[A], 
+                                                  logDir: String,
+                                                  seq: Int): ActorRef = 
+    spawn("taskLogger%s".format(seq), logger, logDir)
+
   /**
    * Start executing the task in another actor.
    * @param task that is supplied to be executed.
    */
   def doLaunch(task: Task) { 
-LOG.info("=================== doLaunch ...")
+    val tasklog = createTaskLogger[TaskLogger](classOf[TaskLogger], 
+                                               getLogDir(hamaHome), 
+                                               slotSeq) 
     val taskWorker = spawn("taskWoker", classOf[Worker], configuration, self, 
-                       peerMessenger)
+                       peerMessenger, tasklog)
     context.watch(taskWorker)
-    taskWorker ! ConfigureFor(/*configuration,*/ task)
+    taskWorker ! ConfigureFor(task)
     taskWorker ! Execute(task.getId.toString, configuration, 
                          task.getConfiguration)
   }

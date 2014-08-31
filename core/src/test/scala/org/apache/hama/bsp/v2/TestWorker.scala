@@ -24,6 +24,7 @@ import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLog
+import org.apache.hama.logging.TaskLogger
 import org.apache.hama.message.PeerMessenger
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
@@ -77,20 +78,17 @@ class C extends Superstep {
 }
 
 class MockWorker1(conf: HamaConfiguration, container: ActorRef, 
-                  peerMessenger: ActorRef, tester: ActorRef) 
-      extends Worker(conf, container, peerMessenger) {
+                  peerMessenger: ActorRef, tasklog: ActorRef, tester: ActorRef) 
+      extends Worker(conf, container, peerMessenger, tasklog) {
 
   var captured = Map.empty[String, Superstep] 
 
   override def doExecute(taskAttemptId: String, conf: HamaConfiguration, 
-                         taskConf: HamaConfiguration) = {//peer match { 
-    //case Some(found) => { 
-      setup(peer)
-      bsp(peer)
-      captured = asInstanceOf[SuperstepBSP].supersteps 
-      LOG.info("Captured supersteps is "+captured)
-    //} 
-    //case None => LOG.warning("BSPPeer is missing!")
+                         taskConf: HamaConfiguration) = {
+    setup(peer)
+    bsp(peer)
+    captured = asInstanceOf[SuperstepBSP].supersteps 
+    LOG.info("Captured supersteps is "+captured)
   }
   
   def getCount: Receive = {
@@ -133,7 +131,6 @@ class TestWorker extends TestEnv("TestWorker") with JobUtil
                 seq: Int = 1,
                 numPeers: Int = 1, // N.B.: use 1 or this test will be blocked!
                 port: Int = 61000): HamaConfiguration = {
-    //conf.setInt("bsp.child.slot.seq", seq)
     conf.set("hama.zookeeper.quorum", "localhost:2181")
     conf.setInt("hama.zookeeper.property.clientPort", 2181)
     conf.setInt("bsp.peers.num", numPeers)
@@ -154,8 +151,12 @@ class TestWorker extends TestEnv("TestWorker") with JobUtil
     }
   }
 
+  def slotSeq: Int = testConfiguration.getInt("bsp.child.slot.seq", 98)
+
   it("test bsp worker function.") {
      val id = identifier(testConfiguration)
+     val tasklog = createWithArgs("taskLogger"+slotSeq, classOf[TaskLogger],
+                                  testRootPath+"/tasklogs")
      val peerMessenger = createWithArgs("peerMessenger_"+id, 
                                         classOf[PeerMessenger],
                                         testConfiguration)
@@ -164,9 +165,8 @@ class TestWorker extends TestEnv("TestWorker") with JobUtil
      val task = createTask("workerTask", 1, 1, 1, testConfiguration)
      val worker = createWithArgs("testWorker", classOf[MockWorker1], 
                                  testConfiguration, container, peerMessenger, 
-                                 tester)
-     //worker ! Bind(testConfiguration, system)
-     worker ! ConfigureFor(/*testConfiguration,*/ task)
+                                 tasklog, tester)
+     worker ! ConfigureFor(task)
      worker ! Execute(task.getId.toString, 
                       testConfiguration, 
                       task.getConfiguration)

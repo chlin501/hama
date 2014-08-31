@@ -46,26 +46,9 @@ final case object GetPeerIndex
 final case object SyncThenValidateSuperstep
 
 class MockWorker(conf: HamaConfiguration, tester: ActorRef, task: Task, 
-                 container: ActorRef, peerMessenger: ActorRef) 
-      extends Worker(conf, container, peerMessenger) {
-
-/*
-  var peer: BSPPeer = _
-
-  def createPeer(conf: HamaConfiguration,
-                 task: Task): BSPPeer = {
-    //val p = Coordinator(conf, sys)
-    val p = new Coordinator()
-    p.configureFor(conf, task, createPeerMessenger(conf))
-    p 
-  }
- 
-  def init: Receive = {
-    case Init => {
-      peer = createPeer(conf, task)
-    }
-  }
-*/
+                 container: ActorRef, peerMessenger: ActorRef, 
+                 tasklog: ActorRef)
+      extends Worker(conf, container, peerMessenger, tasklog) {
 
   // getPeerName shouldn't return 0.0.0.0 
   def getPeerName: Receive = {
@@ -203,10 +186,8 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     val worker2 = createWithArgs("worker2", classOf[MockWorker], 
                                  conf2, tester, task2, container, peerMessenger)
 
-    //worker1 ! Init
-    //worker2 ! Init
-    worker1 ! ConfigureFor(/*testConfiguration,*/ task1)
-    worker2 ! ConfigureFor(/*testConfiguration,*/ task2)
+    worker1 ! ConfigureFor(task1)
+    worker2 ! ConfigureFor(task2)
 
     worker1 ! GetAllPeers
     worker2 ! GetAllPeers

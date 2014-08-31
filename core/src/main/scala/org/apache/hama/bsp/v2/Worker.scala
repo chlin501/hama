@@ -18,11 +18,7 @@
 package org.apache.hama.bsp.v2
 
 import akka.actor.Actor
-import akka.actor.ActorContext
 import akka.actor.ActorRef
-import akka.actor.ActorSystem
-import akka.actor.Props
-import akka.event.LoggingAdapter
 import java.io.File
 import java.net.InetAddress
 import java.net.URL
@@ -33,20 +29,15 @@ import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.Operation
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
-//import org.apache.hama.logging.TaskLog
-//import org.apache.hama.logging.TaskLogger
-//import org.apache.hama.logging.TaskLoggerRef
-//import org.apache.hama.logging.TaskLogParam
-//import org.apache.hama.logging.TaskLogParameter
+import org.apache.hama.logging.Logging
+import org.apache.hama.logging.LoggingAdapter
+import org.apache.hama.logging.TaskLogger
+import org.apache.hama.logging.TaskLogging
 import org.apache.hama.message.BSPMessageBundle
+import org.apache.hama.util.Utils._
 
 sealed trait WorkerOperation
-/*
-final case class Bind(conf: HamaConfiguration, 
-                      actorSystem: ActorSystem) extends WorkerOperation
-*/
-final case class ConfigureFor(/*conf: HamaConfiguration,*/
-                              task: Task) extends WorkerOperation
+final case class ConfigureFor(task: Task) extends WorkerOperation
 final case class Execute(taskAttemptId: String,
                          conf: HamaConfiguration, 
                          taskConf: HamaConfiguration) extends WorkerOperation
@@ -54,67 +45,31 @@ final case class Close extends WorkerOperation
 
 final case class LocalMessages[M <: Writable](bundle: BSPMessageBundle[M])
 
-/*
-object Worker {
-
-  val tasklogsPath = "/logs/taskslogs"
-
-}
-*/
-
 /**
  * This is the actual class that perform {@link Superstep}s execution.
  */
 protected[v2] class Worker(conf: HamaConfiguration,  // common conf
                            container: ActorRef, 
-                           peerMessenger: ActorRef)
-      extends SuperstepBSP {//with Actor //with TaskLog with TaskLoggerRef with TaskLogParameter {
-
-  //val logger = akka.event.Logging(context.system, this)
-
-  //import Worker._ 
+                           peerMessenger: ActorRef,
+                           tasklog: ActorRef) extends SuperstepBSP {
 
   protected val peer = new Coordinator
- 
-  //protected var task: Option[Task] = None
 
-  override def slotSeq: Int = conf.getInt("bsp.child.slot.seq", -1)
-
-/*
-  override def loggerRef(): ActorRef = {
-    context.actorOf(Props(classOf[TaskLogger], getLogDir(hamaHome)), 
-                    "taskLogger"+slotSeq)
-  }
-*/
-
-/*
-  override def getTaskLogParam(): TaskLogParam = 
-    TaskLogParam(context.system, getLogDir(hamaHome), slotSeq) 
-*/
-
-/*
-  // TODO: check if any better way to set hama home. 
-  protected def hamaHome: String = System.getProperty("hama.home.dir")
-
-  protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
-*/
-
-/*
-  override def getTask(): Task = task match { // TODO: doIfExists
-    case None => throw new NullPointerException("Task is not yet ready!")
-    case Some(found) => found
-  }
-*/
+  override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
+  //override def loggerRef(): ActorRef = tasklog
 
   /**
    * This ties coordinator to a particular task.
    */
   def configFor: Receive = {
-    case ConfigureFor(/*conf,*/ task) => {
-      setConf(task.getConfiguration)
-      //LOG.info("Configure this worker to task attempt id {}", 
-               //task.getId.toString)
-      peer.configureFor(conf, task, peerMessenger)
+    case ConfigureFor(aTask) => {
+      task = Some(aTask)
+      if(LOG.isInstanceOf[TaskLogging]) 
+        LOG.asInstanceOf[TaskLogging].initialize(aTask.getId)
+      setConf(aTask.getConfiguration)
+      LOG.info("Configure this worker to task attempt id {}", 
+               aTask.getId.toString)
+      peer.configureFor(conf, aTask, peerMessenger)
     }
   }
 
@@ -195,14 +150,14 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
    * @return Receive is partial function.
    */
   def close: Receive = {
-    case Close => close
+    case Close => {
+      doIfExists[Task, Unit](task, { (found) =>
+        if(LOG.isInstanceOf[TaskLogging]) 
+          LOG.asInstanceOf[TaskLogging].close(found.getId)
+      }, Unit)
+      close
+    }
   }
-
-/*
-  def unknown: Receive = {
-    case msg@_ => println(getClass.getSimpleName+" receives message "+msg)
-  }
-*/
 
   override def receive = configFor orElse execute orElse close orElse unknown
 }

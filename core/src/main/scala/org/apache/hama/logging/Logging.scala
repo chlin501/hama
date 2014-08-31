@@ -53,9 +53,7 @@ object Logging {
   def apply(clazz: Class[_]): LoggingAdapter = 
     new CommonLogging(LogFactory.getLog(clazz))
 
-  //def apply[L <: TaskLogger](ref: ActorRef) = new TaskLogging(ref)
-
-  var count = 0
+  def apply[L <: TaskLogger](ref: ActorRef) = new TaskLogging(ref)
 
   //var logger: ActorRef = _
 
@@ -64,25 +62,17 @@ object Logging {
    * @param taskLogParam contains {@link ActorSystem}, log dir path, and 
    *                     slot seq, indicating to which slot this task logger
    *                     belongs.
-   */
   def apply[L <: TaskLogger](taskLogParam: TaskLogParam, 
                              taskLoggerClass: Class[L]): LoggingAdapter = {
     val sys = taskLogParam.system
     checkIfNull("ActorSystem", sys) 
     val logDir = taskLogParam.logDir
     checkIfEmpty(logDir)
-    count += 1
-println("xxxxxxxxxxxxxxxxxxxxxx task logger count: "+count)
-    val logger = sys.actorOf(Props(taskLoggerClass, logDir), 
-                               "taskLogger%s".format(taskLogParam.slotSeq))
-/*
     logger = logger match {
       case null => sys.actorOf(Props(taskLoggerClass, logDir), 
                                "taskLogger%s".format(taskLogParam.slotSeq))
       case ref@_ => ref
     }
-*/
-    checkIfNull("TaskLogger", logger)
     new TaskLogging(logger)
   }
  
@@ -96,6 +86,7 @@ println("xxxxxxxxxxxxxxxxxxxxxx task logger count: "+count)
       throw new IllegalArgumentException("Task logDir not provided!")
     case _ =>
   }
+   */
 }
 
 /**
@@ -167,12 +158,12 @@ protected[logging] class CommonLogging(logger: Log) extends LoggingAdapter {
 
 object TaskLogging {
 
-  final protected[logging] case class Initialize(taskAttemptId: TaskAttemptID)
-  final protected[logging] case class Info(message: String)
-  final protected[logging] case class Debug(message: String)
-  final protected[logging] case class Warning(message: String)
-  final protected[logging] case class Error(message: String)
-  final protected[logging] case class Close(taskAttemptId: TaskAttemptID)
+  final case class Initialize(taskAttemptId: TaskAttemptID)
+  final case class Info(message: String)
+  final case class Debug(message: String)
+  final case class Warning(message: String)
+  final case class Error(message: String)
+  final case class Close(taskAttemptId: TaskAttemptID)
 
 }
 
@@ -232,17 +223,6 @@ trait CommonLog extends HamaLog {
   override def LOG: LoggingAdapter = Logging(getClass)
 
 }
-
-/*
-trait ExecutorLogger {
-
-  def write conf, ext, f: () => Unit...
-
-} TODO
-
-StdOut extends Actor with ExecutorLogger
-StdErr extends Actor with ExecutorLogger
-*/
 
 /**
  * This is intended to be used by {@link BSPPeerContainer} for task logging.
@@ -342,17 +322,17 @@ StdErr extends Actor with ExecutorLogger
 
 }
 
+/**
 final case class TaskLogParam(system: ActorSystem, 
                               logDir: String, 
                               slotSeq: Int)
 
-/**
  * Used by TaskLog and underlying Task actor.
- */
 protected[logging] trait TaskLogParameter {
 
   def getTaskLogParam(): TaskLogParam 
 }
+ */
 
 /*
 protected[logging] trait TaskLoggerRef {
@@ -366,11 +346,11 @@ protected[logging] trait TaskLoggerRef {
  * Intended to be used by {@link BSPPeerContainer}.
  */
 trait TaskLog extends HamaLog { 
-  self: TaskLogParameter => // TODO:change to Actor? so we can use context.actorOf to create log actor ref
+  //self: TaskLogParameter => // TODO:change to Actor? so we can use context.actorOf to create log actor ref
 
   //self: TaskLoggerRef =>
 
-  override def LOG: LoggingAdapter = //Logging[TaskLogger](loggerRef)
-    Logging[TaskLogger](getTaskLogParam, classOf[TaskLogger])
+  //override def LOG: LoggingAdapter = Logging[TaskLogger](loggerRef)
+    //Logging[TaskLogger](getTaskLogParam, classOf[TaskLogger])
 
 }

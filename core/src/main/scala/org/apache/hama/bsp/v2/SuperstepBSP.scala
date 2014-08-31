@@ -17,9 +17,7 @@
  */
 package org.apache.hama.bsp.v2
 
-import akka.actor.Actor
 import akka.actor.ActorRef
-import akka.actor.Props
 import java.io.IOException
 import org.apache.hadoop.conf.Configurable
 import org.apache.hadoop.conf.Configuration
@@ -32,17 +30,19 @@ import org.apache.hama.monitor.CheckpointerReceiver
 import org.apache.hama.monitor.Pack
 import org.apache.hama.sync.SyncException
 import org.apache.hama.logging.TaskLog
-import org.apache.hama.logging.TaskLogParam
-import org.apache.hama.logging.TaskLogParameter
+//import org.apache.hama.logging.TaskLogParam
+//import org.apache.hama.logging.TaskLogParameter
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
+/*
 object SuperstepBSP {
 
   val tasklogsPath = "/logs/taskslogs"
 
 }
+*/
 
 /**
  * This class manages all superstep and supersteps routing, started from the
@@ -51,19 +51,17 @@ object SuperstepBSP {
 protected trait SuperstepBSP extends BSP 
                              with Agent 
                              with TaskLog 
-                             with TaskLogParameter
+                             //with TaskLogParameter
                              with Configurable {
- 
-  //self: Actor with TaskLog with TaskParameter =>
 
-  import SuperstepBSP._
+  //import SuperstepBSP._
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
   protected[v2] var task: Option[Task] = None
 
-  //protected def getTask(): Task // TODO: doIfExists
-
+/*
+// beg // move to container, let container/ context create instead of context.system.
   override def getTaskLogParam(): TaskLogParam = 
     TaskLogParam(context.system, getLogDir(hamaHome), slotSeq) 
 
@@ -72,7 +70,9 @@ protected trait SuperstepBSP extends BSP
 
   protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
 
-  protected def slotSeq: Int //= conf.getInt("bsp.child.slot.seq", -1)
+  protected def slotSeq: Int 
+// end 
+*/
 
   /**
    * This is configuration for a specific task. 
@@ -80,8 +80,7 @@ protected trait SuperstepBSP extends BSP
   protected var taskConf = new HamaConfiguration
 
   override def setConf(conf: Configuration) = conf match {
-    case null => //LOG.error("Task configuration is not provided for {}!",
-                  //         getTask.getId) 
+    case null => 
     case _ => this.taskConf = conf.asInstanceOf[HamaConfiguration]
   }
 
@@ -100,11 +99,9 @@ protected trait SuperstepBSP extends BSP
   @throws(classOf[SyncException])
   override def setup(peer: BSPPeer) { 
     val classes = commonConf(peer).get("hama.supersteps.class")
-    //LOG.info("Supersteps to be instantiated include {}", classes)
+    LOG.info("Supersteps to be instantiated include {}", classes)
     val classNames = classes.split(",")
-    //LOG.info(classNames.length+" superstep classes, including "+classes) 
     classNames.foreach( className => {
-      //LOG.debug("Instantiate "+className)
       instantiate(className, peer) match {
         case Success(instance) => { 
           instance.setup(peer)
@@ -168,13 +165,12 @@ protected trait SuperstepBSP extends BSP
       task match { 
     case Some(found) => {
       val superstepCount = peer.getSuperstepCount
-      val taskAttemptId = found.getId
-      val actorName = "checkpoint_"+taskAttemptId+"_"+superstepCount
-      Some(context.actorOf(Props(classOf[Checkpointer], 
-                                 taskConf, 
-                                 taskAttemptId, 
-                                 superstepCount), 
-                           actorName))
+      val taskAttemptId = found.getId.toString
+      val actorName = "checkpoint-"+taskAttemptId+"-"+superstepCount
+      val ckpt = spawn(actorName, classOf[Checkpointer], taskConf, 
+                       taskAttemptId, superstepCount)
+      LOG.debug("Checkpointer "+ckpt.path.name+" is created!")
+      Some(ckpt)
     }
     case None => None
   }
@@ -185,30 +181,15 @@ protected trait SuperstepBSP extends BSP
     Option[ActorRef] = isCheckpointEnabled(commonConf(peer)) match {
       case true => {
         val ckpt = createCheckpointer(peer, superstep)
-/*
-        val ckpt = context.actorOf(Props(classOf[Checkpointer], 
-                                         taskConf,
-                                         doIfExists[Task, Unit](task, { (f) => 
-                                           f.getId
-                                         }, Unit)
-                                         peer.getSuperstepCount), 
-                                    "checkpoint_"+getTask.getId+"_"+
-                                        peer.getSuperstepCount) 
-*/
-        //LOG.debug("Checkpoint "+ckpt.path.name+" is created!")
         peer.isInstanceOf[CheckpointerReceiver] match {
           case true => peer.asInstanceOf[CheckpointerReceiver].
                             receive(Pack(ckpt, superstep))
-          case false => //LOG.warning("Checkpoint "+ckpt.path.name+" is created"+
-                         //        ", but can't be assigned to BSPPeer because "+
-                          //       " not an instance of CheckpointerReceiver!")
+          case false => LOG.warning("Checkpointer is created, but BSPPeer is "+
+                                    "not an instance of CheckpointerReceiver!")
         }
         ckpt
       }
-      case false => {
-        //LOG.debug("No checkpoint is needed for "+getTask.getId)
-        None
-      }
+      case false => None
     }
 
   /**
