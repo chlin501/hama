@@ -62,7 +62,7 @@ object Logging {
 }
 
 /**
- * This is intended to be used by implementation with different purposes.
+ * A wrapper for different logging mechanism.
  */
 trait LoggingAdapter { 
 
@@ -215,10 +215,7 @@ protected class TaskLogger(logDir: String) extends Actor {
 
   override def receive = {
     case Initialize(taskAttemptId) => {
-      this.taskAttemptId = taskAttemptId match {
-        case null => None
-        case _ => Some(taskAttemptId)  
-      }
+      this.taskAttemptId = Option(taskAttemptId) 
       val (stdout, stderr) = mkPathAndWriters(logDir, taskAttemptId, mkdirs)
       out = stdout
       err = stderr
@@ -260,7 +257,7 @@ protected class TaskLogger(logDir: String) extends Actor {
   protected def write(writer: Option[FileWriter], msg: String) = writer match {
     case Some(found) => found.write(msg+"\n")
     case None => 
-      System.err.println("Unlikely! But either stdout or stderr is missing!")
+      System.err.println("Either stdout or stderr is missing for task logger!")
   }
 
   protected def mkdirs(logDir: String, jobId: String): (JobIDPath, Boolean) = {
@@ -281,7 +278,7 @@ protected class TaskLogger(logDir: String) extends Actor {
     mkdirs(logDir, jobId) match {
       case (jobDir, true) => 
         (Some(getWriter(jobDir, taskAttemptId.toString)),
-         Some(getWriter(jobDir, taskAttemptId.toString, ".err")))
+         Some(getWriter(jobDir, taskAttemptId.toString, "err")))
       case (jobDir, false) => (None, None)
     }
   }

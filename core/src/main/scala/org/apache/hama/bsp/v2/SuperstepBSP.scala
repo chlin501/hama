@@ -30,19 +30,9 @@ import org.apache.hama.monitor.CheckpointerReceiver
 import org.apache.hama.monitor.Pack
 import org.apache.hama.sync.SyncException
 import org.apache.hama.logging.TaskLog
-//import org.apache.hama.logging.TaskLogParam
-//import org.apache.hama.logging.TaskLogParameter
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-
-/*
-object SuperstepBSP {
-
-  val tasklogsPath = "/logs/taskslogs"
-
-}
-*/
 
 /**
  * This class manages all superstep and supersteps routing, started from the
@@ -51,30 +41,13 @@ object SuperstepBSP {
 protected trait SuperstepBSP extends BSP 
                              with Agent 
                              with TaskLog 
-                             //with TaskLogParameter
                              with Configurable {
-
-  //import SuperstepBSP._
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
   protected[v2] var task: Option[Task] = None
 
   protected[v2] def setTask(aTask: Task) = this.task = Option(aTask)
-
-/*
-// beg // move to container, let container/ context create instead of context.system.
-  override def getTaskLogParam(): TaskLogParam = 
-    TaskLogParam(context.system, getLogDir(hamaHome), slotSeq) 
-
-  // TODO: check if any better way to set hama home. 
-  protected def hamaHome: String = System.getProperty("hama.home.dir")
-
-  protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
-
-  protected def slotSeq: Int 
-// end 
-*/
 
   /**
    * This is configuration for a specific task. 
@@ -115,12 +88,12 @@ protected trait SuperstepBSP extends BSP
     })
   }
 
+  protected def classWithLoader(className: String): Class[_] = 
+    Class.forName(className, true, taskConf.getClassLoader)
+
   protected def instantiate(className: String, peer: BSPPeer): Try[Superstep] = 
-    Try(ReflectionUtils.newInstance(Class.forName(className, 
-                                                  true, 
-                                                  taskConf.getClassLoader), 
+    Try(ReflectionUtils.newInstance(classWithLoader(className), 
                                     commonConf(peer)).asInstanceOf[Superstep])
-  
 
   @throws(classOf[IOException])
   @throws(classOf[SyncException])

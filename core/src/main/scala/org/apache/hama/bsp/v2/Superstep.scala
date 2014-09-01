@@ -72,7 +72,7 @@ abstract class Superstep {
    * @param peer is a {@link BSPPeer} objet containing necessary services
    *             during computation.
    */
-  def compute(peer: BSPPeer) 
+  def compute(peer: BSPPeer)  // TODO: may need throw custom exception so SuperstepBSP can deal with it.
 
   /**
    * Cleanup after computation is finished.

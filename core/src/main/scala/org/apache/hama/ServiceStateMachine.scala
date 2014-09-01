@@ -78,23 +78,6 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
     case Event(Next, s @ Cache(subServices)) => {
       goto(Normal) using s
     }
-/*
-    case Event(Load, s @ Cache(subServices)) => {
-      LOG.info("Loading service {}", sender.path.name)  
-      val currentServices = subServices ++ Set(sender)
-      services = currentServices // Service.scala#services
-      LOG.debug("Current services available: {}", services.mkString(", "))
-      context.watch(sender) // watch sub service
-      cancelServiceLookup(sender.path.name, sender)
-      afterLoaded(sender)
-      val cache = s.copy(currentServices)
-      if(servicesCount == currentServices.size) {
-        goto(Normal) using cache
-      } else {
-        stay using cache
-      }
-    }
-*/
   }
 
   /**
@@ -106,21 +89,6 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
       //notify(Normal)(Ready(name)) 
       goto(CleanUp) using s
     }
-/*
-    case Event(Shutdown, s @ Cache(subServices)) => {
-      LOG.info("Shutting down server ...")
-      subServices.view.foreach {
-        case service => {
-          // service once receive Shutdown message MUST perform housekeeping 
-          // (cleanup) tasks. In the end call sender ! Unload(name) where name
-          // is the def of its own function name.
-          // and all services MUST stop accepts requests. 
-          service ! Shutdown 
-        }
-      }
-      goto(CleanUp) using s
-    }
-*/
   }
 
   /**
@@ -130,18 +98,6 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
     case Event(Next, s @ Cache(subServices)) => {
       goto(Stopped) using s
     }
-/*
-    case Event(Unload, s @ Cache(subServices)) => {
-      val currentServices = subServices - sender 
-      context.unwatch(sender) // unwatch sub service
-      val cache = s.copy(currentServices)
-      if(0 == currentServices.size) {
-        goto(Stopped) using cache
-      } else {
-        stay using cache
-      }
-    }
-*/
   }
 
   /**
@@ -177,30 +133,6 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
                   stateName, e, s)
       stay using s
     }
-/*
-    case Event(WhichState, s @ Cache(subServices)) => {
-      var tmp: State = stay using s // FSM State
-      if(Normal.equals(stateName) && !isNotifiedInNormal && isConditionEmpty) { 
-        broadcast(Normal)
-        notify(Normal)(Ready(name)) 
-        isNotifiedInNormal = true
-      } else if(Stopped.equals(stateName) && !isNotifiedInStopped) {
-        LOG.debug("StateName [{}] should be Stopped.", stateName)
-        // TODO: check if subServices map is empty, if not throws exception
-        stateChecker.cancel
-        notify(Stopped)(Halt(name))
-        isNotifiedInStopped = true
-        tmp = stop(FSM.Normal, Cache(Set.empty[ActorRef]))
-      }
-      tmp
-    } 
-     * Event such as Load, SubscribeState may go to here
-    case Event(e, s) => {
-      LOG.warning("CurrentState {}, unknown event {}, services {}.", 
-                  stateName, e, s)
-      stay using s
-    }
-*/
   }
 
   /**

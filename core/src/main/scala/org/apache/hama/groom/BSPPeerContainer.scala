@@ -17,7 +17,6 @@
  */
 package org.apache.hama.groom
 
-//import akka.actor.ActorContext
 import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.actor.Actor
@@ -30,7 +29,6 @@ import java.io.File
 import java.io.FileWriter
 import java.net.InetAddress
 import org.apache.hama.bsp.TaskAttemptID
-//import org.apache.hama.bsp.v2.Bind
 import org.apache.hama.bsp.v2.ConfigureFor
 import org.apache.hama.bsp.v2.Execute
 import org.apache.hama.bsp.v2.Task

@@ -25,6 +25,10 @@ protected[v2] case class TaskWithStats(task: Option[Task],
 
 trait TaskAware {
 
+  /**
+   * Beause {@link Task} is shared, change task value here would affect task
+   * as the same instance somewhere else e.g. SuperstepBSP, BSPPeerContainer.
+   */
   protected[v2] var taskWithStats: TaskWithStats = TaskWithStats(None, None)
 
   def task(): Option[Task] = taskWithStats.task

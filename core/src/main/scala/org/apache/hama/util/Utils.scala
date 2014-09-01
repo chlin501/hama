@@ -26,4 +26,11 @@ object Utils {
     case None => default
   }
 
+  def doIfNotNull[A, B <: Any](something: A, 
+                               f: (A) => B, 
+                               default: B): B = something match {
+    case null => default
+    case v@_ => f(v) 
+  }
+
 }

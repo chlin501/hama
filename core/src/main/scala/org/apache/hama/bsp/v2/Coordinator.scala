@@ -229,7 +229,7 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
     case None => false
   }
 
-  // TODO: need more concise expression. perhaps refactor interface. return java iterator with entry containing peer and bundle looks stupid.
+  // TODO: need more concise expression. perhaps refactor interface. return java iterator with entry containing peer and bundle looks ugly.
   protected def getBundles(messenger: Option[MessageManager[Writable]]) = 
     doIfExists[MessageManager[Writable], java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[Writable]]]](messenger, { (mgr) => mgr.getOutgoingBundles }, null.asInstanceOf[java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[Writable]]]])
 
