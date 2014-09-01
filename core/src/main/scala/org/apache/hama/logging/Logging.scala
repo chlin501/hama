@@ -21,7 +21,6 @@ import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
-
 import java.io.File
 import java.io.FileWriter
 import org.apache.commons.logging.Log
@@ -53,40 +52,13 @@ object Logging {
   def apply(clazz: Class[_]): LoggingAdapter = 
     new CommonLogging(LogFactory.getLog(clazz))
 
+  /**
+   * Task log instance will be injected instead of instantiated by worker.
+   * @param ref is the task log actor reference.
+   * @return LoggingAdapter as the wrapper.
+   */
   def apply[L <: TaskLogger](ref: ActorRef) = new TaskLogging(ref)
 
-  //var logger: ActorRef = _
-
-  /**
-   * This is intended to be used by {@link BSPPeerContainer} only.
-   * @param taskLogParam contains {@link ActorSystem}, log dir path, and 
-   *                     slot seq, indicating to which slot this task logger
-   *                     belongs.
-  def apply[L <: TaskLogger](taskLogParam: TaskLogParam, 
-                             taskLoggerClass: Class[L]): LoggingAdapter = {
-    val sys = taskLogParam.system
-    checkIfNull("ActorSystem", sys) 
-    val logDir = taskLogParam.logDir
-    checkIfEmpty(logDir)
-    logger = logger match {
-      case null => sys.actorOf(Props(taskLoggerClass, logDir), 
-                               "taskLogger%s".format(taskLogParam.slotSeq))
-      case ref@_ => ref
-    }
-    new TaskLogging(logger)
-  }
- 
-  private def checkIfNull(msg: String, arg: Any) = arg match {
-    case null => throw new IllegalArgumentException(msg+" not provided!")
-    case _ =>
-  }
-
-  private def checkIfEmpty(arg: String) = arg match {
-    case null|"" => 
-      throw new IllegalArgumentException("Task logDir not provided!")
-    case _ =>
-  }
-   */
 }
 
 /**
@@ -102,14 +74,14 @@ trait LoggingAdapter {
 
   def error(msg: String, args: Any*)
 
-  def format(msg: String, args: Any*): String = f(msg, args:_*)/*Try(f(msg, args:_*)) match {
+  def format(msg: String, args: Any*): String = Try(f(msg, args:_*)) match {
     case Success(result) => result 
     case Failure(cause) => cause.getMessage match {
       case "Format specifier 's'" => 
-        "[Warning] The number of {} and its values specified doesn't match!"
+        "[Warning] The number of {} and its args specified doesn't match!"
       case errMsg@_ => errMsg
     }
-  } */
+  } 
 
   private def f(msg: String, args: Any*): String =
     msg.replace("{}", "%s").format(args:_*)
@@ -229,7 +201,7 @@ trait CommonLog extends HamaLog {
  * @param logDir points to the log path directory, under which job id dirs 
  *               with differrent task attempt ids would be created for logging.
  */
-/*protected[logging]*/ class TaskLogger(logDir: String) extends Actor {
+protected class TaskLogger(logDir: String) extends Actor {
 
   import TaskLogging._
 
@@ -323,34 +295,31 @@ trait CommonLog extends HamaLog {
 }
 
 /**
-final case class TaskLogParam(system: ActorSystem, 
-                              logDir: String, 
-                              slotSeq: Int)
-
- * Used by TaskLog and underlying Task actor.
-protected[logging] trait TaskLogParameter {
-
-  def getTaskLogParam(): TaskLogParam 
-}
- */
-
-/*
-protected[logging] trait TaskLoggerRef {
-
-  def loggerRef(): ActorRef
-
-}
-*/
-
-/**
- * Intended to be used by {@link BSPPeerContainer}.
+ * Intended to be used by {@link Worker} when different task is launched.
  */
 trait TaskLog extends HamaLog { 
-  //self: TaskLogParameter => // TODO:change to Actor? so we can use context.actorOf to create log actor ref
+  
+  /**
+   * Config the task logging to taskAttemptId directory.
+   * @param taskAttemptId is the directory name.
+   */
+  def initializeLog(taskAttemptId: TaskAttemptID) = taskAttemptId match {
+    case null =>
+    case id@_ => LOG.isInstanceOf[TaskLogging] match {
+      case true => LOG.asInstanceOf[TaskLogging].initialize(taskAttemptId)
+      case false =>
+    }
+  }
 
-  //self: TaskLoggerRef =>
-
-  //override def LOG: LoggingAdapter = Logging[TaskLogger](loggerRef)
-    //Logging[TaskLogger](getTaskLogParam, classOf[TaskLogger])
-
+  /**
+   * Close writer stream which points to taskAttemptId.
+   * @param taskAttemptId denotes the path bound with writer.
+   */
+  def closeLog(taskAttemptId: TaskAttemptID) = taskAttemptId match {
+    case null =>
+    case id@_ => LOG.isInstanceOf[TaskLogging] match {
+      case true => LOG.asInstanceOf[TaskLogging].close(taskAttemptId)
+      case false =>
+    }
+  }
 }

@@ -26,13 +26,4 @@ object Utils {
     case None => default
   }
 
-/*
-  def doIfExists[A, B <: Any](something: Option[A],
-                              f: (A) => B,
-                              n: () => B): B = something match {
-    case Some(found) => f(found)
-    case None => n()
-  }
-*/
-
 }

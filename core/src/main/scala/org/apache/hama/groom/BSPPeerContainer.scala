@@ -153,6 +153,14 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    */
   protected val peerMessenger: ActorRef = createPeerMessenger(identifier(conf))
 
+  /**
+   * A log class for tasks to be executed. Sending TaskAttemptID to switch
+   * for logging to different directory. 
+   */
+  protected val tasklog = createTaskLogger[TaskLogger](classOf[TaskLogger], 
+                                                       getLogDir(hamaHome), 
+                                                       slotSeq) 
+
   protected var executor: Option[ActorRef] = None
 
   override def configuration: HamaConfiguration = conf
@@ -219,9 +227,6 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * @param task that is supplied to be executed.
    */
   def doLaunch(task: Task) { 
-    val tasklog = createTaskLogger[TaskLogger](classOf[TaskLogger], 
-                                               getLogDir(hamaHome), 
-                                               slotSeq) 
     val taskWorker = spawn("taskWoker", classOf[Worker], configuration, self, 
                        peerMessenger, tasklog)
     context.watch(taskWorker)

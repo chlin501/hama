@@ -48,6 +48,7 @@ final case class LocalMessages[M <: Writable](bundle: BSPMessageBundle[M])
 /**
  * This is the actual class that perform {@link Superstep}s execution.
  */
+// TODO: rename to TaskWorker?
 protected[v2] class Worker(conf: HamaConfiguration,  // common conf
                            container: ActorRef, 
                            peerMessenger: ActorRef,
@@ -62,15 +63,12 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
    * This ties coordinator to a particular task.
    */
   def configFor: Receive = {
-    case ConfigureFor(aTask) => {
-      doConfigFor(aTask)
-    }
+    case ConfigureFor(aTask) => doConfigFor(aTask)
   }
 
   protected def doConfigFor(aTask: Task) {
     setTask(aTask)
-    if(LOG.isInstanceOf[TaskLogging]) 
-      LOG.asInstanceOf[TaskLogging].initialize(aTask.getId)
+    initializeLog(aTask.getId)
     setConf(aTask.getConfiguration)
     LOG.info("Configure this worker to task attempt id {}", 
              aTask.getId.toString)
@@ -155,10 +153,7 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
    */
   def close: Receive = {
     case Close => {
-      doIfExists[Task, Unit](task, { (found) =>
-        if(LOG.isInstanceOf[TaskLogging]) 
-          LOG.asInstanceOf[TaskLogging].close(found.getId)
-      }, Unit)
+      doIfExists[Task, Unit](task, { (found) => closeLog(found.getId) }, Unit)
       close
     }
   }
