@@ -57,12 +57,11 @@ import scala.util.Failure
  * - io 
  * - sync
  */
-// TODO: Task information such as
+// TODO: use task operator to collect metrics: 
 //  - status
 //  - start time
 //  - finish time
-//  - progress 
-// need to find an independent way to update those info. 
+//  - progress, etc.
 class Coordinator extends BSPPeer with CheckpointerReceiver 
                                   with Checkpointable 
                                   with Messenger 
@@ -89,12 +88,17 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
                                  peerMessenger: ActorRef) {
     taskOperator = operator
     this.conf = commonConf;
-    configureForMessenger(configuration, taskOperator.task, peerMessenger) 
+    taskOperator.execute({ (value) =>
+      configureForMessenger(configuration, value, peerMessenger) 
+    })
     //this.io = ioService[_, _](io, configuration, taskWithStats) 
-    localize(configuration, taskOperator.task)
-    settingForTask(configuration, taskOperator.task)
-    configureForBarrier(configuration, taskOperator.task, host, port) 
-    firstSync(taskOperator.task.getCurrentSuperstep)
+    taskOperator.execute({ (value) => localize(configuration, value) })
+    taskOperator.execute({ (value) => settingForTask(configuration, value) })
+    taskOperator.execute({ (value) => 
+      configureForBarrier(configuration, value, host, port) 
+    })
+    taskOperator.execute({ (value) => firstSync(value.getCurrentSuperstep) })
+  
   }
 
   /**
@@ -103,11 +107,11 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
    */
   //TODO: should the task's superstep be confiured to 0 instead?
   protected def firstSync(superstep: Long) {
-    syncClient.enterBarrier(taskOperator.task.getId.getJobID, 
-                            taskOperator.task.getId, superstep)
-    syncClient.leaveBarrier(taskOperator.task.getId.getJobID, 
-                            taskOperator.task.getId, superstep)
-    taskOperator.task.increatmentSuperstep
+    taskOperator.execute({ (value) => {
+      syncClient.enterBarrier(value.getId.getJobID, value.getId, superstep)
+      syncClient.leaveBarrier(value.getId.getJobID, value.getId, superstep)
+      value.increatmentSuperstep
+    }})
   }
 
   /** 
@@ -180,38 +184,38 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
   override def getNumCurrentMessages(): Int = messenger.getNumCurrentMessages
 
   @throws(classOf[SyncException])
-  protected def enterBarrier() { 
-    val found = taskOperator.task
-    syncClient.enterBarrier(found.getId.getJobID, found.getId, 
-                            found.getCurrentSuperstep)
-  }
+  protected def enterBarrier() = taskOperator.execute({ (value) => 
+    syncClient.enterBarrier(value.getId.getJobID, value.getId, 
+                            value.getCurrentSuperstep)
+  }) 
 
   @throws(classOf[SyncException])
-  protected def leaveBarrier() {
-    val found = taskOperator.task
-    syncClient.leaveBarrier(found.getId.getJobID, found.getId,
-                            found.getCurrentSuperstep)
-  }
+  protected def leaveBarrier() = taskOperator.execute({ (value) =>
+    syncClient.leaveBarrier(value.getId.getJobID, value.getId,
+                            value.getCurrentSuperstep)
+  })
 
   protected def doTransfer(peer: ProxyInfo, 
                            bundle: BSPMessageBundle[Writable]): Try[Boolean] = 
     Try(checkThenTransfer(peer, bundle))
 
   protected def checkThenTransfer(peer: ProxyInfo, 
-                                  bundle: BSPMessageBundle[Writable]): Boolean =
-    { messenger.transfer(peer, bundle); true }
+                                  bundle: BSPMessageBundle[Writable]): 
+    Boolean = { messenger.transfer(peer, bundle); true }
 
   @throws(classOf[IOException])
   override def sync() {
-    taskOperator.task.transitToSync 
+    taskOperator.execute({ (value) => value.transitToSync })
     val pack = nextPack(conf)
     val it = messenger.getOutgoingBundles 
     asScalaIterator(it).foreach( entry => {
       val peer = entry.getKey
       val bundle = entry.getValue
       it.remove 
-      savePeerBundle(pack, taskOperator.task.getId.toString,
-                     getSuperstepCount, peer, bundle)
+      taskOperator.execute({ (value) => 
+        savePeerBundle(pack, value.getId.toString, getSuperstepCount, 
+                       peer, bundle)
+      })
       doTransfer(peer, bundle) match {
         case Success(result) => LOG.debug("Successfully transfer messages!")
         case Failure(cause) => LOG.error("Fail transferring messages due "+
@@ -225,13 +229,17 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
     saveSuperstep(pack)
     leaveBarrier()
     // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
-    taskOperator.task.increatmentSuperstep 
+    taskOperator.execute({ (value) => value.increatmentSuperstep })
   } 
   
-  override def getSuperstepCount(): Long = taskOperator.task.getCurrentSuperstep
+  override def getSuperstepCount(): Long = 
+    taskOperator.getThenExecute[Long]({ (value) => value.getCurrentSuperstep },
+                                      0L)
 
   private def initPeers(): Array[String] = 
-    syncClient.getAllPeerNames(taskOperator.task.getId)
+    taskOperator.getThenExecute[Array[String]]({ (value) => 
+      syncClient.getAllPeerNames(value.getId)
+    }, Array[String]())
 
   override def getPeerName(): String = syncClient.getPeerName
 
@@ -240,7 +248,9 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
     case _=> initPeers()(index)
   }
 
-  override def getPeerIndex(): Int = taskOperator.task.getId.getTaskID.getId 
+  override def getPeerIndex(): Int = 
+    taskOperator.getThenExecute[Int]({ (value) => value.getId.getTaskID.getId },
+                                     0)
 
   override def getAllPeerNames(): Array[String] = initPeers
 
@@ -251,7 +261,9 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
 
   override def clear() = messenger.clearOutgoingMessages 
 
-  override def getTaskAttemptId(): TaskAttemptID = taskOperator.task.getId 
+  override def getTaskAttemptId(): TaskAttemptID = 
+   taskOperator.getThenExecute[TaskAttemptID]({ (value) => value.getId }, 
+                                              null.asInstanceOf[TaskAttemptID])
 
   /**
    * This is called after {@link BSP#bsp} finishs its execution in the end.

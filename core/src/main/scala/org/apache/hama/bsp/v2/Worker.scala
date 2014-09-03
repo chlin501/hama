@@ -152,7 +152,7 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
    */
   def close: Receive = {
     case Close => {
-      closeLog(operator.task.getId)
+      operator.execute({ (value) => closeLog(value.getId) })
       close
     }
   }

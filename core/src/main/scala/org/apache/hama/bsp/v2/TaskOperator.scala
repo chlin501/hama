@@ -21,35 +21,37 @@ import org.apache.hama.bsp.Counters
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.util.Utils._
 
-protected[v2] case class TaskWithStats(task: Task, counters: Counters) 
+/**
+ * This holds task to metris stats information.
+ * @param task contains specific setting for superstep computation.
+ * @param counters is an object holds metrics stats data.
+ */
+//TODO: replace counters with e.g. asyc metrics collecting mechanism.
+protected[v2] case class TaskWithStats(task: Option[Task], counters: Counters) 
 
 object TaskOperator {
 
-  def apply(task: Task): TaskOperator = task match {
-    case null => throw new IllegalArgumentException("Task is missing!")
-    case _=> new TaskOperator(TaskWithStats(task, new Counters))
-  }
+  /**
+   * Constructor for task operation.
+   * @param task is delivered from {@link TaskManager}.
+   * @return TaskOperator holds {@link Task} and {@link Counters} objects.
+   */
+  def apply(task: Task): TaskOperator = 
+    new TaskOperator(Some(task), new Counters)
 }
 
-class TaskOperator(taskWithStats: TaskWithStats) {
+class TaskOperator(task: Option[Task], counters: Counters) {
 
-  /**
-   * Beause {@link Task} is shared, change task value here would affect task
-   * as the same instance somewhere else e.g. SuperstepBSP, BSPPeerContainer.
-  protected[v2] var taskWithStats = TaskWithStats(None, new Counters)
-   */
+  def getThenExecute[A <: Any, B <: Any](
+    v: (Task) => A
+  )(e: (A) => B, default: B): B = task.map({ (aTask) => v(aTask) }).
+                                       map({ (value) => e(value) }).  
+                                       getOrElse(default)
 
-  //def bind(aTask: Task) = taskWithStats = TaskWithStats(aTask, counters)
+  def getThenExecute[A <: Any](e: (Task) => A, default: A): A = 
+    getThenExecute[Task, A]({ (t) => t})({ (value) => e(value) }, default)
 
-  def task(): Task = taskWithStats.task
+  def execute(e: (Task) => Unit) = getThenExecute[Unit]({ (value) =>
+    e(value) }, Unit)
 
-  def counters(): Counters = taskWithStats.counters
-
-/*
-  def whenFound[A <: Any](f: (Task) => A, default: A): A = 
-    doIfExists[Task, A](task, { (found) => f(found) }, default)
-
-  def whenFound(f: (Task) => Unit) = 
-    doIfExists[Task, Unit](task, { (found) => f(found) }, Unit)
-*/
 }
