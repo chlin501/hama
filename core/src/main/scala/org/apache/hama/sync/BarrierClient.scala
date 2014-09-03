@@ -22,17 +22,14 @@ import org.apache.hama.HamaConfiguration
 
 trait BarrierClient {
 
-// TODO: magnet pattern
-  def configureForBarrier(conf: HamaConfiguration, task: Option[Task], 
-                          host: String, port: Int): 
-      Option[PeerSyncClient] = task match { 
-    case Some(found) => {
-      val syncClient = SyncServiceFactory.getPeerSyncClient(conf)
-      syncClient.init(conf, found.getId.getJobID, found.getId)
-      syncClient.register(found.getId.getJobID, found.getId, host, port)
-      Some(syncClient)
-    }
-    case None => None
+  protected var syncClient: PeerSyncClient = _
+
+  def configureForBarrier(conf: HamaConfiguration, task: Task, 
+                          host: String, port: Int) {
+    val client = SyncServiceFactory.getPeerSyncClient(conf)
+    client.init(conf, task.getId.getJobID, task.getId)
+    client.register(task.getId.getJobID, task.getId, host, port)
+    syncClient = client
   }
 
 }

@@ -25,16 +25,14 @@ import org.apache.hama.HamaConfiguration
 
 trait Messenger {
 
+  protected var messenger: MessageManager[Writable] = _
+
   def configureForMessenger[M <: Writable](conf: HamaConfiguration, 
-                                           task: Option[Task], 
-                                           peerMessenger: ActorRef): 
-      Option[MessageManager[M]] = task match { 
-    case Some(found) => {
-      val mgr = MessageManager.get[M](conf, peerMessenger)
-      mgr.init(conf, found.getId)
-      Some(mgr)
-    }
-    case None => None
+                                           task: Task, 
+                                           peerMessenger: ActorRef) {
+    val mgr = MessageManager.get[M](conf, peerMessenger)
+    mgr.init(conf, task.getId)
+    messenger = mgr.asInstanceOf[MessageManager[Writable]]
   }
 
 }

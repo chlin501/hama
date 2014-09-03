@@ -65,14 +65,16 @@ import scala.util.Failure
 // need to find an independent way to update those info. 
 class Coordinator extends BSPPeer with CheckpointerReceiver 
                                   with Checkpointable 
-                                  with TaskAware 
+                                  //with TaskAware 
                                   with Messenger 
                                   with BarrierClient {
 
   /* services for a particular v2.Task. */
-  protected var messenger: Option[MessageManager[Writable]] = None
-  protected var syncClient: Option[PeerSyncClient] = None
+  //protected var messenger: Option[MessageManager[Writable]] = None // TODO: move to messengr trait
+  //protected var syncClient: Option[PeerSyncClient] = None // TODO: move to barrier client trait
+  /* This store common configuration */
   protected var conf: HamaConfiguration = new HamaConfiguration
+  protected var taskOperator: TaskOperator = _
 
   override def configuration(): HamaConfiguration = conf
 
@@ -87,20 +89,18 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
    *             from conf provided by {@link Container}.
    */
   protected[v2] def configureFor(commonConf: HamaConfiguration, 
-                                 bspTask: Task,
+                                 //bspTask: Task, 
+                                 operator: TaskOperator,
                                  peerMessenger: ActorRef) {
-    taskWithStats = TaskWithStats(Some(bspTask), Some(new Counters()))
+    //taskWithStats = TaskWithStats(Some(bspTask), Some(new Counters()))
+    taskOperator = operator
     this.conf = commonConf;
-    // TODO: magnet pattern for messenger
-    messenger = configureForMessenger(configuration, task, peerMessenger) 
+    configureForMessenger(configuration, taskOperator.task, peerMessenger) 
     //this.io = ioService[_, _](io, configuration, taskWithStats) 
-    localize(configuration, task)
-    settingForTask(configuration, task)
-    // TODO: magnet pattern for sync client
-    syncClient = configureForBarrier(configuration, task, host, port) 
-    firstSync(doIfExists[Task, Int](task, { (found) =>
-      found.getCurrentSuperstep
-    }, 0))
+    localize(configuration, taskOperator.task)
+    settingForTask(configuration, taskOperator.task)
+    configureForBarrier(configuration, taskOperator.task, host, port) 
+    firstSync(taskOperator.task.getCurrentSuperstep)
   }
 
   /**
@@ -108,17 +108,12 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
    * @param superstep indicate the curent superstep value.
    */
   //TODO: should the task's superstep be confiured to 0 instead?
-  protected def firstSync(superstep: Long) = task match {
-    case Some(found) => {
-      doIfExists[PeerSyncClient, Unit](syncClient, { (client) => 
-        client.enterBarrier(found.getId.getJobID, found.getId, superstep)
-      }, Unit)
-      doIfExists[PeerSyncClient, Unit](syncClient, { (client) => 
-        client.leaveBarrier(found.getId.getJobID, found.getId, superstep)
-      }, Unit)
-      found.increatmentSuperstep 
-    }
-    case None => 
+  protected def firstSync(superstep: Long) {
+    syncClient.enterBarrier(taskOperator.task.getId.getJobID, 
+                            taskOperator.task.getId, superstep)
+    syncClient.leaveBarrier(taskOperator.task.getId.getJobID, 
+                            taskOperator.task.getId, superstep)
+    taskOperator.task.increatmentSuperstep
   }
 
   /** 
@@ -126,25 +121,24 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
    * <b>task.getConfiguration()</b>.
    * - And add additional classpath to task's configuration.
    * @param conf is the common setting from bsp peer container.
-   * @param task is contains setting for particular job computation.
+   * @param task contains setting for particular job computation.
    */
-  protected def settingForTask(conf: HamaConfiguration, task: Option[Task]) = 
-    doIfExists[Task, Unit](task, { (found) => {
-      val taskConf = found.getConfiguration
-      Operation.get(taskConf).setWorkingDirectory(
-        new Path(Operation.defaultWorkingDirectory(taskConf))
-      )
-      val libjars = CacheService.moveJarsAndGetClasspath(conf) 
-      libjars match {
-        case null => LOG.warning("No jars to be included for "+found.getId)
-        case _ => {
-          LOG.info("Jars to be included in classpath are "+
-                   libjars.mkString(", "))
-          taskConf.setClassLoader(new URLClassLoader(libjars, 
-                                                     taskConf.getClassLoader))
-        }
-      } 
-    }}, Unit)
+  protected def settingForTask(conf: HamaConfiguration, task: Task) = {
+    val taskConf = task.getConfiguration
+    Operation.get(taskConf).setWorkingDirectory(
+      new Path(Operation.defaultWorkingDirectory(taskConf))
+    )
+    val libjars = CacheService.moveJarsAndGetClasspath(conf) 
+    libjars match {
+      case null => LOG.warning("No jars to be included for "+task.getId)
+      case _ => {
+        LOG.info("Jars to be included in classpath are "+
+                 libjars.mkString(", "))
+        taskConf.setClassLoader(new URLClassLoader(libjars, 
+                                                   taskConf.getClassLoader))
+      }
+    } 
+  }
 
   /**
    * Setup io service for a specific task.
@@ -166,7 +160,7 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
    * Copy necessary files to local (file) system so to speed up computation.
    * @param conf should contain related cache files if any.
    */
-  protected def localize(conf: HamaConfiguration, task: Option[Task]) = 
+  protected def localize(conf: HamaConfiguration, task: Task) = 
     CacheService.moveCacheToLocal(conf)
 
   /**
@@ -183,37 +177,27 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
   //override def getIO[I, O](): IO[I, O] = this.io.asInstanceOf[IO[I, O]]
 
   @throws(classOf[IOException])
-  override def send(peerName: String, msg: Writable) = messenger match {
-    case Some(found) => found.send(peerName, msg.asInstanceOf[Writable])
-    case None =>
-  }
+  override def send(peerName: String, msg: Writable) = 
+    messenger.send(peerName, msg.asInstanceOf[Writable])
 
   override def getCurrentMessage(): Writable = 
-    doIfExists[MessageManager[Writable], Writable](messenger, { (mgr) =>
-      mgr.getCurrentMessage.asInstanceOf[Writable]
-    }, null.asInstanceOf[Writable])
-    
+    messenger.getCurrentMessage.asInstanceOf[Writable]
 
-  override def getNumCurrentMessages(): Int = 
-    doIfExists[MessageManager[Writable], Int](messenger, { (mgr) =>
-      mgr.getNumCurrentMessages
-    }, 0)
+  override def getNumCurrentMessages(): Int = messenger.getNumCurrentMessages
 
   @throws(classOf[SyncException])
-  protected def enterBarrier() = doIfExists[Task, Unit](task, { (found) => 
-    doIfExists[PeerSyncClient, Unit](syncClient, { (client) => 
-      client.enterBarrier(found.getId.getJobID, found.getId, 
-                          found.getCurrentSuperstep)
-    }, Unit) 
-  }, Unit)
+  protected def enterBarrier() { 
+    val found = taskOperator.task
+    syncClient.enterBarrier(found.getId.getJobID, found.getId, 
+                            found.getCurrentSuperstep)
+  }
 
   @throws(classOf[SyncException])
-  protected def leaveBarrier() = doIfExists[Task, Unit](task, { (found) => 
-    doIfExists[PeerSyncClient, Unit](syncClient, { (client) => 
-      client.leaveBarrier(found.getId.getJobID, found.getId,
-                          found.getCurrentSuperstep)
-    }, Unit)
-  }, Unit)
+  protected def leaveBarrier() {
+    val found = taskOperator.task
+    syncClient.leaveBarrier(found.getId.getJobID, found.getId,
+                            found.getCurrentSuperstep)
+  }
 
   protected def doTransfer(peer: ProxyInfo, 
                            bundle: BSPMessageBundle[Writable]): Try[Boolean] = 
@@ -221,95 +205,59 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
 
   protected def checkThenTransfer(peer: ProxyInfo, 
                                   bundle: BSPMessageBundle[Writable]): Boolean =
-       messenger match { 
-    case Some(found) => {
-      found.transfer(peer, bundle)
-      true
-    }
-    case None => false
-  }
-
-  // TODO: need more concise expression. perhaps refactor interface. return java iterator with entry containing peer and bundle looks ugly.
-  protected def getBundles(messenger: Option[MessageManager[Writable]]) = 
-    doIfExists[MessageManager[Writable], java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[Writable]]]](messenger, { (mgr) => mgr.getOutgoingBundles }, null.asInstanceOf[java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[Writable]]]])
+    { messenger.transfer(peer, bundle); true }
 
   @throws(classOf[IOException])
   override def sync() {
-    doIfExists[Task, Unit](task, {(found) => found.transitToSync }, Unit)
+    taskOperator.task.transitToSync 
     val pack = nextPack(conf)
-    val it = getBundles(messenger)
-
-    it match {
-      case null =>
-        throw new IllegalStateException("MessageManager's outgoing bundles is "+
-                                        "null!")
-      case _ => {
-        asScalaIterator(it).foreach( entry => {
-          val peer = entry.getKey
-          val bundle = entry.getValue
-          it.remove 
-          savePeerBundle(pack, doIfExists[Task, String](task, { (found) => 
-            found.getId.toString
-          }, null.asInstanceOf[String]), getSuperstepCount, peer, bundle)
-          doTransfer(peer, bundle) match {
-            case Success(result) => LOG.debug("Successfully transfer messages!")
-            case Failure(cause) => LOG.error("Fail transferring messages due "+
-                                             "to {}", cause)
-          }
-        })
-        //noMoreBundle(pack, getTask.getId.toString, getSuperstepCount)
+    val it = messenger.getOutgoingBundles 
+    asScalaIterator(it).foreach( entry => {
+      val peer = entry.getKey
+      val bundle = entry.getValue
+      it.remove 
+      savePeerBundle(pack, taskOperator.task.getId.toString,
+                     getSuperstepCount, peer, bundle)
+      doTransfer(peer, bundle) match {
+        case Success(result) => LOG.debug("Successfully transfer messages!")
+        case Failure(cause) => LOG.error("Fail transferring messages due "+
+                                         "to {}", cause)
       }
-    }
+    })
+    //noMoreBundle(pack, getTask.getId.toString, getSuperstepCount)
      
     enterBarrier()
     clear()
     saveSuperstep(pack)
     leaveBarrier()
     // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
-    doIfExists[Task, Unit](task, { (found) => 
-      found.increatmentSuperstep 
-    }, Unit)
+    taskOperator.task.increatmentSuperstep 
   } 
   
-  override def getSuperstepCount(): Long = 
-    doIfExists[Task, Long](task, { (found) => found.getCurrentSuperstep }, 0)
+  override def getSuperstepCount(): Long = taskOperator.task.getCurrentSuperstep
 
-  private def initPeers(): Option[Array[String]] = 
-    doIfExists[Task, Option[Array[String]]](task, { (found) =>
-      doIfExists[PeerSyncClient, Option[Array[String]]](syncClient, { (client)=>
-        Some(client.getAllPeerNames(found.getId))
-      }, Some(Array[String]()))
-    }, Some(Array[String]()))
+  private def initPeers(): Array[String] = 
+    syncClient.getAllPeerNames(taskOperator.task.getId)
 
-  override def getPeerName(): String = 
-    doIfExists[PeerSyncClient, String](syncClient, { (client) => 
-      client.getPeerName
-    }, "")
+  override def getPeerName(): String = syncClient.getPeerName
 
   override def getPeerName(index: Int): String = initPeers match {
-    case Some(found) => found(index)
-    case None => null
+    case null => null
+    case _=> initPeers()(index)
   }
 
-  override def getPeerIndex(): Int = doIfExists[Task, Int](task, { (found) => {
-    found.getId.getTaskID.getId 
-  }}, -1)
+  override def getPeerIndex(): Int = taskOperator.task.getId.getTaskID.getId 
 
-  override def getAllPeerNames(): Array[String] = initPeers.getOrElse(null)
+  override def getAllPeerNames(): Array[String] = initPeers
 
   override def getNumPeers(): Int = initPeers match {
-    case Some(found) => found.length
-    case None => 0
+    case null => 0 
+    case _=> initPeers.length
   }
 
-  override def clear() = doIfExists[MessageManager[Writable], Unit](
-    messenger, { (mgr) => mgr.clearOutgoingMessages }, Unit
-  )
+  override def clear() = messenger.clearOutgoingMessages 
 
-  override def getTaskAttemptId(): TaskAttemptID = 
-    doIfExists[Task, TaskAttemptID](task, { (found) => 
-      found.getId 
-    }, null.asInstanceOf[TaskAttemptID])
+  override def getTaskAttemptId(): TaskAttemptID = taskOperator.task.getId 
 
   /**
    * This is called after {@link BSP#bsp} finishs its execution in the end.
@@ -318,12 +266,8 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
    // TODO: close all operations, including io/ message/ sync/ local files in cache, etc.
   protected[v2] def close() = {
     clear 
-    doIfExists[PeerSyncClient, Unit](syncClient, { (client) => 
-      client.close 
-    }, Unit)
-    doIfExists[MessageManager[Writable], Unit](messenger, { (mgr) => 
-      mgr.close
-    }, Unit)
+    syncClient.close 
+    messenger.close
   }
 
 }

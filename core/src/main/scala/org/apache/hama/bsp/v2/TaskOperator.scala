@@ -19,20 +19,37 @@ package org.apache.hama.bsp.v2
 
 import org.apache.hama.bsp.Counters
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.util.Utils._
 
-protected[v2] case class TaskWithStats(task: Option[Task], 
-                                       counters: Option[Counters]) 
+protected[v2] case class TaskWithStats(task: Task, counters: Counters) 
 
-trait TaskAware {
+object TaskOperator {
+
+  def apply(task: Task): TaskOperator = task match {
+    case null => throw new IllegalArgumentException("Task is missing!")
+    case _=> new TaskOperator(TaskWithStats(task, new Counters))
+  }
+}
+
+class TaskOperator(taskWithStats: TaskWithStats) {
 
   /**
    * Beause {@link Task} is shared, change task value here would affect task
    * as the same instance somewhere else e.g. SuperstepBSP, BSPPeerContainer.
+  protected[v2] var taskWithStats = TaskWithStats(None, new Counters)
    */
-  protected[v2] var taskWithStats: TaskWithStats = TaskWithStats(None, None)
 
-  def task(): Option[Task] = taskWithStats.task
+  //def bind(aTask: Task) = taskWithStats = TaskWithStats(aTask, counters)
 
-  def counters(): Option[Counters] = taskWithStats.counters
+  def task(): Task = taskWithStats.task
 
+  def counters(): Counters = taskWithStats.counters
+
+/*
+  def whenFound[A <: Any](f: (Task) => A, default: A): A = 
+    doIfExists[Task, A](task, { (found) => f(found) }, default)
+
+  def whenFound(f: (Task) => Unit) = 
+    doIfExists[Task, Unit](task, { (found) => f(found) }, Unit)
+*/
 }
