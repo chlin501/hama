@@ -41,28 +41,10 @@ import scala.util.Try
 protected trait SuperstepBSP extends BSP 
                              with Agent 
                              with TaskLog {
-                             //with Configurable {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
   protected[v2] var operator: TaskOperator = _
-
-/*
-  protected[v2] var task: Option[Task] = None
-
-  protected[v2] def setTask(aTask: Task) = this.task = Option(aTask)
-*/
-  /**
-   * This is configuration for a specific task. 
-  protected var taskConf = new HamaConfiguration
-
-  override def setConf(conf: Configuration) = conf match {
-    case null => 
-    case _ => this.taskConf = conf.asInstanceOf[HamaConfiguration]
-  }
-
-  override def getConf(): Configuration = this.taskConf 
-   */
 
   /**
    * This function returns common configuration from BSPPeer.
@@ -94,12 +76,6 @@ protected trait SuperstepBSP extends BSP
   protected def classWithLoader(className: String): Class[_] = 
     Class.forName(className, true, 
                   operator.task.getConfiguration.getClassLoader)
-    
-/*
-    Class.forName(className, true, operator.whenFound[ClassLoader]({ (found) =>
-      found.getConfiguration.getClassLoader
-    }, null.asInstanceOf[ClassLoader]))
-*/
 
   protected def instantiate(className: String, peer: BSPPeer): Try[Superstep] = 
     Try(ReflectionUtils.newInstance(classWithLoader(className), 
@@ -155,21 +131,7 @@ protected trait SuperstepBSP extends BSP
     LOG.debug("Checkpointer "+ckpt.path.name+" is created!")
     Some(ckpt)
   }
-    
-/*
-    operator.whenFound[Option[ActorRef]]({ (found) => {
-      val superstepCount = peer.getSuperstepCount
-      val taskAttemptId = found.getId.toString
-      val actorName = "checkpoint-"+taskAttemptId+"-"+superstepCount
-      val ckpt = spawn(actorName, classOf[Checkpointer], found.getConfiguration,
-                       taskAttemptId, superstepCount)
-      LOG.debug("Checkpointer "+ckpt.path.name+" is created!")
-      Some(ckpt)
-    }}, None)
-*/
-    
 
-  // TODO: move to checkpointer receiver?
   protected[v2] def prepareForCheckpoint(peer: BSPPeer, superstep: Superstep): 
     Option[ActorRef] = isCheckpointEnabled(commonConf(peer)) match {
       case true => {

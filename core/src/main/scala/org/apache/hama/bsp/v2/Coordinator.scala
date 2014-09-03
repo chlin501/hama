@@ -65,13 +65,9 @@ import scala.util.Failure
 // need to find an independent way to update those info. 
 class Coordinator extends BSPPeer with CheckpointerReceiver 
                                   with Checkpointable 
-                                  //with TaskAware 
                                   with Messenger 
                                   with BarrierClient {
 
-  /* services for a particular v2.Task. */
-  //protected var messenger: Option[MessageManager[Writable]] = None // TODO: move to messengr trait
-  //protected var syncClient: Option[PeerSyncClient] = None // TODO: move to barrier client trait
   /* This store common configuration */
   protected var conf: HamaConfiguration = new HamaConfiguration
   protected var taskOperator: TaskOperator = _
@@ -89,10 +85,8 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
    *             from conf provided by {@link Container}.
    */
   protected[v2] def configureFor(commonConf: HamaConfiguration, 
-                                 //bspTask: Task, 
                                  operator: TaskOperator,
                                  peerMessenger: ActorRef) {
-    //taskWithStats = TaskWithStats(Some(bspTask), Some(new Counters()))
     taskOperator = operator
     this.conf = commonConf;
     configureForMessenger(configuration, taskOperator.task, peerMessenger) 

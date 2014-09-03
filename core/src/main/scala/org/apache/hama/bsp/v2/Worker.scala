@@ -68,9 +68,7 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
 
   protected def doConfigFor(aTask: Task) {
     operator = TaskOperator(aTask)
-    //setTask(aTask)
     initializeLog(aTask.getId)
-    //setConf(aTask.getConfiguration)
     LOG.info("Configure this worker to task attempt id {}", 
              aTask.getId.toString)
     peer.configureFor(conf, operator, peerMessenger)
@@ -154,8 +152,6 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
    */
   def close: Receive = {
     case Close => {
-      //doIfExists[Task, Unit](task, { (found) => closeLog(found.getId) }, Unit)
-      //operator.whenFound({ (found) => closeLog(found.getId) })
       closeLog(operator.task.getId)
       close
     }
