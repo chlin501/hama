@@ -86,9 +86,9 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
    *             from conf provided by {@link Container}.
    */
   protected[v2] def configureFor(commonConf: HamaConfiguration, 
-                                 operator: TaskOperator,
+                                 operator: Option[TaskOperator],
                                  peerMessenger: ActorRef) {
-    taskOperator = Some(operator)
+    taskOperator = operator
     this.conf = commonConf;
     TaskOperator.execute(taskOperator, { (task) =>
       configureForMessenger(configuration, task, peerMessenger) 

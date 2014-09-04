@@ -67,11 +67,11 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
   }
 
   protected def doConfigFor(aTask: Task) {
-    operator = TaskOperator(aTask)
+    taskOperator = Some(TaskOperator(aTask))
     initializeLog(aTask.getId)
     LOG.info("Configure this worker to task attempt id {}", 
              aTask.getId.toString)
-    peer.configureFor(conf, operator, peerMessenger)
+    peer.configureFor(conf, taskOperator, peerMessenger)
   }
 
   /**
@@ -152,7 +152,7 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
    */
   def close: Receive = {
     case Close => {
-      operator.execute({ (value) => closeLog(value.getId) })
+      TaskOperator.execute(taskOperator, { (task) => closeLog(task.getId) })
       close
     }
   }

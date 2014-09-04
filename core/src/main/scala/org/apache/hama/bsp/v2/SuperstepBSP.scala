@@ -44,7 +44,7 @@ protected trait SuperstepBSP extends BSP
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
-  protected[v2] var operator: TaskOperator = _
+  protected[v2] var taskOperator: Option[TaskOperator] = None 
 
   /**
    * This function returns common configuration from BSPPeer.
@@ -74,7 +74,7 @@ protected trait SuperstepBSP extends BSP
   }
 
   protected def classWithLoader(className: String): Class[_] = 
-    operator.getThenExecute[Class[_]]({ (value) => 
+    TaskOperator.execute[Class[_]](taskOperator, { (value) => 
       Class.forName(className, true, value.getConfiguration.getClassLoader)
     }, null.asInstanceOf[Class[_]])
 
@@ -123,7 +123,7 @@ protected trait SuperstepBSP extends BSP
   }
 
   protected def createCheckpointer(peer: BSPPeer): Option[ActorRef] = 
-    operator.getThenExecute[Option[ActorRef]]({ (value) => {
+    TaskOperator.execute[Option[ActorRef]](taskOperator, { (value) => {
       val superstepCount = peer.getSuperstepCount
       val actorName = "checkpoint-"+value.getId.toString+"-"+superstepCount
       val ckpt = spawn(actorName, classOf[Checkpointer], value.getConfiguration,
