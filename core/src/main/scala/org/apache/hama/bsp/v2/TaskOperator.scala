@@ -31,6 +31,15 @@ protected[v2] case class TaskWithStats(task: Option[Task], counters: Counters)
 
 object TaskOperator {
 
+  def execute[A <: Any](op: Option[TaskOperator], 
+                        f: (Task) => A, default: A): A  =
+    op.map({ (taskOp) => taskOp }).map({ (taskOp) =>
+      taskOp.getThenExecute[A]({ (task) => f(task) }, default)
+    }).getOrElse(default)
+
+  def execute(op: Option[TaskOperator], f: (Task) => Unit) =
+    execute[Unit](op, { (task) => f(task) }, Unit)
+
   /**
    * Constructor for task operation.
    * @param task is delivered from {@link TaskManager}.
