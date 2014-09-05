@@ -74,8 +74,8 @@ protected trait SuperstepBSP extends BSP
   }
 
   protected def classWithLoader(className: String): Class[_] = 
-    TaskOperator.execute[Class[_]](taskOperator, { (value) => 
-      Class.forName(className, true, value.getConfiguration.getClassLoader)
+    TaskOperator.execute[Class[_]](taskOperator, { (task) => 
+      Class.forName(className, true, task.getConfiguration.getClassLoader)
     }, null.asInstanceOf[Class[_]])
 
   protected def instantiate(className: String, peer: BSPPeer): Try[Superstep] = 
@@ -123,11 +123,11 @@ protected trait SuperstepBSP extends BSP
   }
 
   protected def createCheckpointer(peer: BSPPeer): Option[ActorRef] = 
-    TaskOperator.execute[Option[ActorRef]](taskOperator, { (value) => {
+    TaskOperator.execute[Option[ActorRef]](taskOperator, { (task) => {
       val superstepCount = peer.getSuperstepCount
-      val actorName = "checkpoint-"+value.getId.toString+"-"+superstepCount
-      val ckpt = spawn(actorName, classOf[Checkpointer], value.getConfiguration,
-                       value.getId.toString, superstepCount)
+      val actorName = "checkpoint-"+task.getId.toString+"-"+superstepCount
+      val ckpt = spawn(actorName, classOf[Checkpointer], task.getConfiguration,
+                       task.getId.toString, superstepCount)
       LOG.debug("Checkpointer "+ckpt.path.name+" is created!")
       Some(ckpt)
     }}, None)

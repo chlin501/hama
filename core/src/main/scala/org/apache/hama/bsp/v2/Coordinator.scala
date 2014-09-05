@@ -69,7 +69,6 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
 
   /* This store common configuration */
   protected var conf: HamaConfiguration = new HamaConfiguration
-  //protected var taskOperator: TaskOperator = _
 
   protected var taskOperator: Option[TaskOperator] = None
 
