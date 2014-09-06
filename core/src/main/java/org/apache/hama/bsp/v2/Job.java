@@ -37,6 +37,16 @@ import org.apache.hama.io.PartitionedSplit;
 /**
  * Read only informaion for a job.
  */
+//       Note: `Recordable' to produce metrics for reporting to monitor:
+//          - lastCheckpoint: the latest complete checkpoint. complete means
+//                            all checkpoints succeed!
+//          - state 
+//          - progress (streaming do not have progress for it's an infinite run)
+//          - setupProgress: tasks complete setup/ total # tasks 
+//          - cleanupProgress: tasks complete cleanup/ total # tasks
+//          - startTime: the earliest startTime of all tasks.
+//          - finishTime: the latest finishTime of all tasks.
+//          - superstepCount: current superstep count.
 public final class Job implements Writable {
 
   public static final Log LOG = LogFactory.getLog(Job.class);
@@ -47,7 +57,7 @@ public final class Job implements Writable {
   private BSPJobID id;
 
   /* The lastest superstep was successfully snapshotted. */
-  private IntWritable lastCheckpoint = new IntWritable(0);  // only a record.
+  private IntWritable lastCheckpoint = new IntWritable(0);  
 
   /* Denote current job state. */
   private State state = State.PREP;
@@ -89,7 +99,7 @@ public final class Job implements Writable {
       String stateName = null;
       switch (this) {
         case PREP:
-          stateName = "SETUP";
+          stateName = "PREP";
           break;  
         case RUNNING:
           stateName = "RUNNING";
@@ -110,8 +120,8 @@ public final class Job implements Writable {
   
   public static final class Builder {
 
-    private BSPJobID id;
-    private HamaConfiguration conf = new HamaConfiguration();
+    private BSPJobID id; 
+    private HamaConfiguration conf = new HamaConfiguration(); 
     private int lastCheckpoint;
     private State state = State.PREP;
     private long progress;
@@ -121,6 +131,34 @@ public final class Job implements Writable {
     private long finishTime;
     private long superstepCount;  
     private TaskTable taskTable;
+
+    /**
+     * This provides a way to create a default Job instance.
+     */
+    public Builder() { }
+
+    /**
+     * Create a new instance based on old Job instance's values.
+     * User can override old values with related set methods.
+     * @param old instance of a Job object.
+     */
+    public Builder(final Job old) {
+      if(null == old) 
+        throw new IllegalArgumentException("This constructor only accepts "+
+                                           "creation based on old instance's "+
+                                           "values.");
+      this.id = old.getId();
+      this.conf = old.getConfiguration(); 
+      this.lastCheckpoint = old.getLastCheckpoint();
+      this.state = old.getState();
+      this.progress = old.getProgress();
+      this.setupProgress = old.getSetupProgress();
+      this.cleanupProgress = old.getCleanupProgress();
+      this.startTime = old.getStartTime();
+      this.finishTime = old.getFinishTime();
+      this.superstepCount = old.getSuperstepCount();
+      this.taskTable = old.getTasks();
+    }
 
     public Builder setId(final BSPJobID id) {
       this.id = id;
@@ -316,6 +354,7 @@ public final class Job implements Writable {
                      conf,
                      taskTable);
     }
+
   }
 
   Job() {} // for Writable
@@ -471,7 +510,7 @@ public final class Job implements Writable {
     return this.conf;
   }
 
-  public TaskTable getTasks() { // TODO: consider to hide taskTable ref.
+  protected TaskTable getTasks() { 
     return this.taskTable;
   }
 

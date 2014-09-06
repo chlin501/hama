@@ -144,14 +144,31 @@ public final class Task implements Writable { // TODO: make Task immutable?
 
     private TaskAttemptID id;
     private HamaConfiguration conf = new HamaConfiguration();
-    private long startTime = 0;
-    private long finishTime = 0;
+    private long startTime;
+    private long finishTime;
     private PartitionedSplit split = null;
-    private int currentSuperstep = 1;
+    private int currentSuperstep;
     private Phase phase = Phase.SETUP;
     private State state = State.WAITING;
     private boolean completed = false;
     private Marker marker = new Marker(false, ""); 
+
+    public Builder() { }
+ 
+    public Builder(final Task old) {
+      if(null == old) 
+        throw new IllegalArgumentException("Previous task not found!");
+      this.id = old.getId();
+      this.conf = old.getConfiguration();
+      this.startTime = old.getStartTime();
+      this.finishTime = old.getFinishTime();
+      this.split = old.getSplit(); 
+      this.currentSuperstep = old.getCurrentSuperstep(); 
+      this.phase = old.getPhase();
+      this.state = old.getState();
+      this.completed = old.isCompleted();
+      this.marker = old.marker;
+    }
 
     public Builder setId(final TaskAttemptID id) {
       this.id = id;
@@ -255,7 +272,7 @@ public final class Task implements Writable { // TODO: make Task immutable?
     if(null == this.split)  
       LOG.warn("Split for task "+this.id.toString()+" is null. This might "+
                "indicate no input is required.");
-    if(0 >= currentSuperstep)
+    if(0 > currentSuperstep)
       throw new IllegalArgumentException("Invalid superstep "+currentSuperstep+
                                          " value!");
     this.currentSuperstep = new IntWritable(currentSuperstep);
