@@ -44,9 +44,10 @@ public class TestJob extends TestCase {
   final Log LOG = LogFactory.getLog(TestJob.class);
   final int numBSPTasks = 1024;
   final int maxTaskAttempts = 4;
+  final HamaConfiguration conf = new HamaConfiguration();
 
-  BSPJobID createJobId() throws Exception {
-    return IDCreator.newBSPJobID().withId("test").withId(7).build();
+  BSPJobID createJobId(final String prefix, final int id) throws Exception {
+    return IDCreator.newBSPJobID().withId(prefix).withId(id).build();
   }
 
   byte[] serialize(final Job job) throws Exception {
@@ -72,33 +73,58 @@ public class TestJob extends TestCase {
     }
     return job;
   }
+  
+  public Job createJob(final Job old, final BSPJobID jobId, 
+                       final HamaConfiguration conf, final Job.State state,
+                       final long startTime, final long finishTime) 
+      throws Exception {
+
+    final Job.Builder builder = (null == old)? new Job.Builder(): 
+                                               new Job.Builder(old);
+    return builder.setId(jobId)
+                  .setConf(conf)
+                  .setName("test-job-serilaization")
+                  .setUser("jeremy")
+                  .addLocalJobFile("/path/to/job.xml")
+                  .setLocalJarFile("/path/to/job.jar")
+                  .setNumBSPTasks(numBSPTasks)
+                  .setMaster("192.168.2.101")
+                  .setMaxTaskAttempts(maxTaskAttempts)
+                  .setInputPath("hdfs:///home/user/input")
+                  .setState(state)
+                  .setProgress(34L)
+                  .setSetupProgress(100L)
+                  .setCleanupProgress(0L)
+                  .setStartTime(startTime)
+                  .setFinishTime(finishTime)
+                  .setSuperstepCount(1947L)
+                  .withTaskTable()
+                  .build();
+  }
+
+  public void testAttributeOverriden() throws Exception {
+    final BSPJobID jobId = createJobId("test", 2);
+    final Job.State state = Job.State.RUNNING;
+    final long startTime = System.currentTimeMillis();
+    final Job old = createJob(null, jobId, conf, state, startTime, -1);
+    assertNotNull("Job can't be null!", old);
+    final Job.State newState = Job.State.SUCCEEDED;
+    final long finishTime = startTime + (1000*60*60*8);
+    final Job newJob = createJob(old, jobId, conf, newState, startTime, 
+                                 finishTime);
+    assertNotNull("New job can't be null!", newJob);
+    assertEquals("Finish time should be "+finishTime, 
+                 finishTime, newJob.getFinishTime());
+    assertEquals("State should be successed!", newState, newJob.getState());
+  }
 
   public void testSerialization() throws Exception {
-    final BSPJobID jobId = createJobId(); 
-
+    final BSPJobID jobId = createJobId("test", 7); 
+    final Job.State state = Job.State.RUNNING;
     final long startTime = System.currentTimeMillis();
     final long finishTime = -1;
-    final Job.State state = Job.State.RUNNING;
-    final HamaConfiguration conf = new HamaConfiguration();
-    final Job job = new Job.Builder().setId(jobId)
-                                     .setConf(conf)
-                                     .setName("test-job-serilaization")
-                                     .setUser("jeremy")
-                                     .addLocalJobFile("/path/to/job.xml")
-                                     .setLocalJarFile("/path/to/job.jar")
-                                     .setNumBSPTasks(numBSPTasks)
-                                     .setMaster("192.87.106.229")
-                                     .setMaxTaskAttempts(maxTaskAttempts)
-                                     .setInputPath("hdfs:///home/user/input")
-                                     .setState(state)
-                                     .setProgress(34L)
-                                     .setSetupProgress(100L)
-                                     .setCleanupProgress(0L)
-                                     .setStartTime(startTime)
-                                     .setFinishTime(finishTime)
-                                     .setSuperstepCount(1947L)
-                                     .withTaskTable()
-                                     .build();
+    
+    final Job job = createJob(null, jobId, conf, state, startTime, finishTime);
     final byte[] bytes = serialize(job);
     assertNotNull("Job byte array can't be null.", bytes);
     final Job forVerification = deserialize(bytes);
@@ -132,7 +158,7 @@ public class TestJob extends TestCase {
 
     LOG.info("Restored master value is "+forVerification.getMaster());
     assertEquals("Master should be the same.", 
-                 forVerification.getMaster(), "192.87.106.229");
+                 forVerification.getMaster(), "192.168.2.101");
 
     LOG.info("MaxAttemptTasks is "+forVerification.getMaxTaskAttempts());
     assertEquals("MaxAttemptTasks should be the same.", 
