@@ -32,12 +32,17 @@ import org.apache.hadoop.io.WritableUtils;
 import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.io.PartitionedSplit;
+import org.apache.hama.monitor.Recordable;
+import org.apache.hama.monitor.metrics.MetricsRecord;
 
 /**
  * A view to task information. 
- * Task building should be done through factory method. 
+ * Task building should be done through Task.Builder method. 
+ * Builder constructor provides a way to create a new Task instance based from
+ * old one provided.
+ * This class can also produce metrics stats for monitor.
  */
-public final class Task implements Writable { // TODO: make Task immutable?
+public final class Task implements Writable { 
 
   final Log LOG = LogFactory.getLog(Task.class);
 
@@ -454,7 +459,7 @@ public final class Task implements Writable { // TODO: make Task immutable?
     } else {
       this.split = null;
     } 
-    this.currentSuperstep = new IntWritable(1);
+    this.currentSuperstep = new IntWritable(0);
     this.currentSuperstep.readFields(in);
     this.state = WritableUtils.readEnum(in, State.class);
     this.phase = WritableUtils.readEnum(in, Phase.class);
@@ -497,5 +502,7 @@ public final class Task implements Writable { // TODO: make Task immutable?
                    marker.toString() + "," +
                    getTotalBSPTasks()+")";
   }
+
+  
 }
 
