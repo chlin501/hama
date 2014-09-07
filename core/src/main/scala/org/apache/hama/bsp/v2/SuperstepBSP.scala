@@ -58,6 +58,8 @@ protected trait SuperstepBSP extends BSP
   @throws(classOf[IOException])
   @throws(classOf[SyncException])
   override def setup(peer: BSPPeer) { 
+    TaskOperator.execute(taskOperator, { (task) => task.transitToSetup })
+    TaskOperator.execute(taskOperator, { (task) => task.markAsRunning })
     val classes = commonConf(peer).get("hama.supersteps.class")
     LOG.info("Supersteps to be instantiated include {}", classes)
     val classNames = classes.split(",")
@@ -106,6 +108,7 @@ protected trait SuperstepBSP extends BSP
       case Some(found) => {
         val superstep = found._2
         superstep.setVariables(variables)
+        TaskOperator.execute(taskOperator, { (task) => task.transitToCompute })
         superstep.compute(peer)
         val next = superstep.next
         next match {
@@ -158,8 +161,10 @@ protected trait SuperstepBSP extends BSP
 
   @throws(classOf[IOException])
   override def cleanup(peer: BSPPeer) { 
+    TaskOperator.execute(taskOperator, { (task) => task.transitToCleanup })
     supersteps.foreach{ case (key, value) => {
       value.cleanup(peer)  
     }}
+    TaskOperator.execute(taskOperator, { (task) => task.markAsSucceed })
   }
 }
