@@ -42,7 +42,7 @@ import org.apache.hama.monitor.metrics.MetricsRecord;
  * old one provided.
  * This class can also produce metrics stats for monitor.
  */
-public final class Task implements Writable { 
+public final class Task implements Writable, Recordable { 
 
   final Log LOG = LogFactory.getLog(Task.class);
 
@@ -503,6 +503,11 @@ public final class Task implements Writable {
                    getTotalBSPTasks()+")";
   }
 
+  @Override
+  public MetricsRecord record() {
+    //MetricsRecord record = new MetricsRecord();
+    return null;
+  }
   
 }
 

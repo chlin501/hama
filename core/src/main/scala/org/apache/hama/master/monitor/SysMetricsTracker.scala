@@ -33,7 +33,7 @@ class SysMetricsTracker(conf: HamaConfiguration) extends LocalService {
     case stat: MetricsRecord => {
       sysMetricsStat ++= Set(stat)
       LOG.debug("{} reports stat {}. Now there are {} records.", 
-                stat.getGroomName, stat, sysMetricsStat.size)
+                stat.getServerName, stat, sysMetricsStat.size)
     }
   }
 

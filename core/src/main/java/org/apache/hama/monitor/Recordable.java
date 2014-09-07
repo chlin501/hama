@@ -25,9 +25,9 @@ import org.apache.hama.monitor.metrics.MetricsRecord;
 public interface Recordable {
 
   /**
-   * Produce {@link MetricsRecord} for reporting statistics.
+   * Record stat data as {@link MetricsRecord} for reporting.
    * @return MetricsRecord contains related stats data.
    */
-  MetricsRecord getRecord();
+  MetricsRecord record();
 
 }

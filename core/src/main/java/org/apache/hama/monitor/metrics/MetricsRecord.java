@@ -32,30 +32,30 @@ import org.apache.hadoop.io.Writable;
  */
 public final class MetricsRecord implements Writable {
 
-  private String groomName;
-  private String name, description;
+  private String serverName;
+  private String category, description;
   private List<Metric> metrics = new ArrayList<Metric>();
 
   public MetricsRecord() { 
-    this("groom_0.0.0.0_50000", "default");
+    this("server_0.0.0.0_50000", "default");
   }
 
-  public MetricsRecord(String groomName, String name) {
-    this(groomName, name, name + " record.");
+  public MetricsRecord(String serverName, String category) {
+    this(serverName, category, category + " record.");
   }
 
-  public MetricsRecord(String groomName, String name, String description) {
-    this.groomName = groomName;
-    this.name = name;
+  public MetricsRecord(String serverName, String category, String description) {
+    this.serverName = serverName;
+    this.category = category;
     this.description = description;
   }
 
-  public final String getGroomName() {
-    return groomName;
+  public final String getServerName() {
+    return serverName;
   }
 
-  public final String getName() {
-    return name;
+  public final String getCategory() {
+    return category;
   }
 
   public final String getDescription() {
@@ -76,8 +76,8 @@ public final class MetricsRecord implements Writable {
 
   @Override
   public void write(DataOutput out) throws IOException {
-    Text.writeString(out, this.groomName);
-    Text.writeString(out, this.name);
+    Text.writeString(out, this.serverName);
+    Text.writeString(out, this.category);
     Text.writeString(out, this.description);
     out.writeInt(metrics.size());
     for (Metric metric : metrics) {
@@ -87,8 +87,8 @@ public final class MetricsRecord implements Writable {
        
   @Override
   public void readFields(DataInput in) throws IOException {
-    this.groomName = Text.readString(in);
-    this.name = Text.readString(in);
+    this.serverName = Text.readString(in);
+    this.category = Text.readString(in);
     this.description = Text.readString(in);
     metrics.clear();
     final int numOfRecords = in.readInt();
@@ -101,8 +101,9 @@ public final class MetricsRecord implements Writable {
 
   @Override
   public String toString() {
-    return "groomName:" + groomName + " name: " + name + " description: " +
-           description; 
+    return "MetricsRecord(" + serverName + "," + 
+                              category + "," + 
+                              description+")"; 
   }
 
   @Override 
@@ -114,9 +115,9 @@ public final class MetricsRecord implements Writable {
     }
 
     final MetricsRecord m = (MetricsRecord) obj;
-    if (!getGroomName().equals(m.groomName))
+    if (!getServerName().equals(m.serverName))
       return false;
-    if (!getName().equals(m.name))
+    if (!getCategory().equals(m.category))
       return false;
     if (!getDescription().equals(m.description))
       return false;
@@ -128,8 +129,8 @@ public final class MetricsRecord implements Writable {
   @Override 
   public int hashCode() {
     int result = 17;
-    result = 37 * result + groomName.hashCode(); 
-    result = 37 * result + name.hashCode(); 
+    result = 37 * result + serverName.hashCode(); 
+    result = 37 * result + category.hashCode(); 
     result = 37 * result + description.hashCode();
     return result;
   }

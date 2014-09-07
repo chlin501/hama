@@ -42,7 +42,7 @@ public class TestMetricsRecord extends TestCase {
 
   MetricsRecord createRecord() throws Exception {
     final MetricsRecord record = 
-      new MetricsRecord("groom_0.0.0.0_50000", "jvm", "jvm metrics stat.");
+      new MetricsRecord("server_0.0.0.0_50000", "jvm", "jvm metrics stat.");
 
     final Writable mem = new LongWritable(1024);
     record.add(new Metric("mem", "mem desc.", LongWritable.class, mem));
@@ -85,13 +85,13 @@ public class TestMetricsRecord extends TestCase {
     final MetricsRecord forVerification = deserialize(bytes);
     LOG.info("Restored MetricsRecord is "+forVerification);
     
-    LOG.info("MetricsRecord groomName is "+forVerification.getGroomName());
-    assertEquals("MetricsRecord GroomName should be the same.", 
-                 record.getGroomName(), forVerification.getGroomName());
+    LOG.info("MetricsRecord server name is "+forVerification.getServerName());
+    assertEquals("MetricsRecord server name should be the same.", 
+                 record.getServerName(), forVerification.getServerName());
 
-    LOG.info("MetricsRecord name is "+forVerification.getName());
+    LOG.info("MetricsRecord category is "+forVerification.getCategory());
     assertEquals("MetricsRecord Name should be the same.", 
-                 record.getName(), forVerification.getName());
+                 record.getCategory(), forVerification.getCategory());
 
     LOG.info("MetricsRecord description is "+forVerification.getDescription());
     assertEquals("MetricsRecord Description should be the same.", 
