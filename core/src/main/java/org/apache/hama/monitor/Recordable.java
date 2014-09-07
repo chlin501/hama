@@ -26,8 +26,10 @@ public interface Recordable {
 
   /**
    * Record stat data as {@link MetricsRecord} for reporting.
+   * @param serverName denotes on which server e.g. GroomSever this record is
+   *                   generated.
    * @return MetricsRecord contains related stats data.
    */
-  MetricsRecord record();
+  MetricsRecord record(final String serverName);
 
 }

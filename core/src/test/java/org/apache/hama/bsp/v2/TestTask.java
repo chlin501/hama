@@ -21,6 +21,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.DataOutputStream;
 import java.io.DataInputStream;
+import java.util.List;
 
 import junit.framework.TestCase;
 
@@ -29,7 +30,9 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Writable;
 import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
-
+import org.apache.hama.monitor.metrics.MetricsRecord;
+import org.apache.hama.monitor.metrics.Metric;
+import org.apache.hama.monitor.TaskStat;
 
 /**
  * Test (De)Serialize functions.
@@ -130,48 +133,27 @@ public class TestTask extends TestCase {
                  task.isCompleted(), forVerification.isCompleted());
   }
 
-  /**
-   * Test phase/ state change if correctly configured.
-  public void testPhase() throws Exception {
-    final Task task = createTaskWithDefault(9);
-    assertPhase(task, Task.Phase.SETUP);
-    task.nextPhase();
-    assertPhase(task, Task.Phase.COMPUTE);
-    task.nextPhase();
-    assertPhase(task, Task.Phase.BARRIER_SYNC);
-    task.nextPhase();
-    assertPhase(task, Task.Phase.CLEANUP);
-
-    task.nextPhase();
-    assertPhase(task, Task.Phase.SETUP); // ensure it's circle.
-    task.prevPhase();
-    assertPhase(task, Task.Phase.CLEANUP); // ensure it's circle.
-    task.prevPhase();
-    assertPhase(task, Task.Phase.BARRIER_SYNC); 
-    task.prevPhase();
-    assertPhase(task, Task.Phase.COMPUTE);
-    task.prevPhase();
-    assertPhase(task, Task.Phase.SETUP);
-    task.prevPhase();
-    assertPhase(task, Task.Phase.CLEANUP);
+  public void testRecordable() throws Exception {
+    final Task task = createTaskWithDefault(3);
+    assertNotNull("Task shouldn't be null!", task);
+    final MetricsRecord record = task.record("server_0.0.0.0_500001");
+    assertNotNull("MetricsRecord shouldn't be null!", record);
+    final List<Metric> metrics = record.getMetrics();
+    assertNotNull("Collected metrics shouldn't be null!", metrics);
+    for(final Metric metric: metrics) {
+      LOG.info("Recorded metric is "+metric);
+      final String name = metric.getName();
+      assertEquals("Metric name should be TaskStat", "TaskStat", name);
+      final String desc = metric.getDescription();
+      assertEquals("Metric desc should be 'task stat data.'", 
+                   "task stat data.", desc);
+      final Class<? extends Writable> declared = metric.getDeclared();
+      assertEquals("Metric class should be "+TaskStat.class, 
+                   TaskStat.class, declared);
+      final String ret = "TaskStat(attempt_test_0003_000003_3,0,0,0,"+
+                         "WAITING,SETUP,false)";
+      final Writable value = metric.getValue();
+      assertEquals("Writable string should be "+ret, ret, value.toString());
+    }
   }
-
-  void assertPhase(final Task task, 
-                   final Task.Phase expectedPhase) throws Exception {
-    final Task.Phase actualPhase = task.getPhase();
-    LOG.info("Current phase "+actualPhase);
-    assertNotNull("Phase shoudn't be null!", actualPhase);
-    assertEquals("Initial phase should be "+expectedPhase, 
-                 expectedPhase, actualPhase);
-  }
-
-  void assertState(final Task task, 
-                   final Task.State expectedState) throws Exception {
-    final Task.State actualState = task.getState();
-    LOG.info("Current state "+actualState);
-    assertNotNull("State shoudn't be null!", actualState);
-    assertEquals("Initial State should be "+expectedState, 
-                 expectedState, actualState);
-  }
-   */
 }

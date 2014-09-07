@@ -17,6 +17,7 @@
  */
 package org.apache.hama.monitor;
 
+@Deprecated
 public final class Metric<T> {
 
   private final String name;

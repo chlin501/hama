@@ -29,6 +29,7 @@ import org.apache.hadoop.io.Writable;
 /**
  * Represents a record containing multiple metrics.
  */
+@Deprecated
 public final class MetricsRecord implements Writable {
 
   private final String name, description;

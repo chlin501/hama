@@ -130,16 +130,10 @@ public final class Metric implements Writable {
 
   @Override 
   public String toString() {
-    final StringBuilder builder = new StringBuilder();
-    builder.append("name: " + name +" description: "+ description+" value: ");
-    if(declared.equals(IntWritable.class)) {
-      builder.append(((IntWritable)value).get());
-    } else if(declared.equals(LongWritable.class)) {
-      builder.append(((LongWritable)value).get());
-    } else {
-      builder.append(value);
-    }
-    return builder.toString();
+    return "Metric(" + name + "," + 
+                       description+ "," + 
+                       declared.getName() + "," +
+                       value.toString() + ")";
   }
 
 }

@@ -83,7 +83,7 @@ public final class TaskStat implements Writable {
     return taskPhase;
   }
 
-  public final boolean isComplete() {
+  public final boolean isCompleted() {
     return completed.get();
   }
 
@@ -112,5 +112,16 @@ public final class TaskStat implements Writable {
     this.taskPhase = WritableUtils.readEnum(in, Phase.class);
     this.completed = new BooleanWritable(false);
     this.completed.readFields(in);
+  }
+
+  @Override 
+  public String toString() {
+    return "TaskStat(" + getTaskAttemptId() + "," +
+                         getSuperstep() + "," +
+                         getStartTime() + "," +
+                         getFinishTime() + "," +
+                         getState() + "," +
+                         getPhase() + "," +
+                         isCompleted() + ")";
   }
 }
