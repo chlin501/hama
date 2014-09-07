@@ -21,6 +21,7 @@ import akka.actor.ActorRef
 import java.net.InetAddress
 import org.apache.hadoop.io.IntWritable
 import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.bsp.v2.Task._
 import org.apache.hama.groom.BSPPeerContainer
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLog
@@ -82,6 +83,16 @@ class MockWorker1(conf: HamaConfiguration, container: ActorRef,
       extends Worker(conf, container, peerMessenger, tasklog) {
 
   var captured = Map.empty[String, Superstep] 
+  
+  override def setup(peer: BSPPeer) {
+    super.setup(peer)
+    val phase = TaskOperator.execute[Phase](taskOperator, { (task) => 
+      task.getPhase }, null.asInstanceOf[Phase])
+    tester ! phase 
+    val state = TaskOperator.execute[State](taskOperator, { (task) => 
+      task.getState }, null.asInstanceOf[State])
+    tester ! state  
+  }
 
   override def doExecute(taskAttemptId: String, conf: HamaConfiguration, 
                          taskConf: HamaConfiguration) = {
@@ -170,6 +181,8 @@ class TestWorker extends TestEnv("TestWorker") with JobUtil
      worker ! Execute(task.getId.toString, 
                       testConfiguration, 
                       task.getConfiguration)
+     expect(Phase.SETUP)
+     expect(State.RUNNING)
      worker ! GetCount
      expect(2)
      LOG.info("Done testing BSP Worker!")

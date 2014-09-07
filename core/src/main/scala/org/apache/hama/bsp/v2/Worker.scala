@@ -95,6 +95,7 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
     bsp(peer)
   }
 
+
   /**
    * Dynamically add client jar url to the {@link URLClassLoader}, which will
    * be used for intializing necessary user customized classes. 

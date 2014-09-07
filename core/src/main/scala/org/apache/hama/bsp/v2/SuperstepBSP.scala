@@ -57,7 +57,7 @@ protected trait SuperstepBSP extends BSP
   
   @throws(classOf[IOException])
   @throws(classOf[SyncException])
-  override def setup(peer: BSPPeer) { 
+  override def setup(peer: BSPPeer) {
     TaskOperator.execute(taskOperator, { (task) => task.transitToSetup })
     TaskOperator.execute(taskOperator, { (task) => task.markAsRunning })
     val classes = commonConf(peer).get("hama.supersteps.class")
