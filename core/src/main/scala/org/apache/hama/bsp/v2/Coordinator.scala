@@ -211,16 +211,18 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
   @throws(classOf[IOException])
   override def sync() {
     TaskOperator.execute(taskOperator, { (task) => task.transitToSync })
-    val pack = nextPack(conf)
+    //val pack = nextPack(conf)
     val it = messenger.getOutgoingBundles 
     asScalaIterator(it).foreach( entry => {
       val peer = entry.getKey
       val bundle = entry.getValue
       it.remove 
+/*
       TaskOperator.execute(taskOperator, { (task) => 
         savePeerBundle(pack, task.getId.toString, getSuperstepCount, peer, 
                        bundle)
       })
+*/
       doTransfer(peer, bundle) match {
         case Success(result) => LOG.debug("Successfully transfer messages!")
         case Failure(cause) => LOG.error("Fail transferring messages due "+
@@ -231,7 +233,13 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
      
     enterBarrier()
     clear()
-    saveSuperstep(pack)
+    // TODO: instead of checkpointing outgoing messages with func saveXXXXXX
+    //       We should checkpoint localQueue after clear, which in turns calls
+    //       messenger.clearOutgoingMessages putting all messages to this 
+    //       peer's localQueue.
+    //       so in recovery stage, we can simply obtain checkpointed localQueue 
+    //       messages back w/ worring about other peer.
+    //saveSuperstep(pack)
     leaveBarrier()
     // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
     TaskOperator.execute(taskOperator, { (task) => task.increatmentSuperstep })

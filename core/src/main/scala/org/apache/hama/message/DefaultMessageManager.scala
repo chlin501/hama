@@ -75,6 +75,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
                                            with PeerCommunicator
                                            with CommonLog {
 
+  // TODO: change to Option[...]
   protected var configuration: HamaConfiguration = _
   protected var taskAttemptId: TaskAttemptID = _
   protected var outgoingMessageManager: OutgoingMessageManager[M] = _
@@ -86,12 +87,6 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
    * {@link PeerMessenger} address information.
    */
   protected var currentPeer: Option[ProxyInfo] = None
-
-  /**
-   * This is used for receiving loopback message {@link #loopBackMessages} 
-  protected val loopbackMessageQueue =  
-    new LinkedBlockingQueue[BSPMessageBundle[M]]() 
-   */ 
 
   /**
    * Only for receiving local messages purpose.
@@ -112,14 +107,14 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
         //val bundle = loopbackMessageQueue.take
         val bundle = PeerMessenger.loopbackQueue.take
         if(null == bundle) 
-          throw new RuntimeException("Fail ispatching local messages received.")
+          throw new RuntimeException("Bundle received is null!")
         receiver.loopBackMessages(bundle.asInstanceOf[BSPMessageBundle[M]]) 
       }
       true
     }
   }
 
-  override def communicator(mgr: ActorRef) = peerMessenger = Some(mgr)
+  override def communicator(mgr: ActorRef) = peerMessenger = Option(mgr)
 
   /**
    * Indicate the local peer.
@@ -231,10 +226,10 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
    * function moves all messages from localQueueForNextIteration to localQueue
    * so that bsp peer can obtain messages sent to itself in the next iteration.
    */
-  override def clearOutgoingMessages() {
+  override def clearOutgoingMessages() { // TODO: use f style not if-else
     outgoingMessageManager.clear
     if (configuration.getBoolean("hama.queue.behaviour.persistent", false) && 
-        localQueue.size > 0) { 
+        localQueue.size > 0) {  
       if (localQueue.isMemoryBasedQueue &&
           localQueueForNextIteration.isMemoryBasedQueue) {
         // To reduce the number of element additions

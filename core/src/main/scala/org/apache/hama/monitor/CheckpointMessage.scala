@@ -34,5 +34,19 @@ final case class SaveSuperstep(
   className: String, variables: Map[String, Writable]
 ) extends CheckpointMessage
 
+/**
+ * Pack {@link Checkpointer}, {@link Superstep}'s variables, and next 
+ * {@link Superstep} class for checkpoint process.
+ * Checkpoint process will save the current superstep, e.g. the N-th superstep,
+ * variables and the next (the N+1 th) superstep class. So during recovery, 
+ * (assuming computation fails at the N+1 superstep,) nextSuperstep can be 
+ * applied as the current superstep, and variables can be restored as 
+ * nextSupestep's variables for computation.
+ * @param ckpt is the Checkpointer actor. 
+ * @param variable is a {@link scala.collection.immutable.Map} 
+ * @param nextSuperstep is next superstep class to be executed.
+ */
 final case class Pack(ckpt: Option[ActorRef], 
-                      superstep: Superstep) extends CheckpointMessage
+                      variables: Map[String, Writable],
+                      nextSuperstep: Class[_ <: Superstep]
+) extends CheckpointMessage

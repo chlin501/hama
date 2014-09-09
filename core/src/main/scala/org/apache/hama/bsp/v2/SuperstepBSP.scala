@@ -141,7 +141,8 @@ protected trait SuperstepBSP extends BSP
         val ckpt = createCheckpointer(peer)
         peer.isInstanceOf[CheckpointerReceiver] match {
           case true => peer.asInstanceOf[CheckpointerReceiver].
-                            receive(Pack(ckpt, superstep))
+                            receive(Pack(ckpt, superstep.getVariables, 
+                                         superstep.next))
           case false => LOG.warning("Checkpointer is created, but BSPPeer is "+
                                     "not an instance of CheckpointerReceiver!")
         }

@@ -119,7 +119,10 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
     findThenSend(target, proxy) 
 
   protected def findThenSend(target: String, proxy: ActorRef) {
-    waitingList.find(entry => entry._1.getActorName.equals(target)) match {
+    waitingList.find(entry => {
+      val proxyInfo = entry._1
+      proxyInfo.getActorName.equals(target)
+    }) match {
       case Some(found) => {
         val msgFrom = found._2
         val msg = msgFrom.msg 
@@ -129,7 +132,7 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
         proxy ! msg
         confirm(from)
       }
-      case None => LOG.warning("Target {} for sending message bundle.",
+      case None => LOG.warning("{} for sending message bundle not found!",
                                target)
     }
   }
@@ -169,7 +172,7 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
    * it puts the bundle to the queue that in another thread in turns retrieves
    * by calling {@link MessageManager#loopBackMessages}.
    */
-  def messageFromRemote: Receive = {
+  def putMessageToLocal: Receive = {
     case bundle: BSPMessageBundle[_] => {
       LOG.info("Message received from {} is putting to loopback queue!", 
                sender)
@@ -177,6 +180,6 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
     }
   }
 
-  override def receive = transfer orElse messageFromRemote orElse actorReply orElse timeout orElse unknown
+  override def receive = transfer orElse putMessageToLocal orElse actorReply orElse timeout orElse unknown
 
 }

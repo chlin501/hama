@@ -38,25 +38,7 @@ trait CheckpointerReceiver extends CommonLog {
    * @param pack is the checkpointer actor.
    */
   def receive(pack: Pack) = packQueue = packQueue.enqueue(pack)
-
-  /**
-   * Used to retrieve setting stored in common confiuration.
-  protected[monitor] def getCommonConf(): HamaConfiguration 
-   */
-
-  /**
-   * Obtain current task atempt id for each task will only be specific to a 
-   * task id. 
-   * @return String of the task attempt id.
-  protected[monitor] def currentTaskAttemptId(): String
-   */
-
-  /**
-   * Identify the current superstep count value.
-   * @return Long of the superstep count.
-  protected[monitor] def currentSuperstepCount(): Long
-   */ 
-
+  
   /**
    * Check if the checkpoint is enabled in {@link HamaConfiguration}; default 
    * set to false.
@@ -77,9 +59,7 @@ trait CheckpointerReceiver extends CommonLog {
    * @return Option[Pack] of checkpoint actor.
    */
   protected[monitor] def firstPackInQueue(): Option[Pack] = queueLength match {
-    case 0 => {
-      None
-    }
+    case 0 => None
     case _ => {
       val (first, rest) = packQueue.dequeue
       packQueue = rest

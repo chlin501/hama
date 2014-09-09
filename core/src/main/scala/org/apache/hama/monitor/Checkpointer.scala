@@ -47,6 +47,7 @@ import scala.collection.JavaConversions._
  *                      save.
  * @param superstepCount indicates at which superstep this task right now is.
  */
+// TODO: change to checkpoint localQueue!!!!!
 class Checkpointer(taskConf: HamaConfiguration, 
                    taskAttemptId: String, 
                    superstepCount: Long) extends Agent with Curator {

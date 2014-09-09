@@ -24,6 +24,7 @@ import org.apache.hama.ProxyInfo
 
 trait Checkpointable extends CommonLog {
 
+/*
   protected def savePeerBundle[M <: Writable](pack: Option[Pack],
                                               taskAttemptId: String,
                                               superstepCount: Long,
@@ -64,6 +65,7 @@ trait Checkpointable extends CommonLog {
                             superstepCount+" is missing!")
     }
   }
+*/
 
 }
 
