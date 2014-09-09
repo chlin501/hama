@@ -35,7 +35,7 @@ import java.util.concurrent.ExecutorService
 import org.apache.hadoop.conf.Configurable
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.io.Writable
-import org.apache.hama.bsp.message.queue.DiskQueue
+import org.apache.hama.bsp.message.queue.DiskQueue // TODO: move to hama.message.queue instead
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
@@ -44,6 +44,7 @@ import org.apache.hama.message.queue.MemoryQueue
 import org.apache.hama.message.queue.MessageQueue
 import org.apache.hama.message.queue.SingleLockQueue
 import org.apache.hama.message.queue.SynchronizedQueue
+import org.apache.hama.message.queue.Viewable
 import org.apache.hama.ProxyInfo
 import org.apache.hama.util.LRUCache
 import org.apache.hama.logging.CommonLog
@@ -79,7 +80,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
   protected var configuration: HamaConfiguration = _
   protected var taskAttemptId: TaskAttemptID = _
   protected var outgoingMessageManager: OutgoingMessageManager[M] = _
-  protected var localQueue: MessageQueue[M] = _
+  protected var localQueue: MessageQueue[M] = _ // Option[MessageQueue[M]]
   protected var localQueueForNextIteration: SynchronizedQueue[M] = _
   protected var peerMessenger: Option[ActorRef] = None
  
@@ -255,6 +256,14 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     }
     localQueue.prepareRead
     localQueueForNextIteration = getSynchronizedReceiverQueue
+  }
+
+  /**
+   * A view to all messages inside the local queue. 
+   */
+  def view(): Option[List[M]] = localQueue.isInstanceOf[Viewable[M]] match {
+    case true => Option(localQueue.asInstanceOf[Viewable[M]].view.toList)
+    case false => None
   }
 
   /**

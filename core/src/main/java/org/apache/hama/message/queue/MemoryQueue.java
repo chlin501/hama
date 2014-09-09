@@ -17,7 +17,10 @@
  */
 package org.apache.hama.message.queue;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.apache.hadoop.conf.Configuration;
@@ -29,7 +32,7 @@ import org.apache.hama.HamaConfiguration;
  * LinkedList backed queue structure for bookkeeping messages.
  */
 public final class MemoryQueue<M extends Writable> 
-      implements SynchronizedQueue<M> {
+      implements SynchronizedQueue<M>, Viewable<M> {
 
   private final ConcurrentLinkedQueue<M> deque = new ConcurrentLinkedQueue<M>();
   private HamaConfiguration conf;
@@ -111,5 +114,10 @@ public final class MemoryQueue<M extends Writable>
   @Override
   public MessageQueue<M> getMessageQueue() {
     return this;
+  }
+
+  @Override 
+  public List<M> view() {
+    return Collections.unmodifiableList(Arrays.asList((M[])deque.toArray(new Object[deque.size()])));
   }
 }

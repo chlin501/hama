@@ -239,6 +239,12 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
     //       peer's localQueue.
     //       so in recovery stage, we can simply obtain checkpointed localQueue 
     //       messages back w/ worring about other peer.
+/*
+    messenger.asInstanceOf[DefaultMessageManager].view match {
+      case Some(allMsgs) => // checkpoint
+      case None =>
+    }
+*/
     //saveSuperstep(pack)
     leaveBarrier()
     // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
