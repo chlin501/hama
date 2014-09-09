@@ -17,12 +17,8 @@
  */
 package org.apache.hama.message
 
-//import akka.actor.Actor
 import akka.actor.ActorRef
-//import akka.actor.ActorSystem
 import akka.actor.TypedActor
-//import akka.event.Logging
-//import akka.pattern.ask
 import akka.util.Timeout
 import java.net.InetAddress
 import java.util.concurrent.BlockingQueue
@@ -38,20 +34,6 @@ import org.apache.hama.util.Utils._
 import scala.collection.JavaConversions._
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
-//import scala.concurrent.Future
-
-/**
- * Denote to initialize messenger's services for transfer messages over wire. 
- * @param conf is common configuration.
-// TODO: remove blocking queue for we don't use typed actor any more.
-final case class Setup[M <: Writable](conf: HamaConfiguration, 
-                                      q: BlockingQueue[BSPMessageBundle[M]])
- */
-
-/**
- * Indicate to which target local messages will be sent.  
-final case class LocalTarget(worker: ActorRef) 
- */
 
 /**
  * An object that contains peer and message bundle. The bundle will be sent 
@@ -80,10 +62,7 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
   /* This holds information to BSPPeer actors. */
   protected val maxCachedConnections: Int = 
     conf.getInt("hama.messenger.max.cached.connections", 100)
-  protected var peersLRUCache = initializeLRUCache(maxCachedConnections)
-  //protected var initialized: Boolean = false
-  //protected var conf: HamaConfiguration = new HamaConfiguration() 
-  //protected var loopbackQueue: BlockingQueue[BSPMessageBundle[_]] = _  // TODO: remove this one! for we've removed TypedActor
+  protected val peersLRUCache = initializeLRUCache(maxCachedConnections)
  
   /**
    * Peer may not be available immediately, so store it in waiting list first.
@@ -91,21 +70,6 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
   protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
 
   override def configuration(): HamaConfiguration = this.conf
-
-/*
-  def initializeService[M <: Writable](conf: HamaConfiguration, 
-                                       q: BlockingQueue[BSPMessageBundle[M]]) {
-    this.conf = conf
-    if(null == q)
-      throw new RuntimeException("Loopback message queue is empty!") 
-    loopbackQueue = q.asInstanceOf[BlockingQueue[BSPMessageBundle[_]]]
-
-    this.maxCachedConnections =
-      this.conf.getInt("hama.messenger.max.cached.connections", 100)
-    this.peersLRUCache = initializeLRUCache(maxCachedConnections)
-    this.initialized = true
-  }
-*/
 
   protected def initializeLRUCache(maxCachedConnections: Int):
       LRUCache[ProxyInfo,ActorRef] = {
@@ -121,12 +85,6 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
       }
     }
   }
-
-/*
-  def initialize: Receive = {
-    case Setup(conf, q) => initializeService(conf, q)
-  }
-*/
  
   /**
    * Cache message bundle and {@link BSPPeer} in waiting list.
@@ -193,23 +151,16 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
   protected def doTransfer[M <: Writable](peer: ProxyInfo, 
                                           bundle: BSPMessageBundle[M], 
                                           from: ActorRef) {
-    //if(initialized) {
-      mapAsScalaMap(peersLRUCache).find( 
-        entry => entry._1.equals(peer)
-      ) match {
-        case Some(found) => {
-          val proxy = peersLRUCache.get(found._2) 
-          proxy ! bundle  
-          confirm(from)
-        }
-        case None => findWith(peer, bundle, from)
+    mapAsScalaMap(peersLRUCache).find( 
+      entry => entry._1.equals(peer)
+    ) match {
+      case Some(found) => {
+        val proxy = peersLRUCache.get(found._2) 
+        proxy ! bundle  
+        confirm(from)
       }
-/*
-    } else {
-      LOG.warning("PeerMessenger is not initialized!") 
-      from ! MessengerUninitialized 
+      case None => findWith(peer, bundle, from)
     }
-*/
   }
 
   /**
