@@ -23,12 +23,13 @@ import org.apache.hadoop.io.MapWritable
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.bsp.v2.Superstep
 import org.apache.hama.Agent
 import org.apache.hama.Close
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.BSPMessageBundle
-import org.apache.hama.ProxyInfo
+//import org.apache.hama.ProxyInfo
 import org.apache.hama.util.Curator
 import scala.util.Failure
 import scala.util.Success
@@ -190,9 +191,24 @@ class Checkpointer(taskConf: HamaConfiguration,
    * Close this checkpointer.
    * @param Receive is a partial function.
    */
-  def close: Receive = {
+  protected def close: Receive = {
     case Close => context.stop(self)
   }
 
-  override def receive = /*savePeerMessages orElse saveSuperstep orElse*/ close orElse unknown
+  protected def checkpoint: Receive = {
+    case Checkpoint(variablesMap, nextSuperstepClass, localMessages) => 
+      doCheckpoint(variablesMap, nextSuperstepClass, localMessages)
+  }
+
+  protected def doCheckpoint[M <: Writable](variables: Map[String, Writable], 
+                                            next: Class[_ <: Superstep], 
+                                            messages: List[M]) {
+    // TODO: 1. create related path e.g. hdfs, zk
+    //       2. save variables map, class name, messages to hdfs
+    //       3. mark successfully finishing ckpt at zk
+    //       4. close ckpt actor.
+  }
+  
+
+  override def receive = /*savePeerMessages orElse saveSuperstep*/ checkpoint orElse close orElse unknown
 }
