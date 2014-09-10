@@ -15,24 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.message
+package org.apache.hama.message 
 
-import akka.actor.Actor
-import akka.actor.ActorRef
 import org.apache.hadoop.io.Writable
-import org.apache.hama.bsp.v2.Task
-import org.apache.hama.HamaConfiguration
 
-trait Messenger {
+trait MessageView {
 
-  protected var messenger: MessageManager[Writable] = _ // TODO: change to Option 
-
-  def configureForMessenger[M <: Writable](conf: HamaConfiguration, 
-                                           task: Task, 
-                                           peerMessenger: ActorRef) {
-    val mgr = MessageManager.get[M](conf, peerMessenger)
-    mgr.init(conf, task.getId)
-    messenger = mgr.asInstanceOf[MessageManager[Writable]]
-  }
+  /**
+   * A view to the messages inside the local queue.
+   * @return Option[List[M]] contains a list of messages of type M.
+   */
+  def localMessages[M <: Writable](): Option[List[M]] 
 
 }

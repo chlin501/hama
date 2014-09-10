@@ -24,6 +24,7 @@ import org.apache.hama.ProxyInfo
 import org.apache.hama.message.BSPMessageBundle
 
 sealed trait CheckpointMessage
+/*
 final case class NoMoreBundle extends CheckpointMessage
 
 final case class SavePeerMessages[M <: Writable](
@@ -33,6 +34,7 @@ final case class SavePeerMessages[M <: Writable](
 final case class SaveSuperstep(
   className: String, variables: Map[String, Writable]
 ) extends CheckpointMessage
+*/
 
 /**
  * Pack {@link Checkpointer}, {@link Superstep}'s variables, and next 

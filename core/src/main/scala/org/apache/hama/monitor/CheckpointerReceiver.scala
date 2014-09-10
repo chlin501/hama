@@ -58,12 +58,12 @@ trait CheckpointerReceiver extends CommonLog {
    * </pre>
    * @return Option[Pack] of checkpoint actor.
    */
-  protected[monitor] def firstPackInQueue(): Option[Pack] = queueLength match {
+  protected[monitor] def head(): Option[Pack] = queueLength match {
     case 0 => None
     case _ => {
       val (first, rest) = packQueue.dequeue
       packQueue = rest
-      Some(first)
+      Option(first)
     }
   }
 
@@ -74,7 +74,8 @@ trait CheckpointerReceiver extends CommonLog {
    */
   def nextPack(conf: HamaConfiguration): Option[Pack] = 
       isCheckpointEnabled(conf) match {
-    case true => firstPackInQueue
-    case false => None
+    case true => head
+    case false => None  
   } 
+
 }

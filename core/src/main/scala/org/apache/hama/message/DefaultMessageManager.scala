@@ -74,6 +74,7 @@ trait PeerCommunicator {
  */
 class DefaultMessageManager[M <: Writable] extends MessageManager[M] 
                                            with PeerCommunicator
+                                           with MessageView
                                            with CommonLog {
 
   // TODO: change to Option[...]
@@ -258,12 +259,10 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
     localQueueForNextIteration = getSynchronizedReceiverQueue
   }
 
-  /**
-   * A view to all messages inside the local queue. 
-   */
-  def view(): Option[List[M]] = localQueue.isInstanceOf[Viewable[M]] match {
-    case true => Option(localQueue.asInstanceOf[Viewable[M]].view.toList)
-    case false => None
+  override def localMessages[M](): Option[List[M]] = 
+    localQueue.isInstanceOf[Viewable[M]] match {
+      case true => Option(localQueue.asInstanceOf[Viewable[M]].view.toList)
+      case false => None
   }
 
   /**

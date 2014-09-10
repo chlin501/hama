@@ -37,6 +37,7 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
+/*
 final case class PeerAndMessages[M <: Writable](ckptPath: String, 
                                                 peer: ProxyInfo,
                                                 msg: M)
@@ -128,7 +129,6 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
     superstep
   }
 
-
   it("test checkpointer.") {
     val superstep = new MockSuperstep
     putVariables(superstep, "count", new LongWritable(superstepCount))
@@ -166,3 +166,4 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
     LOG.info("Done TestCheckpointer test case!")
   }
 }
+*/

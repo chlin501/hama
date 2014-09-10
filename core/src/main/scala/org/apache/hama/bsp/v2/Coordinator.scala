@@ -34,6 +34,7 @@ import org.apache.hama.ProxyInfo
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.MessageManager
+import org.apache.hama.message.MessageView
 import org.apache.hama.message.Messenger
 import org.apache.hama.message.PeerCommunicator
 import org.apache.hama.monitor.CheckpointerReceiver
@@ -239,17 +240,29 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
     //       peer's localQueue.
     //       so in recovery stage, we can simply obtain checkpointed localQueue 
     //       messages back w/ worring about other peer.
-/*
-    messenger.asInstanceOf[DefaultMessageManager].view match {
-      case Some(allMsgs) => // checkpoint
-      case None =>
-    }
-*/
     //saveSuperstep(pack)
+    checkpoint
     leaveBarrier()
     // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
     TaskOperator.execute(taskOperator, { (task) => task.increatmentSuperstep })
   } 
+
+  // 1. save variables map, next superstep class in pack 
+  // 2. save messages in local queue.
+  protected def checkpoint() = messenger.isInstanceOf[MessageView] match {
+    case true => messenger.asInstanceOf[MessageView].
+                           localMessages match {
+      case Some(allMsgs) => {
+// with pack.ckpt checkpoint 1 and 2 
+        nextPack(conf).map( (pack) => 
+          pack.ckpt.map( (found) => println("do checkpoint! .."))
+        )
+        //pack.ckpt( (found) => found ! Checkpoint(pack))
+      }
+      case None => LOG.warning("No messages can be checkpointed!")
+    }
+    case false => LOG.warning("Messenger is not an instance of MessageView!")
+  }
   
   override def getSuperstepCount(): Long = 
     TaskOperator.execute[Long](taskOperator, { (task) => 

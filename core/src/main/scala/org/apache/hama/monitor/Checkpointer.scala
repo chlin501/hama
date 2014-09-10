@@ -55,21 +55,20 @@ class Checkpointer(taskConf: HamaConfiguration,
   // TODO: may need a more netural interface for saving messages, etc. 
   //       to different external storage.
   protected val operation = Operation.get(taskConf) 
+  protected def getRootPath(): String = taskConf.get("bsp.checkpoint.root.path",
+                                                     "/bsp/checkpoint") 
 
   /**
    * Save {@link BSPMessageBundle} to HDFS with path pointed to 
    * <pre>
    * ${bsp.checkpoint.root.path}/<job_id>/<superstep>/<task_attepmt_id>.ckpt
    * </pre>
-   */
   def savePeerMessages: Receive = {
     case SavePeerMessages(peer, bundle) => 
       doSavePeerMessages(taskConf, taskAttemptId, superstepCount,
                          peer, bundle)
   }
 
-  protected def getRootPath(): String = taskConf.get("bsp.checkpoint.root.path",
-                                                     "/bsp/checkpoint") 
 
   // TODO: we may need to divide <superstep> into sub category because 
   //       more than 10k znodes may lead to performance slow down for zk 
@@ -130,7 +129,9 @@ class Checkpointer(taskConf: HamaConfiguration,
       }
     }
   }
+   */
 
+/*
   def saveSuperstep: Receive = {
     case SaveSuperstep(className, variables) => 
       doSaveSuperstep(className, variables, superstepCount, taskAttemptId)
@@ -175,6 +176,7 @@ class Checkpointer(taskConf: HamaConfiguration,
     }
     doClose
   }
+*/
 
   /**
    * Write to znode denoting the checkpoint process is completed!
@@ -192,5 +194,5 @@ class Checkpointer(taskConf: HamaConfiguration,
     case Close => context.stop(self)
   }
 
-  override def receive = savePeerMessages orElse saveSuperstep orElse close orElse unknown
+  override def receive = /*savePeerMessages orElse saveSuperstep orElse*/ close orElse unknown
 }
