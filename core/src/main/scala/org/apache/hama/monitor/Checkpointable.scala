@@ -19,8 +19,12 @@ package org.apache.hama.monitor
 
 import org.apache.hadoop.io.Writable
 import org.apache.hama.logging.CommonLog
+/*
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.ProxyInfo
+*/
+import org.apache.hama.message.MessageManager
+import org.apache.hama.message.MessageView
 
 trait Checkpointable extends CommonLog {
 
@@ -66,6 +70,21 @@ trait Checkpointable extends CommonLog {
     }
   }
 */
+
+  protected def checkpoint[M <: Writable](messenger: MessageManager[M],
+                                          optionPack: Option[Pack]) =
+    messenger.isInstanceOf[MessageView] match {
+      case true => messenger.asInstanceOf[MessageView].localMessages match {
+        case Some(allMsgs) => optionPack.map( (pack) =>
+          pack.ckpt.map( (found) =>
+            found ! Checkpoint(pack.variables, pack.nextSuperstep, allMsgs)
+          )
+        )
+        case None => LOG.warning("No messages can be checkpointed!")
+      }
+      case false => LOG.warning("Messenger is not an instance of MessageView!")
+    }
+
 
 }
 

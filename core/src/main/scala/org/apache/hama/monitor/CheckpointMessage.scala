@@ -24,6 +24,20 @@ import org.apache.hama.ProxyInfo
 import org.apache.hama.message.BSPMessageBundle
 
 sealed trait CheckpointMessage
+/**
+ * Checkpoint {@link Superstep}'s variables map, {@link Superstep} next
+ * superstep class, and messages in localQueue, which is {@link MessageQueue}.
+ * @param variables is a map containing custom defined values during superstep.
+ *                  computation.
+ * @param nextSuperstep is the next superstep to be executed.
+ * @param localMessages are messages, sent from other nodes or by itself, 
+ *                      stored in local queue.
+ */
+final case class Checkpoint[M <: Writable](
+  variables: Map[String, Writable], nextSuperstep: Class[_ <: Superstep],
+  localMessages: List[M] 
+) extends CheckpointMessage
+
 /*
 final case class NoMoreBundle extends CheckpointMessage
 
