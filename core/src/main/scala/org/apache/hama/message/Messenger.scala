@@ -27,7 +27,7 @@ trait Messenger {
 
   protected var messenger: MessageManager[Writable] = _ // TODO: change to Option 
 
-  def configureForMessenger[M <: Writable](conf: HamaConfiguration, 
+  def configureForMessenger[M <: Writable](conf: HamaConfiguration, // common conf
                                            task: Task, 
                                            peerMessenger: ActorRef) {
     val mgr = MessageManager.get[M](conf, peerMessenger)

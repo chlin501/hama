@@ -22,6 +22,12 @@ import org.apache.hama.HamaConfiguration
 
 object BSPMessageCompressor {
 
+  /**
+   * Obtain compressor for bsp message(s).
+   * @param conf is common configuration.
+   * @return BSPMessageCompressor for compressing messages; return null if no 
+   *                              compression class is set.
+   */
   def get(conf: HamaConfiguration): BSPMessageCompressor = {
     var compressor: BSPMessageCompressor = null
     conf.get("hama.messenger.compression.class") match {
@@ -36,6 +42,13 @@ object BSPMessageCompressor {
     }
     compressor
   }
+
+  def threshold(conf: Option[HamaConfiguration]): Long = conf match {
+    case None => 128L
+    case Some(found) => found.getLong("hama.messenger.compression.threshold",
+                                      128)
+  }
+
 }
 
 /**

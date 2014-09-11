@@ -44,71 +44,67 @@ class OutgoingPOJOMessageBundle[M <: Writable]
   private val outgoingBundles = 
     new ConcurrentHashMap[ProxyInfo, BSPMessageBundle[M]]() 
 
-  override def init(conf: HamaConfiguration, 
+  override def init(conf: HamaConfiguration, // common conf
                     compressor: BSPMessageCompressor) {
-    this.conf = Some(conf)
-    this.compressor = Some(compressor)
+    this.conf = Option(conf)
+    this.compressor = Option(compressor)
     this.combiner = getCombiner(this.conf)
   }
 
   protected def getCombiner(conf: Option[HamaConfiguration]): 
     Option[Combiner[M]] = conf match {
       case None => None
-      case Some(found) => {
-        found.get(Constants.COMBINER_CLASS) match {
-          case null => None
-          case combinerName@_ => {
-            val combinerClass = found.getClassByName(combinerName)
-            newInstance(combinerClass) match {
-              case Success(instance) => Some(instance)
-              case Failure(cause) => {
-                LOG.error("Fail instantiating "+combinerName, cause)
-                None
-              }
+      case Some(found) => found.get(Constants.COMBINER_CLASS) match {
+        case null => None
+        case combinerName@_ => {
+          val combinerClass = found.getClassByName(combinerName)
+          newInstance(combinerClass) match {
+            case Success(instance) => Some(instance)
+            case Failure(cause) => {
+              LOG.error("Fail instantiating "+combinerName, cause)
+              None
             }
           }
         }
-      }
+      } 
     } 
 
   protected def newInstance(combinerClass: Class[_]): Try[Combiner[M]] =
     Try(ReflectionUtils.newInstance(combinerClass).asInstanceOf[Combiner[M]])
   
 
+/*
   protected def getCompressionThreshold(conf: Option[HamaConfiguration]): 
     Long = conf match {
       case None => 128L
       case Some(found) => found.getLong("hama.messenger.compression.threshold",
                                         128)
   }
+*/
 
   override def addMessage(peer: ProxyInfo, msg: M) {
     outgoingBundles.containsKey(peer) match {
       case true => 
-      case false => {
-        compressor match {
-          case None =>
-          case Some(found) => {
-            val bundle = new BSPMessageBundle[M]()
-            bundle.setCompressor(found, getCompressionThreshold(this.conf))
-            outgoingBundles.put(peer, bundle)
-          }
+      case false => compressor match {
+        case None =>
+        case Some(found) => {
+          val bundle = new BSPMessageBundle[M]()
+          bundle.setCompressor(found, BSPMessageCompressor.threshold(this.conf))
+          outgoingBundles.put(peer, bundle)
         }
       }
     } 
     combiner match {
       case None => outgoingBundles.get(peer).addMessage(msg)
-      case Some(found) => {
-        compressor match {
-          case None =>
-          case Some(f) => {
-            val bundle = outgoingBundles.get(peer)
-            bundle.addMessage(msg)
-            val combined = new BSPMessageBundle[M]()
-            combined.setCompressor(f, getCompressionThreshold(this.conf))
-            combined.addMessage(found.combine(bundle))
-            outgoingBundles.put(peer, combined)
-          }
+      case Some(found) => compressor match {
+        case None =>
+        case Some(f) => {
+          val bundle = outgoingBundles.get(peer)
+          bundle.addMessage(msg)
+          val combined = new BSPMessageBundle[M]()
+          combined.setCompressor(f, BSPMessageCompressor.threshold(this.conf))
+          combined.addMessage(found.combine(bundle))
+          outgoingBundles.put(peer, combined)
         }
       }
     }

@@ -28,7 +28,9 @@ import org.apache.hama.Agent
 import org.apache.hama.Close
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.message.CombinerUtil
 import org.apache.hama.message.BSPMessageBundle
+import org.apache.hama.message.compress.BSPMessageCompressor
 //import org.apache.hama.ProxyInfo
 import org.apache.hama.util.Curator
 import scala.util.Failure
@@ -43,74 +45,36 @@ import scala.collection.JavaConversions._
  * same task.
  * N.B.: Checkpointer will not be recovered because we assume at least some   
  *       checkpoint will success.
- * @param taskConf is the task configuration.
+ * @param commConf is common configuration.
+ * @param taskConf contains configuration specific to a task.
  * @param taskAttemptId denotes with which task content this checkpointer will
  *                      save.
  * @param superstepCount indicates at which superstep this task right now is.
  */
-// TODO: change to checkpoint localQueue!!!!!
-class Checkpointer(taskConf: HamaConfiguration, 
+class Checkpointer(commConf: HamaConfiguration, 
+                   taskConf: HamaConfiguration, 
                    taskAttemptId: String, 
                    superstepCount: Long) extends Agent with Curator {
 
-  // TODO: may need a more netural interface for saving messages, etc. 
-  //       to different external storage.
+  // TODO: may need to use more neutral interface for saving data to different
+  //       storage.
   protected val operation = Operation.get(taskConf) 
-  protected def getRootPath(): String = taskConf.get("bsp.checkpoint.root.path",
-                                                     "/bsp/checkpoint") 
 
-  /**
-   * Save {@link BSPMessageBundle} to HDFS with path pointed to 
-   * <pre>
-   * ${bsp.checkpoint.root.path}/<job_id>/<superstep>/<task_attepmt_id>.ckpt
-   * </pre>
-  def savePeerMessages: Receive = {
-    case SavePeerMessages(peer, bundle) => 
-      doSavePeerMessages(taskConf, taskAttemptId, superstepCount,
-                         peer, bundle)
-  }
-
+  protected def getRootPath(taskConf: HamaConfiguration): String = 
+    taskConf.get("bsp.checkpoint.root.path", "/bsp/checkpoint") 
 
   // TODO: we may need to divide <superstep> into sub category because 
   //       more than 10k znodes may lead to performance slow down for zk 
   //       at the final step marking with ok znode.
-  protected def getCkptPath(rootPath: String,
-                            jobId: String, 
-                            aSuperstepCount: Long,
-                            aTaskAttemptId: String, 
-                            suffix: String = "ckpt"): String = 
-    "%s/%s/%s/%s.%s".format(rootPath, jobId, aSuperstepCount, aTaskAttemptId,
-                            suffix)
-
-  protected def formCheckpointPath(aSuperstepCount: Long, 
-                                   aTaskAttemptId: String,
-                                   suffix: String = "ckpt"): String = {
-    val rootPath = getRootPath
-    val currentTaskAttemptId = TaskAttemptID.forName(aTaskAttemptId)      
+  protected def mkCheckpointPath(rootPath: String, 
+                                 superstepCount: Long, 
+                                 taskAttemptId: String,
+                                 suffix: String = "ckpt"): String = {
+    val currentTaskAttemptId = TaskAttemptID.forName(taskAttemptId)      
     val jobId = currentTaskAttemptId.getJobID.toString
-    getCkptPath(rootPath, jobId, aSuperstepCount, aTaskAttemptId, suffix)
+    "%s/%s/%s/%s.%s".format(rootPath, jobId, superstepCount, taskAttemptId,
+                            suffix)
   }
-
-  protected def doSavePeerMessages[M <: Writable](taskConf: HamaConfiguration,
-                                                  aTaskAttemptId: String,
-                                                  aSuperstepCount: Long,
-                                                  peer: ProxyInfo, 
-                                                  bundle: BSPMessageBundle[M]) {
-    formCheckpointPath(aSuperstepCount, aTaskAttemptId) match {
-      case null|"" => 
-      case ckptPath@_ => {
-        LOG.debug("Save peer and bundle data to {}", ckptPath)
-        writePeerAndMessages(new Path(ckptPath), peer, bundle)
-      }
-    }
-  }
-
-  protected def writePeerAndMessages[M <: Writable](
-    ckptPath: Path, peer: ProxyInfo, bundle: BSPMessageBundle[M]
-  ) = write(ckptPath, (out) => { 
-    peer.write(out)
-    bundle.write(out)
-  })
 
   // TODO: consider to open ckptPath stream at the beginning, then close stream
   //       when receiving NoMoreBundle message would increase performance.
@@ -130,54 +94,6 @@ class Checkpointer(taskConf: HamaConfiguration,
       }
     }
   }
-   */
-
-/*
-  def saveSuperstep: Receive = {
-    case SaveSuperstep(className, variables) => 
-      doSaveSuperstep(className, variables, superstepCount, taskAttemptId)
-  }
-
-  protected def writeClassNameAndVariables(ckptPath: Path, 
-                                           className: Text,
-                                           variables: MapWritable) = 
-    write(ckptPath, (out) => { 
-      className.write(out)
-      variables.write(out)
-    })
-
-  protected def doSaveSuperstep(className: String, 
-                                variables: Map[String, Writable],
-                                aSuperstep: Long, 
-                                aTaskAttemptId: String) {
-    val text = className match {
-      case null|"" => new Text()
-      case value@_ => new Text(value)
-    }
-
-    val mapWritable = variables.isEmpty match {
-      case true => new MapWritable
-      case false => {
-        val writable = new MapWritable
-        writable.putAll(mapAsJavaMap(variables.map { e => 
-          (new Text(e._1), e._2)
-        }))
-        writable
-      }
-    }
- 
-    formCheckpointPath(aSuperstep, aTaskAttemptId) match {
-      case null|"" =>
-      case ckptPath@_ => {
-        LOG.debug("Save superstep class name and variables data to {}", 
-                  ckptPath)
-        writeClassNameAndVariables(new Path(ckptPath), text, mapWritable) 
-        markFinish(formCheckpointPath(aSuperstep, aTaskAttemptId, "ok"))
-      }
-    }
-    doClose
-  }
-*/
 
   /**
    * Write to znode denoting the checkpoint process is completed!
@@ -200,15 +116,84 @@ class Checkpointer(taskConf: HamaConfiguration,
       doCheckpoint(variablesMap, nextSuperstepClass, localMessages)
   }
 
+  /**
+   * This function performs following steps for checkpoint.
+   * - Create path e.g. hdfs, zk used for checkpoint.
+   * - Save variables map, class name, messages to hdfs.
+   * - Mark successfully finishing ckpt at zk.
+   * - Close checkpoint actor.
+   * @param variables are map users exploit to store data during superstep  
+   *                  computation.
+   * @param next is the class for next superstep computation.
+   * @param messages are sent from other peers or by itself for next superstep
+   *                 computation.
+   */
   protected def doCheckpoint[M <: Writable](variables: Map[String, Writable], 
                                             next: Class[_ <: Superstep], 
                                             messages: List[M]) {
-    // TODO: 1. create related path e.g. hdfs, zk
-    //       2. save variables map, class name, messages to hdfs
-    //       3. mark successfully finishing ckpt at zk
-    //       4. close ckpt actor.
+    mkCheckpointPath(getRootPath(taskConf), 
+                     superstepCount, 
+                     taskAttemptId) match {
+      case null|"" => 
+      case ckptPath@_ => write(new Path(ckptPath), (out) => { 
+        toMapWritable(variables).write(out)
+        toText(next).write(out)
+        toBundle(messages) match {
+          case Some(bundle) => bundle.write(out)
+          case None => LOG.error("Can't create BSPMessageBundle for "+
+                                 "checkpointer {} at {}", 
+                                 taskAttemptId, superstepCount)
+        }
+      })      
+    }
+    markFinish(mkCheckpointPath(getRootPath(taskConf), superstepCount, 
+                                taskAttemptId, "ok"))
+    doClose
+  }
+
+  protected def toText(next: Class[_ <: Superstep]): Text = {
+    val text = new Text
+    text.set(next.getClass.getName)
+    text
+  } 
+
+  protected def toBundle[M <: Writable](messages: List[M]): 
+      Option[BSPMessageBundle[M]] = CombinerUtil.get(Option(commConf)) match {
+    case None => None
+    case Some(combiner) => BSPMessageCompressor.get(commConf) match {
+      case null => None // default compressor is SnappyCompressor
+      case compressor@_ => {
+        val bundle = getBundle[M](compressor)
+        messages.foreach( msg => bundle.addMessage(msg))
+        val combined = getBundle[M](compressor)
+        combined.setCompressor(compressor, 
+                               BSPMessageCompressor.threshold(Option(commConf)))
+        val itor = bundle.asInstanceOf[java.lang.Iterable[Nothing]]
+        combined.addMessage(combiner.combine(itor))
+        Option(combined)
+      } 
+    }
   }
   
+  protected def getBundle[M <: Writable](compressor: BSPMessageCompressor): 
+      BSPMessageBundle[M] = {
+    val bundle = new BSPMessageBundle[M]()
+    bundle.setCompressor(compressor, 
+                         BSPMessageCompressor.threshold(Option(commConf)))
+    bundle
+  }
+   
+  protected def toMapWritable(variables: Map[String, Writable]): MapWritable = 
+    variables.isEmpty match {
+      case true => new MapWritable
+      case false => {
+        val writable = new MapWritable
+        writable.putAll(mapAsJavaMap(variables.map { e => 
+          (new Text(e._1), e._2)
+        }))
+        writable
+      }
+    }
 
-  override def receive = /*savePeerMessages orElse saveSuperstep*/ checkpoint orElse close orElse unknown
+  override def receive = checkpoint orElse close orElse unknown
 }

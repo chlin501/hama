@@ -129,8 +129,9 @@ protected trait SuperstepBSP extends BSP
     TaskOperator.execute[Option[ActorRef]](taskOperator, { (task) => {
       val superstepCount = peer.getSuperstepCount
       val actorName = "checkpoint-"+task.getId.toString+"-"+superstepCount
-      val ckpt = spawn(actorName, classOf[Checkpointer], task.getConfiguration,
-                       task.getId.toString, superstepCount)
+      val ckpt = spawn(actorName, classOf[Checkpointer], commonConf(peer),
+                       task.getConfiguration, task.getId.toString, 
+                       superstepCount) 
       LOG.debug("Checkpointer "+ckpt.path.name+" is created!")
       Some(ckpt)
     }}, None)

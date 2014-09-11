@@ -19,6 +19,9 @@ package org.apache.hama.bsp;
 
 import org.apache.hadoop.io.Writable;
 
+//TODO: move to org.apache.hama.message package 
+//      use scala 
+//      merge with CombinerUtil to Combiner.scala
 public abstract class Combiner<M extends Writable> {
 
   /**
