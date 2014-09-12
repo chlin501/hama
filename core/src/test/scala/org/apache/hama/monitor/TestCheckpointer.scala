@@ -18,8 +18,10 @@
 package org.apache.hama.monitor
 
 import akka.actor.ActorRef
+import java.io.DataOutputStream
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.BooleanWritable
+import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.LongWritable
 import org.apache.hadoop.io.MapWritable
 import org.apache.hadoop.io.Text
@@ -27,7 +29,9 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.v2.Superstep
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.BSPMessageBundle
-import org.apache.hama.message.OutgoingMessageManager
+import org.apache.hama.message.CombinerUtil
+import org.apache.hama.message.compress.BSPMessageCompressor
+//import org.apache.hama.message.OutgoingMessageManager
 import org.apache.hama.message.Peer
 import org.apache.hama.ProxyInfo
 import org.apache.hama.TestEnv
@@ -43,37 +47,59 @@ final case class PeerAndMessages[M <: Writable](ckptPath: String,
                                                 msg: M)
 final case class NameAndMap(ckptPath: String, className: String, 
                             variables: Map[String, String])
+*/
 
-class MockCheckpointer(taskConf: HamaConfiguration,
+final case class Msgs(arg1: Int, arg2: Int, arg3: Int)
+
+object MockCheckpointer {
+
+  val tmpRootPath = "/tmp/hama/bsp/ckpt"
+
+}
+
+class MockCheckpointer(commConf: HamaConfiguration,
+                       taskConf: HamaConfiguration,
                        taskAttemptId: String,
                        superstep: Long,
                        tester: ActorRef) 
-      extends Checkpointer(taskConf, taskAttemptId, superstep) {
+      extends Checkpointer(commConf, taskConf, taskAttemptId, superstep) {
 
-  override def writePeerAndMessages[M <: Writable](
-    ckptPath: Path, peer: ProxyInfo, bundle: BSPMessageBundle[M]
-  ) { 
-    LOG.info("Checkpointer path: {}, peer: {}, bundle: {}", 
-             ckptPath, peer, bundle)
-    var cnt = 1 
-    asScalaIterator(bundle.iterator).foreach ( msg => {
-      if(1 < cnt) 
-        throw new RuntimeException("Message count "+cnt+" is larger than 1!")
-      tester ! PeerAndMessages(ckptPath.toString, peer, msg)
-      cnt += 1
-    })
+  import MockCheckpointer._
+
+  override def getRootPath(taskConf: HamaConfiguration): String = {
+    val path = taskConf.get("bsp.checkpoint.root.path", tmpRootPath) 
+    LOG.info("Checkpoint file will be writtent to {} directory.", path)
+    path 
   }
 
-  override def writeClassNameAndVariables(ckptPath: Path,
-                                          className: Text,
-                                          variables: MapWritable) {
-    LOG.info("Checkpoint path to {} with className {} and variables {}", 
-             ckptPath, className.toString, variables)
-    val result = asScalaSet(variables.entrySet).map ( entry => 
-      (entry.getKey.asInstanceOf[Text].toString, entry.getValue.toString)
-    ).toMap
-    LOG.info("MapWritable after converted becomes {}", result)
-    tester !  NameAndMap(ckptPath.toString, className.toString, result)
+  override def toMapWritable(variables: Map[String, Writable]): MapWritable = {
+    val mapWritable = super.toMapWritable(variables)
+    LOG.info("MapWritable to be verified -> {}", mapWritable)
+    if(1 != mapWritable.size) 
+      throw new RuntimeException("Map variables size is not 1!")
+    val count = mapWritable.get(new Text("superstepCount"))
+    tester ! count.asInstanceOf[LongWritable].get
+    mapWritable
+  }  
+
+  override def writeText(next: Class[_ <: Superstep])(out: DataOutputStream): 
+      Option[Text] = {
+    val text = super.writeText(next)(out)
+    LOG.info("Text to be verified -> {}", text)
+    tester ! text
+    text
+  } 
+  
+  override def toBundle[M <: Writable](messages: List[M]): 
+      Option[BSPMessageBundle[M]] = {
+    val combined = super.toBundle[M](messages)
+    asScalaIterator(combined.iterator).foreach { bundle => 
+      LOG.info("Bundle to be verified -> {}", bundle)
+      asScalaIterator(bundle.iterator).foreach { m =>
+        tester ! m.asInstanceOf[IntWritable].get 
+      }
+    }
+    combined
   }
 
   override def markFinish(destPath: String) {
@@ -83,9 +109,10 @@ class MockCheckpointer(taskConf: HamaConfiguration,
 
 }
 
-class MockSuperstep extends Superstep {
+class MockSuperstep(superstepCount: Long) extends Superstep {
 
-   override def getVariables(): Map[String, Writable] = super.getVariables
+   override def getVariables(): Map[String, Writable] = 
+     Map("superstepCount" -> new LongWritable(superstepCount))
    override def compute(peer: org.apache.hama.bsp.v2.BSPPeer) { }
    override def next: Class[_ <: Superstep] = null
 
@@ -94,12 +121,18 @@ class MockSuperstep extends Superstep {
 @RunWith(classOf[JUnitRunner])
 class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper 
                                                            with JobUtil {
+/*
   val rootPath = "/bsp/checkpoint"
-  val superstepCount: Long = 6
+*/
+  val superstepCount: Long = 1654
+  val threshold = BSPMessageCompressor.threshold(Option(testConfiguration))
+/*
   val jobIdentifier = "test"
   val id = 9
   val jobId = createJobId(jobIdentifier, id).toString
+*/
   val taskAttemptId = createTaskAttemptId("test", 9, 3, 2).toString
+/*
   val path = "%s/%s/%s/%s".format(rootPath, jobId, superstepCount, 
                                   taskAttemptId)
   val ckptPath = path+".ckpt"
@@ -115,6 +148,7 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
   val first = PeerAndMessages(ckptPath, peer1, msg1)
   val second = PeerAndMessages(ckptPath, peer2, msg2)
   val third = PeerAndMessages(ckptPath, peer3, msg3)
+*/
 
   override protected def beforeAll = launchZk
 
@@ -123,22 +157,41 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
     super.afterAll
   }
 
+/*
   def putVariables(superstep: Superstep, key: String, value: Writable): 
       Superstep = {
     superstep.collect(key, value)
     superstep
   }
+*/
+
+  def messages(): List[Writable] = List[Writable](new IntWritable(192), 
+                                                  new IntWritable(112), 
+                                                  new IntWritable(23))
 
   it("test checkpointer.") {
-    val superstep = new MockSuperstep
+    val superstep = new MockSuperstep(superstepCount)
+/*
     putVariables(superstep, "count", new LongWritable(superstepCount))
     putVariables(superstep, "flag", new BooleanWritable(true))
     LOG.info("Test checkpointer for task attempt id "+taskAttemptId+
              " at superstep "+superstepCount) 
+*/
     // no specific setting for task, so use testConfiguration instead.
     val ckpt = createWithArgs("checkpointer", classOf[MockCheckpointer], 
-                              testConfiguration, taskAttemptId, 
-                              superstepCount, tester)
+                              testConfiguration, testConfiguration, 
+                              taskAttemptId, superstepCount, tester)
+
+    ckpt ! Checkpoint(superstep.getVariables, superstep.next, messages)
+
+    expect(superstepCount)
+    expect(None)
+    expect(192)
+    expect(112)
+    expect(23)
+    expect(MockCheckpointer.tmpRootPath+
+           "/job_test_0009/1654/attempt_test_0009_000003_2.ok")
+/*
     val outgoing = OutgoingMessageManager.get[Writable](testConfiguration)
     outgoing.addMessage(peer1, msg1)
     outgoing.addMessage(peer2, msg2)
@@ -163,7 +216,7 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
       v.toString
     }))
     expect(zkCkptPath)
+*/
     LOG.info("Done TestCheckpointer test case!")
   }
 }
-*/
