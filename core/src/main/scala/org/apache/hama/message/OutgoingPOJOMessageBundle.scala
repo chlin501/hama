@@ -22,7 +22,6 @@ import java.util.Iterator
 import java.util.Map.Entry
 
 import org.apache.hadoop.io.Writable
-import org.apache.hama.bsp.Combiner
 import org.apache.hama.Constants
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.compress.BSPMessageCompressor

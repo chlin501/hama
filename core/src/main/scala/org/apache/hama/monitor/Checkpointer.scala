@@ -28,7 +28,7 @@ import org.apache.hama.Agent
 import org.apache.hama.Close
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.message.CombinerUtil
+import org.apache.hama.message.Combiner
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.compress.BSPMessageCompressor
 //import org.apache.hama.ProxyInfo
@@ -217,7 +217,7 @@ class Checkpointer(commConf: HamaConfiguration,
   } 
 
   protected def toBundle[M <: Writable](messages: List[M]): 
-      Option[BSPMessageBundle[M]] = CombinerUtil.get(Option(commConf)) match {
+      Option[BSPMessageBundle[M]] = Combiner.get(Option(commConf)) match {
     case None => {
       val compressor = BSPMessageCompressor.get(commConf)
       val bundle = getBundle[M](compressor)

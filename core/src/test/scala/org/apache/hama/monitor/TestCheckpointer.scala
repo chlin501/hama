@@ -29,7 +29,7 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.v2.Superstep
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.BSPMessageBundle
-import org.apache.hama.message.CombinerUtil
+import org.apache.hama.message.Combiner
 import org.apache.hama.message.compress.BSPMessageCompressor
 //import org.apache.hama.message.OutgoingMessageManager
 import org.apache.hama.message.Peer
