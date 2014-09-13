@@ -107,6 +107,7 @@ class MockWorker1(conf: HamaConfiguration, container: ActorRef,
       captured.get(classOf[C].getName) match {
         case Some(found) => {
           val count = found.find[IntWritable]("count")
+          LOG.info("xxxxxxxxxxxxxx What is the count value in variables map? {}", count)
           tester ! count.get
         }
         case None => throw new RuntimeException("Superstep C not found!")

@@ -19,57 +19,10 @@ package org.apache.hama.monitor
 
 import org.apache.hadoop.io.Writable
 import org.apache.hama.logging.CommonLog
-/*
-import org.apache.hama.message.BSPMessageBundle
-import org.apache.hama.ProxyInfo
-*/
 import org.apache.hama.message.MessageManager
 import org.apache.hama.message.MessageView
 
 trait Checkpointable extends CommonLog {
-
-/*
-  protected def savePeerBundle[M <: Writable](pack: Option[Pack],
-                                              taskAttemptId: String,
-                                              superstepCount: Long,
-                                              peer: ProxyInfo,
-                                              bundle: BSPMessageBundle[M]) =
-    pack match {
-      case None =>
-        LOG.debug("No checkpointer found for TaskAttemptID "+taskAttemptId+
-                  " at "+ superstepCount)
-      case Some(pack) => pack.ckpt match {
-        case Some(found) => found ! SavePeerMessages[M](peer, bundle)
-        case None => 
-          LOG.debug("No checkpointer for TaskAttemptID "+ taskAttemptId+" at "+
-                    superstepCount)
-      }
-    }
-
-  protected def saveSuperstep(pack: Option[Pack]) = pack match {
-    case Some(pack) => pack.ckpt match {
-      case Some(ckpt) => {
-        val className = pack.superstep.getClass.getName
-        val variables = pack.superstep.getVariables
-        ckpt ! SaveSuperstep(className, variables)
-      }
-      case None => LOG.warning("Checkpointer not found!")
-    }
-    case None => LOG.warning("Checkpointer not found!")
-  }
- 
-  protected def noMoreBundle(pack: Option[Pack],
-                             taskAttemptId: String,
-                             superstepCount: Long) = pack match {
-    case None => LOG.warning("Checkpointer for "+taskAttemptId+" at "+
-                          superstepCount+" is missing!")
-    case Some(pack) => pack.ckpt match {
-      case Some(found) => found ! NoMoreBundle
-      case None => LOG.warning("Checkpointer for "+taskAttemptId+" at "+
-                            superstepCount+" is missing!")
-    }
-  }
-*/
 
   protected def checkpoint[M <: Writable](messenger: MessageManager[M],
                                           optionPack: Option[Pack]) =

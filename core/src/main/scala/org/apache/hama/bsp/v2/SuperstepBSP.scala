@@ -30,6 +30,7 @@ import org.apache.hama.monitor.CheckpointerReceiver
 import org.apache.hama.monitor.Pack
 import org.apache.hama.sync.SyncException
 import org.apache.hama.logging.TaskLog
+import org.apache.hama.util.Curator
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
@@ -38,9 +39,7 @@ import scala.util.Try
  * This class manages all superstep and supersteps routing, started from the
  * first superstep, according to the execution instruction.
  */
-protected trait SuperstepBSP extends BSP 
-                             with Agent 
-                             with TaskLog {
+protected trait SuperstepBSP extends BSP with Agent with TaskLog with Curator {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 

@@ -246,21 +246,6 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
     // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
     TaskOperator.execute(taskOperator, { (task) => task.increatmentSuperstep })
   } 
-
-/*
-  protected def checkpoint(msngr: MessengManager) = 
-    msngr.isInstanceOf[MessageView] match {
-      case true => msngr.asInstanceOf[MessageView].localMessages match {
-        case Some(allMsgs) => nextPack(conf).map( (pack) => 
-          pack.ckpt.map( (found) => 
-            found ! Checkpoint(pack.variables, pack.nextSuperstep, allMsgs) 
-          )
-        )
-        case None => LOG.warning("No messages can be checkpointed!")
-      }
-      case false => LOG.warning("Messenger is not an instance of MessageView!")
-    }
-*/
   
   override def getSuperstepCount(): Long = 
     TaskOperator.execute[Long](taskOperator, { (task) => 

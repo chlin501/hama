@@ -17,7 +17,7 @@
  */
 package org.apache.hama.message.queue;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
@@ -118,6 +118,9 @@ public final class MemoryQueue<M extends Writable>
 
   @Override 
   public List<M> view() {
-    return Collections.unmodifiableList(Arrays.asList((M[])deque.toArray(new Object[deque.size()])));
+    final Object[] ary = deque.toArray(new Object[deque.size()]);
+    final ArrayList<M> list = new ArrayList<M>();
+    for(Object e: ary) list.add((M)e);
+    return Collections.unmodifiableList(list);
   }
 }
