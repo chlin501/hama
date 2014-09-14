@@ -60,6 +60,8 @@ class Checkpointer(commConf: HamaConfiguration,
   //       storage.
   protected val operation = Operation.get(taskConf) 
 
+  override def preStart = initializeCurator(commConf)
+
   protected def getRootPath(taskConf: HamaConfiguration): String = 
     taskConf.get("bsp.checkpoint.root.path", "/bsp/checkpoint") 
 

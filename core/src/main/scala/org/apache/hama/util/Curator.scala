@@ -62,8 +62,12 @@ trait Curator extends Conversion with CommonLog {
   }
 
   /**
-   * Recursively create znode. No value is set with this function.
-   * The znode must be an absolute path - started with '/'.
+   * Recursively create znode. 
+   * No value is set with this function.
+   * The znode must be an absolute path.
+   * This is not an atomic operation. 
+   * Use {@link org.apache.curator.framework.api.transaction.CuratorTransaction}
+   * instead if needed.
    * @param znode denote the path to be created in ZooKeeper.
    */
   def create(znode: String) = {

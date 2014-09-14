@@ -45,8 +45,8 @@ trait CheckpointerReceiver extends CommonLog {
    * @param conf is common configuration.
    * @return Boolean denote true if checkpoint is enabled; othwerwise false.
    */
-  protected[monitor] def isCheckpointEnabled(conf: HamaConfiguration): Boolean =
-    conf.getBoolean("bsp.checkpoint.enabled", false)
+  protected def isCheckpointEnabled(conf: HamaConfiguration): Boolean =
+    conf.getBoolean("bsp.checkpoint.enabled", true)
 
   protected def queueLength(): Int = packQueue.length
 

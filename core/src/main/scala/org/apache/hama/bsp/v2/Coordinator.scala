@@ -34,7 +34,6 @@ import org.apache.hama.ProxyInfo
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.MessageManager
-//import org.apache.hama.message.MessageView
 import org.apache.hama.message.Messenger
 import org.apache.hama.message.PeerCommunicator
 import org.apache.hama.monitor.CheckpointerReceiver
@@ -212,18 +211,11 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
   @throws(classOf[IOException])
   override def sync() {
     TaskOperator.execute(taskOperator, { (task) => task.transitToSync })
-    //val pack = nextPack(conf)
     val it = messenger.getOutgoingBundles 
     asScalaIterator(it).foreach( entry => {
       val peer = entry.getKey
       val bundle = entry.getValue
       it.remove 
-/*
-      TaskOperator.execute(taskOperator, { (task) => 
-        savePeerBundle(pack, task.getId.toString, getSuperstepCount, peer, 
-                       bundle)
-      })
-*/
       doTransfer(peer, bundle) match {
         case Success(result) => LOG.debug("Successfully transfer messages!")
         case Failure(cause) => LOG.error("Fail transferring messages due "+
@@ -234,13 +226,6 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
      
     enterBarrier()
     clear()
-    // TODO: instead of checkpointing outgoing messages with func saveXXXXXX
-    //       We should checkpoint localQueue after clear, which in turns calls
-    //       messenger.clearOutgoingMessages putting all messages to this 
-    //       peer's localQueue.
-    //       so in recovery stage, we can simply obtain checkpointed localQueue 
-    //       messages back w/ worring about other peer.
-    //saveSuperstep(pack)
     checkpoint(messenger, nextPack(conf))
     leaveBarrier()
     // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.

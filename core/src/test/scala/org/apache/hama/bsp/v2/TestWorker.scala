@@ -32,6 +32,8 @@ import org.apache.hama.util.JobUtil
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 
 final case object GetCount
 
@@ -83,15 +85,37 @@ class MockWorker1(conf: HamaConfiguration, container: ActorRef,
       extends Worker(conf, container, peerMessenger, tasklog) {
 
   var captured = Map.empty[String, Superstep] 
+
+  override def cleanup(peer: BSPPeer) {
+    super.cleanup(peer)
+    TaskOperator.execute(taskOperator, { (task) =>  {
+      val phase = task.getPhase
+      LOG.info("Phase {} should be CLEANUP right now.", phase)
+      tester ! phase
+      val state = task.getState
+      LOG.info("State {} should be SUCCEEDED right now.", state)
+      tester ! state
+      val finishTime = task.getFinishTime
+      LOG.info("This task is finished at {}", finishTime)
+      if(0 >= finishTime) 
+        throw new RuntimeException("Illegal task finish time! "+finishTime)
+    }})
+  }
   
   override def setup(peer: BSPPeer) {
     super.setup(peer)
-    val phase = TaskOperator.execute[Phase](taskOperator, { (task) => 
-      task.getPhase }, null.asInstanceOf[Phase])
-    tester ! phase 
-    val state = TaskOperator.execute[State](taskOperator, { (task) => 
-      task.getState }, null.asInstanceOf[State])
-    tester ! state  
+    TaskOperator.execute(taskOperator, { (task) => {
+      val startTime = task.getStartTime
+      LOG.info("This task is started at {}", startTime)
+      if(0 >= startTime) 
+        throw new RuntimeException("Illegal task start time! "+startTime)
+      val phase = task.getPhase 
+      tester ! phase 
+      LOG.info("Phase {} should SETUP right now.", phase)
+      val state = task.getState 
+      LOG.info("State {} should RUNNING right now.", state)
+      tester ! state  
+    }})
   }
 
   override def doExecute(taskAttemptId: String, conf: HamaConfiguration, 
@@ -101,13 +125,31 @@ class MockWorker1(conf: HamaConfiguration, container: ActorRef,
     captured = asInstanceOf[SuperstepBSP].supersteps 
     LOG.info("Captured supersteps is "+captured)
   }
+
+  override def transitToCompute() {
+    super.transitToCompute
+    TaskOperator.execute(taskOperator, { (task) => {
+      val phase = task.getPhase
+      LOG.info("Phase {} should COMPUTE right now.", phase)
+      tester ! phase
+    }})
+  }
+
+  override def doSync(peer: BSPPeer) {
+    super.doSync(peer)
+    TaskOperator.execute(taskOperator, { (task) => {
+      val phase = task.getPhase
+      LOG.info("Phase {} should be BARRIER_SYNC right now.", phase)
+      tester ! phase
+    }}) 
+  }
   
   def getCount: Receive = {
     case GetCount =>  {
       captured.get(classOf[C].getName) match {
         case Some(found) => {
           val count = found.find[IntWritable]("count")
-          LOG.info("xxxxxxxxxxxxxx What is the count value in variables map? {}", count)
+          LOG.info("What is the count value in variables map? {}", count)
           tester ! count.get
         }
         case None => throw new RuntimeException("Superstep C not found!")
@@ -174,6 +216,8 @@ class TestWorker extends TestEnv("TestWorker") with JobUtil
                                         testConfiguration)
      val container = createWithArgs("container", classOf[BSPPeerContainer],
                                     testConfiguration)
+     // change checkpointer's root path to /tmp/hama/ckpt dir
+     testConfiguration.set("bsp.checkpoint.root.path", "/tmp/hama/ckpt")
      val task = createTask("workerTask", 1, 1, 1, testConfiguration)
      val worker = createWithArgs("testWorker", classOf[MockWorker1], 
                                  testConfiguration, container, peerMessenger, 
@@ -184,8 +228,29 @@ class TestWorker extends TestEnv("TestWorker") with JobUtil
                       task.getConfiguration)
      expect(Phase.SETUP)
      expect(State.RUNNING)
+
+     // A
+     expect(Phase.COMPUTE) 
+     expect(Phase.BARRIER_SYNC)
+     // B
+     expect(Phase.COMPUTE)
+     expect(Phase.BARRIER_SYNC)
+     // C
+     expect(Phase.COMPUTE)
+     expect(Phase.BARRIER_SYNC)
+     // A
+     expect(Phase.COMPUTE) 
+     expect(Phase.BARRIER_SYNC)
+     // final step 
+     expect(Phase.COMPUTE) // when next is null, no sync will be ran 
+
+     expect(Phase.CLEANUP)
+     expect(State.SUCCEEDED)
+     
      worker ! GetCount
      expect(2)
+     LOG.info("Wait 10 seconds for checkpoint finished! ")
+     sleep(10.seconds)
      LOG.info("Done testing BSP Worker!")
   }
 }

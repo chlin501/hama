@@ -30,7 +30,6 @@ import org.apache.hama.monitor.CheckpointerReceiver
 import org.apache.hama.monitor.Pack
 import org.apache.hama.sync.SyncException
 import org.apache.hama.logging.TaskLog
-import org.apache.hama.util.Curator
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
@@ -39,7 +38,7 @@ import scala.util.Try
  * This class manages all superstep and supersteps routing, started from the
  * first superstep, according to the execution instruction.
  */
-protected trait SuperstepBSP extends BSP with Agent with TaskLog with Curator {
+protected trait SuperstepBSP extends BSP with Agent with TaskLog {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
@@ -57,8 +56,11 @@ protected trait SuperstepBSP extends BSP with Agent with TaskLog with Curator {
   @throws(classOf[IOException])
   @throws(classOf[SyncException])
   override def setup(peer: BSPPeer) {
-    TaskOperator.execute(taskOperator, { (task) => task.transitToSetup })
-    TaskOperator.execute(taskOperator, { (task) => task.markAsRunning })
+    TaskOperator.execute(taskOperator, { (task) => {
+      task.markTaskStarted
+      task.transitToSetup 
+      task.markAsRunning 
+    }})
     val classes = commonConf(peer).get("hama.supersteps.class")
     LOG.info("Supersteps to be instantiated include {}", classes)
     val classNames = classes.split(",")
@@ -107,14 +109,14 @@ protected trait SuperstepBSP extends BSP with Agent with TaskLog with Curator {
       case Some(found) => {
         val superstep = found._2
         superstep.setVariables(variables)
-        TaskOperator.execute(taskOperator, { (task) => task.transitToCompute })
+        transitToCompute
         superstep.compute(peer)
         val next = superstep.next
         next match {
            case null => eventually(peer)
            case clazz@_ => {
              prepareForCheckpoint(peer, superstep)
-             peer.sync
+             doSync(peer)
              findThenExecute(clazz.getName, peer, superstep.getVariables)
            }
         }
@@ -124,13 +126,18 @@ protected trait SuperstepBSP extends BSP with Agent with TaskLog with Curator {
     }
   }
 
+  protected def transitToCompute() = 
+    TaskOperator.execute(taskOperator, { (task) => task.transitToCompute })
+
+  protected def doSync(peer: BSPPeer) = peer.sync
+
   protected def createCheckpointer(peer: BSPPeer): Option[ActorRef] = 
     TaskOperator.execute[Option[ActorRef]](taskOperator, { (task) => {
       val superstepCount = peer.getSuperstepCount
       val actorName = "checkpoint-"+task.getId.toString+"-"+superstepCount
-      val ckpt = spawn(actorName, classOf[Checkpointer], commonConf(peer),
+      val ckpt = spawn(actorName, classOf[Checkpointer], commonConf(peer), 
                        task.getConfiguration, task.getId.toString, 
-                       superstepCount) 
+                       superstepCount)
       LOG.debug("Checkpointer "+ckpt.path.name+" is created!")
       Some(ckpt)
     }}, None)
@@ -155,6 +162,7 @@ protected trait SuperstepBSP extends BSP with Agent with TaskLog with Curator {
    * Check common configuration if checkpoint is needed.
    * @param conf is the common configuration.
    */
+  // TODO: move to checkpoint related api
   protected def isCheckpointEnabled(conf: HamaConfiguration): Boolean = 
     conf.getBoolean("bsp.checkpoint.enabled", true)
 
@@ -162,10 +170,15 @@ protected trait SuperstepBSP extends BSP with Agent with TaskLog with Curator {
 
   @throws(classOf[IOException])
   override def cleanup(peer: BSPPeer) { 
+LOG.info("xxxxxxxxxxxxxxxxxxxxxxxx start cleanup .....")
     TaskOperator.execute(taskOperator, { (task) => task.transitToCleanup })
     supersteps.foreach{ case (key, value) => {
       value.cleanup(peer)  
     }}
-    TaskOperator.execute(taskOperator, { (task) => task.markAsSucceed })
+LOG.info("xxxxxxxxxxxxxxxxxxxxxxxx after cleanup .....")
+    TaskOperator.execute(taskOperator, { (task) => {
+      task.markAsSucceed 
+      task.markTaskFinished
+    }})
   }
 }
