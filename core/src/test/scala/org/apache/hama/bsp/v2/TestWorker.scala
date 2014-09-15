@@ -126,8 +126,8 @@ class MockWorker1(conf: HamaConfiguration, container: ActorRef,
     LOG.info("Captured supersteps is "+captured)
   }
 
-  override def transitToCompute() {
-    super.transitToCompute
+  override def beforeCompute(peer: BSPPeer, superstep: Superstep) {
+    super.beforeCompute(peer, superstep)
     TaskOperator.execute(taskOperator, { (task) => {
       val phase = task.getPhase
       LOG.info("Phase {} should COMPUTE right now.", phase)
@@ -135,8 +135,8 @@ class MockWorker1(conf: HamaConfiguration, container: ActorRef,
     }})
   }
 
-  override def doSync(peer: BSPPeer) {
-    super.doSync(peer)
+  override def whenSync(peer: BSPPeer, superstep: Superstep) {
+    super.whenSync(peer, superstep)
     TaskOperator.execute(taskOperator, { (task) => {
       val phase = task.getPhase
       LOG.info("Phase {} should be BARRIER_SYNC right now.", phase)
@@ -207,7 +207,7 @@ class TestWorker extends TestEnv("TestWorker") with JobUtil
 
   def slotSeq: Int = testConfiguration.getInt("bsp.child.slot.seq", 98)
 
-  it("test bsp worker function.") {
+  it("test bsp worker and task status function.") {
      val id = identifier(testConfiguration)
      val tasklog = createWithArgs("taskLogger"+slotSeq, classOf[TaskLogger],
                                   testRootPath+"/tasklogs")

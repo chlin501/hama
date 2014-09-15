@@ -38,7 +38,10 @@ import scala.util.Try
  * This class manages all superstep and supersteps routing, started from the
  * first superstep, according to the execution instruction.
  */
-protected trait SuperstepBSP extends BSP with Agent with TaskLog {
+protected trait SuperstepBSP extends BSP 
+                             with Agent 
+                             with TaskLog 
+                             with StateOperation {
 
   protected[v2] var supersteps = Map.empty[String, Superstep] 
 
@@ -52,15 +55,18 @@ protected trait SuperstepBSP extends BSP with Agent with TaskLog {
    */
   protected[v2] def commonConf(peer: BSPPeer): HamaConfiguration = 
     peer.configuration
-  
-  @throws(classOf[IOException])
-  @throws(classOf[SyncException])
-  override def setup(peer: BSPPeer) {
+
+  override def beforeSetup(peer: BSPPeer) = 
     TaskOperator.execute(taskOperator, { (task) => {
       task.markTaskStarted
       task.transitToSetup 
       task.markAsRunning 
     }})
+  
+  @throws(classOf[IOException])
+  @throws(classOf[SyncException])
+  override def setup(peer: BSPPeer) {
+    beforeSetup(peer)
     val classes = commonConf(peer).get("hama.supersteps.class")
     LOG.info("Supersteps to be instantiated include {}", classes)
     val classNames = classes.split(",")
@@ -76,6 +82,11 @@ protected trait SuperstepBSP extends BSP with Agent with TaskLog {
     })
   }
 
+  /**
+   * Load class from a particular load which contains the target class.
+   * @param className is the name of class to be loaded.
+   * @return Class to be instantiated.
+   */
   protected def classWithLoader(className: String): Class[_] = 
     TaskOperator.execute[Class[_]](taskOperator, { (task) => 
       Class.forName(className, true, task.getConfiguration.getClassLoader)
@@ -109,14 +120,14 @@ protected trait SuperstepBSP extends BSP with Agent with TaskLog {
       case Some(found) => {
         val superstep = found._2
         superstep.setVariables(variables)
-        transitToCompute
+        beforeCompute(peer, superstep)
         superstep.compute(peer)
         val next = superstep.next
         next match { // TODO: null==next causes sync is not executed. check if need to change to sync before going to cleanup!
            case null => eventually(peer)
            case clazz@_ => {
-             prepareForCheckpoint(peer, superstep)
-             doSync(peer)
+             beforeSync(peer, superstep)
+             whenSync(peer, superstep)
              findThenExecute(clazz.getName, peer, superstep.getVariables)
            }
         }
@@ -126,10 +137,13 @@ protected trait SuperstepBSP extends BSP with Agent with TaskLog {
     }
   }
 
-  protected def transitToCompute() = 
+  override def beforeSync(peer: BSPPeer, superstep: Superstep) = 
+    prepareForCheckpoint(peer, superstep)
+
+  override def beforeCompute(peer: BSPPeer, superstep: Superstep) = 
     TaskOperator.execute(taskOperator, { (task) => task.transitToCompute })
 
-  protected def doSync(peer: BSPPeer) = peer.sync
+  override def whenSync(peer: BSPPeer, superstep: Superstep) = peer.sync
 
   protected def createCheckpointer(peer: BSPPeer): Option[ActorRef] = 
     TaskOperator.execute[Option[ActorRef]](taskOperator, { (task) => {
@@ -168,17 +182,21 @@ protected trait SuperstepBSP extends BSP with Agent with TaskLog {
 
   protected def eventually(peer: BSPPeer) = cleanup(peer) 
 
-  @throws(classOf[IOException])
-  override def cleanup(peer: BSPPeer) { 
-LOG.info("xxxxxxxxxxxxxxxxxxxxxxxx start cleanup .....")
+  override def beforeCleanup(peer: BSPPeer) = 
     TaskOperator.execute(taskOperator, { (task) => task.transitToCleanup })
-    supersteps.foreach{ case (key, value) => {
-      value.cleanup(peer)  
-    }}
-LOG.info("xxxxxxxxxxxxxxxxxxxxxxxx after cleanup .....")
-    TaskOperator.execute(taskOperator, { (task) => {
+
+  override def afterCleanup(peer: BSPPeer) = 
+    TaskOperator.execute(taskOperator, { (task) => { 
       task.markAsSucceed 
       task.markTaskFinished
     }})
+
+  @throws(classOf[IOException])
+  override def cleanup(peer: BSPPeer) { 
+    beforeCleanup(peer)
+    supersteps.foreach{ case (key, value) => {
+      value.cleanup(peer)  
+    }}
+    afterCleanup(peer)
   }
 }
