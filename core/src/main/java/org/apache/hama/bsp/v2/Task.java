@@ -32,9 +32,9 @@ import org.apache.hadoop.io.WritableUtils;
 import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.io.PartitionedSplit;
-import org.apache.hama.monitor.metrics.Metric;
-import org.apache.hama.monitor.metrics.MetricsRecord;
-import org.apache.hama.monitor.Recordable;
+//import org.apache.hama.monitor.metrics.Metric;
+//import org.apache.hama.monitor.metrics.MetricsRecord;
+import org.apache.hama.monitor.Transformable;
 import org.apache.hama.monitor.TaskStat;
 
 /**
@@ -44,7 +44,7 @@ import org.apache.hama.monitor.TaskStat;
  * old one provided.
  * This class can also produce metrics stats for monitor.
  */
-public final class Task implements Writable, Recordable { 
+public final class Task implements Writable, Transformable { 
 
   final Log LOG = LogFactory.getLog(Task.class);
 
@@ -506,16 +506,9 @@ public final class Task implements Writable, Recordable {
   }
 
   @Override
-  public MetricsRecord record(final String serverName) {
-    final MetricsRecord record = 
-      new MetricsRecord(serverName, "taskStat", "task stat data.");
-    final TaskStat taskStat = 
-      new TaskStat(getId(), getCurrentSuperstep(), getStartTime(), 
-                   getFinishTime(), getState(), getPhase(), isCompleted());
-    record.add(new Metric("TaskStat", "task stat data.", TaskStat.class, 
-                           taskStat));
-    return record;
+  public TaskStat toStat() {
+    return new TaskStat(getId(), getCurrentSuperstep(), getStartTime(), 
+                        getFinishTime(), getState(), getPhase(), isCompleted());
   }
-  
 }
 

@@ -30,8 +30,8 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Writable;
 import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
-import org.apache.hama.monitor.metrics.MetricsRecord;
-import org.apache.hama.monitor.metrics.Metric;
+//import org.apache.hama.monitor.metrics.MetricsRecord;
+//import org.apache.hama.monitor.metrics.Metric;
 import org.apache.hama.monitor.TaskStat;
 
 /**
@@ -133,27 +133,14 @@ public class TestTask extends TestCase {
                  task.isCompleted(), forVerification.isCompleted());
   }
 
-  public void testRecordable() throws Exception {
+  public void testTransformable() throws Exception {
     final Task task = createTaskWithDefault(3);
     assertNotNull("Task shouldn't be null!", task);
-    final MetricsRecord record = task.record("server_0.0.0.0_500001");
-    assertNotNull("MetricsRecord shouldn't be null!", record);
-    final List<Metric> metrics = record.getMetrics();
-    assertNotNull("Collected metrics shouldn't be null!", metrics);
-    for(final Metric metric: metrics) {
-      LOG.info("Recorded metric is "+metric);
-      final String name = metric.getName();
-      assertEquals("Metric name should be TaskStat", "TaskStat", name);
-      final String desc = metric.getDescription();
-      assertEquals("Metric desc should be 'task stat data.'", 
-                   "task stat data.", desc);
-      final Class<? extends Writable> declared = metric.getDeclared();
-      assertEquals("Metric class should be "+TaskStat.class, 
-                   TaskStat.class, declared);
-      final String ret = "TaskStat(attempt_test_0003_000003_3,0,0,0,"+
-                         "WAITING,SETUP,false)";
-      final Writable value = metric.getValue();
-      assertEquals("Writable string should be "+ret, ret, value.toString());
-    }
+    final TaskStat taskStat = task.toStat();
+    assertNotNull("Task stat shouldn't be null!", taskStat);
+    final String ret = "TaskStat(attempt_test_0003_000003_3,0,0,0,"+
+                       "WAITING,SETUP,false)";
+    LOG.info("Task stat values is "+taskStat.toString());
+    assertEquals("String should be "+ret, ret, taskStat.toString());
   }
 }

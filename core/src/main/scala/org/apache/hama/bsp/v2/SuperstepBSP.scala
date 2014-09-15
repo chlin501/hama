@@ -112,7 +112,7 @@ protected trait SuperstepBSP extends BSP with Agent with TaskLog {
         transitToCompute
         superstep.compute(peer)
         val next = superstep.next
-        next match {
+        next match { // TODO: null==next causes sync is not executed. check if need to change to sync before going to cleanup!
            case null => eventually(peer)
            case clazz@_ => {
              prepareForCheckpoint(peer, superstep)

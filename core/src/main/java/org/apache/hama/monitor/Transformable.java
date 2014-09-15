@@ -17,19 +17,15 @@
  */
 package org.apache.hama.monitor;
 
-import org.apache.hama.monitor.metrics.MetricsRecord;
-
 /**
  * This provides a way to produce stats data for monitoring.
  */
-public interface Recordable {
+public interface Transformable { 
 
   /**
-   * Record stat data as {@link MetricsRecord} for reporting.
-   * @param serverName denotes on which server e.g. GroomSever this record is
-   *                   generated.
+   * Produce stat data. 
    * @return MetricsRecord contains related stats data.
    */
-  MetricsRecord record(final String serverName);
+  <T> T toStat();
 
 }
