@@ -56,17 +56,14 @@ protected trait SuperstepBSP extends BSP
   protected[v2] def commonConf(peer: BSPPeer): HamaConfiguration = 
     peer.configuration
 
-  override def beforeSetup(peer: BSPPeer) = 
+  override def beginOfSetup(peer: BSPPeer) = 
     TaskOperator.execute(taskOperator, { (task) => {
       task.markTaskStarted
       task.transitToSetup 
       task.markAsRunning 
     }})
-  
-  @throws(classOf[IOException])
-  @throws(classOf[SyncException])
-  override def setup(peer: BSPPeer) {
-    beforeSetup(peer)
+
+  override def whenSetup(peer: BSPPeer) {
     val classes = commonConf(peer).get("hama.supersteps.class")
     LOG.info("Supersteps to be instantiated include {}", classes)
     val classNames = classes.split(",")
@@ -79,7 +76,15 @@ protected trait SuperstepBSP extends BSP
         case Failure(cause) => 
           throw new IOException("Fail instantiating "+className, cause)
       }
-    })
+    })  
+  }
+
+  @throws(classOf[IOException])
+  @throws(classOf[SyncException])
+  override def setup(peer: BSPPeer) {
+    beginOfSetup(peer)
+    whenSetup(peer)
+    endOfSetup(peer)
   }
 
   /**
@@ -121,13 +126,15 @@ protected trait SuperstepBSP extends BSP
         val superstep = found._2
         superstep.setVariables(variables)
         beforeCompute(peer, superstep)
-        superstep.compute(peer)
+        whenCompute(peer, superstep)
+        afterCompute(peer, superstep)
         val next = superstep.next
         next match { // TODO: null==next causes sync is not executed. check if need to change to sync before going to cleanup!
            case null => eventually(peer)
            case clazz@_ => {
              beforeSync(peer, superstep)
              whenSync(peer, superstep)
+             afterSync(peer, superstep)
              findThenExecute(clazz.getName, peer, superstep.getVariables)
            }
         }
@@ -142,6 +149,9 @@ protected trait SuperstepBSP extends BSP
 
   override def beforeCompute(peer: BSPPeer, superstep: Superstep) = 
     TaskOperator.execute(taskOperator, { (task) => task.transitToCompute })
+
+  override def whenCompute(peer: BSPPeer, superstep: Superstep) = 
+    superstep.compute(peer)
 
   override def whenSync(peer: BSPPeer, superstep: Superstep) = peer.sync
 
@@ -182,21 +192,24 @@ protected trait SuperstepBSP extends BSP
 
   protected def eventually(peer: BSPPeer) = cleanup(peer) 
 
-  override def beforeCleanup(peer: BSPPeer) = 
+  override def beginOfCleanup(peer: BSPPeer) = 
     TaskOperator.execute(taskOperator, { (task) => task.transitToCleanup })
 
-  override def afterCleanup(peer: BSPPeer) = 
+  override def endOfCleanup(peer: BSPPeer) = 
     TaskOperator.execute(taskOperator, { (task) => { 
       task.markAsSucceed 
       task.markTaskFinished
     }})
 
+  override def whenCleanup(peer: BSPPeer) = supersteps.foreach { 
+    case (key, value) => {
+      value.cleanup(peer)  
+  }}
+
   @throws(classOf[IOException])
   override def cleanup(peer: BSPPeer) { 
-    beforeCleanup(peer)
-    supersteps.foreach{ case (key, value) => {
-      value.cleanup(peer)  
-    }}
-    afterCleanup(peer)
+    beginOfCleanup(peer)
+    whenCleanup(peer)
+    endOfCleanup(peer)
   }
 }

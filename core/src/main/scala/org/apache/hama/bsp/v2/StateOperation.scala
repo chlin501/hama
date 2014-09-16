@@ -17,13 +17,13 @@
  */
 package org.apache.hama.bsp.v2
 
-trait StateOperation { // TODO: scala AOP? 
+trait StateOperation { 
 
-  def beforeSetup(peer: BSPPeer) { }
+  def beginOfSetup(peer: BSPPeer) { }
 
   def whenSetup(peer: BSPPeer) { }
 
-  def afterSetup(peer: BSPPeer) { }
+  def endOfSetup(peer: BSPPeer) { }
 
   def beforeCompute(peer: BSPPeer, superstep: Superstep) { }
 
@@ -37,9 +37,9 @@ trait StateOperation { // TODO: scala AOP?
 
   def afterSync(peer: BSPPeer, superstep: Superstep) { }
 
-  def beforeCleanup(peer: BSPPeer) { }
+  def beginOfCleanup(peer: BSPPeer) { }
 
   def whenCleanup(peer: BSPPeer) { }
 
-  def afterCleanup(peer: BSPPeer) { }
+  def endOfCleanup(peer: BSPPeer) { }
 }
