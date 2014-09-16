@@ -48,6 +48,12 @@ protected trait SuperstepBSP extends BSP
   protected[v2] var taskOperator: Option[TaskOperator] = None 
 
   /**
+   * This function reports TaskStat to container so that container can decide 
+   * next step when worker is offline.
+   */
+  protected def reporter(): ActorRef  
+
+  /**
    * This function returns common configuration from BSPPeer.
    * @param peer for the aggregation of all supersteps.
    * @return HamaConfiguration is common configuration, not specific to any 
@@ -61,6 +67,7 @@ protected trait SuperstepBSP extends BSP
       task.markTaskStarted
       task.transitToSetup 
       task.markAsRunning 
+      reporter ! task.toStat
     }})
 
   override def whenSetup(peer: BSPPeer) {
@@ -152,7 +159,11 @@ protected trait SuperstepBSP extends BSP
     prepareForCheckpoint(peer, superstep)
 
   override def beforeCompute(peer: BSPPeer, superstep: Superstep) = 
-    TaskOperator.execute(taskOperator, { (task) => task.transitToCompute })
+    TaskOperator.execute(taskOperator, { (task) => {
+      task.transitToCompute 
+      reporter ! task.toStat
+    }})
+  
 
   override def whenCompute(peer: BSPPeer, superstep: Superstep) = 
     superstep.compute(peer)
@@ -197,12 +208,16 @@ protected trait SuperstepBSP extends BSP
   protected def eventually(peer: BSPPeer) = cleanup(peer) 
 
   override def beginOfCleanup(peer: BSPPeer) = 
-    TaskOperator.execute(taskOperator, { (task) => task.transitToCleanup })
+    TaskOperator.execute(taskOperator, { (task) => {
+      task.transitToCleanup 
+      reporter ! task.toStat
+    }})
 
   override def endOfCleanup(peer: BSPPeer) = 
     TaskOperator.execute(taskOperator, { (task) => { 
       task.markAsSucceed 
       task.markTaskFinished
+      reporter ! task.toStat
     }})
 
   override def whenCleanup(peer: BSPPeer) = supersteps.foreach { 

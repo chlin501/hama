@@ -37,6 +37,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.LocalService
 import org.apache.hama.message.PeerMessenger
+import org.apache.hama.monitor.TaskStat
 import org.apache.hama.RemoteService
 import org.apache.hama.util.ActorLocator
 import org.apache.hama.util.ExecutorLocator
@@ -58,6 +59,8 @@ import scala.concurrent.duration.DurationInt
  */
 final case class Args(actorSystemName: String, listeningTo: String, port: Int, 
                       seq: Int, config: Config)
+
+final case class Report(stat: TaskStat)
 
 object BSPPeerContainer {
 
@@ -137,9 +140,12 @@ object BSPPeerContainer {
 
 /**
  * Launched BSP actor in forked process.
+ * Container is respoinsible for Worker execution. So the relation between 
+ * Container and Worker is 1 on 1.
  * @param conf contains common setting for the forked process instead of tasks
  *             to be executed later on.
  */
+// TODO: rename to Container
 class BSPPeerContainer(conf: HamaConfiguration) extends LocalService 
                                                 with RemoteService 
                                                 with ActorLocator {
@@ -149,7 +155,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   /**
    * This serves as internal communicator between peers.
    */
-  protected val peerMessenger: ActorRef = createPeerMessenger(identifier(conf))
+  protected val peerMessenger = createPeerMessenger(identifier(conf))
 
   /**
    * A log class for tasks to be executed. Sending TaskAttemptID to switch
@@ -160,6 +166,10 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
                                                        slotSeq) 
 
   protected var executor: Option[ActorRef] = None
+
+  protected var taskWorker: Option[ActorRef] = None
+
+  protected var taskStat: Option[TaskStat] = None
 
   override def configuration: HamaConfiguration = conf
 
@@ -172,21 +182,29 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
   protected def executorName: String = "groomServer_executor_"+slotSeq
  
-  override def initializeServices {
+  override def initializeServices =
     lookup(executorName, locate(ExecutorLocator(configuration)))
-  }
 
   override def afterLinked(proxy: ActorRef) {
-    executor = Some(proxy)
-    executor match {
-      case Some(found) => {
-        found ! ContainerReady
-        LOG.info("Slot seq {} sends ContainerReady to {}", 
-                 slotSeq, found.path.name)
-      }
-      case None => 
-    }
+    executor = Option(proxy)
+    executor.map( found => {
+      found ! ContainerReady
+      LOG.info("Slot seq {} sends ContainerReady to {}", slotSeq, 
+               found.path.name)
+    })
   }
+
+  protected def createPeerMessenger(id: String): ActorRef = 
+    spawn("peerMessenger_"+id, classOf[PeerMessenger], conf)
+
+  /**
+   * Check if the task worker is running. true if a worker is running; false 
+   * otherwise.
+   * @param worker wraps the task worker as option.
+   * @return Boolean denotes worker is running if true; otherwise false.
+   */
+  protected def isOccupied(worker: Option[ActorRef]): Boolean = 
+    worker.map( v => true).getOrElse(false)
 
   /**
    * - Asynchronouly create task with an actor.
@@ -194,16 +212,14 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * @param Receive is partial function.
    */
   def launchTask: Receive = {
-    case action: LaunchTask => {
+    case action: LaunchTask => if(!isOccupied(taskWorker)) {
       doLaunch(action.task)
       postLaunch(slotSeq, action.task.getId, sender)
-    }
+    } else LOG.warning("Task worker is already running!")
   }
 
-  protected def createPeerMessenger(id: String): ActorRef = 
-    spawn("peerMessenger_"+id, classOf[PeerMessenger], conf)
 
-  protected def identifier(conf: HamaConfiguration): String = {
+  protected def identifier(conf: HamaConfiguration): String = 
     conf.getInt("bsp.child.slot.seq", -1) match {
       case -1 => throw new RuntimeException("Slot seq shouldn't be -1!")
       case seq@_ => {
@@ -213,7 +229,6 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
         "BSPPeerSystem%d@%s:%d".format(seq, host, port)
       }
     }
-  }
 
   protected def createTaskLogger[A <: TaskLogger](logger: Class[A], 
                                                   logDir: String,
@@ -225,12 +240,14 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * @param task that is supplied to be executed.
    */
   def doLaunch(task: Task) { 
-    val taskWorker = spawn("taskWoker", classOf[Worker], configuration, self, 
-                       peerMessenger, tasklog)
-    context.watch(taskWorker)
-    taskWorker ! ConfigureFor(task)
-    taskWorker ! Execute(task.getId.toString, configuration, 
-                         task.getConfiguration)
+    taskWorker = Option(spawn("taskWoker", classOf[Worker], configuration, 
+                              self, peerMessenger, tasklog)).map( worker => {
+      context.watch(worker)
+      worker ! ConfigureFor(task)
+      worker ! Execute(task.getId.toString, configuration, 
+                       task.getConfiguration)
+      worker
+    })
   }
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
@@ -244,7 +261,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * @param Receive is partial function.
    */
   def resumeTask: Receive = {
-    case action: ResumeTask => {
+    case action: ResumeTask => if(!isOccupied(taskWorker)) {
       doResume(action.task)
       postResume(slotSeq, action.task.getId, sender)
     }
@@ -329,9 +346,31 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * @param target actor is {@link Executor}
    */
   override def offline(target: ActorRef) {
-    LOG.info("{} is offline. So we are going to shutdown itself ...", target)
-    self ! ShutdownContainer
+    LOG.info("{} is offline!", target.path.name)
+    val ExecutorName = executorName
+    target.path.name match {
+      case "taskWorker" => // TODO: mark task as fail (update taskStat), restart, etc.
+      case `ExecutorName` => self ! ShutdownContainer
+      case unexpected@_ => 
+        LOG.warning("Unexpected actor {} is offline!", unexpected)
+    }
   }
 
-  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
+  /**
+   * Report running worker's task stat data.
+   * @return Receive is partial function.
+   */
+  def reportStat: Receive = {
+    case Report(stat) => updateStat(stat)
+  }
+
+  /**
+   * Update task stat data.
+   */
+  protected def updateStat(stat: TaskStat) {
+    taskStat = Option(stat)
+    // TODO: spawn a new actor and transform/ write to external place e.g. zk
+  }
+
+  override def receive = reportStat orElse launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
 }

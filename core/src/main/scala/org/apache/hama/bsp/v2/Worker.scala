@@ -59,6 +59,8 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
+  override def reporter(): ActorRef = container
+
   /**
    * This ties coordinator to a particular task.
    */
@@ -151,12 +153,11 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
    * Close underlying {@link BSPPeer} operations.
    * @return Receive is partial function.
    */
-  def close: Receive = {
-    case Close => {
-      TaskOperator.execute(taskOperator, { (task) => closeLog(task.getId) })
-      close
-    }
+  def closeAll: Receive = {
+    case Close => TaskOperator.execute(taskOperator, { (task) => 
+      closeLog(task.getId) 
+    })
   }
 
-  override def receive = configFor orElse execute orElse close orElse unknown
+  override def receive = configFor orElse execute orElse closeAll orElse unknown
 }
