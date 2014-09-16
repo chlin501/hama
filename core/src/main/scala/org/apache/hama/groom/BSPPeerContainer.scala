@@ -37,6 +37,8 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.LocalService
 import org.apache.hama.message.PeerMessenger
+import org.apache.hama.monitor.Report
+import org.apache.hama.monitor.TaskReporter
 import org.apache.hama.monitor.TaskStat
 import org.apache.hama.RemoteService
 import org.apache.hama.util.ActorLocator
@@ -59,8 +61,6 @@ import scala.concurrent.duration.DurationInt
  */
 final case class Args(actorSystemName: String, listeningTo: String, port: Int, 
                       seq: Int, config: Config)
-
-final case class Report(stat: TaskStat)
 
 object BSPPeerContainer {
 
@@ -170,6 +170,8 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   protected var taskWorker: Option[ActorRef] = None
 
   protected var taskStat: Option[TaskStat] = None
+
+  protected var taskReporter: Option[ActorRef] = None
 
   override def configuration: HamaConfiguration = conf
 
@@ -366,10 +368,15 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
   /**
    * Update task stat data.
+   * @param stat contains the Task currently executed.
    */
   protected def updateStat(stat: TaskStat) {
     taskStat = Option(stat)
     // TODO: spawn a new actor and transform/ write to external place e.g. zk
+    taskReporter = if(taskReporter.isEmpty) {
+      Option(spawn("taskReporter", classOf[TaskReporter])) 
+    } else None
+    taskReporter.map( reporter => { reporter ! Report(stat) })  
   }
 
   override def receive = reportStat orElse launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
