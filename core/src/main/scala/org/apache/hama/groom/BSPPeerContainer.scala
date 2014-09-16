@@ -19,14 +19,10 @@ package org.apache.hama.groom
 
 import akka.actor.ActorSystem
 import akka.actor.Props
-import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Cancellable
-import akka.event.Logging
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import java.io.File
-import java.io.FileWriter
 import java.net.InetAddress
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.ConfigureFor
@@ -38,7 +34,6 @@ import org.apache.hama.logging.TaskLogger
 import org.apache.hama.LocalService
 import org.apache.hama.message.PeerMessenger
 import org.apache.hama.monitor.Report
-import org.apache.hama.monitor.TaskReporter
 import org.apache.hama.monitor.TaskStat
 import org.apache.hama.RemoteService
 import org.apache.hama.util.ActorLocator
@@ -169,9 +164,11 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
   protected var taskWorker: Option[ActorRef] = None
 
+  /**
+   * The stat to a specific task. Used to check the execution of a task and
+   * related operation.
+   */
   protected var taskStat: Option[TaskStat] = None
-
-  protected var taskReporter: Option[ActorRef] = None
 
   override def configuration: HamaConfiguration = conf
 
@@ -219,7 +216,6 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
       postLaunch(slotSeq, action.task.getId, sender)
     } else LOG.warning("Task worker is already running!")
   }
-
 
   protected def identifier(conf: HamaConfiguration): String = 
     conf.getInt("bsp.child.slot.seq", -1) match {
@@ -316,10 +312,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    */
   def stopContainer: Receive = {
    case StopContainer => {
-      executor match {
-        case Some(found) => found ! ContainerStopped  
-        case None =>
-      }
+      executor.map( found => found ! ContainerStopped)
       LOG.debug("ContainerStopped message is sent ...")
     }
   }
@@ -331,10 +324,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   def shutdownContainer: Receive = {
     case ShutdownContainer => {
       LOG.debug("Unwatch remote executro {} ...", executor)
-      executor match {
-        case Some(found) => context.unwatch(found) 
-        case None =>
-      }
+      executor.map( found => context.unwatch(found) )
       //LOG.debug("Stop {} itself ...", name)
       //context.stop(self)
       LOG.info("Completely shutdown BSPContainer system ...")
@@ -370,14 +360,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * Update task stat data.
    * @param stat contains the Task currently executed.
    */
-  protected def updateStat(stat: TaskStat) {
-    taskStat = Option(stat)
-    // TODO: spawn a new actor and transform/ write to external place e.g. zk
-    taskReporter = if(taskReporter.isEmpty) {
-      Option(spawn("taskReporter", classOf[TaskReporter])) 
-    } else None
-    taskReporter.map( reporter => { reporter ! Report(stat) })  
-  }
+  protected def updateStat(stat: TaskStat) = taskStat = Option(stat)
 
   override def receive = reportStat orElse launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
 }
