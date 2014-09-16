@@ -104,11 +104,15 @@ protected trait SuperstepBSP extends BSP
   @throws(classOf[IOException])
   @throws(classOf[SyncException])
   override def bsp(peer: BSPPeer) {
-    // TODO: check if it's a resume task; if true replace FirstSuperstep with checkpointed one; otherwise start from first superstep!
-    findThenExecute(classOf[FirstSuperstep].getName, 
-                    peer,
-                    Map.empty[String, Writable]) 
+    beginOfBSP(peer)
+    whenBSP(peer)
+    endOfBSP(peer)
   }
+
+  // TODO: check if it's a resume task; if true replace FirstSuperstep with checkpointed one; otherwise start from first superstep!
+  override def whenBSP(peer: BSPPeer) = 
+    findThenExecute(classOf[FirstSuperstep].getName, peer, 
+                    Map.empty[String, Writable]) 
 
   protected def findThenExecute(className: String, 
                                 peer: BSPPeer,

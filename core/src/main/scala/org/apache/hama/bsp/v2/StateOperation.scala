@@ -25,6 +25,12 @@ trait StateOperation {
 
   def endOfSetup(peer: BSPPeer) { }
 
+  def beginOfBSP(peer: BSPPeer) { }
+
+  def whenBSP(peer: BSPPeer) { }
+
+  def endOfBSP(peer: BSPPeer) { }
+
   def beforeCompute(peer: BSPPeer, superstep: Superstep) { }
 
   def whenCompute(peer: BSPPeer, superstep: Superstep) { }
