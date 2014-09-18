@@ -35,6 +35,7 @@ import java.io.OutputStream
 import java.lang.ProcessBuilder
 import org.apache.commons.lang.math.NumberUtils
 import org.apache.hadoop.io.IOUtils
+import org.apache.hama.bsp.v2.Occupied
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.fs.Operation
@@ -116,7 +117,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   val taskManagerName = conf.get("bsp.groom.taskmanager.name", "taskManager") 
   val operation = Operation.get(conf)
   var commandQueue = Queue[Command]()
-  protected var bspPeerContainer: ActorRef =_
+  protected var bspPeerContainer: ActorRef =_ // TODO: Option
   protected var stdout: ActorRef = _
   protected var stderr: ActorRef = _
   protected var isStdoutClosed = false
@@ -373,11 +374,23 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
     }
   }
 
-  def terminated: Receive = {
+  protected def terminated: Receive = {
     case Terminated(target) => LOG.warning("{} is offline.", target.path.name)
   }
 
-  def receive = launchAck orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownContainer orElse unknown
+  /**
+   * Reply to {@link TaskManager} that slot is occupied!
+   * @return Receive is partial function.
+   */
+  protected def occupied: Receive = {
+    case result: Occupied => {
+      LOG.warning("Slot {} is occupied by {}.", result.getSlotSeq, 
+                  result.getTaskAttemptId.toString)
+      taskManagerListener ! result
+    }
+  }
+
+  def receive = launchAck orElse occupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownContainer orElse unknown
      
 }
 

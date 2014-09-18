@@ -46,7 +46,7 @@ object TaskOperator {
    * @return TaskOperator holds {@link Task} and {@link Counters} objects.
    */
   def apply(task: Task): TaskOperator = 
-    new TaskOperator(Some(task), new Counters)
+    new TaskOperator(Option(task), new Counters)
 }
 
 class TaskOperator(task: Option[Task], counters: Counters) {

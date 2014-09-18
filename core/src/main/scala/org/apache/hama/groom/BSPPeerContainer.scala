@@ -27,8 +27,9 @@ import java.net.InetAddress
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.ConfigureFor
 import org.apache.hama.bsp.v2.Execute
+import org.apache.hama.bsp.v2.Occupied
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.bsp.v2.Worker
+import org.apache.hama.bsp.v2.TaskWorker
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.LocalService
@@ -135,8 +136,8 @@ object BSPPeerContainer {
 
 /**
  * Launched BSP actor in forked process.
- * Container is respoinsible for Worker execution. So the relation between 
- * Container and Worker is 1 on 1.
+ * Container is respoinsible for TaskWorker execution. So the relation between 
+ * Container and TaskWorker is 1 on 1.
  * @param conf contains common setting for the forked process instead of tasks
  *             to be executed later on.
  */
@@ -172,7 +173,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
 
   override def configuration: HamaConfiguration = conf
 
-  // TODO: check if any better way to set hama home.
+  // TODO: check if any better way to config hama home.
   protected def hamaHome: String = System.getProperty("hama.home.dir")
 
   protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
@@ -214,7 +215,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
     case action: LaunchTask => if(!isOccupied(taskWorker)) {
       doLaunch(action.task)
       postLaunch(slotSeq, action.task.getId, sender)
-    } else LOG.warning("Task worker is already running!")
+    } else sender ! new Occupied(slotSeq, action.task.getId) 
   }
 
   protected def identifier(conf: HamaConfiguration): String = 
@@ -238,7 +239,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
    * @param task that is supplied to be executed.
    */
   def doLaunch(task: Task) { 
-    taskWorker = Option(spawn("taskWoker", classOf[Worker], configuration, 
+    taskWorker = Option(spawn("taskWoker", classOf[TaskWorker], configuration, 
                               self, peerMessenger, tasklog)).map( worker => {
       context.watch(worker)
       worker ! ConfigureFor(task)

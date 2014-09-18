@@ -39,7 +39,7 @@ import org.apache.hama.util.Utils._
 sealed trait WorkerOperation
 final case class ConfigureFor(task: Task) extends WorkerOperation
 final case class Execute(taskAttemptId: String,
-                         conf: HamaConfiguration, 
+                         commConf: HamaConfiguration, 
                          taskConf: HamaConfiguration) extends WorkerOperation
 final case class Close extends WorkerOperation
 
@@ -48,12 +48,10 @@ final case class LocalMessages[M <: Writable](bundle: BSPMessageBundle[M])
 /**
  * This is the actual class that perform {@link Superstep}s execution.
  */
-// TODO: rename to TaskWorker?
-protected[v2] class Worker(conf: HamaConfiguration,  // common conf
-                           container: ActorRef, 
-                           peerMessenger: ActorRef,
-                           tasklog: ActorRef) extends SuperstepBSP {
-
+protected[v2] class TaskWorker(commConf: HamaConfiguration,  
+                               container: ActorRef, 
+                               peerMessenger: ActorRef,
+                               tasklog: ActorRef) extends SuperstepBSP {
 
   protected val peer = new Coordinator
 
@@ -73,7 +71,7 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
     initializeLog(aTask.getId)
     LOG.info("Configure this worker to task attempt id {}", 
              aTask.getId.toString)
-    peer.configureFor(conf, taskOperator, peerMessenger)
+    peer.configureFor(commConf, taskOperator, peerMessenger)
   }
 
   /**
@@ -81,8 +79,8 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
    * @return Receive id partial function.
    */
   def execute: Receive = {
-    case Execute(taskAttemptId, conf, taskConf) => 
-      doExecute(taskAttemptId, conf, taskConf)
+    case Execute(taskAttemptId, commConf, taskConf) => 
+      doExecute(taskAttemptId, commConf, taskConf)
   }
 
   /**
@@ -90,7 +88,7 @@ protected[v2] class Worker(conf: HamaConfiguration,  // common conf
    * @param taskConf is HamaConfiguration specific to a pariticular task.
    */
   protected def doExecute(taskAttemptId: String, 
-                          conf: HamaConfiguration, 
+                          commConf: HamaConfiguration, 
                           taskConf: HamaConfiguration) {
     addJarToClasspath(taskAttemptId, taskConf)
     setup(peer)

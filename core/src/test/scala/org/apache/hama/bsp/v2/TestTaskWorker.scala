@@ -82,7 +82,7 @@ class C extends Superstep {
 
 class MockWorker1(conf: HamaConfiguration, container: ActorRef, 
                   peerMessenger: ActorRef, tasklog: ActorRef, tester: ActorRef) 
-      extends Worker(conf, container, peerMessenger, tasklog) {
+      extends TaskWorker(conf, container, peerMessenger, tasklog) {
 
   var captured = Map.empty[String, Superstep] 
 
@@ -161,7 +161,7 @@ class MockWorker1(conf: HamaConfiguration, container: ActorRef,
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestWorker extends TestEnv("TestWorker") with JobUtil 
+class TestTaskWorker extends TestEnv("TestTaskWorker") with JobUtil 
                                                with LocalZooKeeper {
 
   override def beforeAll { 
@@ -251,6 +251,6 @@ class TestWorker extends TestEnv("TestWorker") with JobUtil
      expect(2)
      LOG.info("Wait 10 seconds for checkpoint finished! ")
      sleep(10.seconds)
-     LOG.info("Done testing BSP Worker!")
+     LOG.info("Done testing BSP TaskWorker!")
   }
 }

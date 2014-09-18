@@ -50,7 +50,7 @@ final case object SyncThenValidateSuperstep
 class MockWorker(conf: HamaConfiguration, tester: ActorRef, task: Task, 
                  container: ActorRef, peerMessenger: ActorRef, 
                  tasklog: ActorRef)
-      extends Worker(conf, container, peerMessenger, tasklog) {
+      extends TaskWorker(conf, container, peerMessenger, tasklog) {
 
   // getPeerName shouldn't return 0.0.0.0 
   def getPeerName: Receive = {

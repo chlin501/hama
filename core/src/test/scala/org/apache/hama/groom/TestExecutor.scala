@@ -25,15 +25,6 @@ import org.apache.hama.bsp.v2.Task
 import org.apache.hama.master.Directive
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
-//import org.apache.hama.groom.BSPPeerContainer
-//import org.apache.hama.groom.ContainerReady
-//import org.apache.hama.groom.ContainerStopped
-//import org.apache.hama.groom.KillAck
-//import org.apache.hama.groom.LaunchAck
-//import org.apache.hama.groom.MockContainer
-//import org.apache.hama.groom.ResumeAck
-//import org.apache.hama.groom.StopExecutor
-//import org.apache.hama.groom.TaskManager
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
@@ -142,9 +133,9 @@ class TestExecutor extends TestEnv("TestExecutor",
     val taskManagerName = 
       testConfiguration.get("bsp.groom.taskmanager.name", "taskManager")
 
-    val monitor = createWithArgs("monitor", classOf[Monitor])
+    val monitor = createWithArgs("monitor", classOf[Monitor], testConfiguration)
     val aggregator = createWithArgs(taskManagerName, classOf[Aggregator],
-                                    monitor, tester) 
+                                    testConfiguration, monitor, tester) 
   
     /* jobid, taskId, taskAttemptId */
     val task1 = createTask("test", 1, 7, 2) 
