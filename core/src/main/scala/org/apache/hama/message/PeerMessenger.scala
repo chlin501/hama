@@ -96,9 +96,9 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
   protected def findWith[M <: Writable](peer: ProxyInfo, 
                                         msgs: BSPMessageBundle[M],
                                         from: ActorRef) = msgs match {
-    case null => LOG.warning("Messages for {} not found", peer)
+    case null => LOG.warning("Messages for {} is empty!", peer)
     case bundle@_ => from match {
-      case null =>
+      case null => LOG.warning("Unknown sender for {} ", peer)
       case f@_ => {
         addToWaitingList(peer, MessageFrom(msgs, f))
         LOG.info("Look up remote peer "+peer.getActorName+" at "+peer.getPath)

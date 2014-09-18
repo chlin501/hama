@@ -70,16 +70,6 @@ class OutgoingPOJOMessageBundle[M <: Writable]
 
   protected def newInstance(combinerClass: Class[_]): Try[Combiner[M]] =
     Try(ReflectionUtils.newInstance(combinerClass).asInstanceOf[Combiner[M]])
-  
-
-/*
-  protected def getCompressionThreshold(conf: Option[HamaConfiguration]): 
-    Long = conf match {
-      case None => 128L
-      case Some(found) => found.getLong("hama.messenger.compression.threshold",
-                                        128)
-  }
-*/
 
   override def addMessage(peer: ProxyInfo, msg: M) {
     outgoingBundles.containsKey(peer) match {

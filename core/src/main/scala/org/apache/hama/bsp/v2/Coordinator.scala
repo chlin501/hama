@@ -228,7 +228,6 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
                                          "to {}", cause)
       }
     })
-    //noMoreBundle(pack, getTask.getId.toString, getSuperstepCount)
      
     enterBarrier()
     clear()

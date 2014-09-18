@@ -145,18 +145,28 @@ object Container {
  * @param conf contains common setting for the forked process instead of tasks
  *             to be executed later on.
  */
-// TODO: rename to Container
 class Container(conf: HamaConfiguration) extends LocalService 
-                                                with RemoteService 
-                                                with ActorLocator {
+                                         with RemoteService 
+                                         with ActorLocator {
 
   import Container._
 
+  // N.B.: When sending messages fails, Terminated message should be observed at
+  //       PeerMessenger because we send messages through peer messenger.
+  //       If remote peer messenger throws exception, it should be able to 
+  //       receives/ replies messages as usual.
+  //       So we should watch peer messenger and if remote peer messenger is 
+  //       terminated (offline); if remote terminated, notify container in 
+  //       reacting for such event.
+
+  // check what exceptions are thrown in superstep bsp, worker, coordinator.
+  // remove unnecessary exceptions or replace exceptions with notifying 
+  // container for reaction!
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
-       case _: IllegalArgumentException => Stop
-       case _: IOException => Restart
-       case _: SyncException => Resume // TODO: test case  
+       //case _: IllegalArgumentException => Stop
+       case _: IOException => Restart // this may be user io issue. 
+       case _: SyncException => Resume  
     }
 
   /**

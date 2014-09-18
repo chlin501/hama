@@ -17,6 +17,7 @@
  */
 package org.apache.hama.bsp.v2
 
+import java.io.IOException
 import org.apache.hadoop.io.Writable
 
 /**
@@ -72,7 +73,8 @@ abstract class Superstep {
    * @param peer is a {@link BSPPeer} objet containing necessary services
    *             during computation.
    */
-  def compute(peer: BSPPeer)  // TODO: may need throw custom exception so SuperstepBSP can deal with it.
+  @throws(classOf[IOException])
+  def compute(peer: BSPPeer)  
 
   /**
    * Cleanup after computation is finished.
