@@ -24,14 +24,14 @@ import org.apache.hama.util.ActorPathMagnet
 object MockContainer {
 
   def main(args: Array[String]) = {
-    val (sys, conf, seq)= BSPPeerContainer.initialize(args)
-    BSPPeerContainer.launch(sys, classOf[MockContainer], conf, seq)
+    val (sys, conf, seq)= Container.initialize(args)
+    Container.launch(sys, classOf[MockContainer], conf, seq)
   }
 }
 
 final case class MockExecutorLocator(conf: HamaConfiguration)
 
-class MockContainer(conf: HamaConfiguration) extends BSPPeerContainer(conf) 
+class MockContainer(conf: HamaConfiguration) extends Container(conf) 
                                              with ActorLocator {
   import scala.language.implicitConversions
 

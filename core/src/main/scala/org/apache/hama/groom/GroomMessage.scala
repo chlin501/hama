@@ -24,12 +24,12 @@ import org.apache.hama.bsp.v2.Task
 sealed trait GroomMessage
 
 /**
- * Singnify BSPPeerContainer actor is ready.
+ * Singnify Container actor is ready.
  */
 private[groom] final case object ContainerReady extends GroomMessage
 
 /**
- * Singnify BSPPeerContainer actor is stopped.
+ * Singnify Container actor is stopped.
  */
 private[groom] final case object ContainerStopped extends GroomMessage
 

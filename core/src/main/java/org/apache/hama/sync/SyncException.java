@@ -21,15 +21,12 @@ public class SyncException extends Exception {
 
   private static final long serialVersionUID = 1L;
 
-  String info;
-
-  public SyncException(String info) {
-    super(); // call superclass constructor
-    this.info = info;
+  public SyncException(final String message) {
+    super(message); 
   }
 
-  public String getError() {
-    return info;
+  public SyncException(final String message, final Throwable cause) {
+    super(message, cause);
   }
 
 }

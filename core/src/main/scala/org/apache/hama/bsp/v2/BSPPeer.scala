@@ -126,45 +126,6 @@ trait BSPPeer {
   def configuration(): HamaConfiguration  
 
   /**
-   * Get the {@link Counter} of the given group with the given name.
-   * 
-   * @param name counter name
-   * @return the <code>Counter</code> of the given group/name.
-  Counter getCounter(Enum<?> name);
-   */
-
-  /**
-   * Get the {@link Counter} of the given group with the given name.
-   * 
-   * @param group counter group
-   * @param name counter name
-   * @return the <code>Counter</code> of the given group/name.
-  Counter getCounter(String group, String name);
-   */
-
-  /**
-   * Increments the counter identified by the key, which can be of any
-   * {@link Enum} type, by the specified amount.
-   * 
-   * @param key key to identify the counter to be incremented. The key can be be
-   *          any <code>Enum</code>.
-   * @param amount A non-negative amount by which the counter is to be
-   *          incremented.
-  void incrementCounter(Enum<?> key, long amount);
-   */
-
-  /**
-   * Increments the counter identified by the group and counter name by the
-   * specified amount.
-   * 
-   * @param group name to identify the group of the counter to be incremented.
-   * @param counter name to identify the counter within the group.
-   * @param amount A non-negative amount by which the counter is to be
-   *          incremented.
-  void incrementCounter(String group, String counter, long amount);
-   */
-
-  /**
    * The task attempt id this execution holds.
    * @return the task id of this task.
    */

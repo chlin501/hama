@@ -16,6 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.logging
+/*
 
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
@@ -30,3 +31,4 @@ trait Logger {
   def getLog(): Log = LOG
 
 }
+*/

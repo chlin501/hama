@@ -188,7 +188,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    */
   def fork(slotSeq: Int) {
     val containerClass = 
-      conf.getClass("bsp.child.class", classOf[BSPPeerContainer])
+      conf.getClass("bsp.child.class", classOf[Container])
     LOG.debug("Container class to be instantiated is {}", containerClass)
     val cmd = javaArgs(javacp, slotSeq, containerClass)
     createProcess(cmd, conf) 
@@ -226,7 +226,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   def createProcess(cmd: Seq[String], conf: HamaConfiguration) {
     val builder = new ProcessBuilder(seqAsJavaList(cmd))
     builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
-    try {
+    try { // TODO: use Try instead
       process = builder.start
       stdout = context.actorOf(Props(classOf[StdOut], 
                                      process.getInputStream, 
@@ -239,8 +239,8 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
                                      self),
                                "stderr%s".format(slotSeq)) 
     } catch {
-      case ioe: IOException => 
-        LOG.error("Fail launching BSPPeerContainer process {}", ioe)
+      case ioe: IOException => LOG.error("Fail launching Container process {}",
+                                         ioe)
     }
   }
 
@@ -258,8 +258,8 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   } 
 
   /**
-   * Ask {@link BSPPeerContainer} to launch a task.
-   * This should happens after {@link BSPPeerContainer} is ready.
+   * Ask {@link Container} to launch a task.
+   * This should happens after {@link Container} is ready.
    * @param Receive is partial function.
    */
   def launchTask: Receive = {
@@ -272,8 +272,8 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   }
 
   /** 
-   * Ask {@link BSPPeerContainer} to resume a specific task.
-   * This should happens after {@link BSPPeerContainer} is ready.
+   * Ask {@link Container} to resume a specific task.
+   * This should happens after {@link Container} is ready.
    * @param Receive is partial function.
    */
   def resumeTask: Receive = {
@@ -286,8 +286,8 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   }
 
   /**
-   * Ask {@link BSPPeerContainer} to kill the task that is currently running.
-   * This should happens after {@link BSPPeerContainer} is ready.
+   * Ask {@link Container} to kill the task that is currently running.
+   * This should happens after {@link Container} is ready.
    * @param Receive is partial function.
    */
   def killTask: Receive = {
@@ -318,7 +318,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   }
 
   /**
-   * BSPPeerContainer notify when it's in ready state.
+   * Container notify when it's in ready state.
    * @return Receive is partial function.
    */
   def containerReady: Receive = {
@@ -335,7 +335,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
 
   def afterContainerReady(target: ActorRef) = target ! PullForExecution(slotSeq) 
   /**
-   * Notify when BSPPeerContainer is stopped.
+   * Notify when Container is stopped.
    * @return Receive is partial function.
    */
   def containerStopped: Receive = {
@@ -343,7 +343,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   }
 
   /**
-   * Send StopContainer message to shutdown BSPPeerContainer process.
+   * Send StopContainer message to shutdown Container process.
    * @return Receive is partial function.
    */
   def stopProcess: Receive = {
@@ -357,7 +357,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   }
 
   /**
-   * Issue shutdown command to {@link BSPPeerContainer}, which shuts down the
+   * Issue shutdown command to {@link Container}, which shuts down the
    * child process.
    * @param Receive is partial function.
    */

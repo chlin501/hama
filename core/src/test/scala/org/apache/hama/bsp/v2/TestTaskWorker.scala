@@ -22,7 +22,7 @@ import java.net.InetAddress
 import org.apache.hadoop.io.IntWritable
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task._
-import org.apache.hama.groom.BSPPeerContainer
+import org.apache.hama.groom.Container
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLog
 import org.apache.hama.logging.TaskLogger
@@ -214,7 +214,7 @@ class TestTaskWorker extends TestEnv("TestTaskWorker") with JobUtil
      val peerMessenger = createWithArgs("peerMessenger_"+id, 
                                         classOf[PeerMessenger],
                                         testConfiguration)
-     val container = createWithArgs("container", classOf[BSPPeerContainer],
+     val container = createWithArgs("container", classOf[Container],
                                     testConfiguration)
      // change checkpointer's root path to /tmp/hama/ckpt dir
      testConfiguration.set("bsp.checkpoint.root.path", "/tmp/hama/ckpt")

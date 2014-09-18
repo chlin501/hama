@@ -58,7 +58,7 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
 
   import DefaultIO._
  
-  // This stores common configuration from BSPPeerContainer. /
+  // This stores common configuration from Container. /
   protected var commonConf: HamaConfiguration = _
 
   // This contains setting sepficit to a v2.Task. /
@@ -127,7 +127,7 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
   def taskConfiguration(): HamaConfiguration = this.taskConf
 
   /**
-   * Common cofiguration from {@link BSPPeerContainer}.
+   * Common cofiguration from {@link Container}.
    * @return HamaConfiguration from container.
    */
   def configuration(): HamaConfiguration = this.commonConf

@@ -197,7 +197,7 @@ trait CommonLog extends HamaLog {
 }
 
 /**
- * This is intended to be used by {@link BSPPeerContainer} for task logging.
+ * This is intended to be used by {@link Container} for task logging.
  * @param logDir points to the log path directory, under which job id dirs 
  *               with differrent task attempt ids would be created for logging.
  */

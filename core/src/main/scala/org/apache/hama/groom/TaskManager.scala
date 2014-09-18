@@ -373,7 +373,7 @@ class TaskManager(conf: HamaConfiguration, monitor: ActorRef)
 
   /**
    * - Find corresponded slot seq and task attempt id replied from 
-   * {@link BSPPeerContainer}.
+   * {@link Container}.
    * - Update information by removing task recorded in {@link Slot}.
    * @param action is the KillAck that contains {@link TaskAttemptID} and slot
    *               seq. 
@@ -406,7 +406,7 @@ class TaskManager(conf: HamaConfiguration, monitor: ActorRef)
    * - search directive in pendingQueue.
    * - update slot information with found directive content. 
    * @param slotSeq is the sequence number of slot.
-   * @param taskAttemptId is the task attempt id executed at BSPPeerContainer.
+   * @param taskAttemptId is the task attempt id executed at Container.
    */
   def doAck(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) {
     if(!pendingQueue.isEmpty) {
@@ -428,7 +428,7 @@ class TaskManager(conf: HamaConfiguration, monitor: ActorRef)
   }
 
   /**
-   * Executor on behalf of BSPPeerContainer requests for task execution.
+   * Executor on behalf of Container requests for task execution.
    * - dequeue a directive from queue.
    * - perform function accoding to {@link Directive#action}.
    * @return Receive is partial function.

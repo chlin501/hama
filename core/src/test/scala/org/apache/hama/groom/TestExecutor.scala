@@ -121,7 +121,7 @@ class TestExecutor extends TestEnv("TestExecutor",
     testConfiguration.set("bsp.working.dir", testRoot.getCanonicalPath)
     testConfiguration.set("bsp.groom.actor-system.name", "TestExecutor")
     testConfiguration.setClass("bsp.child.class", classOf[MockContainer],
-                               classOf[BSPPeerContainer])
+                               classOf[Container])
   }
 
   def createDirective(action: Directive.Action, task: Task): Directive = 

@@ -24,7 +24,7 @@ import akka.event.Logging
 import java.net.InetAddress
 import org.apache.hadoop.fs.Path
 import org.apache.hama.Agent
-import org.apache.hama.groom.BSPPeerContainer
+import org.apache.hama.groom.Container
 import org.apache.hama.message.PeerMessenger
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLogger
@@ -179,7 +179,7 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     val id = identifier(testConfiguration)
     val peerMessenger = createWithArgs("peerMessenger_"+id, 
                                       classOf[PeerMessenger], testConfiguration)
-    val container = createWithArgs("container", classOf[BSPPeerContainer],
+    val container = createWithArgs("container", classOf[Container],
                                    testConfiguration)
     // job id should be the same, so peers can sync
     val JOB2 = 2 

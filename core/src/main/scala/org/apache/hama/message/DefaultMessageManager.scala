@@ -139,7 +139,7 @@ class DefaultMessageManager[M <: Writable] extends MessageManager[M]
 
   /**
    * Initialize messaging service with common configuration provided by 
-   * {@link BSPPeerContainer}.
+   * {@link Container}.
    * @param conf is common configuration, not task configuration.
    * @param taskAttemptId is specific task attempt id to be used during 
    *                      messenging.

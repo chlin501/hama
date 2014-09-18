@@ -17,10 +17,13 @@
  */
 package org.apache.hama.groom
 
+import java.io.IOException
 import akka.actor.ActorSystem
-import akka.actor.Props
 import akka.actor.ActorRef
 import akka.actor.Cancellable
+import akka.actor.OneForOneStrategy
+import akka.actor.SupervisorStrategy._
+import akka.actor.Props
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import java.net.InetAddress
@@ -37,6 +40,7 @@ import org.apache.hama.message.PeerMessenger
 import org.apache.hama.monitor.Report
 import org.apache.hama.monitor.TaskStat
 import org.apache.hama.RemoteService
+import org.apache.hama.sync.SyncException
 import org.apache.hama.util.ActorLocator
 import org.apache.hama.util.ExecutorLocator
 import scala.concurrent.duration.FiniteDuration
@@ -58,7 +62,7 @@ import scala.concurrent.duration.DurationInt
 final case class Args(actorSystemName: String, listeningTo: String, port: Int, 
                       seq: Int, config: Config)
 
-object BSPPeerContainer {
+object Container {
 
   val tasklogsPath = "/logs/taskslogs"
 
@@ -93,7 +97,7 @@ object BSPPeerContainer {
   def toArgs(args: Array[String]): Args = {
     if(null == args || 0 == args.length)
       throw new IllegalArgumentException("No arguments supplied when "+
-                                         "BSPPeerContainer is forked.")
+                                         "Container is forked.")
     val actorSystemName = args(0)
     // N.B.: it may binds to 0.0.0.0 for all inet.
     val listeningTo = args(1) 
@@ -130,7 +134,7 @@ object BSPPeerContainer {
   @throws(classOf[Throwable])
   def main(args: Array[String]) = {
     val (sys, conf, seq)= initialize(args)
-    launch(sys, classOf[BSPPeerContainer], conf, seq)
+    launch(sys, classOf[Container], conf, seq)
   }
 }
 
@@ -142,11 +146,18 @@ object BSPPeerContainer {
  *             to be executed later on.
  */
 // TODO: rename to Container
-class BSPPeerContainer(conf: HamaConfiguration) extends LocalService 
+class Container(conf: HamaConfiguration) extends LocalService 
                                                 with RemoteService 
                                                 with ActorLocator {
 
-  import BSPPeerContainer._
+  import Container._
+
+  override val supervisorStrategy =
+    OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
+       case _: IllegalArgumentException => Stop
+       case _: IOException => Restart
+       case _: SyncException => Resume // TODO: test case  
+    }
 
   /**
    * This serves as internal communicator between peers.
@@ -334,7 +345,7 @@ class BSPPeerContainer(conf: HamaConfiguration) extends LocalService
   }
 
   /**
-   * When {@link Executor} is offline, {@link BSPPeerContainer} will shutdown
+   * When {@link Executor} is offline, {@link Container} will shutdown
    * itself.
    * @param target actor is {@link Executor}
    */

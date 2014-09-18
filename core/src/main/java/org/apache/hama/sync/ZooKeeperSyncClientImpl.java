@@ -143,8 +143,12 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
           writeNode(pathToSuperstepZnode + "/ready", null, false, null);
         }
       }
-    } catch (Exception e) {
-      throw new SyncException(e.toString());
+    } catch (KeeperException ke) {
+      throw new SyncException("Zookeeper exception for task "+
+                              taskId.toString()+" at superstep "+superstep, ke);
+    } catch (InterruptedException ie) {
+      throw new SyncException("Interrupted exception for "+taskId.toString()+
+                              " at superstep "+superstep, ie);
     }
   }
 
@@ -238,8 +242,12 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
           }
         }
       }
-    } catch (Exception e) {
-      throw new SyncException(e.getMessage());
+    } catch (KeeperException ke) {
+      throw new SyncException("Zookeeper exception for task "+
+                              taskId.toString()+" at superstep "+superstep, ke);
+    } catch (InterruptedException ie) {
+      throw new SyncException("Interrupted exception for "+taskId.toString()+
+                              " at superstep "+superstep, ie);
     }
   }
 

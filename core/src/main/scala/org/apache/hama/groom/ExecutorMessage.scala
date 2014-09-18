@@ -25,6 +25,6 @@ private[groom] final case class Fork(slotSeq: Int) extends ExecutorMessage
 
 /**
  * {@link TaskManager} notifies {@link Executor} to stop
- * {@link BSPPeerContainer}.
+ * {@link Container}.
  */
 private[groom] final case object StopProcess extends ExecutorMessage
