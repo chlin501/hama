@@ -20,6 +20,7 @@ package org.apache.hama.message
 import akka.actor.ActorRef
 import akka.actor.TypedActor
 import akka.util.Timeout
+import java.io.IOException
 import java.net.InetAddress
 import java.util.concurrent.BlockingQueue
 import java.util.concurrent.LinkedBlockingQueue
@@ -180,6 +181,12 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
     }
   }
 
-  override def receive = transfer orElse putMessageToLocal orElse actorReply orElse timeout orElse unknown
+  override def offline(proxy: ActorRef) {
+    if(proxy.path.name.startsWith("peerMessenger_")) 
+     throw new IOException("Need restart for "+proxy.path.name+" offline!") 
+    else LOG.info("{} is offline ...", proxy)
+  }
+
+  override def receive = transfer orElse putMessageToLocal orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
 
 }

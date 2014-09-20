@@ -118,16 +118,6 @@ trait RemoteService extends Service {
    */
   protected def afterLinked(target: String, proxy: ActorRef) {}
 
-  /**
-   * Provide a way to transform the linked actor reference.
-   * @param target is the name of the remote actor.
-   * @param proxy is the remote actor reference to be used.
-   * @return (String, ActorRef) as tuple where the formor is the name of the 
-   *                            actor and the latter is the remote reference.
-  protected def beforeLinked(target: String, proxy: ActorRef): 
-      (String, ActorRef) = (target, proxy)
-   */
-
   override protected def remoteReply(target: String, remote: ActorRef) {
     LOG.info("Proxy {} is ready: {}", target, remote)
     context.watch(remote) // TODO: watch proxy instead?
@@ -135,29 +125,6 @@ trait RemoteService extends Service {
     afterLinked(remote) // TODO: need to switch using proxy ReliableProxy
     afterLinked(target, remote)
   }
-
-  /**
-   * A reply from the remote actor indicating if the remote actor is ready to 
-   * provide its service.
-   * @param Receive is paritual function.
-  protected def isProxyReady: Receive = {
-    case ActorIdentity(target, Some(remote)) => {
-      LOG.info("Proxy {} is ready.", target)
-      context.watch(remote) // TODO: watch proxy instead?
-      val pair = beforeLinked(target.asInstanceOf[String], remote)
-      val newName = pair._1
-      val newActor = pair._2
-      if(null == newName || null == newActor) 
-        throw new RuntimeException("Calling beforeLinked function leads to "+
-                                  "actor ref and its name missing!")
-      val proxy = link(newName, newActor)//remote.path.name 
-      afterLinked(newActor) // TODO: need to switch using proxy
-      afterLinked(newName, newActor)
-    }
-    case ActorIdentity(target, None) => 
-      LOG.warning("Proxy {} is not yet available!", target)
-  }
-   */
 
   /**
    * Timeout reply when looking up a specific remote proxy.
