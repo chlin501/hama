@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.bsp.v2;
+package org.apache.hama.groom;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -28,7 +28,7 @@ import org.apache.hama.bsp.TaskAttemptID;
 
 
 /**
- * This indicates which BSPPeerContainer is occupied.
+ * This indicates which {@link Container} is occupied.
  */
 public final class Occupied implements Writable { 
 
@@ -55,6 +55,7 @@ public final class Occupied implements Writable {
     return this.id;
   }
   
+  @Override
   public void readFields(final DataInput in) throws IOException {
     this.slotSeq = new IntWritable(1);
     this.slotSeq.readFields(in);
@@ -62,9 +63,28 @@ public final class Occupied implements Writable {
     this.id.readFields(in);
   }
 
+  @Override
   public void write(final DataOutput out) throws IOException {
     this.slotSeq.write(out);
     this.id.write(out);
+  }
+
+  @Override
+  public boolean equals(final Object another) {
+    if (another == this) return true;
+    if (null == another) return false;
+    if (getClass() != another.getClass()) return false;
+
+    final Occupied s = (Occupied) another;
+    if (s.getSlotSeq() != slotSeq.get()) return false;
+    if(!s.getTaskAttemptId().equals(id)) return false;
+
+    return true;
+  }
+
+  @Override
+  public String toString() {
+    return "Occupied("+getSlotSeq()+","+getTaskAttemptId().toString()+")";
   }
   
 }

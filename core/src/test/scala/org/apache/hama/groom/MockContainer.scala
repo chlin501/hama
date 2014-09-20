@@ -21,6 +21,9 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.util.ActorLocator
 import org.apache.hama.util.ActorPathMagnet
 
+/**
+ * For TestExecutor.
+ */
 object MockContainer {
 
   def main(args: Array[String]) = {
@@ -31,6 +34,9 @@ object MockContainer {
 
 final case class MockExecutorLocator(conf: HamaConfiguration)
 
+/**
+ * For TestExecutor
+ */
 class MockContainer(conf: HamaConfiguration) extends Container(conf) 
                                              with ActorLocator {
   import scala.language.implicitConversions

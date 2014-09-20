@@ -30,7 +30,6 @@ import java.net.InetAddress
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.ConfigureFor
 import org.apache.hama.bsp.v2.Execute
-import org.apache.hama.bsp.v2.Occupied
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.v2.TaskWorker
 import org.apache.hama.HamaConfiguration
@@ -199,7 +198,7 @@ class Container(conf: HamaConfiguration) extends LocalService
 
   protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
 
-  protected def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", 1)
+  protected def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", -1)
 
   protected def executorName: String = "groomServer_executor_"+slotSeq
  
@@ -236,19 +235,21 @@ class Container(conf: HamaConfiguration) extends LocalService
     case action: LaunchTask => if(!isOccupied(taskWorker)) {
       doLaunch(action.task)
       postLaunch(slotSeq, action.task.getId, sender)
-    } else sender ! new Occupied(slotSeq, action.task.getId) 
+    } else reply(sender, slotSeq, action.task.getId)
   }
 
-  protected def identifier(conf: HamaConfiguration): String = 
-    conf.getInt("bsp.child.slot.seq", -1) match {
-      case -1 => throw new RuntimeException("Slot seq shouldn't be -1!")
-      case seq@_ => {
-        val host = conf.get("bsp.peer.hostname",
-                            InetAddress.getLocalHost.getHostName)
-        val port = conf.getInt("bsp.peer.port", 61000)
-        "BSPPeerSystem%d@%s:%d".format(seq, host, port)
-      }
+  protected def reply(from: ActorRef, seq: Int, taskAttemptId: TaskAttemptID) = 
+    from ! new Occupied(seq, taskAttemptId) 
+
+  protected def identifier(conf: HamaConfiguration): String = slotSeq match {
+    case -1 => throw new RuntimeException("Slot seq shouldn't be -1!")
+    case seq@_ => {
+      val host = conf.get("bsp.peer.hostname",
+                          InetAddress.getLocalHost.getHostName)
+      val port = conf.getInt("bsp.peer.port", 61000)
+      "BSPPeerSystem%d@%s:%d".format(seq, host, port)
     }
+  }
 
   protected def createTaskLogger[A <: TaskLogger](logger: Class[A], 
                                                   logDir: String,

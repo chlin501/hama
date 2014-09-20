@@ -35,7 +35,6 @@ import java.io.OutputStream
 import java.lang.ProcessBuilder
 import org.apache.commons.lang.math.NumberUtils
 import org.apache.hadoop.io.IOUtils
-import org.apache.hama.bsp.v2.Occupied
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.fs.Operation

@@ -228,7 +228,8 @@ trait JobUtil extends CommonLog  {
                       .build
   }
 
-  def createJarPath(jar: String)(implicit testRoot: File): File = new File(testRoot, jar)
+  def createJarPath(jar: String)(implicit testRoot: File): File = 
+    new File(testRoot, jar)
 
   def getSystemDir(conf: HamaConfiguration): Path = {
     val sysDir = new Path(conf.get("bsp.system.dir", "/tmp/hadoop/bsp/system"))
