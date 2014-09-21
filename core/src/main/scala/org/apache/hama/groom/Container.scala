@@ -163,8 +163,7 @@ class Container(conf: HamaConfiguration) extends LocalService
   // container for reaction!
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
-       //case _: IllegalArgumentException => Stop
-       case _: IOException => Restart // this may be user io issue. 
+       case _: IOException => Resume  
        case _: SyncException => Resume  
     }
 
@@ -364,10 +363,13 @@ class Container(conf: HamaConfiguration) extends LocalService
     LOG.info("{} is offline!", target.path.name)
     val ExecutorName = executorName
     target.path.name match {
-      case "taskWorker" => // TODO: mark task as fail (update taskStat), restart, etc.
+      case "taskWorker" => // TODO: mark task as failure (update taskStat), report task manager
       case `ExecutorName` => self ! ShutdownContainer
-      case unexpected@_ => 
-        LOG.warning("Unexpected actor {} is offline!", unexpected)
+      case rest@_ => {
+        if(rest.startsWith("peerMessenger_")) {
+          // report 
+        } else LOG.warning("Unexpected actor {} is offline!", rest)
+      }
     }
   }
 

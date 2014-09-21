@@ -20,6 +20,7 @@ package org.apache.hama.groom
 import akka.actor.ActorRef
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.message.PeerMessenger
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
@@ -30,8 +31,16 @@ sealed trait BooleanVal
 final case object True extends BooleanVal
 final case object False extends BooleanVal
 
+class MockPeerMessenger(conf: HamaConfiguration, tester: ActorRef) 
+      extends PeerMessenger(conf) {
+
+}
+ 
+
 class MockContainerRestart(conf: HamaConfiguration, 
                            tester: ActorRef) extends Container(conf) {
+
+  //override def createPeerMessenger(id: String): ActorRef = 
 
   override def reply(from: ActorRef, seq: Int, taskAttemptId: TaskAttemptID) = 
     tester ! new Occupied(seq, taskAttemptId)
@@ -82,9 +91,6 @@ class TestContainer extends TestEnv("TestContainer") with JobUtil {
     testConfiguration.setBoolean("test.task.worker.occupied", true)
     container ! new LaunchTask(defaultTask)
     expect(new Occupied(3, defaultTask.getId))
-
-    // TODO: test container ability in restarting peerMessenger and TaskWorker 
-    //       when encountering IOException.
 
     LOG.info("Done testing container.")
   }

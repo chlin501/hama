@@ -70,7 +70,7 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
    */
   protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
 
-  override def configuration(): HamaConfiguration = this.conf
+  override def configuration(): HamaConfiguration = conf
 
   protected def initializeLRUCache(maxCachedConnections: Int):
       LRUCache[ProxyInfo,ActorRef] = {
@@ -111,6 +111,8 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
   protected def addToWaitingList(peer: ProxyInfo, msgFrom: MessageFrom) =
     waitingList ++= Map(peer -> msgFrom) 
 
+  protected def removeFromWaitingList(peer: ProxyInfo) = waitingList -= peer
+
   protected def lookupPeer(name: String, addr: String) = lookup(name, addr) 
 
   protected def cache(peer: ProxyInfo, proxy: ActorRef) = 
@@ -129,8 +131,9 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
         val msg = msgFrom.msg 
         val from = msgFrom.from
         cache(found._1, proxy)
-        LOG.info("Transfer message to {} with size {}", target, msg.size)
+        LOG.debug("Transfer message to {} with size {}", target, msg.size)
         proxy ! msg
+        removeFromWaitingList(found._1)
         confirm(from)
       }
       case None => LOG.warning("{} for sending message bundle not found!",
@@ -181,10 +184,13 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
     }
   }
 
+  /**
+   * When network disconnection occurs, remote actor is offline (Terminated).
+   */
   override def offline(proxy: ActorRef) {
-    if(proxy.path.name.startsWith("peerMessenger_")) 
-     throw new IOException("Need restart for "+proxy.path.name+" offline!") 
-    else LOG.info("{} is offline ...", proxy)
+    if(proxy.path.name.startsWith("peerMessenger_")) {
+// TODO: report failure and stop, waiting master for instruction!
+    } else LOG.warning("Unexpected {} is offline!",  proxy)
   }
 
   override def receive = transfer orElse putMessageToLocal orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
