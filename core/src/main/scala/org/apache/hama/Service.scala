@@ -33,10 +33,10 @@ trait Service extends Agent {
   /**
    * A configuration file specific to Hama system.
    */
-  protected def configuration: HamaConfiguration
+  protected def configuration: HamaConfiguration // TODO: remove this?
 
   /**
-   * Initialize either groom's or master's subservices.
+   * Initialize necessary subservices.
    */
   override def preStart = initializeServices 
 
@@ -52,5 +52,12 @@ trait Service extends Agent {
   protected def superviseeIsTerminated: Receive = {
     case Terminated(target) => offline(target)
   }
+
+  /**
+   * Stop services needed.
+   */
+  protected def stopServices = {}
+
+  override def postStop = stopServices
 
 }

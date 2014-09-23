@@ -20,22 +20,10 @@ package org.apache.hama
 sealed trait CommonMessage
 
 /**
- * Request service for processing a particular message.
- * @param service name to which the message will be sent.
- * @param message contains data will be consumed.
-final case class Request(service: String, message: Any) extends CommonMessage
- */
-
-/**
  * Notify when the system is in Normal state.
  * @param systemName of the server.
  */
 final case class Ready(systemName: String) extends CommonMessage
-
-/**
- * Client checks if the server is ready for service.
- */
-final case object IsServiceReady extends CommonMessage
 
 /**
  * Notify when the servicde is in Stopped state.

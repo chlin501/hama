@@ -28,10 +28,10 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import java.net.InetAddress
 import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.bsp.v2.ConfigureFor
-import org.apache.hama.bsp.v2.Execute
+//import org.apache.hama.bsp.v2.ConfigureFor
+//import org.apache.hama.bsp.v2.Execute
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.bsp.v2.TaskWorker
+//import org.apache.hama.bsp.v2.TaskWorker
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.LocalService
@@ -139,8 +139,6 @@ object Container {
 
 /**
  * Launched BSP actor in forked process.
- * Container is respoinsible for TaskWorker execution. So the relation between 
- * Container and TaskWorker is 1 on 1.
  * @param conf contains common setting for the forked process instead of tasks
  *             to be executed later on.
  */
@@ -260,6 +258,7 @@ class Container(conf: HamaConfiguration) extends LocalService
    * @param task that is supplied to be executed.
    */
   def doLaunch(task: Task) { 
+/*
     taskWorker = Option(spawn("taskWoker", classOf[TaskWorker], configuration, 
                               self, peerMessenger, tasklog)).map( worker => {
       context.watch(worker)
@@ -268,6 +267,7 @@ class Container(conf: HamaConfiguration) extends LocalService
                        task.getConfiguration)
       worker
     })
+*/
   }
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {

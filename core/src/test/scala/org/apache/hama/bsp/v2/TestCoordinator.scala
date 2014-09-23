@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.bsp.v2
-
+/*
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
@@ -246,3 +246,4 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     LOG.info("Done testing Coordinator!")
   }
 }
+*/

@@ -30,9 +30,12 @@ trait Messenger {
   def configureForMessenger[M <: Writable](conf: HamaConfiguration, // common conf
                                            task: Task, 
                                            peerMessenger: ActorRef) {
+//TODO: default message manager is changed to actor. need other way to instantiate.
+/*
     val mgr = MessageManager.get[M](conf, peerMessenger)
     mgr.init(conf, task.getId)
     messenger = mgr.asInstanceOf[MessageManager[Writable]]
+*/
   }
 
 }

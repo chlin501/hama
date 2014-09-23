@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.message
-
+/*
 import akka.actor.ActorRef
 import java.net.InetAddress
 import org.apache.hadoop.io.IntWritable
@@ -130,3 +130,4 @@ class TestMessageManager extends TestEnv("TestMessageManager") with JobUtil {
 
   }
 }
+*/

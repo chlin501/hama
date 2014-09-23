@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.bsp.v2
-
+/*
 import akka.actor.ActorRef
 import java.io.IOException
 import java.net.InetAddress
@@ -29,7 +29,6 @@ import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.CacheService
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
-//import org.apache.hama.io.IO
 import org.apache.hama.ProxyInfo
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.message.BSPMessageBundle
@@ -53,7 +52,6 @@ object Coordinator {
 
 }
 
-/**
  * This class purely implements BSPPeer interface, and is intended to be used  
  * by @{link Worker} for executing superstep logic.
  *
@@ -62,25 +60,22 @@ object Coordinator {
  * - messenging
  * - io 
  * - sync
- */
 // TODO: use task operator to collect metrics: 
 //  - status
 //  - start time
 //  - finish time
 //  - progress, etc.
-class Coordinator extends BSPPeer with CheckpointerReceiver 
+class Coordinator(conf: HamaConfiguration, checkpointer: ActorRef,
+                   messenger: ActorRef, syncClient: ActorRef) extends Agent {
+                                  extends BSPPeer with CheckpointerReceiver 
                                   with Checkpointable 
                                   with Messenger 
                                   with BarrierClient {
-
-  /* This store common configuration */
-  protected var conf: HamaConfiguration = new HamaConfiguration
 
   protected var taskOperator: Option[TaskOperator] = None
 
   override def configuration(): HamaConfiguration = conf
 
-  /**
    * Configure necessary services for a specific task, including
    * - io
    * - sync
@@ -89,7 +84,6 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
    *       The formor comes from child process, the later from the task.
    * @param task contains setting for a specific job; its configuration differs
    *             from conf provided by {@link Container}.
-   */
   protected[v2] def configureFor(commonConf: HamaConfiguration, 
                                  operator: Option[TaskOperator],
                                  peerMessenger: ActorRef) {
@@ -113,10 +107,8 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
     })
   }
 
-  /**
    * Internal sync to ensure all peers is registered/ ready.
    * @param superstep indicate the curent superstep value.
-   */
   //TODO: should the task's superstep be confiured to 0 instead?
   protected def firstSync(superstep: Long) = 
     TaskOperator.execute(taskOperator, { (task) => {
@@ -125,13 +117,11 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
       task.increatmentSuperstep
     }})
 
-  /** 
    * - Configure FileSystem's working directory with corresponded 
    * <b>task.getConfiguration()</b>.
    * - And add additional classpath to task's configuration.
    * @param conf is the common setting from bsp peer container.
    * @param task contains setting for particular job computation.
-   */
   protected def settingForTask(conf: HamaConfiguration, task: Task) = {
     val taskConf = task.getConfiguration
     Operation.get(taskConf).setWorkingDirectory(
@@ -165,18 +155,14 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
   }
    */
 
-  /**
    * Copy necessary files to local (file) system so to speed up computation.
    * @param conf should contain related cache files if any.
-   */
   protected def localize(conf: HamaConfiguration, task: Task) = 
     CacheService.moveCacheToLocal(conf)
 
-  /**
    * The host this actor runs on. It may be different from the host that remote 
    * module listens to.
    * @return String name of the host.
-   */
   protected def host(): String =  // TODO: move to net package?
     configuration.get("bsp.peer.hostname", 
                       InetAddress.getLocalHost.getHostName) 
@@ -272,10 +258,8 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
    TaskOperator.execute[TaskAttemptID](taskOperator, { (task) => task.getId }, 
                                        null.asInstanceOf[TaskAttemptID])
 
-  /**
    * This is called after {@link BSP#bsp} finishs its execution in the end.
    * It will close all necessary operations.
-   */
    // TODO: close all operations, including io/ message/ sync/ local files in cache, etc.
   protected[v2] def close() = {
     clear 
@@ -284,3 +268,4 @@ class Coordinator extends BSPPeer with CheckpointerReceiver
   }
 
 }
+*/

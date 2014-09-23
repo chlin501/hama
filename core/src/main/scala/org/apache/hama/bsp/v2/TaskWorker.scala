@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.bsp.v2
-
+/*
 import akka.actor.Actor
 import akka.actor.ActorRef
 import java.io.File
@@ -45,9 +45,7 @@ final case class Close extends WorkerOperation
 
 final case class LocalMessages[M <: Writable](bundle: BSPMessageBundle[M])
 
-/**
  * This is the actual class that perform {@link Superstep}s execution.
- */
 protected[v2] class TaskWorker(commConf: HamaConfiguration,  
                                container: ActorRef, 
                                peerMessenger: ActorRef,
@@ -59,9 +57,7 @@ protected[v2] class TaskWorker(commConf: HamaConfiguration,
 
   override def reporter(): ActorRef = container
 
-  /**
    * This ties coordinator to a particular task.
-   */
   def configFor: Receive = {
     case ConfigureFor(aTask) => doConfigFor(aTask)
   }
@@ -74,19 +70,15 @@ protected[v2] class TaskWorker(commConf: HamaConfiguration,
     peer.configureFor(commConf, taskOperator, peerMessenger)
   }
 
-  /**
    * Start executing {@link Superstep}s accordingly.
    * @return Receive id partial function.
-   */
   def execute: Receive = {
     case Execute(taskAttemptId, commConf, taskConf) => 
       doExecute(taskAttemptId, commConf, taskConf)
   }
 
-  /**
    * Execute supersteps according to the task configuration provided.
    * @param taskConf is HamaConfiguration specific to a pariticular task.
-   */
   protected def doExecute(taskAttemptId: String, 
                           commConf: HamaConfiguration, 
                           taskConf: HamaConfiguration) {
@@ -96,12 +88,10 @@ protected[v2] class TaskWorker(commConf: HamaConfiguration,
   }
 
 
-  /**
    * Dynamically add client jar url to the {@link URLClassLoader}, which will
    * be used for intializing necessary user customized classes. 
    * @param taskConf is the configuration sepcific to a task.
    * @return Option[ClassLoader] contains class loader with client jar url.
-   */
   def addJarToClasspath(taskAttemptId: String, 
                         taskConf: HamaConfiguration): Option[ClassLoader] = {
     val jar = taskConf.get("bsp.jar")
@@ -124,19 +114,15 @@ protected[v2] class TaskWorker(commConf: HamaConfiguration,
     }
   }
 
-  /**
    * Normoalize user jar path to URL.
    * @param jarPath is the path pointed to the jar downloaded from remote 
    *                repository.
    * @return URL translated from the jar path string.
-   */
   protected def normalizePath(jarPath: String): URL = 
     new File(jarPath).toURI.toURL
 
-  /**
    * Create path as dest for the jar to be downloaded based on 
    * TaskAttemptID.
-   */
   def createLocalPath(taskAttemptId: String, 
                       config: HamaConfiguration,
                       operation: Operation): String = {
@@ -147,10 +133,8 @@ protected[v2] class TaskWorker(commConf: HamaConfiguration,
     "%s/%s/%s.jar".format(localDir, subDir, taskAttemptId.toString)
   }
 
-  /**
    * Close underlying {@link BSPPeer} operations.
    * @return Receive is partial function.
-   */
   def closeAll: Receive = {
     case Close => TaskOperator.execute(taskOperator, { (task) => 
       closeLog(task.getId) 
@@ -159,3 +143,4 @@ protected[v2] class TaskWorker(commConf: HamaConfiguration,
 
   override def receive = configFor orElse execute orElse closeAll orElse unknown
 }
+*/

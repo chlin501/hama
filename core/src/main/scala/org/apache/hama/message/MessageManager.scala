@@ -27,14 +27,13 @@ import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.ProxyInfo
 
+  /**
 object MessageManager {
 
-  /**
    * Only instantiate object without tighting to any specific tasks.
    * Need to call init() explicitly for initialization.
    * @param conf is common configuration.
    * @return MessageMenager without tight to any tasks.
-   */
   def get[M <: Writable](conf: HamaConfiguration, 
                          peerMessenger: ActorRef): MessageManager[M] = {
     val name = conf.get("hama.messenger.class", 
@@ -49,6 +48,7 @@ object MessageManager {
   }
 
 }
+   */
 
 /**
  * Communication between {@link BSPPeer}s.
@@ -60,8 +60,8 @@ trait MessageManager[M <: Writable] {
    * @param configuration that contains necessary setting for initialize 
    *                      message manager.
    * @param id denotes which task attempt id this message manager will manage.
+  def init(conf: HamaConfiguration, id: TaskAttemptID) // TODO: rename to setup
    */
-  def init(conf: HamaConfiguration, id: TaskAttemptID)
 
   /**
    * Close underlying operations.

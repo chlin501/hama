@@ -201,7 +201,8 @@ trait CommonLog extends HamaLog {
  * @param logDir points to the log path directory, under which job id dirs 
  *               with differrent task attempt ids would be created for logging.
  */
-protected class TaskLogger(logDir: String) extends Actor {
+protected class TaskLogger(logDir: String, 
+                           taskAttemptId: TaskAttemptID) extends Actor {
 
   import TaskLogging._
 
@@ -211,19 +212,36 @@ protected class TaskLogger(logDir: String) extends Actor {
 
   protected var out: Option[StdOutWriter] = None
   protected var err: Option[StdErrWriter] = None
-  protected var taskAttemptId: Option[TaskAttemptID] = None
+  //protected var taskAttemptId: Option[TaskAttemptID] = None
+
+  override def preStart() = setup
+  override def postStop() = stop
+
+  protected def setup() {
+    val (stdout, stderr) = mkPathAndWriters(logDir, taskAttemptId, mkdirs)
+    out = stdout
+    err = stderr
+  }
+
+  protected def stop() {
+    closeIfNotNull(out)
+    closeIfNotNull(err)
+  }
 
   override def receive = {
-    case Initialize(taskAttemptId) => {
+/*
+    case Initialize(taskAttemptId) => { 
       this.taskAttemptId = Option(taskAttemptId) 
       val (stdout, stderr) = mkPathAndWriters(logDir, taskAttemptId, mkdirs)
       out = stdout
       err = stderr
     }
+*/
     case Info(msg) => write(out, msg) 
     case Debug(msg) => write(out, msg)
     case Warning(msg) => write(err, msg)
     case Error(msg) => write(err, msg)
+/*
     case Close(attemptId) => {
       attemptId match {
         case null => println("Don't know close which task attempt id for it's"+
@@ -235,10 +253,12 @@ protected class TaskLogger(logDir: String) extends Actor {
         }
       }
     }
+*/
     case msg@_ => println("Unknown msg "+msg+" found for task attempt id "+
-                          taskAttemptId.getOrElse("'unknown'"))
+                          taskAttemptId)
   }
 
+/*
   protected def closeIfMatched(id: String, 
                                currentId: String) = id.equals(currentId) match {
     case true => {
@@ -248,10 +268,10 @@ protected class TaskLogger(logDir: String) extends Actor {
     case false => println("Id "+id+" doesn't match current task attempt id "+
                           currentId)
   }
+*/
 
-  protected def closeIfNotNull(fw: Option[FileWriter]) = fw match {
-    case Some(found) => try {} finally { found.close }
-    case None =>
+  protected def closeIfNotNull(fw: Option[FileWriter]) = fw.map { (found) => 
+    try {} finally { found.close }
   }
 
   protected def write(writer: Option[FileWriter], msg: String) = writer match {
@@ -292,14 +312,14 @@ protected class TaskLogger(logDir: String) extends Actor {
 }
 
 /**
- * Intended to be used by {@link Worker} when different task is launched.
+ * Intended to be used by task related actors when different task components
+ * are launched.
  */
 trait TaskLog extends HamaLog { 
   
   /**
    * Config the task logging to taskAttemptId directory.
    * @param taskAttemptId is the directory name.
-   */
   def initializeLog(taskAttemptId: TaskAttemptID) = taskAttemptId match {
     case null =>
     case id@_ => LOG.isInstanceOf[TaskLogging] match {
@@ -307,11 +327,11 @@ trait TaskLog extends HamaLog {
       case false =>
     }
   }
+   */
 
   /**
    * Close writer stream which points to taskAttemptId.
    * @param taskAttemptId denotes the path bound with writer.
-   */
   def closeLog(taskAttemptId: TaskAttemptID) = taskAttemptId match {
     case null =>
     case id@_ => LOG.isInstanceOf[TaskLogging] match {
@@ -319,4 +339,5 @@ trait TaskLog extends HamaLog {
       case false =>
     }
   }
+   */
 }

@@ -16,11 +16,8 @@
  * limitations under the License.
  */
 package org.apache.hama.bsp.v2
-
+/*
 import akka.actor.ActorRef
-import java.io.IOException
-import org.apache.hadoop.conf.Configurable
-import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.Agent
@@ -34,50 +31,37 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
-/**
  * This class manages all superstep and supersteps routing, started from the
  * first superstep, according to the execution instruction.
- */
-protected trait SuperstepBSP extends BSP 
-                             with Agent 
-                             with TaskLog 
-                             with StateOperation {
+protected class SuperstepBSP(conf: HamaConfiguration,  
+                             task: Task,
+                             container: ActorRef,
+                             coordinator: ActorRef,
+                             tasklog: ActorRef) extends Agent {
 
-  protected[v2] var supersteps = Map.empty[String, Superstep] 
+  protected[v2] var supersteps = Map.empty[String, ActorRef] 
 
-  protected[v2] var taskOperator: Option[TaskOperator] = None 
+  protected def setup: Receive = {
+    case Setup => {
+      begingOfSetup
+    }
+  }
 
-  /**
-   * This function reports TaskStat to container so that container can decide 
-   * next step when worker is offline.
-   */
-  protected def reporter(): ActorRef  
+  protected def begingOfSetup() {
+    task.markTaskStarted
+    task.transitToSetup 
+    task.markAsRunning 
+  }
 
-  /**
-   * This function returns common configuration from BSPPeer.
-   * @param peer for the aggregation of all supersteps.
-   * @return HamaConfiguration is common configuration, not specific to any 
-   *                           tasks.
-   */
-  protected[v2] def commonConf(peer: BSPPeer): HamaConfiguration = 
-    peer.configuration
-
-  override def beginOfSetup(peer: BSPPeer) = 
-    TaskOperator.execute(taskOperator, { (task) => {
-      task.markTaskStarted
-      task.transitToSetup 
-      task.markAsRunning 
-      reporter ! task.toStat
-    }})
-
-  override def whenSetup(peer: BSPPeer) {
-    val classes = commonConf(peer).get("hama.supersteps.class")
+  protected def whenSetup() {
+    val taskConf = task.getConfiguration
+    val classes = taskConf.get("hama.supersteps.class")
     LOG.info("Supersteps to be instantiated include {}", classes)
     val classNames = classes.split(",")
     classNames.foreach( className => {
-      instantiate(className, peer) match {
+      instantiate(className, taskConf) match {
         case Success(instance) => { 
-          instance.setup(peer)
+          //instance.setup(peer)
           supersteps ++= Map(className -> instance)
         }
         case Failure(cause) => 
@@ -85,6 +69,11 @@ protected trait SuperstepBSP extends BSP
       }
     })  
   }
+
+  protected def instantiate(className: String, 
+                            taskConf: HamaConfiguration): Try[Superstep] = 
+    Try(ReflectionUtils.newInstance(classWithLoader(className), taskConf).
+                        asInstanceOf[Superstep])
 
   @throws(classOf[IOException])
   @throws(classOf[SyncException])
@@ -94,19 +83,14 @@ protected trait SuperstepBSP extends BSP
     endOfSetup(peer)
   }
 
-  /**
    * Load class from a particular load which contains the target class.
    * @param className is the name of class to be loaded.
    * @return Class to be instantiated.
-   */
   protected def classWithLoader(className: String): Class[_] = 
     TaskOperator.execute[Class[_]](taskOperator, { (task) => 
       Class.forName(className, true, task.getConfiguration.getClassLoader)
     }, null.asInstanceOf[Class[_]])
 
-  protected def instantiate(className: String, peer: BSPPeer): Try[Superstep] = 
-    Try(ReflectionUtils.newInstance(classWithLoader(className), 
-                                    commonConf(peer)).asInstanceOf[Superstep])
 
   @throws(classOf[IOException])
   @throws(classOf[SyncException])
@@ -197,10 +181,8 @@ protected trait SuperstepBSP extends BSP
       case false => None
     }
 
-  /**
    * Check common configuration if checkpoint is needed.
    * @param conf is the common configuration.
-   */
   // TODO: move to checkpoint related api
   protected def isCheckpointEnabled(conf: HamaConfiguration): Boolean = 
     conf.getBoolean("bsp.checkpoint.enabled", true)
@@ -231,4 +213,8 @@ protected trait SuperstepBSP extends BSP
     whenCleanup(peer)
     endOfCleanup(peer)
   }
+
+  override def receive = setup orElse unknown
+  
 }
+*/

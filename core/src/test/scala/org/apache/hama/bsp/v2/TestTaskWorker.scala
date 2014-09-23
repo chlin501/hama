@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.bsp.v2
-
+/*
 import akka.actor.ActorRef
 import java.net.InetAddress
 import org.apache.hadoop.io.IntWritable
@@ -254,3 +254,4 @@ class TestTaskWorker extends TestEnv("TestTaskWorker") with JobUtil
      LOG.info("Done testing BSP TaskWorker!")
   }
 }
+*/

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.groom
-
+/*
 import akka.actor.ActorRef
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
@@ -95,3 +95,4 @@ class TestContainer extends TestEnv("TestContainer") with JobUtil {
     LOG.info("Done testing container.")
   }
 }
+*/

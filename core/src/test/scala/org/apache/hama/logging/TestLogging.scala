@@ -20,6 +20,7 @@ package org.apache.hama.logging
 import akka.actor.ActorRef
 import java.io.FileWriter
 import org.apache.commons.logging.Log
+import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
@@ -32,8 +33,9 @@ final case class DebugMsg(msg: String)
 final case class WarnMsg(msg: String)
 final case class ErrMsg(msg: String)
 
-class MockTaskLogger(logDir: String, 
-                     tester: ActorRef) extends TaskLogger(logDir) {
+class MockTaskLogger(logDir: String, taskAttemptId: TaskAttemptID,
+                     tester: ActorRef) 
+      extends TaskLogger(logDir, taskAttemptId) {
 
   override def write(out: Option[FileWriter], msg: String) = tester ! msg
 
@@ -129,11 +131,13 @@ class TestLogging extends TestEnv("TestLogging") with JobUtil {
     LOG.info("Test task logging ...")
     val taskAttemptId = createTaskAttemptId("test", 1, 1, 1)
 
-    val mockTaskLogger = 
-      createWithArgs("mockTaskLogger", classOf[MockTaskLogger], getLogDir,
-                     tester)
+    val mockTaskLogger = createWithArgs("mockTaskLogger", 
+                                        classOf[MockTaskLogger], 
+                                        getLogDir,
+                                        taskAttemptId, 
+                                        tester)
 
-    mockTaskLogger ! Initialize(taskAttemptId)
+    //mockTaskLogger ! Initialize(taskAttemptId)
 
     // Note: expectMsg may fail for unknown reason
     mockTaskLogger ! Info(f(testMsg, "info"))
@@ -148,7 +152,7 @@ class TestLogging extends TestEnv("TestLogging") with JobUtil {
     mockTaskLogger ! Error(f(testMsg, "error"))
     expectAnyOf(f(testMsg, "error"))
 
-    mockTaskLogger ! Close(taskAttemptId)
+    //mockTaskLogger ! Close(taskAttemptId)
 
     LOG.info("Done with TestLogging ...")
     
