@@ -49,13 +49,15 @@ import scala.util.{Try, Failure, Success}
 
 sealed trait MessengerMessage
 final case class Send(peerName: String, msg: Writable) extends MessengerMessage
-final case object CurrentMessage extends MessengerMessage
-final case object NoCurrentMessage extends MessengerMessage
-final case object OutgoingBundles extends MessengerMessage
+final case object GetCurrentMessage extends MessengerMessage
+final case object GetNumCurrentMessages extends MessengerMessage
+final case object GetOutgoingBundles extends MessengerMessage
 final case object ClearOutgoingMessages extends MessengerMessage
+final case object GetListenerAddress extends MessengerMessage
 
-final case class MessageFrom(msg: BSPMessageBundle[_ <: Writable], 
-                             from: ActorRef)
+final protected[message] case class MessageFrom(
+  msg: BSPMessageBundle[_ <: Writable], from: ActorRef
+)
 
 /**
  * Provide default functionality of {@link MessageManager}.
@@ -115,13 +117,13 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration,
   override def getCurrentMessage(): M = localQueue.poll 
 
   protected def currentMessage: Receive = {
-    case CurrentMessage => sender ! getCurrentMessage
+    case GetCurrentMessage => sender ! getCurrentMessage
   }
   
   override def getNumCurrentMessages(): Int = localQueue.size 
 
   protected def numberCurrentMessages: Receive = {
-    case NoCurrentMessage => sender ! getNumCurrentMessages
+    case GetNumCurrentMessages => sender ! getNumCurrentMessages
   }
 
   protected def clear: Receive = {
@@ -160,7 +162,7 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration,
     outgoingMessageManager.getBundleIterator
 
   protected def outgoingBundles: Receive = {
-    case OutgoingBundles => {
+    case GetOutgoingBundles => {
       sender ! asScalaIterator(getOutgoingBundles).map( v => 
         (v.getKey, v.getValue)
       ) 
@@ -294,6 +296,10 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration,
 
   override def getListenerAddress(): ProxyInfo = currentPeer(conf)
 
-  override def receive = sendMessage orElse currentMessage orElse numberCurrentMessages orElse outgoingBundles orElse transferMessages orElse clear orElse putMessagesToLocal orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown 
+  protected def listenerAddress: Receive = {
+    case GetListenerAddress => sender ! getListenerAddress
+  }
+
+  override def receive = sendMessage orElse currentMessage orElse numberCurrentMessages orElse outgoingBundles orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown 
 
 }
