@@ -28,7 +28,7 @@ import java.util.Map.Entry
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.ProxyInfo
-import org.apache.hama.Service
+import org.apache.hama.RemoteService
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.Operation
 import org.apache.hama.logging.Logging
@@ -47,6 +47,16 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.{Try, Failure, Success}
 
+sealed trait MessengerMessage
+final case class Send(peerName: String, msg: Writable) extends MessengerMessage
+final case object CurrentMessage extends MessengerMessage
+final case object NoCurrentMessage extends MessengerMessage
+final case object OutgoingBundles extends MessengerMessage
+final case object ClearOutgoingMessages extends MessengerMessage
+
+final case class MessageFrom(msg: BSPMessageBundle[_ <: Writable], 
+                             from: ActorRef)
+
 /**
  * Provide default functionality of {@link MessageManager}.
  * It realizes message communication by java object, and send messages through
@@ -57,10 +67,15 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration,
                                            slotSeq: Int,
                                            taskAttemptId: TaskAttemptID,
                                            tasklog: ActorRef)
-      extends MessageManager[M] with Service with TaskLog with MessageView {
+      extends MessageManager[M] with RemoteService with TaskLog 
+      with MessageView {
 
   protected val outgoingMessageManager = OutgoingMessageManager.get[M](conf)
   protected val localQueue = getReceiverQueue
+  protected val maxCachedConnections = 
+    conf.getInt("hama.messenger.max.cached.connections", 100)
+  protected val peersLRUCache = initializeLRUCache(maxCachedConnections)
+  protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
@@ -98,8 +113,20 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration,
 
   @throws(classOf[IOException])
   override def getCurrentMessage(): M = localQueue.poll 
+
+  protected def currentMessage: Receive = {
+    case CurrentMessage => sender ! getCurrentMessage
+  }
   
   override def getNumCurrentMessages(): Int = localQueue.size 
+
+  protected def numberCurrentMessages: Receive = {
+    case NoCurrentMessage => sender ! getNumCurrentMessages
+  }
+
+  protected def clear: Receive = {
+    case ClearOutgoingMessages => clearOutgoingMessages
+  } 
   
   override def clearOutgoingMessages() = {
     outgoingMessageManager.clear
@@ -123,24 +150,132 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration,
   override def send(peerName: String, msg: M) = 
     outgoingMessageManager.addMessage(Peer.at(peerName), msg); 
 
+  protected def sendMessage: Receive = {
+    case Send(peerName, msg) => send(peerName, msg.asInstanceOf[M])
+  }
+
+  // TODO: refactor methods return types
   override def getOutgoingBundles(): 
     Iter[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] = 
     outgoingMessageManager.getBundleIterator
+
+  protected def outgoingBundles: Receive = {
+    case OutgoingBundles => {
+      sender ! asScalaIterator(getOutgoingBundles).map( v => 
+        (v.getKey, v.getValue)
+      ) 
+    }
+  }
+
+  @throws(classOf[IOException]) 
+  override def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M]) = 
+    LOG.warning("This function, executed by {}, doesn't take effect!", 
+                Thread.currentThread.getName)
+
+  /**
+   * Client can use ask pattern for synchronous execution (blocking call).
+   */
+  protected def transferMessages: Receive = {
+    case Transfer(peer, bundle) => 
+      transfer(peer, bundle.asInstanceOf[BSPMessageBundle[M]], sender)
+  }
 
   /**
    * Actual transfer messsages over wire.
    * It first finds the peer and then send messages.
    * @param peer contains information of another peer. 
    * @param bundle are messages to be sent.
-   */
-  @throws(classOf[IOException])
-  override def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M]) = {
-/* TODO: merge peerMessenger with DefaultMessageManager
-    peerMessenger match {
-      case Some(found) => found ! Transfer(peer, bundle)
-      case None =>
+   */  @throws(classOf[IOException]) 
+  override def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M], 
+                        from: ActorRef) {
+    mapAsScalaMap(peersLRUCache).find( 
+      entry => entry._1.equals(peer)
+    ) match {
+      case Some(found) => {
+        val proxy = peersLRUCache.get(found._2) 
+        proxy ! bundle  
+        confirm(from)
+      }
+      case None => findWith(peer, bundle, from)
     }
-*/
+  }
+
+  protected def initializeLRUCache(maxCachedConnections: Int):
+      LRUCache[ProxyInfo,ActorRef] = {
+    new LRUCache[ProxyInfo, ActorRef](maxCachedConnections) {
+      override def removeEldestEntry(eldest: Entry[ProxyInfo, ActorRef]):
+          Boolean = {
+        if (size() > this.capacity) {
+          val peer = eldest.getKey
+          remove(peer)
+          true
+        }
+        false
+      }
+    }
+  }
+
+  def confirm(from: ActorRef) = from ! TransferredCompleted 
+
+  protected def findWith[M <: Writable](peer: ProxyInfo, 
+                                        msgs: BSPMessageBundle[M],
+                                        from: ActorRef) = msgs match {
+    case null => LOG.warning("Messages for {} is empty!", peer)
+    case bundle@_ => from match {
+      case null => LOG.warning("Unknown sender for {} ", peer)
+      case f@_ => {
+        addToWaitingList(peer, MessageFrom(msgs, f))
+        LOG.info("Look up remote peer "+peer.getActorName+" at "+peer.getPath)
+        lookupPeer(peer.getActorName, peer.getPath)     
+      }
+    }
+  }
+
+  protected def addToWaitingList(peer: ProxyInfo, msgFrom: MessageFrom) =
+    waitingList ++= Map(peer -> msgFrom) 
+
+  protected def removeFromWaitingList(peer: ProxyInfo) = waitingList -= peer
+
+  protected def lookupPeer(name: String, addr: String) = lookup(name, addr)
+
+  override def afterLinked(target: String, proxy: ActorRef) = 
+    findThenSend(target, proxy) 
+
+  /**
+   * Find the peer name equals to the target, and then send the bundler over
+   * network.
+   * @param target of peer actor name.
+   * @param proxy is the remote MessageManager actor reference.
+   */
+  protected def findThenSend(target: String, proxy: ActorRef) {
+    waitingList.find(entry => {
+      val proxyInfo = entry._1
+      proxyInfo.getActorName.equals(target)
+    }) match {
+      case Some(found) => {
+        val msgFrom = found._2
+        val msg = msgFrom.msg 
+        val from = msgFrom.from
+        cache(found._1, proxy)
+        LOG.debug("Transfer message to {} with size {}", target, msg.size)
+        proxy ! msg
+        removeFromWaitingList(found._1)
+        confirm(from)
+      }
+      case None => LOG.warning("{} for sending message bundle not found!",
+                               target)
+    }
+  }
+
+  protected def cache(peer: ProxyInfo, proxy: ActorRef) = 
+    peersLRUCache.put(peer, proxy)  
+
+  protected def putMessagesToLocal: Receive = {
+    case bundle: BSPMessageBundle[M] => {
+      LOG.info("Message received from {} is putting to local queue!", 
+               sender)
+      loopBackMessages(bundle) 
+    }
   }
 
   @throws(classOf[IOException])
@@ -159,6 +294,6 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration,
 
   override def getListenerAddress(): ProxyInfo = currentPeer(conf)
 
-  override def receive = unknown  // TODO: not yet finish
+  override def receive = sendMessage orElse currentMessage orElse numberCurrentMessages orElse outgoingBundles orElse transferMessages orElse clear orElse putMessagesToLocal orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown 
 
 }

@@ -311,6 +311,7 @@ protected class TaskLogger(logDir: String,
 
 }
 
+
 /**
  * Intended to be used by task related actors when different task components
  * are launched.

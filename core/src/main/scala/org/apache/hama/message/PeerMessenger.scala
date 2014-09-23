@@ -44,8 +44,10 @@ import scala.concurrent.duration.FiniteDuration
  */
 final case class Transfer[M <: Writable](peer: ProxyInfo, msg: BSPMessageBundle[M])
 
+/*
 final case class MessageFrom(msg: BSPMessageBundle[_ <: Writable], 
                              from: ActorRef)
+*/
 
 object PeerMessenger {
 
