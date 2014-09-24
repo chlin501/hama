@@ -130,12 +130,10 @@ protected[logging] class CommonLogging(logger: Log) extends LoggingAdapter {
 
 object TaskLogging {
 
-  final case class Initialize(taskAttemptId: TaskAttemptID)
   final case class Info(message: String)
   final case class Debug(message: String)
   final case class Warning(message: String)
   final case class Error(message: String)
-  final case class Close(taskAttemptId: TaskAttemptID)
 
 }
 
@@ -143,16 +141,13 @@ object TaskLogging {
  * Wrapper for task logger.
  */
 protected[logging] class TaskLogging(logger: ActorRef) extends LoggingAdapter {
-
+// TODO: filter log level! check ifXXXXXEnabled() { ... } 
   import TaskLogging._
-
-  def initialize(taskAttemptId: TaskAttemptID) = 
-    logger ! Initialize(taskAttemptId)
 
   override def info(msg: String, args: Any*) = 
     logger ! Info(format(msg, args:_*))
 
-  override def debug(msg: String, args: Any*) = 
+  override def debug(msg: String, args: Any*) =  
     logger ! Debug(format(msg, args:_*))
 
   override def warning(msg: String, args: Any*) = 
@@ -160,8 +155,6 @@ protected[logging] class TaskLogging(logger: ActorRef) extends LoggingAdapter {
 
   override def error(msg: String, args: Any*) = 
     logger ! Error(format(msg, args:_*))
-
-  def close(taskAttemptId: TaskAttemptID) = logger ! Close(taskAttemptId)
 
 }
 
@@ -196,15 +189,22 @@ trait CommonLog extends HamaLog {
 
 }
 
+object TaskLogger {
+
+  val tasklogsPath = "/logs/taskslogs"
+
+}
+
 /**
  * This is intended to be used by {@link Container} for task logging.
  * @param logDir points to the log path directory, under which job id dirs 
  *               with differrent task attempt ids would be created for logging.
  */
-protected class TaskLogger(logDir: String, 
+protected class TaskLogger(hamaHome: String, 
                            taskAttemptId: TaskAttemptID) extends Actor {
 
   import TaskLogging._
+  import TaskLogger._
 
   type StdOutWriter = FileWriter
   type StdErrWriter = FileWriter
@@ -212,13 +212,15 @@ protected class TaskLogger(logDir: String,
 
   protected var out: Option[StdOutWriter] = None
   protected var err: Option[StdErrWriter] = None
-  //protected var taskAttemptId: Option[TaskAttemptID] = None
 
   override def preStart() = setup
   override def postStop() = stop
 
+  def logDir(hamaHome: String): String = hamaHome + tasklogsPath
+
   protected def setup() {
-    val (stdout, stderr) = mkPathAndWriters(logDir, taskAttemptId, mkdirs)
+    val (stdout, stderr) = mkPathAndWriters(logDir(hamaHome), taskAttemptId, 
+                                            mkdirs)
     out = stdout
     err = stderr
   }
@@ -229,46 +231,13 @@ protected class TaskLogger(logDir: String,
   }
 
   override def receive = {
-/*
-    case Initialize(taskAttemptId) => { 
-      this.taskAttemptId = Option(taskAttemptId) 
-      val (stdout, stderr) = mkPathAndWriters(logDir, taskAttemptId, mkdirs)
-      out = stdout
-      err = stderr
-    }
-*/
     case Info(msg) => write(out, msg) 
     case Debug(msg) => write(out, msg)
     case Warning(msg) => write(err, msg)
     case Error(msg) => write(err, msg)
-/*
-    case Close(attemptId) => {
-      attemptId match {
-        case null => println("Don't know close which task attempt id for it's"+
-                             " missing!")
-        case id@_ => this.taskAttemptId match {
-          case Some(targetId) => closeIfMatched(id.toString, targetId.toString)
-          case None => System.err.println("TaskAttemptId not matched => id: "+
-                                          id+", task attempt id: None.")
-        }
-      }
-    }
-*/
     case msg@_ => println("Unknown msg "+msg+" found for task attempt id "+
                           taskAttemptId)
   }
-
-/*
-  protected def closeIfMatched(id: String, 
-                               currentId: String) = id.equals(currentId) match {
-    case true => {
-      closeIfNotNull(out)
-      closeIfNotNull(err)
-    }
-    case false => println("Id "+id+" doesn't match current task attempt id "+
-                          currentId)
-  }
-*/
 
   protected def closeIfNotNull(fw: Option[FileWriter]) = fw.map { (found) => 
     try {} finally { found.close }
@@ -280,8 +249,8 @@ protected class TaskLogger(logDir: String,
       System.err.println("Either stdout or stderr is missing for task logger!")
   }
 
-  protected def mkdirs(logDir: String, jobId: String): (JobIDPath, Boolean) = {
-    val jobDir = new File(logDir, jobId)
+  protected def mkdirs(logPath: String, jobId: String): (JobIDPath, Boolean) = {
+    val jobDir = new File(logPath, jobId)
     val ret = jobDir.exists match {
       case false => jobDir.mkdirs
       case true => true 
@@ -289,13 +258,13 @@ protected class TaskLogger(logDir: String,
     (jobDir.toString, ret)
   }
 
-  protected def mkPathAndWriters(logDir: String,
+  protected def mkPathAndWriters(logsPath: String,
                                  taskAttemptId: TaskAttemptID, 
                                  mkdirs: (String, String) => 
                                          (JobIDPath, Boolean)): 
       (Option[StdOutWriter], Option[StdErrWriter]) = {
     val jobId = taskAttemptId.getJobID.toString
-    mkdirs(logDir, jobId) match {
+    mkdirs(logsPath, jobId) match {
       case (jobDir, true) => 
         (Some(getWriter(jobDir, taskAttemptId.toString)),
          Some(getWriter(jobDir, taskAttemptId.toString, "err")))
@@ -316,29 +285,4 @@ protected class TaskLogger(logDir: String,
  * Intended to be used by task related actors when different task components
  * are launched.
  */
-trait TaskLog extends HamaLog { 
-  
-  /**
-   * Config the task logging to taskAttemptId directory.
-   * @param taskAttemptId is the directory name.
-  def initializeLog(taskAttemptId: TaskAttemptID) = taskAttemptId match {
-    case null =>
-    case id@_ => LOG.isInstanceOf[TaskLogging] match {
-      case true => LOG.asInstanceOf[TaskLogging].initialize(taskAttemptId)
-      case false =>
-    }
-  }
-   */
-
-  /**
-   * Close writer stream which points to taskAttemptId.
-   * @param taskAttemptId denotes the path bound with writer.
-  def closeLog(taskAttemptId: TaskAttemptID) = taskAttemptId match {
-    case null =>
-    case id@_ => LOG.isInstanceOf[TaskLogging] match {
-      case true => LOG.asInstanceOf[TaskLogging].close(taskAttemptId)
-      case false =>
-    }
-  }
-   */
-}
+trait TaskLog extends HamaLog { }

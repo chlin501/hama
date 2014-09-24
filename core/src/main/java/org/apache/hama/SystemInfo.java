@@ -86,10 +86,14 @@ public class SystemInfo implements Writable {
 
   public Protocol getProtocol() {
     Protocol p = Protocol.Remote;
-    if(Protocol.Local.toString().equals(this.protocol.toString())) {
+    if(isLocal()) {
       p = Protocol.Local;
     }
     return p; 
+  }
+
+  public boolean isLocal() {
+    return Protocol.Local.toString().equals(protocol.toString());
   }
   
   public String getActorSystemName() {
@@ -102,6 +106,14 @@ public class SystemInfo implements Writable {
 
   public int getPort() {
     return this.port.get();
+  }
+
+  public String getAddress() {
+    if(isLocal()) {
+      return getActorSystemName();
+    } else {
+      return getActorSystemName() + "@" + getHost() + ":" + getPort();
+    }
   }
 
   @Override
@@ -129,9 +141,11 @@ public class SystemInfo implements Writable {
     return result;
   }
 
+/*
   public String getSystemPath() {
     return getActorSystemName()+"@"+getHost()+":"+getPort();
   }
+*/
 
   @Override 
   public String toString() {

@@ -18,11 +18,8 @@
 package org.apache.hama.message
 
 import akka.actor.ActorRef
-import akka.actor.ActorSystem
 import java.io.IOException
 import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.util.ArrayList
 import java.util.{ Iterator => Iter }
 import java.util.Map.Entry
 import org.apache.hadoop.io.Writable
@@ -30,7 +27,6 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.fs.Operation
 import org.apache.hama.logging.Logging
 import org.apache.hama.logging.LoggingAdapter
 import org.apache.hama.logging.TaskLog
@@ -38,14 +34,9 @@ import org.apache.hama.logging.TaskLogger
 import org.apache.hama.logging.TaskLogging
 import org.apache.hama.message.compress.BSPMessageCompressor
 import org.apache.hama.message.queue.MessageQueue
-import org.apache.hama.message.queue.SingleLockQueue
-import org.apache.hama.message.queue.SynchronizedQueue
 import org.apache.hama.message.queue.Viewable
 import org.apache.hama.util.LRUCache
 import scala.collection.JavaConversions._
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import scala.util.{Try, Failure, Success}
 
 sealed trait MessengerMessage
 final case class Send(peerName: String, msg: Writable) extends MessengerMessage
@@ -54,21 +45,31 @@ final case object GetNumCurrentMessages extends MessengerMessage
 final case object GetOutgoingBundles extends MessengerMessage
 final case object ClearOutgoingMessages extends MessengerMessage
 final case object GetListenerAddress extends MessengerMessage
+/**
+ * An object that contains peer and message bundle. The bundle will be sent
+ * to peer accordingly.
+ * @param peer is the destination to which will be sent.
+ * @param msg is the actual data.
+ */
+final case class Transfer[M <: Writable](
+   peer: ProxyInfo, msg: BSPMessageBundle[M]
+) extends MessengerMessage
+
 
 final protected[message] case class MessageFrom(
   msg: BSPMessageBundle[_ <: Writable], from: ActorRef
 )
 
 /**
- * Provide default functionality of {@link MessageManager}.
+ * Provide default functionality of {@link MessageExecutive}.
  * It realizes message communication by java object, and send messages through
  * actor via {@link akka.actor.TypedActor}.
  * @param conf is the common configuration, not specific for task.
  */
-class DefaultMessageManager[M <: Writable](conf: HamaConfiguration,
-                                           slotSeq: Int,
-                                           taskAttemptId: TaskAttemptID,
-                                           tasklog: ActorRef)
+class MessageExecutive[M <: Writable](conf: HamaConfiguration,
+                                      slotSeq: Int,
+                                      taskAttemptId: TaskAttemptID,
+                                      tasklog: ActorRef)
       extends MessageManager[M] with RemoteService with TaskLog 
       with MessageView {
 
@@ -149,8 +150,10 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration,
    */
   // TODO: report stats
   @throws(classOf[IOException])
-  override def send(peerName: String, msg: M) = 
+  override def send(peerName: String, msg: M) = {
+    LOG.debug("Message {} will be sent to {}", msg, peerName)
     outgoingMessageManager.addMessage(Peer.at(peerName), msg); 
+  }
 
   protected def sendMessage: Receive = {
     case Send(peerName, msg) => send(peerName, msg.asInstanceOf[M])
@@ -217,6 +220,10 @@ class DefaultMessageManager[M <: Writable](conf: HamaConfiguration,
     }
   }
 
+  /**
+   * This is used to notify client, usually Coordinator, that messages are sent
+   * out.
+   */
   def confirm(from: ActorRef) = from ! TransferredCompleted 
 
   protected def findWith[M <: Writable](peer: ProxyInfo, 

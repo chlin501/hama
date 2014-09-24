@@ -230,6 +230,13 @@ public final class ProxyInfo extends SystemInfo implements Writable {
     return this.actorName.toString();
   }
 
+  /**
+   * Obtain full path, consisted of: 
+   * - protocol 
+   * - address
+   * - actor path
+   * @return String
+   */
   public String getPath() {
     if(Protocol.Local.equals(getProtocol())) {
       return getProtocol()+"://"+getActorSystemName()+"/user/"+getActorPath();

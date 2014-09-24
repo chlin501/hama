@@ -23,32 +23,9 @@ import java.util.Iterator
 import java.util.Map.Entry
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hadoop.io.Writable
-import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.ProxyInfo
-
-  /**
-object MessageManager {
-
-   * Only instantiate object without tighting to any specific tasks.
-   * Need to call init() explicitly for initialization.
-   * @param conf is common configuration.
-   * @return MessageMenager without tight to any tasks.
-  def get[M <: Writable](conf: HamaConfiguration, 
-                         peerMessenger: ActorRef): MessageManager[M] = {
-    val name = conf.get("hama.messenger.class", 
-                        classOf[DefaultMessageManager[M]].getCanonicalName())
-    val mgr = ReflectionUtils.newInstance(conf.getClassByName(name), conf)
-    mgr.isInstanceOf[PeerCommunicator] match { 
-      case true => mgr.asInstanceOf[PeerCommunicator].
-                       communicator(peerMessenger)
-      case false =>
-    }
-    mgr.asInstanceOf[MessageManager[M]]
-  }
-
-}
-   */
+import org.apache.hama.bsp.TaskAttemptID
 
 /**
  * Communication between {@link BSPPeer}s.

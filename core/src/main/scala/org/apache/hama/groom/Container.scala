@@ -63,8 +63,6 @@ final case class Args(actorSystemName: String, listeningTo: String, port: Int,
 
 object Container {
 
-  val tasklogsPath = "/logs/taskslogs"
-
   // TODO: all config need to post to zk
   def toConfig(listeningTo: String, port: Int): Config = {
     ConfigFactory.parseString(s"""
@@ -127,7 +125,7 @@ object Container {
   def launch(system: ActorSystem, containerClass: Class[_], 
              conf: HamaConfiguration, seq: Int) {
     system.actorOf(Props(containerClass, conf), 
-                   "bspPeerContainer%s".format(seq))
+                   "container%s".format(seq))
   }
 
   @throws(classOf[Throwable])
@@ -175,8 +173,8 @@ class Container(conf: HamaConfiguration) extends LocalService
    * for logging to different directory. 
    */
   protected val tasklog = createTaskLogger[TaskLogger](classOf[TaskLogger], 
-                                                       getLogDir(hamaHome), 
-                                                       slotSeq) 
+                                                       //getLogDir(hamaHome), 
+                                                       hamaHome, slotSeq) 
 
   protected var executor: Option[ActorRef] = None
 
@@ -193,7 +191,7 @@ class Container(conf: HamaConfiguration) extends LocalService
   // TODO: check if any better way to config hama home.
   protected def hamaHome: String = System.getProperty("hama.home.dir")
 
-  protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
+  //protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
 
   protected def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", -1)
 

@@ -116,7 +116,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   val taskManagerName = conf.get("bsp.groom.taskmanager.name", "taskManager") 
   val operation = Operation.get(conf)
   var commandQueue = Queue[Command]()
-  protected var bspPeerContainer: ActorRef =_ // TODO: Option
+  protected var container: ActorRef =_ // TODO: Option
   protected var stdout: ActorRef = _
   protected var stderr: ActorRef = _
   protected var isStdoutClosed = false
@@ -262,7 +262,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    * @param Receive is partial function.
    */
   def launchTask: Receive = {
-    case action: LaunchTask =>  bspPeerContainer ! new LaunchTask(action.task)
+    case action: LaunchTask => container ! new LaunchTask(action.task)
   }
 
   def launchAck: Receive = {
@@ -276,7 +276,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    * @param Receive is partial function.
    */
   def resumeTask: Receive = {
-    case action: ResumeTask => bspPeerContainer ! new ResumeTask(action.task)
+    case action: ResumeTask => container ! new ResumeTask(action.task)
   }
 
   def resumeAck: Receive = {
@@ -291,7 +291,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    */
   def killTask: Receive = {
     case action: KillTask => 
-      bspPeerContainer ! new KillTask(action.taskAttemptId)
+      container ! new KillTask(action.taskAttemptId)
   }
 
   def killAck: Receive = {
@@ -322,10 +322,10 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    */
   def containerReady: Receive = {
     case ContainerReady => {
-      bspPeerContainer = sender
+      container = sender
       while(!commandQueue.isEmpty) {
         val (cmd, rest) = commandQueue.dequeue
-        bspPeerContainer ! cmd.msg
+        container ! cmd.msg
         commandQueue = rest  
       }
       afterContainerReady(taskManagerListener)
@@ -347,10 +347,10 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    */
   def stopProcess: Receive = {
     case StopProcess => {
-      bspPeerContainer match {
+      container match {
         case null => 
           commandQueue = commandQueue.enqueue(Command(StopContainer, sender)) 
-        case _ => bspPeerContainer ! StopContainer 
+        case _ => container ! StopContainer 
       }
     }
   }
@@ -362,12 +362,12 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    */
   def shutdownContainer: Receive = {
     case ShutdownContainer => {
-      bspPeerContainer match {
+      container match {
         case null => commandQueue = 
           commandQueue.enqueue(Command(ShutdownContainer, sender)) 
         case _ => {
-          LOG.debug("Shutdown container {}", bspPeerContainer)
-          bspPeerContainer ! ShutdownContainer 
+          LOG.debug("Shutdown container {}", container)
+          container ! ShutdownContainer 
         }
       }
     }

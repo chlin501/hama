@@ -74,27 +74,23 @@ class OutgoingPOJOMessageBundle[M <: Writable]
   override def addMessage(peer: ProxyInfo, msg: M) {
     outgoingBundles.containsKey(peer) match {
       case true => 
-      case false => compressor match {
-        case None =>
-        case Some(found) => {
-          val bundle = new BSPMessageBundle[M]()
-          bundle.setCompressor(found, BSPMessageCompressor.threshold(this.conf))
-          outgoingBundles.put(peer, bundle)
-        }
+      case false => {
+        val bundle = new BSPMessageBundle[M]()
+        bundle.setCompressor(compressor.getOrElse(null), 
+                             BSPMessageCompressor.threshold(this.conf))
+        outgoingBundles.put(peer, bundle)
       }
     } 
     combiner match {
       case None => outgoingBundles.get(peer).addMessage(msg)
-      case Some(found) => compressor match {
-        case None =>
-        case Some(f) => {
+      case Some(found) => {
           val bundle = outgoingBundles.get(peer)
           bundle.addMessage(msg)
           val combined = new BSPMessageBundle[M]()
-          combined.setCompressor(f, BSPMessageCompressor.threshold(this.conf))
+          combined.setCompressor(compressor.getOrElse(null), 
+                                 BSPMessageCompressor.threshold(this.conf))
           combined.addMessage(found.combine(bundle))
           outgoingBundles.put(peer, combined)
-        }
       }
     }
   }

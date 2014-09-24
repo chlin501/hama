@@ -41,8 +41,8 @@ import scala.concurrent.duration.FiniteDuration
  * to peer accordingly.
  * @param peer is the destination to which will be sent.
  * @param msg is the actual data.
- */
 final case class Transfer[M <: Writable](peer: ProxyInfo, msg: BSPMessageBundle[M])
+ */
 
 /*
 final case class MessageFrom(msg: BSPMessageBundle[_ <: Writable], 

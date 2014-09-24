@@ -20,48 +20,53 @@ package org.apache.hama.message
 import org.apache.hama.ProxyInfo
 
 /**
- * This is used for constructing Peer information used in sending messages 
- * between {@link BSPPeer}.
- * Lookup actor doesn't requires to distinguish local from remote actor remote
+ * This is used for constructing Peer information when sending messages between
+ * {@link BSPPeer}.
+ * Actor lookup doesn't require distinguishing local from remote because remote
  * module can correctly dispatch message to the ator as long as the peer 
- * host:port matches the target.
+ * host:port vlaue matches the target.
  */
 object Peer {
 
   /**
-   * Create remote Peer's ProxyInfo for MessageManager sending messages.
+   * Create remote Peer's Proxy infomation for MessageManager.
    * @param actorSystemName is the name of the actor system, found in zk client.
    * @param host is the remoe host name.
    * @param port is the port value of the remote host.
    * @return ProxyInfo contains related peer information.
    */
-  def at(actorSystemName: String, host: String, port: Int): ProxyInfo = {
-    val identifier = actorSystemName+"@"+host+":"+port
-    ProxyInfo.fromString("akka.tcp://"+identifier+"/user/peerMessenger_"+
+  def at(actorSystem: String, host: String, port: Int): ProxyInfo = {
+    val identifier = actorSystem+"@"+host+":"+port
+    ProxyInfo.fromString("akka.tcp://"+identifier+"/user/container/messenger"+
                          identifier.replaceAll("@", "_").replaceAll(":", "_"))
   }
 
+  
+
   /**
-   * This doesn't distinguish local from remote address because remote module
-   * can correctly dispatch mesage to the right actor.
+   * Create Peer's Proxy information for MessageManager.
    * @param peer is the actor address/ path to be used with the form of 
    *             <b>${actor-system-name}@${host}:${port}</b>.
    * @return ProxyInfo contains related peer information.
    */
-  def at(peer: String): ProxyInfo = {
-    if(-1 == peer.indexOf("@") || -1 == peer.indexOf(":")) 
-      throw new IllegalArgumentException("Invalid peer string format: "+peer)
-    ProxyInfo.fromString("akka.tcp://"+peer+"/user/peerMessenger_"+
-                         peer.replaceAll("@", "_").replaceAll(":", "_"))
-  }
+  def at(peer: String): ProxyInfo = 
+    if(-1 == peer.indexOf("@") || -1 == peer.indexOf(":")) {
+      ProxyInfo.fromString("akka://"+peer+"/user/container/messenger_"+peer)
+      
+    } else {
+      ProxyInfo.fromString("akka.tcp://"+peer+"/user/container/messenger_"+
+                           peer.replaceAll("@", "_").replaceAll(":", "_"))
+    }
 
+/*
   def atLocal(actorSystemName: String): ProxyInfo = {
     if(-1 != actorSystemName.indexOf("@") || 
        -1 != actorSystemName.indexOf(":")) 
       throw new IllegalArgumentException("Invalid local actor system name: "+
                                          actorSystemName)
-    ProxyInfo.fromString("akka://"+actorSystemName+"/user/peerMessenger_"+
+    ProxyInfo.fromString("akka://"+actorSystemName+"/user/container/messenger_"+
                          actorSystemName)
   }
+*/
 
 }

@@ -42,9 +42,9 @@ class TestOutgoingMessageManager extends TestEnv("TestOutgoingMessageManager") {
       val key = entry.getKey
       val value = entry.getValue
       LOG.info("Message key: "+key+" value: "+value)
-      assert(key.getSystemPath.equals("BSPPeerSystem1@host123:2139") ||
-             key.getSystemPath.equals("BSPPeerSystem2@my-local-laptop:1235") ||
-             key.getSystemPath.equals("BSPPeerSystem9@host1:29184"))
+      assert(key.getAddress.equals("BSPPeerSystem1@host123:2139") ||
+             key.getAddress.equals("BSPPeerSystem2@my-local-laptop:1235") ||
+             key.getAddress.equals("BSPPeerSystem9@host1:29184"))
       asScalaIterator(value.iterator).foreach( msg => {
         assert(null != msg)
         LOG.info("Msg value found in BSPMessageBundle: "+msg.get)

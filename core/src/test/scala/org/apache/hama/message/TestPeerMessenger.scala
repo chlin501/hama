@@ -39,7 +39,7 @@ class RemotePeerMessenger(conf: HamaConfiguration,
 
 object LocalPeerMessenger {
 
-  val dummyPeer = Peer.atLocal("TestPeerMessenger")
+  val dummyPeer = Peer.at("TestPeerMessenger")
 
 }
 
