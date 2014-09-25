@@ -141,7 +141,7 @@ object TaskLogging {
  * Wrapper for task logger.
  */
 protected[logging] class TaskLogging(logger: ActorRef) extends LoggingAdapter {
-// TODO: filter log level! check ifXXXXXEnabled() { ... } 
+
   import TaskLogging._
 
   override def info(msg: String, args: Any*) = 
@@ -200,6 +200,10 @@ object TaskLogger {
  * @param logDir points to the log path directory, under which job id dirs 
  *               with differrent task attempt ids would be created for logging.
  */
+// TODO: improve 
+//       - log level is{log-level}Enabled 
+//       - message detail at prefix 
+//       or replace with better mechanism.
 protected class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
                            console: Boolean) extends Actor {
 

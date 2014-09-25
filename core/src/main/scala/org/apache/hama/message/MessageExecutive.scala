@@ -297,8 +297,9 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   override def loopBackMessages(bundle: BSPMessageBundle[M]) = {
     val threshold = BSPMessageCompressor.threshold(Option(conf))
     bundle.setCompressor(BSPMessageCompressor.get(conf), threshold)
-    val it: Iter[_ <: Writable] = bundle.iterator
-    while (it.hasNext) loopBackMessage(it.next)
+    asScalaIterator(bundle.iterator).foreach( msg => {
+      loopBackMessage(msg)
+    })
   }
 
   // TODO: report stats

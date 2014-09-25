@@ -46,12 +46,6 @@ import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 
-object Coordinator {
-
-  def apply(): Coordinator = new Coordinator()
-
-}
-
  * This class purely implements BSPPeer interface, and is intended to be used  
  * by @{link Worker} for executing superstep logic.
  *
