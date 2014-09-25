@@ -76,9 +76,8 @@ trait RemoteService extends Service {
     LOG.debug("Lookup proxy {} at {}", target, path)
     context.system.actorSelection(path) ! Identify(target)
     import context.dispatcher
-    val cancellable =
-      context.system.scheduler.scheduleOnce(timeout, self, 
-                                            Timeout(target, path))
+    val cancellable = 
+      context.system.scheduler.scheduleOnce(timeout, self, Timeout(target, path))
     proxiesLookup ++= Map(target -> cancellable)
     LOG.debug("Proxies to be lookup? {}", proxiesLookup.mkString(", "))
   }
@@ -90,19 +89,21 @@ trait RemoteService extends Service {
    */
   protected def link(target: String, ref: ActorRef): ActorRef = {
     LOG.debug("Link to remote target: {} ref: {}.", target, ref)
-    val proxy = context.system.actorOf(Props(classOf[ReliableProxy],
-                                           ref,
-                                           100.millis),
-                                       target)
+    val proxy = proxyOf(target, ref)
     proxies ++= Set(proxy)
     proxiesLookup.get(target) match {
       case Some(cancellable) => cancellable.cancel
-      case None =>
-        LOG.warning("Can't cancel for proxy {} not found!", target)
+      case None => LOG.warning("Can't cancel for proxy {} not found!", target)
     }
     LOG.debug("Done linking to remote service {}.", target)
     proxy
   }
+
+  protected def proxyOf(target: String, remote: ActorRef,
+                        retryAfter: FiniteDuration = 100.millis): ActorRef = 
+    context.system.actorOf(Props(classOf[ReliableProxy], remote, retryAfter),
+                           target)
+  
 
   /**
    * Post process once the remote actor is linked.
@@ -133,7 +134,10 @@ trait RemoteService extends Service {
   protected def timeout: Receive = {
     case Timeout(proxy, path) => {
       LOG.debug("Timeout when looking up proxy {} ", proxy)
-      lookup(proxy, path)
+      proxies.find(p => p.path.name.equals(proxy)) match {
+        case Some(found) => LOG.debug("Proxy {} is already been found!", proxy)
+        case None => lookup(proxy, path)
+      }
     }
   }
 

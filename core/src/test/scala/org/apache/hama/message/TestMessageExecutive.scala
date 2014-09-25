@@ -26,6 +26,7 @@ import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.ProxyInfo
 import org.apache.hama.TestEnv
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.message.compress.BSPMessageCompressor
@@ -33,6 +34,8 @@ import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.DurationInt
 
 final case object GetSentMessage
 
@@ -40,7 +43,8 @@ class MockMessageExecutive[M <: Writable](conf: HamaConfiguration,
                                           slotSeq: Int,
                                           taskAttemptId: TaskAttemptID,
                                           tasklog: ActorRef,
-                                          tester: ActorRef) 
+                                          tester: ActorRef,
+                                          target: ProxyInfo)
       extends MessageExecutive[M](conf, slotSeq, taskAttemptId, tasklog) {
 
   def getSentMessage: Receive = {
@@ -58,11 +62,31 @@ class MockMessageExecutive[M <: Writable](conf: HamaConfiguration,
       })
     }
   } 
-  
-   
+
+  override def lookupPeer(name: String, addr: String) = {
+    val containerRemoved = addr.replaceAll("container/", "")
+    println("remove container within actor path: "+containerRemoved)
+    val sysName = target.getActorSystemName
+    val replaced = containerRemoved.replaceFirst(sysName, context.system.name)
+    println("replace first system address ("+sysName+") with ("+
+            context.system.name+") => " +replaced)
+    lookup(name, replaced)
+  }
+
+  override def proxyOf(target: String, ref: ActorRef,
+                       retryAfter: FiniteDuration = 100.millis): ActorRef = ref 
+
+  override def putToLocal(bundle: BSPMessageBundle[M]) {
+    val beforeSize = localQueue.size
+    println("actor name: "+name+" [before] local queue's size is "+beforeSize) 
+    super.putToLocal(bundle)
+    val afterSize = localQueue.size
+    println("actor name: "+name+" [after] local queue's size is "+afterSize) 
+    tester ! afterSize
+  } 
+
   override def receive = getSentMessage orElse super.receive
 }
-
 
 @RunWith(classOf[JUnitRunner])
 class TestMessageExecutive extends TestEnv("TestMessageExecutive") 
@@ -96,14 +120,15 @@ class TestMessageExecutive extends TestEnv("TestMessageExecutive")
   }
 
   def createMsgMgr(slotSeq: Int, taskAttemptId: TaskAttemptID, 
-                   tasklog: ActorRef): ActorRef = {
+                   tasklog: ActorRef, proxy: ProxyInfo): ActorRef = {
     val messenger = createWithArgs("messenger_BSPPeerSystem%s".format(slotSeq), 
                                    classOf[MockMessageExecutive[Writable]], 
                                    testConfiguration, 
                                    slotSeq, 
                                    taskAttemptId, 
                                    tasklog,
-                                   tester)
+                                   tester, 
+                                   proxy)
     assert(null != messenger)
 
     messenger
@@ -119,8 +144,12 @@ class TestMessageExecutive extends TestEnv("TestMessageExecutive")
     // log dir will both create at logDir/jobId so we only create 1 task logger
     val tasklog = createTaskLogger(slotSeq1, taskAttemptId1) 
 
-    val messenger1 = createMsgMgr(slotSeq1, taskAttemptId1, tasklog)
-    val messenger2 = createMsgMgr(slotSeq2, taskAttemptId2, tasklog)
+    val proxy1 = Peer.at(bspPeerSystem1) 
+    val proxy2 = Peer.at(bspPeerSystem2) 
+    LOG.info("proxy1 is at{}. proxy2 is at {}", proxy1, proxy2)
+
+    val messenger1 = createMsgMgr(slotSeq1, taskAttemptId1, tasklog, proxy2)
+    val messenger2 = createMsgMgr(slotSeq2, taskAttemptId2, tasklog, proxy1)
 
     val bundle1 = createBundle[IntWritable](new IntWritable(3), 
                                             new IntWritable(6), 
@@ -136,10 +165,6 @@ class TestMessageExecutive extends TestEnv("TestMessageExecutive")
                                               new LongWritable(22111)) 
     val seq2b = Seq[String]("2135", "124", "22111")
 
-    val proxy1 = Peer.at(bspPeerSystem1) 
-    val proxy2 = Peer.at(bspPeerSystem2) 
-
-    LOG.info("proxy1 is at{}. proxy2 is at {}", proxy1, proxy2)
 
     LOG.info("test send method ...")
     messenger1 ! Send(proxy2.getAddress, bundle2a)
@@ -152,16 +177,12 @@ class TestMessageExecutive extends TestEnv("TestMessageExecutive")
     messenger2 ! GetSentMessage
     expect((proxy1.getPath, seq1))
 
-
-/*
-    messenger1 ! GetOutgoingBundles
-   
-
     messenger1 ! Transfer(proxy2, bundle2a)
+    expect(3)
     messenger1 ! Transfer(proxy2, bundle2b)
+    expect(6)
     messenger2 ! Transfer(proxy1, bundle1)
-*/
-
+    expect(3)
 
 /*
 

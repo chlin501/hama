@@ -197,7 +197,8 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
       entry => entry._1.equals(peer)
     ) match {
       case Some(found) => {
-        val proxy = peersLRUCache.get(found._2) 
+        val proxy = found._2
+        LOG.debug("Message is going to be sent to dest "+proxy)
         proxy ! bundle  
         confirm(from)
       }
@@ -206,7 +207,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   }
 
   protected def initializeLRUCache(maxCachedConnections: Int):
-      LRUCache[ProxyInfo,ActorRef] = {
+      LRUCache[ProxyInfo, ActorRef] = {
     new LRUCache[ProxyInfo, ActorRef](maxCachedConnections) {
       override def removeEldestEntry(eldest: Entry[ProxyInfo, ActorRef]):
           Boolean = {
@@ -257,6 +258,8 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
    * @param proxy is the remote MessageManager actor reference.
    */
   protected def findThenSend(target: String, proxy: ActorRef) {
+    LOG.debug("Taret to be checked in waiting list: "+target +
+              " proxy: "+proxy)
     waitingList.find(entry => {
       val proxyInfo = entry._1
       proxyInfo.getActorName.equals(target)
@@ -266,7 +269,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
         val msg = msgFrom.msg 
         val from = msgFrom.from
         cache(found._1, proxy)
-        LOG.debug("Transfer message to {} with size {}", target, msg.size)
+        LOG.info("Transfer message to {} with size {}", target, msg.size)
         proxy ! msg
         removeFromWaitingList(found._1)
         confirm(from)
@@ -283,9 +286,12 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     case bundle: BSPMessageBundle[M] => {
       LOG.info("Message received from {} is putting to local queue!", 
                sender)
-      loopBackMessages(bundle) 
+      putToLocal(bundle)
     }
   }
+
+  protected def putToLocal(bundle: BSPMessageBundle[M]) = 
+    loopBackMessages(bundle) 
 
   @throws(classOf[IOException])
   override def loopBackMessages(bundle: BSPMessageBundle[M]) = {
