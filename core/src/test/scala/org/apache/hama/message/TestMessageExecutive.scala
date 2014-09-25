@@ -112,9 +112,13 @@ class TestMessageExecutive extends TestEnv("TestMessageExecutive")
     bundle
   }
 
-  def createTaskLogger(slotSeq: Int, taskAttemptId: TaskAttemptID): ActorRef = {
+  def createTaskLogger(slotSeq: Int, taskAttemptId: TaskAttemptID,
+                       console: Boolean = true): ActorRef = {
     val tasklog = createWithArgs("taskLogger%s".format(slotSeq), 
-                             classOf[TaskLogger], logDir, taskAttemptId)
+                                 classOf[TaskLogger], 
+                                 logDir, 
+                                 taskAttemptId, 
+                                 console)
     assert(null != tasklog)
     tasklog
   }
@@ -133,8 +137,6 @@ class TestMessageExecutive extends TestEnv("TestMessageExecutive")
 
     messenger
   }
-
-  override def afterAll =  system.shutdown  // temp disable delete /tmp/hama
 
   it("test message executive functions.") {
     val jobId = createJobId("test", 2)

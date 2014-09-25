@@ -200,8 +200,8 @@ object TaskLogger {
  * @param logDir points to the log path directory, under which job id dirs 
  *               with differrent task attempt ids would be created for logging.
  */
-protected class TaskLogger(hamaHome: String, 
-                           taskAttemptId: TaskAttemptID) extends Actor {
+protected class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
+                           console: Boolean) extends Actor {
 
   import TaskLogging._
   import TaskLogger._
@@ -213,6 +213,8 @@ protected class TaskLogger(hamaHome: String,
   protected var out: Option[StdOutWriter] = None
   protected var err: Option[StdErrWriter] = None
 
+  def this(hamaHome: String, taskAttemptId: TaskAttemptID) = 
+    this(hamaHome, taskAttemptId, false)
   override def preStart() = setup
   override def postStop() = stop
 
@@ -244,7 +246,9 @@ protected class TaskLogger(hamaHome: String,
   }
 
   protected def write(writer: Option[FileWriter], msg: String) = writer match {
-    case Some(found) => found.write(msg+"\n")
+    case Some(found) => if(!console) {
+      found.write(msg+"\n")
+    } else println(msg)
     case None => 
       System.err.println("Either stdout or stderr is missing for task logger!")
   }
