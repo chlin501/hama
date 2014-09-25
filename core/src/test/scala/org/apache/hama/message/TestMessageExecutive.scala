@@ -93,13 +93,29 @@ class MockMessageExecutive[M <: Writable](conf: HamaConfiguration,
     }
   }
 
+  override def listenerAddress: Receive = {
+    case GetListenerAddress => {
+      val currentPeer = getListenerAddress
+      println("actor "+name+" has current peer address "+currentPeer)
+      tester ! currentPeer
+    }
+  }
+
   override def receive = getSentMessage orElse super.receive
 }
 
-@RunWith(classOf[JUnitRunner])
-class TestMessageExecutive extends TestEnv("TestMessageExecutive") 
-                           with JobUtil {
+object TestMessageExecutive {
+
   val sysName = "TestMessageExecutive"
+
+}
+
+@RunWith(classOf[JUnitRunner])
+class TestMessageExecutive extends TestEnv(TestMessageExecutive.sysName) 
+                           with JobUtil {
+
+  import TestMessageExecutive._
+
   val slotSeq1 = 1
   val slotSeq2 = 2
   val bspPeerSystem1 = "BSPPeerSystem%s".format(slotSeq1)
@@ -107,8 +123,12 @@ class TestMessageExecutive extends TestEnv("TestMessageExecutive")
   val logDir = testRootPath+"/messeage"
 
   val host = InetAddress.getLocalHost.getHostName
-  val port = 12341
+  val port = 61000 
 
+  def currentPeer(slotSeq: Int): ProxyInfo = {
+    val sys = "BSPPeerSystem%s@%s:%s".format(slotSeq, host, port)
+    Peer.at(sys)
+  }
 
   def createBundle[M <: Writable](msgs: M*): BSPMessageBundle[M] = {
     val bundle = new BSPMessageBundle[M]()
@@ -204,6 +224,8 @@ class TestMessageExecutive extends TestEnv("TestMessageExecutive")
     expectAnyOf("2135", "124", "22111")
     messenger2 ! GetCurrentMessage
     expectAnyOf("2135", "124", "22111")
+    messenger1 ! GetListenerAddress
+    expect(currentPeer(slotSeq1))
 
     messenger2 ! Transfer(proxy1, bundle1)
     expect(3)
@@ -213,9 +235,9 @@ class TestMessageExecutive extends TestEnv("TestMessageExecutive")
     expectAnyOf("3", "6", "9")
     messenger1 ! GetCurrentMessage
     expectAnyOf("3", "6", "9")
+    messenger2 ! GetListenerAddress
+    expect(currentPeer(slotSeq2))
 
-
-    // TODO: reset operations
     LOG.info("Done testing message manager!")
 
   }
