@@ -133,6 +133,7 @@ public class TestTask extends TestCase {
                  task.isCompleted(), forVerification.isCompleted());
   }
 
+/*
   public void testTransformable() throws Exception {
     final Task task = createTaskWithDefault(3);
     assertNotNull("Task shouldn't be null!", task);
@@ -143,4 +144,5 @@ public class TestTask extends TestCase {
     LOG.info("Task stat values is "+taskStat.toString());
     assertEquals("String should be "+ret, ret, taskStat.toString());
   }
+*/
 }

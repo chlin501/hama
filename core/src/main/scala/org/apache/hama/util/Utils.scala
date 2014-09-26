@@ -17,20 +17,26 @@
  */
 package org.apache.hama.util
 
+import akka.actor.ActorRef
+import akka.pattern.ask
+import akka.util.Timeout
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.Future
+import scala.reflect.ClassTag
+
 object Utils {
 
-  def doIfExists[A, B <: Any](something: Option[A],
-                              f: (A) => B,
-                              default: B): B = something match {
-    case Some(found) => f(found)
-    case None => default
-  }
-
-  def doIfNotNull[A, B <: Any](something: A, 
-                               f: (A) => B, 
-                               default: B): B = something match {
-    case null => default
-    case v@_ => f(v) 
+  def await[R <: Any: ClassTag](caller: ActorRef, message: Any, 
+                                defaultTimeout: FiniteDuration = 10.seconds,
+                                duration: Duration = Duration.Inf): R = {
+    import scala.language.postfixOps
+    implicit val timeout = Timeout(defaultTimeout) //10 seconds 
+    val future = ask(caller, message).mapTo[R] 
+    Await.result(future, duration)
   }
 
 }
+

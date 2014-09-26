@@ -16,16 +16,14 @@
  * limitations under the License.
  */
 package org.apache.hama.bsp.v2
-
+/*
 import org.apache.hama.bsp.Counters
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.util.Utils._
 
-/**
  * This holds task to metris stats information.
  * @param task contains specific setting for superstep computation.
  * @param counters is an object holds metrics stats data.
- */
 //TODO: replace counters with e.g. asyc metrics collecting mechanism.
 protected[v2] case class TaskWithStats(task: Option[Task], counters: Counters) 
 
@@ -40,11 +38,9 @@ object TaskOperator {
   def execute(op: Option[TaskOperator], f: (Task) => Unit) =
     execute[Unit](op, { (task) => f(task) }, Unit)
 
-  /**
    * Constructor for task operation.
    * @param task is delivered from {@link TaskManager}.
    * @return TaskOperator holds {@link Task} and {@link Counters} objects.
-   */
   def apply(task: Task): TaskOperator = 
     new TaskOperator(Option(task), new Counters)
 }
@@ -64,3 +60,4 @@ class TaskOperator(task: Option[Task], counters: Counters) {
     e(value) }, Unit)
 
 }
+*/

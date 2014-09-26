@@ -70,8 +70,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
                                       slotSeq: Int,
                                       taskAttemptId: TaskAttemptID,
                                       tasklog: ActorRef)
-      extends MessageManager[M] with RemoteService with TaskLog 
-      with MessageView {
+      extends RemoteService with TaskLog with MessageView {
 
   protected val outgoingMessageManager = OutgoingMessageManager.get[M](conf)
   protected val localQueue = getReceiverQueue
@@ -79,7 +78,6 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     conf.getInt("hama.messenger.max.cached.connections", 100)
   protected val peersLRUCache = initializeLRUCache(maxCachedConnections)
   protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
-  protected var transferredFrom: Option[ActorRef] = None
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
@@ -110,19 +108,19 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     queue
   }
 
-  override def close() {
+  protected def close() { // override
     outgoingMessageManager.clear
     localQueue.close  
   }
 
-  @throws(classOf[IOException])
-  override def getCurrentMessage(): M = localQueue.poll 
+  @throws(classOf[IOException]) // override
+  protected def getCurrentMessage(): M = localQueue.poll 
 
   protected def currentMessage: Receive = {
     case GetCurrentMessage => sender ! getCurrentMessage
   }
   
-  override def getNumCurrentMessages(): Int = localQueue.size 
+  protected def getNumCurrentMessages(): Int = localQueue.size 
 
   protected def numberCurrentMessages: Receive = {
     case GetNumCurrentMessages => sender ! getNumCurrentMessages
@@ -132,13 +130,13 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     case ClearOutgoingMessages => clearOutgoingMessages
   } 
   
-  override def clearOutgoingMessages() = {
+  protected def clearOutgoingMessages() = {// override
     outgoingMessageManager.clear
     localQueue.close
     localQueue.prepareRead
   }
 
-  override def localMessages[M](): Option[List[M]] = 
+  override def localMessages[M](): Option[List[M]] =  
     localQueue.isInstanceOf[Viewable[M]] match {
       case true => Option(localQueue.asInstanceOf[Viewable[M]].view.toList)
       case false => None
@@ -151,7 +149,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
    */
   // TODO: report stats
   @throws(classOf[IOException])
-  override def send(peerName: String, msg: M) = {
+  protected def send(peerName: String, msg: M) = { // override
     LOG.debug("Message {} will be sent to {}", msg, peerName)
     outgoingMessageManager.addMessage(Peer.at(peerName), msg); 
   }
@@ -161,7 +159,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   }
 
   // TODO: refactor methods return types
-  override def getOutgoingBundles(): 
+  protected def getOutgoingBundles(): // override
     Iter[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] = 
     outgoingMessageManager.getBundleIterator
 
@@ -173,22 +171,12 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     }
   }
 
-  @throws(classOf[IOException]) 
-  override def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M]) = 
-    transferredFrom match { 
-      case Some(from) => transfer(peer, bundle, from)
-      case None => LOG.error("Don't know where messages are from!")
-    }
-
   /**
    * Client can use ask pattern for synchronous execution (blocking call).
    */
   protected def transferMessages: Receive = {
-    case Transfer(peer, bundle) => {
-      transferredFrom = Option(sender)
-      LOG.debug("Message is transferred from {}", transferredFrom)
-      transfer(peer, bundle.asInstanceOf[BSPMessageBundle[M]])
-    }
+    case Transfer(peer, bundle) => 
+      transfer(peer, bundle.asInstanceOf[BSPMessageBundle[M]], sender)
   }
 
   /**
@@ -198,7 +186,8 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
    * @param bundle are messages to be sent.
    */  
   @throws(classOf[IOException]) 
-  def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M], from: ActorRef) {
+  protected def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M], 
+                         from: ActorRef) {
     mapAsScalaMap(peersLRUCache).find( 
       entry => entry._1.equals(peer)
     ) match {
@@ -300,7 +289,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     loopBackMessages(bundle) 
 
   @throws(classOf[IOException])
-  override def loopBackMessages(bundle: BSPMessageBundle[M]) = {
+  protected def loopBackMessages(bundle: BSPMessageBundle[M]) = { // override
     val threshold = BSPMessageCompressor.threshold(Option(conf))
     bundle.setCompressor(BSPMessageCompressor.get(conf), threshold)
     asScalaIterator(bundle.iterator).foreach( msg => {
@@ -310,11 +299,11 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   // TODO: report stats
   @throws(classOf[IOException])
-  override def loopBackMessage(message: Writable) {
+  protected def loopBackMessage(message: Writable) { // override
     localQueue.add(message.asInstanceOf[M])
   } 
 
-  override def getListenerAddress(): ProxyInfo = currentPeer(conf)
+  protected def getListenerAddress(): ProxyInfo = currentPeer(conf) // override
 
   protected def listenerAddress: Receive = {
     case GetListenerAddress => sender ! getListenerAddress

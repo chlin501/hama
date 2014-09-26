@@ -16,111 +16,118 @@
  * limitations under the License.
  */
 package org.apache.hama.bsp.v2
-/*
+
 import akka.actor.ActorRef
 import java.io.IOException
 import java.net.InetAddress
 import java.net.URLClassLoader
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.ProxyInfo
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.Counters
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.CacheService
 import org.apache.hama.fs.Operation
-import org.apache.hama.HamaConfiguration
-import org.apache.hama.ProxyInfo
-import org.apache.hama.logging.CommonLog
+import org.apache.hama.logging.Logging
+import org.apache.hama.logging.LoggingAdapter
+import org.apache.hama.logging.TaskLog
+import org.apache.hama.logging.TaskLogging
+import org.apache.hama.logging.TaskLogger
 import org.apache.hama.message.BSPMessageBundle
-import org.apache.hama.message.MessageManager
-import org.apache.hama.message.Messenger
-import org.apache.hama.message.PeerCommunicator
-import org.apache.hama.monitor.CheckpointerReceiver
-import org.apache.hama.monitor.Checkpointable
-import org.apache.hama.sync.BarrierClient
-import org.apache.hama.sync.PeerSyncClient
-import org.apache.hama.sync.SyncException
-import org.apache.hama.util.Utils._
+import org.apache.hama.message.Send
+//import org.apache.hama.message.MessageManager
+//import org.apache.hama.message.Messenger
+//import org.apache.hama.monitor.CheckpointerReceiver
+//import org.apache.hama.monitor.Checkpointable
+import org.apache.hama.sync.Enter
+import org.apache.hama.sync.Leave
+//import org.apache.hama.sync.BarrierClient
+//import org.apache.hama.sync.PeerSyncClient
+//import org.apache.hama.sync.SyncException
 import scala.collection.JavaConversions._
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 
- * This class purely implements BSPPeer interface, and is intended to be used  
- * by @{link Worker} for executing superstep logic.
+final case class Setup(task: Task)
+
+/**
+ * This class provides BSPPeer functions in terms of Actor, and will be 
+ * encapsulated in an adapter used by {@link Superstep}s.
  *
  * {@link Coordinator} is responsible for providing related services, 
  * including:
  * - messenging
- * - io 
+ * - <strik>io</strike>
  * - sync
+ */
 // TODO: use task operator to collect metrics: 
 //  - status
 //  - start time
 //  - finish time
 //  - progress, etc.
-class Coordinator(conf: HamaConfiguration, checkpointer: ActorRef,
-                   messenger: ActorRef, syncClient: ActorRef) extends Agent {
-                                  extends BSPPeer with CheckpointerReceiver 
-                                  with Checkpointable 
-                                  with Messenger 
-                                  with BarrierClient {
+// TODO: use wrapper to wrap BSPPeer which calls Coordinator instead!
+class Coordinator(conf: HamaConfiguration,  // common conf
+                  checkpointer: ActorRef,
+                  messenger: ActorRef, 
+                  syncClient: ActorRef,
+                  tasklog: ActorRef) extends LocalService with TaskLog {
 
-  protected var taskOperator: Option[TaskOperator] = None
+  /**
+   * Create a new task when passing task to the next actor.
+   */
+  var task: Option[Task] = None
+
+  override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
   override def configuration(): HamaConfiguration = conf
 
-   * Configure necessary services for a specific task, including
-   * - io
-   * - sync
-   * - messaging
-   * Note: <pre>configuration != task.getConfiguration(). </pre>
-   *       The formor comes from child process, the later from the task.
-   * @param task contains setting for a specific job; its configuration differs
-   *             from conf provided by {@link Container}.
-  protected[v2] def configureFor(commonConf: HamaConfiguration, 
-                                 operator: Option[TaskOperator],
-                                 peerMessenger: ActorRef) {
-    taskOperator = operator
-    this.conf = commonConf;
-    TaskOperator.execute(taskOperator, { (task) =>
-      configureForMessenger(configuration, task, peerMessenger) 
-    })
-    //this.io = ioService[_, _](io, configuration, taskWithStats) 
-    TaskOperator.execute(taskOperator, { (task) => 
-      localize(configuration, task) 
-    })
-    TaskOperator.execute(taskOperator, { (task) => 
-      settingForTask(configuration, task) 
-    })
-    TaskOperator.execute(taskOperator, { (task) => 
-      configureForBarrier(configuration, task, host, port) 
-    })
-    TaskOperator.execute(taskOperator, { (task) => 
-      firstSync(task.getCurrentSuperstep) 
-    })
+  override def initializeServices = localize(conf)
+
+  /**
+   * Copy necessary files to local (file) system so to speed up computation.
+   * @param conf should contain related cache files if any.
+   */
+  protected def localize(conf: HamaConfiguration) = 
+    CacheService.moveCacheToLocal(conf)
+
+  protected def setup: Receive = {
+    case Setup(aTask) => {
+      this.task = Option(aTask)
+      this.task.map { (aTask) => setup(aTask) }
+    }
   }
 
-   * Internal sync to ensure all peers is registered/ ready.
-   * @param superstep indicate the curent superstep value.
-  //TODO: should the task's superstep be confiured to 0 instead?
-  protected def firstSync(superstep: Long) = 
-    TaskOperator.execute(taskOperator, { (task) => {
-      syncClient.enterBarrier(task.getId.getJobID, task.getId, superstep)
-      syncClient.leaveBarrier(task.getId.getJobID, task.getId, superstep)
-      task.increatmentSuperstep
-    }})
-
+  /**
+   * Prepare related data for a specific task.
+   * Note: <pre>configuration != task.getConfiguration(). </pre>
+   *       The formor comes from child process, the later from the task.
+   * @param task contains setting for a specific job; task configuration differs
+   *             from conf provided by {@link Container}.
+   */
+  protected[v2] def setup(task: Task) {  
+    settingFor(task)  
+    firstSync(task)  
+  }
+  
+  /**
    * - Configure FileSystem's working directory with corresponded 
    * <b>task.getConfiguration()</b>.
    * - And add additional classpath to task's configuration.
    * @param conf is the common setting from bsp peer container.
    * @param task contains setting for particular job computation.
-  protected def settingForTask(conf: HamaConfiguration, task: Task) = {
+   */
+  protected def settingFor(task: Task) = {
     val taskConf = task.getConfiguration
-    Operation.get(taskConf).setWorkingDirectory(
-      new Path(Operation.defaultWorkingDirectory(taskConf))
-    )
+
+    //TODO: this seems to belong to io
+    //Operation.get(taskConf).setWorkingDirectory(
+      //new Path(Operation.defaultWorkingDirectory(taskConf))
+    //) 
+
     val libjars = CacheService.moveJarsAndGetClasspath(conf) 
     libjars match {
       case null => LOG.warning("No jars to be included for "+task.getId)
@@ -134,26 +141,29 @@ class Coordinator(conf: HamaConfiguration, checkpointer: ActorRef,
   }
 
   /**
-   * Setup io service for a specific task.
-  protected def ioService[I, O](io: IO[I, O],
-                                conf: HamaConfiguration, 
-                                taskWithStats: TaskWithStats): IO[I, O] = {
-    val newIO = io match {
-      case null => IO.get[I,O](conf)
-      case _ => io
-    }
-    newIO.initialize(getTask.getConfiguration, // tight to a task 
-                     getTask.getSplit, 
-                     getCounters)
-    newIO
-  }
+   * Internal sync to ensure all peers is registered/ ready.
+   * @param superstep indicate the curent superstep value.
    */
+  //TODO: should the task's superstep be confiured to 0 instead?
+  protected def firstSync(task: Task) {
+    syncClient ! Enter(task.getId.getJobID, task.getId, 
+                       task.getCurrentSuperstep)
+    syncClient ! Leave(task.getId.getJobID, task.getId, 
+                       task.getCurrentSuperstep)
+    task.increatmentSuperstep
+  }
 
-   * Copy necessary files to local (file) system so to speed up computation.
-   * @param conf should contain related cache files if any.
-  protected def localize(conf: HamaConfiguration, task: Task) = 
-    CacheService.moveCacheToLocal(conf)
+  @throws(classOf[IOException])
+  def send(peerName: String, msg: Writable) = 
+    messenger ! Send(peerName, msg.asInstanceOf[Writable])
 
+/* ask pattern
+
+  override def getCurrentMessage(): Writable = 
+    messenger ! GetCurrentMessage .asInstanceOf[Writable]
+*/
+  
+/*
    * The host this actor runs on. It may be different from the host that remote 
    * module listens to.
    * @return String name of the host.
@@ -163,14 +173,8 @@ class Coordinator(conf: HamaConfiguration, checkpointer: ActorRef,
 
   protected def port(): Int = configuration.getInt("bsp.peer.port", 61000) // TODO: move to net pkg?
 
-  //override def getIO[I, O](): IO[I, O] = this.io.asInstanceOf[IO[I, O]]
 
-  @throws(classOf[IOException])
-  override def send(peerName: String, msg: Writable) = 
-    messenger.send(peerName, msg.asInstanceOf[Writable])
 
-  override def getCurrentMessage(): Writable = 
-    messenger.getCurrentMessage.asInstanceOf[Writable]
 
   override def getNumCurrentMessages(): Int = messenger.getNumCurrentMessages
 
@@ -260,6 +264,8 @@ class Coordinator(conf: HamaConfiguration, checkpointer: ActorRef,
     syncClient.close 
     messenger.close
   }
+*/
+
+  override def receive = setup orElse unknown
 
 }
-*/

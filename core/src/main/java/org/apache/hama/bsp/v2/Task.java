@@ -34,8 +34,8 @@ import org.apache.hama.HamaConfiguration;
 import org.apache.hama.io.PartitionedSplit;
 //import org.apache.hama.monitor.metrics.Metric;
 //import org.apache.hama.monitor.metrics.MetricsRecord;
-import org.apache.hama.monitor.Transformable;
-import org.apache.hama.monitor.TaskStat;
+//import org.apache.hama.monitor.Transformable;
+//import org.apache.hama.monitor.TaskStat;
 
 /**
  * A view to task information. 
@@ -44,7 +44,7 @@ import org.apache.hama.monitor.TaskStat;
  * old one provided.
  * This class can also produce metrics stats for monitor.
  */
-public final class Task implements Writable, Transformable { 
+public final class Task implements Writable/*, Transformable*/ { 
 
   final Log LOG = LogFactory.getLog(Task.class);
 
@@ -505,10 +505,12 @@ public final class Task implements Writable, Transformable {
                    getTotalBSPTasks()+")";
   }
 
+/*
   @Override
   public TaskStat toStat() {
     return new TaskStat(getId(), getCurrentSuperstep(), getStartTime(), 
                         getFinishTime(), getState(), getPhase(), isCompleted());
   }
+*/
 }
 

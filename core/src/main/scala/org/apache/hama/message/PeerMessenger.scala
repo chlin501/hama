@@ -31,7 +31,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.util.LRUCache
-import org.apache.hama.util.Utils._
+//import org.apache.hama.util.Utils._
 import scala.collection.JavaConversions._
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
