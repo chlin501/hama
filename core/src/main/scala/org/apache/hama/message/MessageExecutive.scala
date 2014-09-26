@@ -79,6 +79,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     conf.getInt("hama.messenger.max.cached.connections", 100)
   protected val peersLRUCache = initializeLRUCache(maxCachedConnections)
   protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
+  protected var transferredFrom: Option[ActorRef] = None
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
@@ -174,15 +175,20 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   @throws(classOf[IOException]) 
   override def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M]) = 
-    LOG.warning("This function, executed by {}, doesn't take effect!", 
-                Thread.currentThread.getName)
+    transferredFrom match { 
+      case Some(from) => transfer(peer, bundle, from)
+      case None => LOG.error("Don't know where messages are from!")
+    }
 
   /**
    * Client can use ask pattern for synchronous execution (blocking call).
    */
   protected def transferMessages: Receive = {
-    case Transfer(peer, bundle) => 
-      transfer(peer, bundle.asInstanceOf[BSPMessageBundle[M]], sender)
+    case Transfer(peer, bundle) => {
+      transferredFrom = Option(sender)
+      LOG.debug("Message is transferred from {}", transferredFrom)
+      transfer(peer, bundle.asInstanceOf[BSPMessageBundle[M]])
+    }
   }
 
   /**
@@ -190,9 +196,9 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
    * It first finds the peer and then send messages.
    * @param peer contains information of another peer. 
    * @param bundle are messages to be sent.
-   */  @throws(classOf[IOException]) 
-  override def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M], 
-                        from: ActorRef) {
+   */  
+  @throws(classOf[IOException]) 
+  def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M], from: ActorRef) {
     mapAsScalaMap(peersLRUCache).find( 
       entry => entry._1.equals(peer)
     ) match {

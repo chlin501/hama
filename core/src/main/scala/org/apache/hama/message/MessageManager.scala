@@ -75,9 +75,6 @@ trait MessageManager[M <: Writable] {
   @throws(classOf[IOException])
   def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M])
 
-  @throws(classOf[IOException])
-  def transfer(peer: ProxyInfo, bundle: BSPMessageBundle[M], actor: ActorRef)
-
   /**
    * Clears the outgoing message queue. 
    */
