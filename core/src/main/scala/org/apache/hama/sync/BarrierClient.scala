@@ -25,8 +25,9 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.Close
 
 sealed trait BarrierMessage
+final case class GetPeerNameBy(taskAttemptId: TaskAttemptID, 
+                               index: Int) extends BarrierMessage
 final case object GetPeerName extends BarrierMessage
-final case class GetAllPeerNames(taskAttemptId: TaskAttemptID)
 final case class Enter(taskAttemptId: TaskAttemptID, superstep: Long) 
       extends BarrierMessage
 final case object WithinBarrier extends BarrierMessage
@@ -54,18 +55,27 @@ object BarrierClient {
 }
 
 class BarrierClient(conf: HamaConfiguration, // common conf
-                    syncClient: PeerSyncClient) extends LocalService { 
+                    syncClient: PeerSyncClient//, 
+                    /*tasklog: ActorRef*/) extends LocalService /*with TaskLog*/ { 
 
   override def configuration(): HamaConfiguration = conf
 
   protected def currentPeerName: Receive = {
-    case GetPeerName => syncClient.getPeerName
+    case GetPeerName => sender ! syncClient.getPeerName
   }
 
-  protected def allPeerNames: Receive = {
-    case GetAllPeerNames(taskAttemptId) => 
-      syncClient.getAllPeerNames(taskAttemptId)
+  protected def peerNameByIndex: Receive = {
+    case GetPeerNameBy(taskAttemptId, index) => initPeers(taskAttemptId) match {
+      case null => // LOG.error("Unlikely but the peers array found is null!")
+      case allPeers@_ => allPeers.isEmpty  match {
+        case true => // LOG.error("Empty peers! Please investigate ...")
+        case false => sender ! allPeers(index)
+      }
+    }
   }
+
+  protected def initPeers(taskAttemptId: TaskAttemptID): Array[String] = 
+    syncClient.getAllPeerNames(taskAttemptId)
 
   protected def enter: Receive = {
     case Enter(taskAttemptId, superstep) => {
@@ -88,6 +98,6 @@ class BarrierClient(conf: HamaConfiguration, // common conf
     }
   }
 
-  override def receive = currentPeerName orElse allPeerNames orElse enter orElse leave orElse close orElse unknown
+  override def receive = currentPeerName orElse peerNameByIndex orElse enter orElse leave orElse close orElse unknown
 
 }

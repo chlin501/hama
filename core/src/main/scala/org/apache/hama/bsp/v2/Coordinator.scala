@@ -39,6 +39,7 @@ import org.apache.hama.logging.TaskLog
 import org.apache.hama.logging.TaskLogging
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.message.BSPMessageBundle
+import org.apache.hama.message.ClearOutgoingMessages
 import org.apache.hama.message.GetCurrentMessage
 import org.apache.hama.message.GetNumCurrentMessages
 import org.apache.hama.message.GetOutgoingBundles
@@ -55,8 +56,8 @@ import org.apache.hama.message.TransferredState
 import org.apache.hama.sync.BarrierMessage
 import org.apache.hama.sync.Enter
 import org.apache.hama.sync.WithinBarrier
-import org.apache.hama.sync.GetAllPeerNames
 import org.apache.hama.sync.GetPeerName
+import org.apache.hama.sync.GetPeerNameBy
 import org.apache.hama.sync.Leave
 import org.apache.hama.sync.OutsideBarrier
 import org.apache.hama.sync.PeerSyncClient
@@ -91,7 +92,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
                   messenger: ActorRef, 
                   syncClient: ActorRef,
                   tasklog: ActorRef) extends LocalService with TaskLog {
-
+  type ProxyAndBundleIt = Iterator[Entry[ProxyInfo, BSPMessageBundle[Writable]]]
   /**
    * Create a new task when passing task to the next actor.
    */
@@ -101,7 +102,14 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   override def configuration(): HamaConfiguration = conf
 
-  override def initializeServices = localize(conf)
+  //override def initializeServices = localize(conf)
+
+  protected def setup: Receive = {
+    case Setup(task: Task) => {
+      this.task = Option(task)
+      setup(task)  
+    }
+  } 
 
   /**
    * Copy necessary files to local (file) system so to speed up computation.
@@ -109,13 +117,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected def localize(conf: HamaConfiguration) = 
     CacheService.moveCacheToLocal(conf)
-
-  protected def setup: Receive = {
-    case Setup(aTask) => {
-      this.task = Option(aTask)
-      this.task.map { (aTask) => setup(aTask) }
-    }
-  }
 
   /**
    * Prepare related data for a specific task.
@@ -126,6 +127,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected[v2] def setup(task: Task) {  
     settingFor(task)  
+    localize(conf)
     firstSync(task)  
   }
   
@@ -162,8 +164,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   //TODO: should the task's superstep be confiured to 0 instead?
   protected def firstSync(task: Task) {
-    Utils.await[Unit](syncClient, Enter(task.getId, task.getCurrentSuperstep))
-    Utils.await[Unit](syncClient, Leave(task.getId, task.getCurrentSuperstep))
+    enterBarrier(task.getId, task.getCurrentSuperstep)
+    leaveBarrier(task.getId, task.getCurrentSuperstep)
     task.increatmentSuperstep
   }
 
@@ -177,6 +179,16 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def getNumCurrentMessages(): Int = 
     Utils.await[Int](messenger, GetNumCurrentMessages)
 
+  protected def getSuperstepCount(): Long = task.map { (aTask) =>
+    aTask.getCurrentSuperstep 
+  }.getOrElse(0).asInstanceOf[Long]
+
+  protected def getPeerName(): String = 
+    Utils.await[String](syncClient, GetPeerName)
+
+  protected def getPeerName(index: Int): String = task.map { (aTask) =>
+    Utils.await[String](syncClient, GetPeerNameBy(aTask.getId, index))
+  }.getOrElse(null)
 
   @throws(classOf[IOException])
   protected def sync() {
@@ -185,9 +197,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
        
       enterBarrier(aTask.getId, aTask.getCurrentSuperstep)
 
-      val it = 
-        Utils.await[Iterator[Entry[ProxyInfo, BSPMessageBundle[Writable]]]](
-        messenger, GetOutgoingBundles)
+      val it = Utils.await[ProxyAndBundleIt](messenger, GetOutgoingBundles)
       asScalaIterator(it).foreach( entry => {
         val peer = entry.getKey
         val bundle = entry.getValue
@@ -196,11 +206,13 @@ class Coordinator(conf: HamaConfiguration,  // common conf
       })
 
       Utils.await[TransferredState](messenger, "IsTransferredCompleted") match {
-        case TransferredCompleted => 
+        case TransferredCompleted => {
           LOG.debug("Message transfers completely for task {}.", aTask.getId)
+          clear
+        }
         case TransferredFailure => {
           LOG.error("Fail transferring messages for task {}!", aTask.getId)
-          // ask controller to restart from the latest superstep
+          // ask controller to recover from the latest superstep
           controller ! TransferredFailure 
         }   
       }       
@@ -211,7 +223,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     }}
   } 
 
-  
+  protected def clear() = messenger ! ClearOutgoingMessages 
 
   @throws(classOf[SyncException])
   protected def enterBarrier(taskAttemptId: TaskAttemptID, superstep: Long) = 
@@ -231,9 +243,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   protected def port(): Int = configuration.getInt("bsp.peer.port", 61000) // TODO: move to net pkg?
 
-
-
-
   protected def doTransfer(peer: ProxyInfo, 
                            bundle: BSPMessageBundle[Writable]): Try[Boolean] = 
     Try(checkThenTransfer(peer, bundle))
@@ -243,22 +252,9 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     Boolean = { messenger.transfer(peer, bundle); true }
 
  
-  override def getSuperstepCount(): Long = 
-    TaskOperator.execute[Long](taskOperator, { (task) => 
-      task.getCurrentSuperstep 
-    }, 0L)
 
-  private def initPeers(): Array[String] = 
-    TaskOperator.execute[Array[String]](taskOperator, { (task) => 
-      syncClient.getAllPeerNames(task.getId) 
-    }, Array[String]())
 
-  override def getPeerName(): String = syncClient.getPeerName
 
-  override def getPeerName(index: Int): String = initPeers match {
-    case null => null
-    case _=> initPeers()(index)
-  }
 
   override def getPeerIndex(): Int = 
     TaskOperator.execute[Int](taskOperator, { (task) => 
@@ -272,7 +268,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case _=> initPeers.length
   }
 
-  override def clear() = messenger.clearOutgoingMessages 
 
   override def getTaskAttemptId(): TaskAttemptID = 
    TaskOperator.execute[TaskAttemptID](taskOperator, { (task) => task.getId }, 
@@ -289,5 +284,4 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 */
 
   override def receive = setup orElse unknown
-
 }

@@ -138,8 +138,8 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   
   protected def clearOutgoingMessages() = {// override
     outgoingMessageManager.clear
-    localQueue.close
-    localQueue.prepareRead
+    //localQueue.close
+    //localQueue.prepareRead
   }
 
   override def localMessages[M](): Option[List[M]] =  
@@ -170,7 +170,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     outgoingMessageManager.getBundleIterator
 
   protected def outgoingBundles: Receive = {
-    case GetOutgoingBundles =>  sender ! getOutgoingBundles
+    case GetOutgoingBundles => sender ! getOutgoingBundles
   }
 
   /**
