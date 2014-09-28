@@ -97,13 +97,13 @@ public interface PeerSyncClient extends SyncClient {
    * @param taskId
    * @param hostAddress
    * @param port
-   */
   void deregisterFromBarrier(BSPJobID jobId, TaskAttemptID taskId,
                              String hostAddress, long port);
+   */
 
   /**
    * This stops the sync daemon. Only used in YARN.
-   */
   void stopServer();
+   */
 
 }

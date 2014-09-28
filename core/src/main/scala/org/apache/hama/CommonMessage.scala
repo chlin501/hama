@@ -17,6 +17,8 @@
  */
 package org.apache.hama
 
+import akka.actor.ActorRef
+
 sealed trait CommonMessage
 
 /**
@@ -42,3 +44,8 @@ final case class Timeout(name: String, path: String) extends CommonMessage
  * Signfy a close operation message.
  */
 final case object Close extends CommonMessage
+
+/**
+ * Denote which actor is terminated.
+ */
+final case class Offline(who: ActorRef) extends CommonMessage

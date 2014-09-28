@@ -24,7 +24,9 @@ import java.util.{ Iterator => Iter }
 import java.util.Map.Entry
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.Offline
 import org.apache.hama.ProxyInfo
+import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.logging.Logging
@@ -60,6 +62,8 @@ final protected[message] case class MessageFrom(
   msg: BSPMessageBundle[_ <: Writable], from: ActorRef
 )
 
+final case object IsWaitingListEmpty
+
 /**
  * Provide default functionality of {@link MessageExecutive}.
  * It realizes message communication by java object, and send messages through
@@ -69,8 +73,9 @@ final protected[message] case class MessageFrom(
 class MessageExecutive[M <: Writable](conf: HamaConfiguration,
                                       slotSeq: Int,
                                       taskAttemptId: TaskAttemptID,
+                                      controller: ActorRef,
                                       tasklog: ActorRef)
-      extends RemoteService with TaskLog with MessageView {
+      extends RemoteService with LocalService with TaskLog with MessageView {
 
   protected val outgoingMessageManager = OutgoingMessageManager.get[M](conf)
   protected val localQueue = getReceiverQueue
@@ -78,6 +83,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     conf.getInt("hama.messenger.max.cached.connections", 100)
   protected val peersLRUCache = initializeLRUCache(maxCachedConnections)
   protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
+  protected var auditor: Option[ActorRef] = None
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
@@ -164,11 +170,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     outgoingMessageManager.getBundleIterator
 
   protected def outgoingBundles: Receive = {
-    case GetOutgoingBundles => {
-      sender ! asScalaIterator(getOutgoingBundles).map( v => 
-        (v.getKey, v.getValue)
-      ) 
-    }
+    case GetOutgoingBundles =>  sender ! getOutgoingBundles
   }
 
   /**
@@ -246,6 +248,11 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   override def afterLinked(target: String, proxy: ActorRef) = 
     findThenSend(target, proxy) 
 
+  override def offline(target: ActorRef) = auditor match { 
+    case Some(peer) => peer ! TransferredFailure 
+    case None => controller ! Offline(target) // ask controller for instruction
+  }
+
   /**
    * Find the peer name equals to the target, and then send the bundler over
    * network.
@@ -309,6 +316,29 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     case GetListenerAddress => sender ! getListenerAddress
   }
 
-  override def receive = sendMessage orElse currentMessage orElse numberCurrentMessages orElse outgoingBundles orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown 
+  protected def checkState: Receive = {
+    case "IsTransferredCompleted" => waitingList.isEmpty match {
+      case true => sender ! TransferredCompleted
+      case false => {
+        auditor = Option(sender)
+        request(self, IsWaitingListEmpty)
+      }
+    }
+  }
+
+  protected def checkWaitingList: Receive = {
+    case IsWaitingListEmpty => waitingList.isEmpty match {
+      case true => auditor.map { (peer) => {
+        peer ! TransferredCompleted 
+        removeFromRequestCache(IsWaitingListEmpty.toString)
+      }}
+      case false => 
+        LOG.debug("Messages are not yet transferred completed because " +
+                  "waiting list for task {} is {}", taskAttemptId, 
+                  waitingList.size)
+    }
+  }
+
+  override def receive = sendMessage orElse currentMessage orElse numberCurrentMessages orElse outgoingBundles orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeIsTerminated orElse checkState orElse checkWaitingList orElse unknown 
 
 }

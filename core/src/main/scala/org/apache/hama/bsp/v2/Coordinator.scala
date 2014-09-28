@@ -21,6 +21,8 @@ import akka.actor.ActorRef
 import java.io.IOException
 import java.net.InetAddress
 import java.net.URLClassLoader
+import java.util.Iterator
+import java.util.Map.Entry
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
@@ -37,16 +39,29 @@ import org.apache.hama.logging.TaskLog
 import org.apache.hama.logging.TaskLogging
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.message.BSPMessageBundle
+import org.apache.hama.message.GetCurrentMessage
+import org.apache.hama.message.GetNumCurrentMessages
+import org.apache.hama.message.GetOutgoingBundles
 import org.apache.hama.message.Send
+import org.apache.hama.message.Transfer
+import org.apache.hama.message.TransferredCompleted
+import org.apache.hama.message.TransferredFailure
+import org.apache.hama.message.TransferredState
 //import org.apache.hama.message.MessageManager
 //import org.apache.hama.message.Messenger
 //import org.apache.hama.monitor.CheckpointerReceiver
 //import org.apache.hama.monitor.Checkpointable
-import org.apache.hama.sync.Enter
-import org.apache.hama.sync.Leave
 //import org.apache.hama.sync.BarrierClient
-//import org.apache.hama.sync.PeerSyncClient
-//import org.apache.hama.sync.SyncException
+import org.apache.hama.sync.BarrierMessage
+import org.apache.hama.sync.Enter
+import org.apache.hama.sync.WithinBarrier
+import org.apache.hama.sync.GetAllPeerNames
+import org.apache.hama.sync.GetPeerName
+import org.apache.hama.sync.Leave
+import org.apache.hama.sync.OutsideBarrier
+import org.apache.hama.sync.PeerSyncClient
+import org.apache.hama.sync.SyncException
+import org.apache.hama.util.Utils
 import scala.collection.JavaConversions._
 import scala.util.Try
 import scala.util.Success
@@ -71,6 +86,7 @@ final case class Setup(task: Task)
 //  - progress, etc.
 // TODO: use wrapper to wrap BSPPeer which calls Coordinator instead!
 class Coordinator(conf: HamaConfiguration,  // common conf
+                  controller: ActorRef,
                   checkpointer: ActorRef,
                   messenger: ActorRef, 
                   syncClient: ActorRef,
@@ -146,10 +162,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   //TODO: should the task's superstep be confiured to 0 instead?
   protected def firstSync(task: Task) {
-    syncClient ! Enter(task.getId.getJobID, task.getId, 
-                       task.getCurrentSuperstep)
-    syncClient ! Leave(task.getId.getJobID, task.getId, 
-                       task.getCurrentSuperstep)
+    Utils.await[Unit](syncClient, Enter(task.getId, task.getCurrentSuperstep))
+    Utils.await[Unit](syncClient, Leave(task.getId, task.getCurrentSuperstep))
     task.increatmentSuperstep
   }
 
@@ -157,12 +171,56 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   def send(peerName: String, msg: Writable) = 
     messenger ! Send(peerName, msg.asInstanceOf[Writable])
 
-/* ask pattern
+  protected def getCurrentMessage(): Writable = 
+    Utils.await[Writable](messenger, GetCurrentMessage)
 
-  override def getCurrentMessage(): Writable = 
-    messenger ! GetCurrentMessage .asInstanceOf[Writable]
-*/
+  protected def getNumCurrentMessages(): Int = 
+    Utils.await[Int](messenger, GetNumCurrentMessages)
+
+
+  @throws(classOf[IOException])
+  protected def sync() {
+    task.map { (aTask) => {
+      aTask.transitToSync 
+       
+      enterBarrier(aTask.getId, aTask.getCurrentSuperstep)
+
+      val it = 
+        Utils.await[Iterator[Entry[ProxyInfo, BSPMessageBundle[Writable]]]](
+        messenger, GetOutgoingBundles)
+      asScalaIterator(it).foreach( entry => {
+        val peer = entry.getKey
+        val bundle = entry.getValue
+        it.remove 
+        messenger ! Transfer(peer, bundle)
+      })
+
+      Utils.await[TransferredState](messenger, "IsTransferredCompleted") match {
+        case TransferredCompleted => 
+          LOG.debug("Message transfers completely for task {}.", aTask.getId)
+        case TransferredFailure => {
+          LOG.error("Fail transferring messages for task {}!", aTask.getId)
+          // ask controller to restart from the latest superstep
+          controller ! TransferredFailure 
+        }   
+      }       
+      // checkpoint(messenger, nextPack(conf)) TODO: 
+      // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
+      leaveBarrier(aTask.getId, aTask.getCurrentSuperstep)
+      aTask.increatmentSuperstep 
+    }}
+  } 
+
   
+
+  @throws(classOf[SyncException])
+  protected def enterBarrier(taskAttemptId: TaskAttemptID, superstep: Long) = 
+    Utils.await[BarrierMessage](syncClient, Enter(taskAttemptId, superstep))
+
+  @throws(classOf[SyncException])
+  protected def leaveBarrier(taskAttemptId: TaskAttemptID, superstep: Long) = 
+    Utils.await[BarrierMessage](syncClient, Leave(taskAttemptId, superstep))
+   
 /*
    * The host this actor runs on. It may be different from the host that remote 
    * module listens to.
@@ -176,20 +234,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
 
 
-  override def getNumCurrentMessages(): Int = messenger.getNumCurrentMessages
-
-  @throws(classOf[SyncException])
-  protected def enterBarrier() = TaskOperator.execute(taskOperator, { (task) => 
-    syncClient.enterBarrier(task.getId.getJobID, task.getId, 
-                            task.getCurrentSuperstep)
-  }) 
-
-  @throws(classOf[SyncException])
-  protected def leaveBarrier() = TaskOperator.execute(taskOperator, { (task) =>
-    syncClient.leaveBarrier(task.getId.getJobID, task.getId,
-                            task.getCurrentSuperstep)
-  })
-
   protected def doTransfer(peer: ProxyInfo, 
                            bundle: BSPMessageBundle[Writable]): Try[Boolean] = 
     Try(checkThenTransfer(peer, bundle))
@@ -198,29 +242,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
                                   bundle: BSPMessageBundle[Writable]): 
     Boolean = { messenger.transfer(peer, bundle); true }
 
-  @throws(classOf[IOException])
-  override def sync() {
-    TaskOperator.execute(taskOperator, { (task) => task.transitToSync })
-    val it = messenger.getOutgoingBundles 
-    asScalaIterator(it).foreach( entry => {
-      val peer = entry.getKey
-      val bundle = entry.getValue
-      it.remove 
-      doTransfer(peer, bundle) match {
-        case Success(result) => LOG.debug("Successfully transfer messages!")
-        case Failure(cause) => LOG.error("Fail transferring messages due "+
-                                         "to {}", cause)
-      }
-    })
-     
-    enterBarrier()
-    clear()
-    checkpoint(messenger, nextPack(conf))
-    leaveBarrier()
-    // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
-    TaskOperator.execute(taskOperator, { (task) => task.increatmentSuperstep })
-  } 
-  
+ 
   override def getSuperstepCount(): Long = 
     TaskOperator.execute[Long](taskOperator, { (task) => 
       task.getCurrentSuperstep 

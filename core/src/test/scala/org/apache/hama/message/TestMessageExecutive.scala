@@ -42,10 +42,11 @@ final case object GetSentMessage
 class MockMessageExecutive[M <: Writable](conf: HamaConfiguration,
                                           slotSeq: Int,
                                           taskAttemptId: TaskAttemptID,
+                                          controller: ActorRef,
                                           tasklog: ActorRef,
                                           tester: ActorRef,
                                           target: ProxyInfo)
-      extends MessageExecutive[M](conf, slotSeq, taskAttemptId, tasklog) {
+extends MessageExecutive[M](conf, slotSeq, taskAttemptId, controller, tasklog) {
 
   def getSentMessage: Receive = {
     case GetSentMessage => {
@@ -158,6 +159,7 @@ class TestMessageExecutive extends TestEnv(TestMessageExecutive.sysName)
                                    testConfiguration, 
                                    slotSeq, 
                                    taskAttemptId, 
+                                   null, // controller not used here
                                    tasklog,
                                    tester, 
                                    proxy)

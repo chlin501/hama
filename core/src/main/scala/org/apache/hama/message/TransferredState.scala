@@ -17,10 +17,7 @@
  */
 package org.apache.hama.message
 
-/**
- * Indicate all messages in {@link BSPMessageBundle} are sent out.
- */
 sealed trait TransferredState
-final case object MessengerUninitialized extends TransferredState
+//final case object MessengerUninitialized extends TransferredState
 final case object TransferredCompleted extends TransferredState
 final case object TransferredFailure extends TransferredState

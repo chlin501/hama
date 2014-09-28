@@ -38,6 +38,8 @@ trait LocalService extends Service {
    */
   protected var services = Set.empty[ActorRef] 
 
+  protected var requestCache = Map.empty[String, Cancellable]
+
   /**
    * Request with message sent to a particular actor.
    * @param target is the actor to which the message will be routed.
@@ -50,8 +52,16 @@ trait LocalService extends Service {
                         delay: FiniteDuration = 3.seconds): Cancellable = {
     LOG.debug("Request message {} to target: {}", message, target)
     import context.dispatcher
-    context.system.scheduler.schedule(initial, delay, target, message)
+    val cancellable = context.system.scheduler.schedule(initial, delay, target, 
+                                                        message)
+    putToRequestCache(message.toString, cancellable)
+    cancellable
   }
+
+  protected def putToRequestCache(key: String, toBeCancelled: Cancellable) = 
+    requestCache ++= Map(key -> toBeCancelled)
+
+  protected def removeFromRequestCache(key: String) = requestCache -= key
   
   protected[hama] def getOrCreate[A <: Actor](serviceName: String, 
                                               target: Class[A],

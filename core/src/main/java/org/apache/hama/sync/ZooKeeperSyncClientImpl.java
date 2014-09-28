@@ -343,6 +343,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
     }
   }
 
+/*
   @Override
   public void deregisterFromBarrier(BSPJobID jobId, TaskAttemptID taskId,
       String hostAddress, long port) {
@@ -355,6 +356,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
     // TODO
     throw new UnsupportedOperationException();
   }
+*/
 
   @Override
   public void process(WatchedEvent event) {
