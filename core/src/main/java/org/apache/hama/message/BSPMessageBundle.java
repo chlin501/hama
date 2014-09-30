@@ -24,7 +24,9 @@ import java.io.DataInputStream;
 import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -54,6 +56,13 @@ public class BSPMessageBundle<M extends Writable> implements Writable,
 
   ByteArrayInputStream bis = null;
   DataInputStream dis = null;
+
+  /**
+   * Record messages' hash value before they are compressed. So it can be 
+   * checked if bundles are equal. If frequency of hash collision is too high,
+   * we may employ other way to check equality between bundles.
+   */
+  protected List<Integer> hashes = new ArrayList<Integer>();
 
   public BSPMessageBundle() {
     byteBuffer = new ByteArrayOutputStream();
@@ -85,6 +94,7 @@ public class BSPMessageBundle<M extends Writable> implements Writable,
    */
   public void addMessage(M message) {
     try {
+      hashes.add(message.hashCode());
       serialized = serialize(message);
 
       if (compressor != null && serialized.length > threshold) {
@@ -195,6 +205,27 @@ public class BSPMessageBundle<M extends Writable> implements Writable,
    */
   public long getLength() throws IOException {
     return bundleLength;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (o == this) return true;
+    if (null == o) return false;
+    if (getClass() != o.getClass()) return false;
+
+    final BSPMessageBundle<M> s = (BSPMessageBundle<M>) o;
+    if(hashes.size() != s.hashes.size()) return false;
+    if(0 != hashes.size() && 0 != s.hashes.size()) {
+      for(int idx = 0; idx < hashes.size(); idx++) {
+        final Integer hash = hashes.get(idx);
+        final Integer sHash = s.hashes.get(idx);
+        if(null == hash || null == sHash) 
+          throw new NullPointerException("Messages' hash valuev not equal! "+
+                                         "Hash: "+hash+" compared: "+sHash);
+        if (!sHash.equals(hash)) return false;
+      }
+    }
+    return true;
   }
 
   @Override
