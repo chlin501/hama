@@ -17,6 +17,10 @@
  */
 package org.apache.hama.message
 
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
 import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
@@ -38,13 +42,30 @@ class TestBSPMessageBundle extends TestEnv("TestBSPMessageBundle") {
                          BSPMessageCompressor.threshold(Option(testConfiguration)))
     bundle
   }
+  
+  def serialize[M <: Writable](bundle: BSPMessageBundle[M]): Array[Byte] = {
+    val bout = new ByteArrayOutputStream()
+    val dout  = new DataOutputStream(bout)
+    bundle.write(dout)
+    val bytes = bout.toByteArray
+    dout.close
+    bytes
+  }  
 
-  it("test bsp message bundle.") {
+  def deserialize[M <: Writable](bytes: Array[Byte]): BSPMessageBundle[M] = {
+    val bin = new ByteArrayInputStream(bytes) 
+    val din = new DataInputStream(bin)
+    val bundle = new BSPMessageBundle[M]()
+    bundle.readFields(din)
+    din.close
+    bundle
+  }
+
+  it("test bsp message bundle equality.") {
     val msg1 = new Text("Apache")
     val msg2 = new Text("Hama")
     val msg3 = new Text("BSP")
-
-    val msg3a = new Text("BSPx")
+    val msg3x = new Text("BSPx")
 
     val bundle1 = createBundle[Text]()
     bundle1.addMessage(msg1, msg2, msg3)
@@ -55,9 +76,22 @@ class TestBSPMessageBundle extends TestEnv("TestBSPMessageBundle") {
     assert(bundle1.equals(bundle2)) 
 
     val bundle3 = createBundle[Text]()
-    bundle3.addMessage(msg1, msg2, msg3a)
+    bundle3.addMessage(msg1, msg2, msg3x)
     assert(!bundle1.equals(bundle3)) 
-        
-    LOG.info("Done testing bsp message bundle!")  
+
+    LOG.info("Serilaize, deserialize bsp message bundle. Then test equality ..")
+    val bytes1 = serialize(bundle1)
+    val bundlea = deserialize(bytes1) 
+    assert(bundle1.equals(bundlea))
+
+    val bytes2 = serialize(bundle2)
+    val bundleb = deserialize(bytes2) 
+    assert(bundle2.equals(bundleb))
+
+    val bytes3 = serialize(bundle3)
+    val bundlec = deserialize(bytes3) 
+    assert(bundle3.equals(bundlec))
+            
+    LOG.info("Done testing bsp message bundle equality!")  
   }
 }

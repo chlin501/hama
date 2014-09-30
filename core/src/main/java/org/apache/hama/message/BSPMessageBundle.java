@@ -237,6 +237,9 @@ public class BSPMessageBundle<M extends Writable> implements Writable,
   public void write(DataOutput out) throws IOException {
     out.writeInt(bundleSize);
     if (bundleSize > 0) {
+      for(Integer hash: hashes) {
+        out.writeInt(hash.intValue());
+      }
       out.writeUTF(className);
       byte[] messages = byteBuffer.toByteArray();
       out.writeInt(messages.length);
@@ -248,6 +251,10 @@ public class BSPMessageBundle<M extends Writable> implements Writable,
   public void readFields(DataInput in) throws IOException {
     int numMessages = in.readInt();
     if (numMessages > 0) {
+      for(int idx = 0; idx < numMessages; idx++) {
+        final Integer hash = in.readInt();
+        hashes.add(hash);
+      }
       className = in.readUTF();
       int bytesLength = in.readInt();
       byte[] temp = new byte[bytesLength];
