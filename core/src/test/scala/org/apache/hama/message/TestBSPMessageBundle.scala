@@ -32,10 +32,32 @@ import scala.collection.JavaConversions._
 @RunWith(classOf[JUnitRunner])
 class TestBSPMessageBundle extends TestEnv("TestBSPMessageBundle") {
 
-  it("test bsp message bundle.") {
-    val bundle = new BSPMessageBundle() 
+  def createBundle[M <: Writable](): BSPMessageBundle[M] = {
+    val bundle = new BSPMessageBundle[M]() 
     bundle.setCompressor(BSPMessageCompressor.get(testConfiguration),
                          BSPMessageCompressor.threshold(Option(testConfiguration)))
+    bundle
+  }
+
+  it("test bsp message bundle.") {
+    val msg1 = new Text("Apache")
+    val msg2 = new Text("Hama")
+    val msg3 = new Text("BSP")
+
+    val msg3a = new Text("BSPx")
+
+    val bundle1 = createBundle[Text]()
+    bundle1.addMessage(msg1, msg2, msg3)
+
+    val bundle2 = createBundle[Text]()
+    bundle2.addMessage(msg1, msg2, msg3)
+    LOG.info("Verify equality between bundles ...")
+    assert(bundle1.equals(bundle2)) 
+
+    val bundle3 = createBundle[Text]()
+    bundle3.addMessage(msg1, msg2, msg3a)
+    assert(!bundle1.equals(bundle3)) 
+        
     LOG.info("Done testing bsp message bundle!")  
   }
 }

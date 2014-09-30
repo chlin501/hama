@@ -87,6 +87,10 @@ public class BSPMessageBundle<M extends Writable> implements Writable,
   private byte[] compressed;
   private byte[] serialized;
 
+  public void addMessage(M ... messages) {
+    for(M msg: messages) addMessage(msg);
+  }
+
   /**
    * Add message to this bundle.
    * 
@@ -219,8 +223,9 @@ public class BSPMessageBundle<M extends Writable> implements Writable,
       for(int idx = 0; idx < hashes.size(); idx++) {
         final Integer hash = hashes.get(idx);
         final Integer sHash = s.hashes.get(idx);
+        LOG.debug("Hash value: "+hash+" Hash value to be compared: "+sHash);
         if(null == hash || null == sHash) 
-          throw new NullPointerException("Messages' hash valuev not equal! "+
+          throw new NullPointerException("Message's hash value not equal! "+
                                          "Hash: "+hash+" compared: "+sHash);
         if (!sHash.equals(hash)) return false;
       }
@@ -250,4 +255,5 @@ public class BSPMessageBundle<M extends Writable> implements Writable,
       bufferDos.write(temp);
     }
   }
+
 }
