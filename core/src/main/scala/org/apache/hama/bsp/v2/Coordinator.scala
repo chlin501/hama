@@ -27,7 +27,6 @@ import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Close
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.Counters
@@ -93,9 +92,10 @@ class Coordinator(conf: HamaConfiguration,  // common conf
                   messenger: ActorRef, 
                   syncClient: ActorRef,
                   tasklog: ActorRef) 
-      extends BSPPeer /*with LocalService*/ with TaskLog {
+      extends BSPPeer with TaskLog {
 
   type ProxyAndBundleIt = Iterator[Entry[ProxyInfo, BSPMessageBundle[Writable]]]
+
   /**
    * Create a new task when passing task to the next actor.
    */
@@ -104,9 +104,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
   override def configuration(): HamaConfiguration = conf
-
-  //override def initializeServices = localize(conf)
-
 
   /**
    * Copy necessary files to local (file) system so to speed up computation.
@@ -138,11 +135,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected def settingFor(task: Task) = {
     val taskConf = task.getConfiguration
-
-    //TODO: this seems to belong to io
-    //Operation.get(taskConf).setWorkingDirectory(
-      //new Path(Operation.defaultWorkingDirectory(taskConf))
-    //) 
 
     val libjars = CacheService.moveJarsAndGetClasspath(conf) 
     libjars match {
@@ -251,8 +243,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
           // TODO: delay retry?
           transmit(it, (retryCount+1), taskAttemptId)
         } else {
-          //ask controller to recover from the latest superstep
-          controller ! TransferredFailure 
+          //ask controller to recover from the latest superstep at diff node
+          controller ! TransferredFailure // attach task?
           LOG.warning("Fail transmitting messages, stop current processing!")
           false
         }
@@ -264,10 +256,20 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   override def clear() = messenger ! ClearOutgoingMessages 
 
+  /**
+   * Enter barrier synchronization.
+   * @param taskAttemptId denotes in which task the current process is. 
+   * @param superstep denotes the current superstep.
+   */
   @throws(classOf[SyncException])
   protected def enterBarrier(taskAttemptId: TaskAttemptID, superstep: Long) = 
     Utils.await[BarrierMessage](syncClient, Enter(taskAttemptId, superstep))
 
+  /**
+   * Leave barrier synchronization.
+   * @param taskAttemptId denotes in which task the current process is. 
+   * @param superstep denotes the current superstep.
+   */
   @throws(classOf[SyncException])
   protected def leaveBarrier(taskAttemptId: TaskAttemptID, superstep: Long) = 
     Utils.await[BarrierMessage](syncClient, Leave(taskAttemptId, superstep))
@@ -282,6 +284,4 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     syncClient ! Close 
     messenger ! Close
   }   
-
-  /*override def receive = setup orElse unknown*/
 }
