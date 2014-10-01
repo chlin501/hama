@@ -30,12 +30,14 @@ final case class GetPeerNameBy(taskAttemptId: TaskAttemptID,
 final case object GetPeerName extends BarrierMessage
 final case class GetNumPeers(taskAttemptId: TaskAttemptID) 
       extends BarrierMessage
+final case class GetAllPeerNames(taskAttemptId: TaskAttemptID) 
+      extends BarrierMessage
 final case class Enter(taskAttemptId: TaskAttemptID, superstep: Long) 
       extends BarrierMessage
 final case object WithinBarrier extends BarrierMessage
 final case class Leave(taskAttemptId: TaskAttemptID, superstep: Long) 
       extends BarrierMessage
-final case object OutsideBarrier extends BarrierMessage
+final case object ExitBarrier extends BarrierMessage
 
 object BarrierClient {
 
@@ -82,6 +84,10 @@ class BarrierClient(conf: HamaConfiguration, // common conf
       case allPeers@_ => sender ! allPeers.length
     }
   }
+  
+  protected def allPeerNames: Receive = {
+    case GetAllPeerNames(taskAttemptId) => sender ! initPeers(taskAttemptId)
+  }
 
   protected def initPeers(taskAttemptId: TaskAttemptID): Array[String] = 
     syncClient.getAllPeerNames(taskAttemptId)
@@ -96,7 +102,7 @@ class BarrierClient(conf: HamaConfiguration, // common conf
   protected def leave: Receive = {
     case Leave(taskAttemptId, superstep) => {
       syncClient.leaveBarrier(taskAttemptId.getJobID, taskAttemptId, superstep)
-      sender ! OutsideBarrier
+      sender ! ExitBarrier
     }
   }
 
@@ -107,6 +113,6 @@ class BarrierClient(conf: HamaConfiguration, // common conf
     }
   }
 
-  override def receive = currentPeerName orElse peerNameByIndex orElse enter orElse leave orElse close orElse unknown
+  override def receive = currentPeerName orElse peerNameByIndex orElse numPeers orElse allPeerNames orElse enter orElse leave orElse close orElse unknown
 
 }

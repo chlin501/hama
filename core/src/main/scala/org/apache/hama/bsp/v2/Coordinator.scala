@@ -56,12 +56,11 @@ import org.apache.hama.message.TransferredState
 //import org.apache.hama.sync.BarrierClient
 import org.apache.hama.sync.BarrierMessage
 import org.apache.hama.sync.Enter
-import org.apache.hama.sync.WithinBarrier
+import org.apache.hama.sync.GetAllPeerNames
 import org.apache.hama.sync.GetNumPeers
 import org.apache.hama.sync.GetPeerName
 import org.apache.hama.sync.GetPeerNameBy
 import org.apache.hama.sync.Leave
-import org.apache.hama.sync.OutsideBarrier
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncException
 import org.apache.hama.util.Utils
@@ -93,7 +92,9 @@ class Coordinator(conf: HamaConfiguration,  // common conf
                   checkpointer: ActorRef,
                   messenger: ActorRef, 
                   syncClient: ActorRef,
-                  tasklog: ActorRef) extends LocalService with TaskLog {
+                  tasklog: ActorRef) 
+      extends BSPPeer /*with LocalService*/ with TaskLog {
+
   type ProxyAndBundleIt = Iterator[Entry[ProxyInfo, BSPMessageBundle[Writable]]]
   /**
    * Create a new task when passing task to the next actor.
@@ -106,12 +107,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   //override def initializeServices = localize(conf)
 
-  protected def setup: Receive = {
-    case Setup(task: Task) => {
-      this.task = Option(task)
-      setup(task)  
-    }
-  } 
 
   /**
    * Copy necessary files to local (file) system so to speed up computation.
@@ -128,6 +123,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    *             from conf provided by {@link Container}.
    */
   protected[v2] def setup(task: Task) {  
+    this.task = Option(task)
     settingFor(task)  
     localize(conf)
     firstSync(task)  
@@ -172,38 +168,42 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   @throws(classOf[IOException])
-  def send(peerName: String, msg: Writable) = 
+  override def send(peerName: String, msg: Writable) = 
     messenger ! Send(peerName, msg.asInstanceOf[Writable])
 
-  protected def getCurrentMessage(): Writable = 
+  override def getCurrentMessage(): Writable = 
     Utils.await[Writable](messenger, GetCurrentMessage)
 
-  protected def getNumCurrentMessages(): Int = 
+  override def getNumCurrentMessages(): Int = 
     Utils.await[Int](messenger, GetNumCurrentMessages)
 
-  protected def getSuperstepCount(): Long = task.map { (aTask) =>
+  override def getSuperstepCount(): Long = task.map { (aTask) =>
     aTask.getCurrentSuperstep 
   }.getOrElse(0).asInstanceOf[Long]
 
-  protected def getPeerName(): String = 
+  override def getPeerName(): String = 
     Utils.await[String](syncClient, GetPeerName)
 
-  protected def getPeerName(index: Int): String = task.map { (aTask) =>
+  override def getPeerName(index: Int): String = task.map { (aTask) =>
     Utils.await[String](syncClient, GetPeerNameBy(aTask.getId, index))
   }.getOrElse(null)
 
-  protected def getNumPeers(): Int = Utils.await[Int](syncClient, GetNumPeers)
-
-  protected def getPeerIndex(): Int = task.map { (task) => 
+  override def getPeerIndex(): Int = task.map { (task) => 
     task.getId.getTaskID.getId 
   }.getOrElse(0)
 
-  protected def getTaskAttemptId(): TaskAttemptID = task.map { (task) => 
+  override def getNumPeers(): Int = Utils.await[Int](syncClient, GetNumPeers)
+
+  override def getAllPeerNames(): Array[String] = task.map { (aTask) =>
+    Utils.await[Array[String]](syncClient, GetAllPeerNames(aTask.getId))
+  }.getOrElse(Array[String]())
+
+  override def getTaskAttemptId(): TaskAttemptID = task.map { (task) => 
     task.getId 
   }.getOrElse(null) 
 
   @throws(classOf[IOException])
-  protected def sync() = task.map { (aTask) => {
+  override def sync() = task.map { (aTask) => {
     aTask.transitToSync 
       enterBarrier(aTask.getId, aTask.getCurrentSuperstep)
 
@@ -262,7 +262,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   protected def retry: Int = conf.getInt("bsp.message.transfer.retry", 3)
 
-  protected def clear() = messenger ! ClearOutgoingMessages 
+  override def clear() = messenger ! ClearOutgoingMessages 
 
   @throws(classOf[SyncException])
   protected def enterBarrier(taskAttemptId: TaskAttemptID, superstep: Long) = 
@@ -283,5 +283,5 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     messenger ! Close
   }   
 
-  override def receive = setup orElse unknown
+  /*override def receive = setup orElse unknown*/
 }
