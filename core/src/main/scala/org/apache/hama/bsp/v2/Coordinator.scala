@@ -25,6 +25,7 @@ import java.util.Iterator
 import java.util.Map.Entry
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
+import org.apache.hama.Close
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
@@ -56,6 +57,7 @@ import org.apache.hama.message.TransferredState
 import org.apache.hama.sync.BarrierMessage
 import org.apache.hama.sync.Enter
 import org.apache.hama.sync.WithinBarrier
+import org.apache.hama.sync.GetNumPeers
 import org.apache.hama.sync.GetPeerName
 import org.apache.hama.sync.GetPeerNameBy
 import org.apache.hama.sync.Leave
@@ -190,6 +192,16 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     Utils.await[String](syncClient, GetPeerNameBy(aTask.getId, index))
   }.getOrElse(null)
 
+  protected def getNumPeers(): Int = Utils.await[Int](syncClient, GetNumPeers)
+
+  protected def getPeerIndex(): Int = task.map { (task) => 
+    task.getId.getTaskID.getId 
+  }.getOrElse(0)
+
+  protected def getTaskAttemptId(): TaskAttemptID = task.map { (task) => 
+    task.getId 
+  }.getOrElse(null) 
+
   @throws(classOf[IOException])
   protected def sync() {
     task.map { (aTask) => {
@@ -232,56 +244,17 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   @throws(classOf[SyncException])
   protected def leaveBarrier(taskAttemptId: TaskAttemptID, superstep: Long) = 
     Utils.await[BarrierMessage](syncClient, Leave(taskAttemptId, superstep))
-   
-/*
-   * The host this actor runs on. It may be different from the host that remote 
-   * module listens to.
-   * @return String name of the host.
-  protected def host(): String =  // TODO: move to net package?
-    configuration.get("bsp.peer.hostname", 
-                      InetAddress.getLocalHost.getHostName) 
 
-  protected def port(): Int = configuration.getInt("bsp.peer.port", 61000) // TODO: move to net pkg?
-
-  protected def doTransfer(peer: ProxyInfo, 
-                           bundle: BSPMessageBundle[Writable]): Try[Boolean] = 
-    Try(checkThenTransfer(peer, bundle))
-
-  protected def checkThenTransfer(peer: ProxyInfo, 
-                                  bundle: BSPMessageBundle[Writable]): 
-    Boolean = { messenger.transfer(peer, bundle); true }
-
- 
-
-
-
-
-  override def getPeerIndex(): Int = 
-    TaskOperator.execute[Int](taskOperator, { (task) => 
-      task.getId.getTaskID.getId 
-    }, 0)
-
-  override def getAllPeerNames(): Array[String] = initPeers
-
-  override def getNumPeers(): Int = initPeers match {
-    case null => 0 
-    case _=> initPeers.length
-  }
-
-
-  override def getTaskAttemptId(): TaskAttemptID = 
-   TaskOperator.execute[TaskAttemptID](taskOperator, { (task) => task.getId }, 
-                                       null.asInstanceOf[TaskAttemptID])
-
+  /**
    * This is called after {@link BSP#bsp} finishs its execution in the end.
    * It will close all necessary operations.
-   // TODO: close all operations, including io/ message/ sync/ local files in cache, etc.
+   */
+   // TODO: close all operations, including message/ sync/ local files in cache, etc.
   protected[v2] def close() = {
     clear 
-    syncClient.close 
-    messenger.close
-  }
-*/
+    syncClient ! Close 
+    messenger ! Close
+  }   
 
   override def receive = setup orElse unknown
 }

@@ -28,6 +28,8 @@ sealed trait BarrierMessage
 final case class GetPeerNameBy(taskAttemptId: TaskAttemptID, 
                                index: Int) extends BarrierMessage
 final case object GetPeerName extends BarrierMessage
+final case class GetNumPeers(taskAttemptId: TaskAttemptID) 
+      extends BarrierMessage
 final case class Enter(taskAttemptId: TaskAttemptID, superstep: Long) 
       extends BarrierMessage
 final case object WithinBarrier extends BarrierMessage
@@ -71,6 +73,13 @@ class BarrierClient(conf: HamaConfiguration, // common conf
         case true => // LOG.error("Empty peers! Please investigate ...")
         case false => sender ! allPeers(index)
       }
+    }
+  }
+
+  protected def numPeers: Receive = {
+    case GetNumPeers(taskAttemptId) => initPeers(taskAttemptId) match {
+      case null => sender ! 0
+      case allPeers@_ => sender ! allPeers.length
     }
   }
 
