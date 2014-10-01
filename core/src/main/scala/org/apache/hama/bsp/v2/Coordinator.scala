@@ -203,37 +203,64 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }.getOrElse(null) 
 
   @throws(classOf[IOException])
-  protected def sync() {
-    task.map { (aTask) => {
-      aTask.transitToSync 
-       
+  protected def sync() = task.map { (aTask) => {
+    aTask.transitToSync 
       enterBarrier(aTask.getId, aTask.getCurrentSuperstep)
 
-      val it = Utils.await[ProxyAndBundleIt](messenger, GetOutgoingBundles)
-      asScalaIterator(it).foreach( entry => {
-        val peer = entry.getKey
-        val bundle = entry.getValue
-        it.remove 
-        messenger ! Transfer(peer, bundle)
-      })
+    val it = Utils.await[ProxyAndBundleIt](messenger, GetOutgoingBundles)
+    transmit(it, 0, aTask.getId.toString) match {
+      case true => {
+          // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
+          // checkpoint(messenger, nextPack(conf)) TODO: move ckpt to the beg of next superstep
+          leaveBarrier(aTask.getId, aTask.getCurrentSuperstep)
+          aTask.increatmentSuperstep 
+      }
+      case false => LOG.error("{} waits for further instruction!", 
+                              aTask.getId.toString)
+    }
+  }}
 
-      Utils.await[TransferredState](messenger, "IsTransferredCompleted") match {
-        case TransferredCompleted => {
-          LOG.debug("Message transfers completely for task {}.", aTask.getId)
-          clear
-        }
-        case TransferredFailure => {
-          LOG.error("Fail transferring messages for task {}!", aTask.getId)
-          // ask controller to recover from the latest superstep
+  /**
+   * This function transmit messages to other peers up to default retry 3 times.
+   * @param it is a {@link java.util.Iterator} object containing 
+   *           {@link java.util.Map.Entry} with {@link ProxyInfo} and 
+   *           {@link BSPMessageBundle} encapsulated.
+   * @param retryCount is a record for retry count.  
+   * @param taskAttemptId denotes which task is currently executed.
+   */
+  protected def transmit(it: ProxyAndBundleIt, retryCount: Int, 
+                         taskAttemptId: String): Boolean = {
+    asScalaIterator(it).foreach( entry => {
+      val peer = entry.getKey
+      val bundle = entry.getValue
+      it.remove 
+      messenger ! Transfer(peer, bundle)
+    })
+
+    Utils.await[TransferredState](messenger, "IsTransferredCompleted") match {
+      case TransferredCompleted => {
+        LOG.debug("Message transfers completely for task {}.", taskAttemptId)
+        clear
+        true
+      }
+      case TransferredFailure => {
+        LOG.error("Fail transferring messages for task {}!", taskAttemptId)
+        if(retry >= retryCount) {
+          LOG.info("#{} retransmit messages to remote ", (retryCount+1))
+          val it = Utils.await[ProxyAndBundleIt](messenger, GetOutgoingBundles)
+          // TODO: delay retry?
+          transmit(it, (retryCount+1), taskAttemptId)
+        } else {
+          //ask controller to recover from the latest superstep
           controller ! TransferredFailure 
-        }   
-      }       
-      // checkpoint(messenger, nextPack(conf)) TODO: 
-      // TODO: record time elapsed between enterBarrier and leaveBarrier, etc.
-      leaveBarrier(aTask.getId, aTask.getCurrentSuperstep)
-      aTask.increatmentSuperstep 
-    }}
-  } 
+          LOG.warning("Fail transmitting messages, stop current processing!")
+          false
+        }
+      }   
+    }
+  }
+
+  protected def retry: Int = conf.getInt("bsp.message.transfer.retry", 3)
 
   protected def clear() = messenger ! ClearOutgoingMessages 
 

@@ -49,3 +49,5 @@ final case object Close extends CommonMessage
  * Denote which actor is terminated.
  */
 final case class Offline(who: ActorRef) extends CommonMessage
+
+final case object Idle
