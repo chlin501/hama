@@ -219,6 +219,7 @@ protected class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
 
   def this(hamaHome: String, taskAttemptId: TaskAttemptID) = 
     this(hamaHome, taskAttemptId, false)
+
   override def preStart() = setup
   override def postStop() = stop
 

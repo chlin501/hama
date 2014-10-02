@@ -17,12 +17,19 @@
  */
 package org.apache.hama.sync
 
+import akka.actor.ActorRef
+import java.net.InetAddress
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.LocalService
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Close
+import org.apache.hama.logging.Logging
+import org.apache.hama.logging.LoggingAdapter
+import org.apache.hama.logging.TaskLog
+import org.apache.hama.logging.TaskLogger
+import org.apache.hama.logging.TaskLogging
 
 sealed trait BarrierMessage
 final case class GetPeerNameBy(taskAttemptId: TaskAttemptID, 
@@ -48,19 +55,25 @@ object BarrierClient {
    * @param host denotes the machine on which the process runs.
    * @param port denotes the port used by the process.
    */
-  def client(conf: HamaConfiguration, taskAttemptId: TaskAttemptID, 
-             host: String, port: Int): PeerSyncClient = {
-    val client = SyncServiceFactory.getPeerSyncClient(conf)
-    client.init(conf, taskAttemptId.getJobID, taskAttemptId)
-    client.register(taskAttemptId.getJobID, taskAttemptId, host, port)
-    client
+  def get(conf: HamaConfiguration, taskAttemptId: TaskAttemptID): 
+      PeerSyncClient = {
+    val syncClient = SyncServiceFactory.getPeerSyncClient(conf)
+    syncClient.init(conf, taskAttemptId.getJobID, taskAttemptId)
+    val host = conf.get("bsp.peer.hostname", 
+                        InetAddress.getLocalHost.getHostName)
+    val port = conf.getInt("bsp.peer.port", 61000)
+    syncClient.register(taskAttemptId.getJobID, taskAttemptId, host, port)
+    syncClient
   }
 
 }
 
 class BarrierClient(conf: HamaConfiguration, // common conf
-                    syncClient: PeerSyncClient//, 
-                    /*tasklog: ActorRef*/) extends LocalService /*with TaskLog*/ { 
+                    syncClient: PeerSyncClient,
+                    tasklog: ActorRef) 
+      extends LocalService with TaskLog { 
+
+  override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
   override def configuration(): HamaConfiguration = conf
 
@@ -70,9 +83,9 @@ class BarrierClient(conf: HamaConfiguration, // common conf
 
   protected def peerNameByIndex: Receive = {
     case GetPeerNameBy(taskAttemptId, index) => initPeers(taskAttemptId) match {
-      case null => // LOG.error("Unlikely but the peers array found is null!")
+      case null => LOG.error("Unlikely but the peers array found is null!")
       case allPeers@_ => allPeers.isEmpty  match {
-        case true => // LOG.error("Empty peers! Please investigate ...")
+        case true => LOG.error("Empty peers with task {}! ", taskAttemptId)
         case false => sender ! allPeers(index)
       }
     }
@@ -95,16 +108,20 @@ class BarrierClient(conf: HamaConfiguration, // common conf
   protected def enter: Receive = {
     case Enter(taskAttemptId, superstep) => {
       syncClient.enterBarrier(taskAttemptId.getJobID, taskAttemptId, superstep)
-      sender ! WithinBarrier
+      withinBarrier(sender)
     }
   }
+
+  protected def withinBarrier(from: ActorRef) = from ! WithinBarrier
 
   protected def leave: Receive = {
     case Leave(taskAttemptId, superstep) => {
       syncClient.leaveBarrier(taskAttemptId.getJobID, taskAttemptId, superstep)
-      sender ! ExitBarrier
+      exitBarrier(sender)
     }
   }
+
+  protected def exitBarrier(from: ActorRef) = from ! ExitBarrier
 
   protected def close: Receive = {
     case Close => {

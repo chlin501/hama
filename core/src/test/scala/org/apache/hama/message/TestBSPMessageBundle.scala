@@ -93,6 +93,8 @@ class TestBSPMessageBundle extends TestEnv("TestBSPMessageBundle") {
     val bundlec = deserialize(bytes3) 
     assert(bundle3.equals(bundlec))
 
+    // if bundles are equals, e.g., bundle1 and bundle2, queue should have only
+    // one item retained.
     val queue = new MemoryQueue[BSPMessageBundle[Text]]()
     queue.add(bundle1)
     queue.add(bundle2)
