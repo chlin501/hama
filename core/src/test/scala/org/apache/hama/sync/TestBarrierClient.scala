@@ -122,6 +122,19 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
     LOG.info("Actual peer2's name is {}, expected {}", peer2, sys2)
     assert(sys2.equals(peer2))
 
+    val peerAtIdx1 = Utils.await[String](client1, GetPeerNameBy(taskId1, 1))
+    LOG.info("Peer at index 1 value is {}", peerAtIdx1)
+    assert(sys2.equals(peerAtIdx1))
+    val peerAtIdx0 = Utils.await[String](client2, GetPeerNameBy(taskId2, 0))
+    LOG.info("Peer at index 0 value is {}", peerAtIdx0)
+    assert(sys1.equals(peerAtIdx0))
+
+    val foundLength1 = Utils.await[Int](client1, GetNumPeers(taskId1))
+    val foundLength2 = Utils.await[Int](client2, GetNumPeers(taskId2))
+    LOG.info("Peer length found by client 1 is `{}', client 2 `{}'", 
+             foundLength1, foundLength2)
+    assert(foundLength1 == foundLength2)
+
     LOG.info("Done testing barrier client!")  
   }
 }

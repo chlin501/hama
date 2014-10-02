@@ -84,9 +84,14 @@ class BarrierClient(conf: HamaConfiguration, // common conf
   protected def peerNameByIndex: Receive = {
     case GetPeerNameBy(taskAttemptId, index) => initPeers(taskAttemptId) match {
       case null => LOG.error("Unlikely but the peers array found is null!")
-      case allPeers@_ => allPeers.isEmpty  match {
+      case allPeers@_ => allPeers.isEmpty match {
         case true => LOG.error("Empty peers with task {}! ", taskAttemptId)
-        case false => sender ! allPeers(index)
+        case false => {
+          val peer = allPeers(index)
+          LOG.debug("Request index {} has value {}. All peers vlaue is {} ", 
+                   index, peer, allPeers.mkString(", "))
+          sender ! peer
+        }
       }
     }
   }
