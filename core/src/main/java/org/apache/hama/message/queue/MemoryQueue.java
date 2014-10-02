@@ -39,8 +39,7 @@ public final class MemoryQueue<M extends Writable>
 
   @Override
   public final void addAll(Iterable<M> col) {
-    for (M m : col)
-      deque.add(m);
+    for (M m : col) deque.add(m);
   }
 
   @Override
@@ -53,7 +52,7 @@ public final class MemoryQueue<M extends Writable>
 
   @Override
   public final void add(M item) {
-    deque.add(item);
+    if(!deque.contains(item)) deque.add(item); 
   }
 
   @Override

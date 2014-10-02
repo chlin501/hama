@@ -25,6 +25,7 @@ import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -211,11 +212,15 @@ public class BSPMessageBundle<M extends Writable> implements Writable,
     return bundleLength;
   }
 
+  public List<Integer> hashesOfMessages() {
+    return Collections.unmodifiableList(hashes);
+  }
+
   @Override
   public boolean equals(Object o) {
     if (o == this) return true;
     if (null == o) return false;
-    if (getClass() != o.getClass()) return false;
+    if (getClass() != o.getClass()) return false; 
 
     final BSPMessageBundle<M> s = (BSPMessageBundle<M>) o;
     if(hashes.size() != s.hashes.size()) return false;

@@ -21,12 +21,13 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.util.concurrent.ConcurrentLinkedQueue
 import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.compress.BSPMessageCompressor
-import org.apache.hama.logging.CommonLog
+import org.apache.hama.message.queue.MemoryQueue
 import org.apache.hama.TestEnv
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
@@ -91,7 +92,13 @@ class TestBSPMessageBundle extends TestEnv("TestBSPMessageBundle") {
     val bytes3 = serialize(bundle3)
     val bundlec = deserialize(bytes3) 
     assert(bundle3.equals(bundlec))
-            
+
+    val queue = new MemoryQueue[BSPMessageBundle[Text]]()
+    queue.add(bundle1)
+    queue.add(bundle2)
+    LOG.info("Memory queue's size, expected 1, is {}", queue.size)
+    assert(1 == queue.size)
+           
     LOG.info("Done testing bsp message bundle equality!")  
   }
 }
