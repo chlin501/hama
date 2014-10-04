@@ -32,18 +32,15 @@ import org.apache.hama.logging.TaskLogger
 import org.apache.hama.logging.TaskLogging
 
 sealed trait BarrierMessage
-final case class GetPeerNameBy(taskAttemptId: TaskAttemptID, 
-                               index: Int) extends BarrierMessage
+final case class SetTaskAttemptId(taskAttemptId: TaskAttemptID) 
+      extends BarrierMessage
+final case class GetPeerNameBy(index: Int) extends BarrierMessage
 final case object GetPeerName extends BarrierMessage
-final case class GetNumPeers(taskAttemptId: TaskAttemptID) 
-      extends BarrierMessage
-final case class GetAllPeerNames(taskAttemptId: TaskAttemptID) 
-      extends BarrierMessage
-final case class Enter(taskAttemptId: TaskAttemptID, superstep: Long) 
-      extends BarrierMessage
+final case object GetNumPeers extends BarrierMessage
+final case object GetAllPeerNames extends BarrierMessage
+final case class Enter(superstep: Long) extends BarrierMessage
 final case object WithinBarrier extends BarrierMessage
-final case class Leave(taskAttemptId: TaskAttemptID, superstep: Long) 
-      extends BarrierMessage
+final case class Leave(superstep: Long) extends BarrierMessage
 final case object ExitBarrier extends BarrierMessage
 
 object BarrierClient {
@@ -68,62 +65,74 @@ object BarrierClient {
 
 }
 
+// TODO: switch to curator distributed double barrier or add retry func.
 class BarrierClient(conf: HamaConfiguration, // common conf
                     syncClient: PeerSyncClient,
                     tasklog: ActorRef) 
       extends LocalService with TaskLog { 
 
+  protected var taskAttemptId: Option[TaskAttemptID] = None
+
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
   override def configuration(): HamaConfiguration = conf
+
+  protected def setTaskAttemptId: Receive = {
+    case SetTaskAttemptId(taskAttemptId) =>
+      this.taskAttemptId = Option(taskAttemptId)
+  }
 
   protected def currentPeerName: Receive = {
     case GetPeerName => sender ! syncClient.getPeerName
   }
 
   protected def peerNameByIndex: Receive = {
-    case GetPeerNameBy(taskAttemptId, index) => initPeers(taskAttemptId) match {
-      case null => LOG.error("Unlikely but the peers array found is null!")
-      case allPeers@_ => allPeers.isEmpty match {
-        case true => LOG.error("Empty peers with task {}! ", taskAttemptId)
-        case false => {
-          val peer = allPeers(index)
-          LOG.debug("Request index {} has value {}. All peers vlaue is {} ", 
-                   index, peer, allPeers.mkString(", "))
-          sender ! peer
+    case GetPeerNameBy(index) => taskAttemptId.map { (id) => 
+      initPeers(id) match {
+        case null => LOG.error("Unlikely but the peers array found is null!")
+        case allPeers@_ => allPeers.isEmpty match {
+          case true => LOG.error("Empty peers with task {}! ", id)
+          case false => {
+            val peer = allPeers(index)
+            LOG.debug("Request index {} has value {}. All peers vlaue is {} ", 
+                      index, peer, allPeers.mkString(", "))
+            sender ! peer
+          }
         }
       }
     }
   }
 
   protected def numPeers: Receive = {
-    case GetNumPeers(taskAttemptId) => initPeers(taskAttemptId) match {
+    case GetNumPeers => taskAttemptId.map { (id) => initPeers(id) match {
       case null => sender ! 0
       case allPeers@_ => sender ! allPeers.length
-    }
+    }}
   }
   
   protected def allPeerNames: Receive = {
-    case GetAllPeerNames(taskAttemptId) => sender ! initPeers(taskAttemptId)
+    case GetAllPeerNames => taskAttemptId.map { (id) => sender ! initPeers(id) }
   }
 
   protected def initPeers(taskAttemptId: TaskAttemptID): Array[String] = 
     syncClient.getAllPeerNames(taskAttemptId)
 
   protected def enter: Receive = {
-    case Enter(taskAttemptId, superstep) => {
-      syncClient.enterBarrier(taskAttemptId.getJobID, taskAttemptId, superstep)
+    case Enter(superstep) => taskAttemptId.map { (id) => {
+      LOG.debug("Enter barrier with task attempt id {}", id)
+      syncClient.enterBarrier(id.getJobID, id, superstep)
       withinBarrier(sender)
-    }
+    }}
   }
 
   protected def withinBarrier(from: ActorRef) = from ! WithinBarrier
 
   protected def leave: Receive = {
-    case Leave(taskAttemptId, superstep) => {
-      syncClient.leaveBarrier(taskAttemptId.getJobID, taskAttemptId, superstep)
+    case Leave(superstep) => taskAttemptId.map { (id) => {
+      syncClient.leaveBarrier(id.getJobID, id, superstep)
+      LOG.debug("Leave barrier with task attempt id {}", id)
       exitBarrier(sender)
-    }
+    }}
   }
 
   protected def exitBarrier(from: ActorRef) = from ! ExitBarrier
@@ -135,6 +144,6 @@ class BarrierClient(conf: HamaConfiguration, // common conf
     }
   }
 
-  override def receive = currentPeerName orElse peerNameByIndex orElse numPeers orElse allPeerNames orElse enter orElse leave orElse close orElse unknown
+  override def receive = setTaskAttemptId orElse currentPeerName orElse peerNameByIndex orElse numPeers orElse allPeerNames orElse enter orElse leave orElse close orElse unknown
 
 }

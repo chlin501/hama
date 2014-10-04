@@ -37,9 +37,15 @@ class MockBarrierClient(conf: HamaConfiguration, client: PeerSyncClient,
                         tasklog: ActorRef, tester: ActorRef)
       extends BarrierClient(conf, client, tasklog) {
 
-  override def withinBarrier(from: ActorRef) = tester ! WithinBarrier
+  override def withinBarrier(from: ActorRef) = {
+    println("Notify "+from+" now is WithinBerrirer!")
+    tester ! WithinBarrier
+  }
 
-  override def exitBarrier(from: ActorRef) = tester ! ExitBarrier
+  override def exitBarrier(from: ActorRef) = {
+    println("Notify "+from+" now is ExitBerrirer!")
+    tester ! ExitBarrier
+  }
 
 }
 
@@ -79,8 +85,10 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
   }
 
   def createTaskLog(name: String, hamaHomePath: String, 
-                    taskAttemptId: TaskAttemptID): ActorRef = 
-    createWithArgs(name, classOf[TaskLogger], hamaHomePath, taskAttemptId)
+                    taskAttemptId: TaskAttemptID, 
+                    console: Boolean = true): ActorRef = 
+    createWithArgs(name, classOf[TaskLogger], hamaHomePath, taskAttemptId,
+                   console)
 
   def createClient(name: String, conf: HamaConfiguration, 
                    taskAttemptId: TaskAttemptID, tasklog: ActorRef): 
@@ -100,19 +108,22 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
     val client1 = createClient("client1", conf1, taskId1, tasklog)
     val client2 = createClient("client2", conf2, taskId2, tasklog)
 
-    client1 ! Enter(taskId1, superstep)
-    client2 ! Enter(taskId2, superstep)
-    expect(WithinBarrier)
-    expect(WithinBarrier)
+    client1 ! SetTaskAttemptId(taskId1)
+    client2 ! SetTaskAttemptId(taskId2)
 
-    client1 ! Leave(taskId1, superstep)
-    client2 ! Leave(taskId2, superstep)
-    expect(ExitBarrier)
-    expect(ExitBarrier)
+    client1 ! Enter(superstep)
+    client2 ! Enter(superstep)
+    expect(WithinBarrier)
+    expect(WithinBarrier)
 
     superstep += 1
     LOG.info("Superstep value, expected 1, is {}", superstep)
     assert(superstep == 1)
+
+    client1 ! Leave(superstep)
+    client2 ! Leave(superstep)
+    expect(ExitBarrier)
+    expect(ExitBarrier)
 
     val peer1 = Utils.await[String](client1, GetPeerName) 
     LOG.info("Actual peer1's name is {}, expected {}", peer1, sys1)
@@ -122,15 +133,15 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
     LOG.info("Actual peer2's name is {}, expected {}", peer2, sys2)
     assert(sys2.equals(peer2))
 
-    val peerAtIdx1 = Utils.await[String](client1, GetPeerNameBy(taskId1, 1))
+    val peerAtIdx1 = Utils.await[String](client1, GetPeerNameBy(1))
     LOG.info("Peer at index 1 value is {}", peerAtIdx1)
     assert(sys2.equals(peerAtIdx1))
-    val peerAtIdx0 = Utils.await[String](client2, GetPeerNameBy(taskId2, 0))
+    val peerAtIdx0 = Utils.await[String](client2, GetPeerNameBy(0))
     LOG.info("Peer at index 0 value is {}", peerAtIdx0)
     assert(sys1.equals(peerAtIdx0))
 
-    val foundLength1 = Utils.await[Int](client1, GetNumPeers(taskId1))
-    val foundLength2 = Utils.await[Int](client2, GetNumPeers(taskId2))
+    val foundLength1 = Utils.await[Int](client1, GetNumPeers)
+    val foundLength2 = Utils.await[Int](client2, GetNumPeers)
     LOG.info("Peer length found by client 1 is `{}', client 2 `{}'", 
              foundLength1, foundLength2)
     assert(foundLength1 == foundLength2)

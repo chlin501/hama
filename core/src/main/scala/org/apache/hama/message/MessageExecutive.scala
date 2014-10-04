@@ -317,7 +317,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   }
 
   protected def checkState: Receive = {
-    case "IsTransferredCompleted" => waitingList.isEmpty match {
+    case IsTransferredCompleted => waitingList.isEmpty match {
       case true => sender ! TransferredCompleted
       case false => {
         auditor = Option(sender)

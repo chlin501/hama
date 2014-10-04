@@ -26,54 +26,45 @@ import java.util.Map.Entry
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Close
+import org.apache.hama.LocalService
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.ProxyInfo
 import org.apache.hama.bsp.BSPJobID
-import org.apache.hama.bsp.Counters
+//import org.apache.hama.bsp.Counters 
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.CacheService
-import org.apache.hama.fs.Operation
 import org.apache.hama.logging.Logging
 import org.apache.hama.logging.LoggingAdapter
 import org.apache.hama.logging.TaskLog
 import org.apache.hama.logging.TaskLogging
 import org.apache.hama.logging.TaskLogger
-import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.ClearOutgoingMessages
 import org.apache.hama.message.GetCurrentMessage
 import org.apache.hama.message.GetNumCurrentMessages
-import org.apache.hama.message.GetOutgoingBundles
 import org.apache.hama.message.Send
-import org.apache.hama.message.Transfer
-import org.apache.hama.message.TransferredCompleted
-import org.apache.hama.message.TransferredFailure
-import org.apache.hama.message.TransferredState
 //import org.apache.hama.message.MessageManager
 //import org.apache.hama.message.Messenger
 //import org.apache.hama.monitor.CheckpointerReceiver
 //import org.apache.hama.monitor.Checkpointable
 //import org.apache.hama.sync.BarrierClient
-import org.apache.hama.sync.BarrierMessage
-import org.apache.hama.sync.Enter
+//import org.apache.hama.sync.BarrierMessage
+//import org.apache.hama.sync.Enter
 import org.apache.hama.sync.GetAllPeerNames
 import org.apache.hama.sync.GetNumPeers
 import org.apache.hama.sync.GetPeerName
 import org.apache.hama.sync.GetPeerNameBy
-import org.apache.hama.sync.Leave
-import org.apache.hama.sync.PeerSyncClient
-import org.apache.hama.sync.SyncException
+//import org.apache.hama.sync.PeerSyncClient
+//import org.apache.hama.sync.SyncException
+import org.apache.hama.sync.WithinBarrier
 import org.apache.hama.util.Utils
 import scala.collection.JavaConversions._
-import scala.util.Try
-import scala.util.Success
-import scala.util.Failure
+//import scala.util.Try
+//import scala.util.Success
+//import scala.util.Failure
 
-final case class Setup(task: Task)
+//final case class Setup(task: Task)
 
 /**
- * This class provides BSPPeer functions in terms of Actor, and will be 
- * encapsulated in an adapter used by {@link Superstep}s.
- *
  * {@link Coordinator} is responsible for providing related services, 
  * including:
  * - messenging
@@ -85,32 +76,25 @@ final case class Setup(task: Task)
 //  - start time
 //  - finish time
 //  - progress, etc.
-// TODO: use wrapper to wrap BSPPeer which calls Coordinator instead!
+// TODO: wrapped by BSPPeerAdapter which calls Coordinator instead!
 class Coordinator(conf: HamaConfiguration,  // common conf
                   controller: ActorRef,
                   checkpointer: ActorRef,
                   messenger: ActorRef, 
                   syncClient: ActorRef,
-                  tasklog: ActorRef) 
-      extends BSPPeer with TaskLog {
+                  tasklog: ActorRef) extends TaskLog {
 
-  type ProxyAndBundleIt = Iterator[Entry[ProxyInfo, BSPMessageBundle[Writable]]]
 
   /**
    * Create a new task when passing task to the next actor.
+   * Note that this task var is not the same instance as that in TaskController,
+   * which is the aggregator value for all task value updated.
+  var task: Option[Task] = None 
    */
-  var task: Option[Task] = None
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
-  override def configuration(): HamaConfiguration = conf
-
-  /**
-   * Copy necessary files to local (file) system so to speed up computation.
-   * @param conf should contain related cache files if any.
-   */
-  protected def localize(conf: HamaConfiguration) = 
-    CacheService.moveCacheToLocal(conf)
+  //def configuration(): HamaConfiguration = conf
 
   /**
    * Prepare related data for a specific task.
@@ -118,24 +102,25 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    *       The formor comes from child process, the later from the task.
    * @param task contains setting for a specific job; task configuration differs
    *             from conf provided by {@link Container}.
-   */
-  protected[v2] def setup(task: Task) {  
+  protected def setup(task: Task) {  
     this.task = Option(task)
-    settingFor(task)  
     localize(conf)
+    settingFor(task)  
     firstSync(task)  
   }
+
+   * Copy necessary files to local (file) system so to speed up computation.
+   * @param conf should contain related cache files if any.
+  protected def localize(conf: HamaConfiguration) = 
+    CacheService.moveCacheToLocal(conf)
   
-  /**
    * - Configure FileSystem's working directory with corresponded 
    * <b>task.getConfiguration()</b>.
    * - And add additional classpath to task's configuration.
    * @param conf is the common setting from bsp peer container.
    * @param task contains setting for particular job computation.
-   */
   protected def settingFor(task: Task) = {
     val taskConf = task.getConfiguration
-
     val libjars = CacheService.moveJarsAndGetClasspath(conf) 
     libjars match {
       case null => LOG.warning("No jars to be included for "+task.getId)
@@ -148,52 +133,59 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     } 
   }
 
-  /**
    * Internal sync to ensure all peers is registered/ ready.
    * @param superstep indicate the curent superstep value.
-   */
   //TODO: should the task's superstep be confiured to 0 instead?
   protected def firstSync(task: Task) {
     enterBarrier(task.getId, task.getCurrentSuperstep)
     leaveBarrier(task.getId, task.getCurrentSuperstep)
-    task.increatmentSuperstep
+    // TODO: controller ! IncreamentSuperstep // task.increatmentSuperstep
   }
-
+   */
+// bsp peer functions
   @throws(classOf[IOException])
-  override def send(peerName: String, msg: Writable) = 
+  def send(peerName: String, msg: Writable) = 
     messenger ! Send(peerName, msg.asInstanceOf[Writable])
 
-  override def getCurrentMessage(): Writable = 
+  def getCurrentMessage(): Writable = 
     Utils.await[Writable](messenger, GetCurrentMessage)
 
-  override def getNumCurrentMessages(): Int = 
+  def getNumCurrentMessages(): Int = 
     Utils.await[Int](messenger, GetNumCurrentMessages)
 
+/*
   override def getSuperstepCount(): Long = task.map { (aTask) =>
     aTask.getCurrentSuperstep 
   }.getOrElse(0).asInstanceOf[Long]
+*/
 
-  override def getPeerName(): String = 
+  def getSuperstepCount(): Long = 
+    Utils.await[Long](controller, GetSuperstepCount)
+
+  def getPeerName(): String = 
     Utils.await[String](syncClient, GetPeerName)
 
-  override def getPeerName(index: Int): String = task.map { (aTask) =>
-    Utils.await[String](syncClient, GetPeerNameBy(aTask.getId, index))
-  }.getOrElse(null)
+  def getPeerName(index: Int): String = 
+    Utils.await[String](syncClient, GetPeerNameBy(index))
 
-  override def getPeerIndex(): Int = task.map { (task) => 
+/*
+  override def getPeerIndex(): Int = task.map { (task) =>  
     task.getId.getTaskID.getId 
   }.getOrElse(0)
+*/
+  def getPeerIndex(): Int = Utils.await[Int](controller, GetPeerIndex)
 
-  override def getNumPeers(): Int = Utils.await[Int](syncClient, GetNumPeers)
+  def getNumPeers(): Int = Utils.await[Int](syncClient, GetNumPeers)
 
-  override def getAllPeerNames(): Array[String] = task.map { (aTask) =>
-    Utils.await[Array[String]](syncClient, GetAllPeerNames(aTask.getId))
-  }.getOrElse(Array[String]())
+  def getAllPeerNames(): Array[String] = 
+    Utils.await[Array[String]](syncClient, GetAllPeerNames)
 
-  override def getTaskAttemptId(): TaskAttemptID = task.map { (task) => 
-    task.getId 
-  }.getOrElse(null) 
+  def getTaskAttemptId(): TaskAttemptID = 
+    Utils.await[TaskAttemptID](controller, GetTaskAttemptId) 
 
+  def clear() = messenger ! ClearOutgoingMessages 
+
+/* TODO: further split into smaller parts. been moved to controller
   @throws(classOf[IOException])
   override def sync() = task.map { (aTask) => {
     aTask.transitToSync 
@@ -212,14 +204,12 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     }
   }}
 
-  /**
    * This function transmit messages to other peers up to default retry 3 times.
    * @param it is a {@link java.util.Iterator} object containing 
    *           {@link java.util.Map.Entry} with {@link ProxyInfo} and 
    *           {@link BSPMessageBundle} encapsulated.
    * @param retryCount is a record for retry count.  
    * @param taskAttemptId denotes which task is currently executed.
-   */
   protected def transmit(it: ProxyAndBundleIt, retryCount: Int, 
                          taskAttemptId: String): Boolean = {
     asScalaIterator(it).foreach( entry => {
@@ -253,35 +243,23 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   protected def retry: Int = conf.getInt("bsp.message.transfer.retry", 3)
-
-  override def clear() = messenger ! ClearOutgoingMessages 
+   */
 
   /**
    * Enter barrier synchronization.
    * @param taskAttemptId denotes in which task the current process is. 
    * @param superstep denotes the current superstep.
-   */
   @throws(classOf[SyncException])
   protected def enterBarrier(taskAttemptId: TaskAttemptID, superstep: Long) = 
-    Utils.await[BarrierMessage](syncClient, Enter(taskAttemptId, superstep))
+    Utils.await[BarrierMessage](syncClient, Enter(superstep))
 
-  /**
    * Leave barrier synchronization.
    * @param taskAttemptId denotes in which task the current process is. 
    * @param superstep denotes the current superstep.
-   */
   @throws(classOf[SyncException])
   protected def leaveBarrier(taskAttemptId: TaskAttemptID, superstep: Long) = 
-    Utils.await[BarrierMessage](syncClient, Leave(taskAttemptId, superstep))
-
-  /**
-   * This is called after {@link BSP#bsp} finishs its execution in the end.
-   * It will close all necessary operations.
+    Utils.await[BarrierMessage](syncClient, Leave(superstep))
    */
-   // TODO: close all operations, including message/ sync/ local files in cache, etc.
-  protected[v2] def close() = {
-    clear 
-    syncClient ! Close 
-    messenger ! Close
-  }   
+
+  //override def receive = setup orElse unknown
 }
