@@ -294,4 +294,8 @@ protected class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
  * Intended to be used by task related actors when different task components
  * are launched.
  */
-trait TaskLog extends HamaLog { }
+trait TaskLog extends HamaLog { 
+
+  //TODO: def tasklogger(): ActorRef
+  //override def LOG: LoggingAdapter = Logging(tasklogger)
+}

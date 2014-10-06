@@ -37,16 +37,21 @@ import org.apache.hama.logging.TaskLogging
 import org.apache.hama.message.compress.BSPMessageCompressor
 import org.apache.hama.message.queue.MessageQueue
 import org.apache.hama.message.queue.Viewable
+import org.apache.hama.monitor.LocalQueueMessages
+import org.apache.hama.monitor.EmptyLocalQueue
 import org.apache.hama.util.LRUCache
 import scala.collection.JavaConversions._
 
 sealed trait MessengerMessage
 final case class Send(peerName: String, msg: Writable) extends MessengerMessage
 final case object GetCurrentMessage extends MessengerMessage
+final case class CurrentMessage[M <: Writable](msg: M) extends MessengerMessage
 final case object GetNumCurrentMessages extends MessengerMessage
 final case object GetOutgoingBundles extends MessengerMessage
 final case object ClearOutgoingMessages extends MessengerMessage
 final case object GetListenerAddress extends MessengerMessage
+final case object GetLocalQueueMessages extends MessengerMessage
+
 /**
  * An object that contains peer and message bundle. The bundle will be sent
  * to peer accordingly.
@@ -73,7 +78,7 @@ final case object IsWaitingListEmpty
 class MessageExecutive[M <: Writable](conf: HamaConfiguration,
                                       slotSeq: Int,
                                       taskAttemptId: TaskAttemptID,
-                                      controller: ActorRef,
+                                      coordinator: ActorRef,
                                       tasklog: ActorRef)
       extends RemoteService with LocalService with TaskLog with MessageView {
 
@@ -123,7 +128,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   protected def getCurrentMessage(): M = localQueue.poll 
 
   protected def currentMessage: Receive = {
-    case GetCurrentMessage => sender ! getCurrentMessage
+    case GetCurrentMessage => sender ! CurrentMessage(getCurrentMessage) 
   }
   
   protected def getNumCurrentMessages(): Int = localQueue.size 
@@ -140,6 +145,17 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     outgoingMessageManager.clear
     //localQueue.close
     //localQueue.prepareRead
+  }
+
+  /**
+   * Checkpoint should call this function asking for the messages at the 
+   * beginning of superstep.
+   */
+  protected def localQueueMessages: Receive = {
+    case GetLocalQueueMessages => localMessages[Writable]() match {
+      case Some(list) => sender ! LocalQueueMessages[Writable](list)
+      case None => sender ! EmptyLocalQueue // ideally list won't be none 
+    }
   }
 
   override def localMessages[M](): Option[List[M]] =  
@@ -250,7 +266,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   override def offline(target: ActorRef) = auditor match { 
     case Some(peer) => peer ! TransferredFailure 
-    case None => controller ! Offline(target) // ask controller for instruction
+    case None => coordinator ! Offline(target) // TODO: ask coordinator for instruction
   }
 
   /**
@@ -339,6 +355,6 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     }
   }
 
-  override def receive = sendMessage orElse currentMessage orElse numberCurrentMessages orElse outgoingBundles orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeIsTerminated orElse checkState orElse checkWaitingList orElse unknown 
+  override def receive = sendMessage orElse currentMessage orElse numberCurrentMessages orElse outgoingBundles orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeIsTerminated orElse checkState orElse checkWaitingList orElse localQueueMessages orElse unknown 
 
 }

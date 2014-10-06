@@ -20,9 +20,8 @@ package org.apache.hama.bsp.v2
 import java.io.IOException
 import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.bsp.Counters.Counter
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.io.IO
+//import org.apache.hama.io.IO
 
 /**
  * BSP communication interface. 
@@ -67,9 +66,9 @@ trait BSPPeer {
    * remote peers.
    * 
    * @throws IOException
-   */
   @throws(classOf[IOException])
   def sync() 
+   */
 
   /**
    * Superstep count at the moment this execution has.  
@@ -130,4 +129,5 @@ trait BSPPeer {
    * @return the task id of this task.
    */
   def getTaskAttemptId(): TaskAttemptID 
+
 }

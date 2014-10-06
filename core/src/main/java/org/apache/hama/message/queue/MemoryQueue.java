@@ -122,4 +122,5 @@ public final class MemoryQueue<M extends Writable>
     for(Object e: ary) list.add((M)e);
     return Collections.unmodifiableList(list);
   }
+
 }

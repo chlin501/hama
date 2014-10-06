@@ -15,29 +15,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.monitor
-/*
+package org.apache.hama.bsp.v2
+
 import org.apache.hadoop.io.Writable
-import org.apache.hama.logging.CommonLog
-import org.apache.hama.message.MessageManager
-import org.apache.hama.message.MessageView
+import org.apache.hama.Agent
 
-trait Checkpointable extends CommonLog {
+sealed trait SuperstepMessage
+final case class Setup(peer: BSPPeer) extends SuperstepMessage
+final case class Compute(peer: BSPPeer) extends SuperstepMessage
+final case class Cleanup(peer: BSPPeer) extends SuperstepMessage
 
-  protected def checkpoint[M <: Writable](messenger: MessageManager[M],
-                                          optionPack: Option[Pack]) =
-    messenger.isInstanceOf[MessageView] match {
-      case true => messenger.asInstanceOf[MessageView].localMessages match {
-        case Some(allMsgs) => optionPack.map( (pack) =>
-          pack.ckpt.map( (found) =>
-            found ! Checkpoint(pack.variables, pack.nextSuperstep, allMsgs)
-          )
-        )
-        case None => LOG.warning("No messages can be checkpointed!")
-      }
-      case false => LOG.warning("Messenger is not an instance of MessageView!")
-    }
+class SuperstepWorker(superstep: Superstep) extends Agent {
 
+  protected def setup: Receive = {
+    case Setup(peer) => superstep.setup(peer)
+  }
+
+  protected def compute: Receive = {
+    case Compute(peer) => superstep.compute(peer)
+  }
+
+  protected def cleanup: Receive = {
+    case Cleanup(peer) => superstep.cleanup(peer)
+  }
+
+  override def receive = setup orElse compute orElse cleanup orElse unknown
 
 }
-*/

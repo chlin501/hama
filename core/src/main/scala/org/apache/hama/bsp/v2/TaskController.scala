@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.bsp.v2
-
+/*
 import akka.actor.ActorRef
 import java.util.Iterator
 import java.util.Map.Entry
@@ -52,7 +52,7 @@ final case object GetTaskAttemptId extends TaskStatMessage
 class TaskController(conf: HamaConfiguration, // common conf
                      messenger: ActorRef,
                      syncClient: ActorRef) 
-      extends LocalService /*with TaskLog*/ {
+      extends LocalService with TaskLog {
 
   type ProxyAndBundleIt = Iterator[Entry[ProxyInfo, BSPMessageBundle[Writable]]]
 
@@ -60,10 +60,8 @@ class TaskController(conf: HamaConfiguration, // common conf
 
   override def configuration(): HamaConfiguration = conf
 
-  /**
    * - Update task phase to sync // perhaps more detail phase value e.g. within barrier
    * - Enter barrier sync 
-   */
   protected def enter: Receive = {
     case Enter(superstep) => {
       task.map { (aTask) => transitToSync(aTask) }
@@ -74,23 +72,17 @@ class TaskController(conf: HamaConfiguration, // common conf
   // TODO: further divide task sync phase
   protected def transitToSync(task: Task) = task.transitToSync 
 
-  /**
    * {@link PeerSyncClient} reply passing enter function.
-   */
   protected def inBarrier: Receive = {
     case WithinBarrier => task.map { (aTask) => withinBarrier(aTask) }
   }
 
   protected def withinBarrier(task: Task) = getBundles()
 
-  /**
    * Obtain message bundles sent through {@link BSPPeer#send} function.
-   */
   protected def getBundles() = messenger ! GetOutgoingBundles
 
-  /**
    * Transmit message bundles iterator to remote messenger.
-   */
   protected def proxyBundleIterator: Receive = {
     case it: ProxyAndBundleIt => task.map { (aTask) => {
       transmit(it, aTask) 
@@ -109,10 +101,8 @@ class TaskController(conf: HamaConfiguration, // common conf
       messenger ! Transfer(peer, bundle)
     })
 
-  /**
    * Clear messenger's outgoing bundle queue.
    * Leave barrier sync. 
-   */
   protected def transferredCompleted: Receive = {
     case TransferredCompleted => task.map { (aTask) => 
       clear
@@ -129,13 +119,17 @@ class TaskController(conf: HamaConfiguration, // common conf
   }
 
   protected def exitBarrier: Receive = {
-    case ExitBarrier => // TODO: call to next superstep
+    case ExitBarrier => {
+      // spawn checkpointer
+      // checkpointer ! StartCheckpoint
+      // TODO: call to next superstep
+    }
   }
 
-  /**
+  //protected def checkpoint() = 
+
    * This is called after {@link BSP#bsp} finishs its execution in the end.
    * It will close all necessary operations.
-   */
    // TODO: close all operations, including message/ sync/ local files in 
    //       cache, etc.
    //       collect combiner stats:  
@@ -146,27 +140,21 @@ class TaskController(conf: HamaConfiguration, // common conf
     messenger ! Close
   }
 
-  /**
    * BSPPeer ask controller at which superstep count this task now is.
-   */
   protected def superstepCount: Receive = {
     case GetSuperstepCount => task.map { (aTask) => 
       sender ! aTask.getCurrentSuperstep
     }
   }
 
-  /**
    * BSPPeer ask controller the index of this peer.
-   */
   protected def peerIndex: Receive = {
     case GetPeerIndex => task.map { (aTask) => 
       sender ! aTask.getId.getTaskID.getId 
     }
   }
 
-  /**
    * BSPPeer ask controller which task attempt id it is.
-   */
   protected def taskAttemptId: Receive = {
     case GetTaskAttemptId => task.map { (aTask) => sender ! aTask.getId }
   }
@@ -176,3 +164,4 @@ class TaskController(conf: HamaConfiguration, // common conf
   override def receive = enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse superstepCount orElse peerIndex orElse taskAttemptId orElse unknown 
 
 }
+*/

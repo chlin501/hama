@@ -17,6 +17,7 @@
  */
 package org.apache.hama.monitor
 
+import akka.actor.ActorRef
 import java.io.DataOutputStream
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.MapWritable
@@ -24,13 +25,14 @@ import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Superstep
-import org.apache.hama.Agent
+import org.apache.hama.LocalService
 import org.apache.hama.Close
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.message.Combiner
 import org.apache.hama.message.BSPMessageBundle
+import org.apache.hama.message.Combiner
 import org.apache.hama.message.compress.BSPMessageCompressor
+import org.apache.hama.message.GetLocalQueueMessages
 //import org.apache.hama.ProxyInfo
 import org.apache.hama.util.Curator
 import scala.util.Failure
@@ -54,13 +56,16 @@ import scala.collection.JavaConversions._
 class Checkpointer(commConf: HamaConfiguration, 
                    taskConf: HamaConfiguration, 
                    taskAttemptId: String, 
-                   superstepCount: Long) extends Agent with Curator {
+                   superstepCount: Long, 
+                   messenger: ActorRef) extends LocalService with Curator {
 
   // TODO: may need to use more neutral interface for saving data to different
   //       storage.
   protected val operation = Operation.get(taskConf) 
 
-  override def preStart = initializeCurator(commConf)
+  override def configuration(): HamaConfiguration = commConf
+
+  override def initializeServices = initializeCurator(commConf)
 
   protected def getRootPath(taskConf: HamaConfiguration): String = 
     taskConf.get("bsp.checkpoint.root.path", "/bsp/checkpoint") 
@@ -141,12 +146,37 @@ class Checkpointer(commConf: HamaConfiguration,
     case Close => context.stop(self)
   }
 
+  /**
+   * Entry point to start checkpoint process.
+   */
+  protected def startCheckpoint: Receive = {
+   case StartCheckpoint => messenger ! GetLocalQueueMessages  // xxxx TODO: need superstep's map, class, etc. as well
+  }
+
+  protected def localQueueMessages: Receive = {
+    case LocalQueueMessages(list) => checkpoint(list)
+  }
+
+  protected def checkpoint[M <: Writable](list: List[M]) { /* xxxx TODO: checkpoint msgs */ }
+
+  /**
+   * Ideally this won't happen because viewable will at least return empty 
+   * list instead of None.
+   */
+  protected def emptyLocalQueue: Receive = {
+    case EmptyLocalQueue => {
+      LOG.error("No messages for checkpointer with task {} at superstep {}!",
+                taskAttemptId, superstepCount) 
+      close
+    }
+  }
+
+/*
   protected def checkpoint: Receive = {
     case Checkpoint(variablesMap, nextSuperstepClass, localMessages) => 
       doCheckpoint(variablesMap, nextSuperstepClass, localMessages)
   }
 
-  /**
    * This function performs following steps for checkpoint.
    * - Create path e.g. hdfs, zk used for checkpoint.
    * - Save variables map, class name, messages to hdfs.
@@ -157,7 +187,6 @@ class Checkpointer(commConf: HamaConfiguration,
    * @param next is the class for next superstep computation.
    * @param messages are sent from other peers or by itself for next superstep
    *                 computation.
-   */
   protected def doCheckpoint[M <: Writable](variables: Map[String, Writable], 
                                             next: Class[_ <: Superstep], 
                                             messages: List[M]) {
@@ -256,6 +285,8 @@ class Checkpointer(commConf: HamaConfiguration,
         writable
       }
     }
+*/
 
-  override def receive = checkpoint orElse close orElse unknown
+  override def receive = startCheckpoint orElse localQueueMessages orElse close orElse unknown
 }
+

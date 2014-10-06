@@ -24,6 +24,11 @@ import org.apache.hama.ProxyInfo
 import org.apache.hama.message.BSPMessageBundle
 
 sealed trait CheckpointMessage
+final case object StartCheckpoint extends CheckpointMessage
+final case class LocalQueueMessages[M <: Writable](list: List[M]) 
+      extends CheckpointMessage
+final case object EmptyLocalQueue extends CheckpointMessage
+
 /**
  * Checkpoint {@link Superstep}'s variables map, {@link Superstep} next
  * superstep class, and messages in localQueue, which is {@link MessageQueue}.
@@ -32,23 +37,11 @@ sealed trait CheckpointMessage
  * @param nextSuperstep is the next superstep to be executed.
  * @param localMessages are messages, sent from other nodes or by itself, 
  *                      stored in local queue.
- */
 final case class Checkpoint[M <: Writable](
   variables: Map[String, Writable], nextSuperstep: Class[_ <: Superstep],
   localMessages: List[M] 
 ) extends CheckpointMessage
-
-/*
-final case class NoMoreBundle extends CheckpointMessage
-
-final case class SavePeerMessages[M <: Writable](
-  peer: ProxyInfo, bundle: BSPMessageBundle[M]
-) extends CheckpointMessage
-
-final case class SaveSuperstep(
-  className: String, variables: Map[String, Writable]
-) extends CheckpointMessage
-*/
+ */
 
 /**
  * Pack {@link Checkpointer}, {@link Superstep}'s variables, and next 
@@ -61,8 +54,9 @@ final case class SaveSuperstep(
  * @param ckpt is the Checkpointer actor. 
  * @param variable is a {@link scala.collection.immutable.Map} 
  * @param nextSuperstep is next superstep class to be executed.
- */
 final case class Pack(ckpt: Option[ActorRef], 
                       variables: Map[String, Writable],
                       nextSuperstep: Class[_ <: Superstep]
 ) extends CheckpointMessage
+ */
+

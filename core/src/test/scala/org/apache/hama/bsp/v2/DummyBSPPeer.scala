@@ -37,8 +37,10 @@ protected class DummyBSPPeer extends BSPPeer with CommonLog {
 
   override def getNumCurrentMessages(): Int = -1
 
+/*
   @throws(classOf[IOException])
   override def sync() = LOG.info(getClass.getSimpleName+" starts sync() ...")
+*/
 
   override def getSuperstepCount(): Long = -1
 

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.monitor
-
+/*
 import akka.actor.ActorRef
 import java.io.DataOutputStream
 import org.apache.hadoop.fs.Path
@@ -147,3 +147,4 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
     LOG.info("Done TestCheckpointer test case!")
   }
 }
+*/
