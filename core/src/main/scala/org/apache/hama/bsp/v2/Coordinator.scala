@@ -18,6 +18,7 @@
 package org.apache.hama.bsp.v2
 
 import akka.actor.ActorRef
+import java.net.URLClassLoader
 import java.util.Iterator
 import java.util.Map.Entry
 import org.apache.hadoop.io.Writable
@@ -26,6 +27,7 @@ import org.apache.hama.Close
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
+import org.apache.hama.fs.CacheService
 import org.apache.hama.logging.Logging
 import org.apache.hama.logging.LoggingAdapter
 import org.apache.hama.logging.TaskLog
@@ -57,14 +59,18 @@ import org.apache.hama.sync.NumPeers
 import org.apache.hama.sync.PeerName
 import org.apache.hama.sync.PeerNameByIndex
 import org.apache.hama.sync.PeerSyncClient
+import org.apache.hama.sync.SetTaskAttemptId
 import org.apache.hama.sync.SyncException
 import org.apache.hama.sync.WithinBarrier
+import org.apache.hama.util.Utils
 import scala.collection.JavaConversions._
 
 sealed trait TaskStatMessage
 final case object GetSuperstepCount extends TaskStatMessage
 final case object GetPeerIndex extends TaskStatMessage
 final case object GetTaskAttemptId extends TaskStatMessage
+
+final case class Customize(task: Task)
 
 /**
  * {@link Coordinator} is responsible for providing related services, 
@@ -80,6 +86,7 @@ final case object GetTaskAttemptId extends TaskStatMessage
 //  - progress, etc.
 // TODO: wrapped by BSPPeerAdapter which calls Coordinator instead!
 class Coordinator(conf: HamaConfiguration,  // common conf
+                  container: ActorRef, 
                   messenger: ActorRef, 
                   syncClient: ActorRef,
                   tasklog: ActorRef) extends LocalService with TaskLog {
@@ -95,12 +102,75 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   override def configuration(): HamaConfiguration = conf
 
   /**
-   * - Update task phase to sync // perhaps more detail phase value e.g. within barrier
+   * Config all related setup before start executing supersteps.
+   */
+  protected def customizeTask: Receive = {
+    case Customize(task) => customize(task)
+  }
+
+  /**
+   * Prepare related data for a specific task.
+   * Note: <pre>configuration != task.getConfiguration(). </pre>
+   *       The formor comes from child process, the later from the task.
+   * @param task contains setting for a specific job; task configuration differs
+   *             from conf provided by {@link Container}.
+   */
+  protected def customize(task: Task) {  
+    this.task = Option(task)
+    localize(conf)
+    settingFor(task)  
+    configSyncClient(task)
+    firstSync(task)  
+  }
+
+  /**
+   * Copy necessary files to local (file) system so to speed up computation.
+   * @param conf should contain related cache files if any.
+   */
+  protected def localize(conf: HamaConfiguration) = 
+    CacheService.moveCacheToLocal(conf)
+  
+  /**
+   * - Configure FileSystem's working directory with corresponded 
+   * <b>task.getConfiguration()</b>.
+   * - And add additional classpath to task's configuration.
+   * @param conf is the common setting from bsp peer container.
+   * @param task contains setting for particular job computation.
+   */
+  protected def settingFor(task: Task) = {
+    val taskConf = task.getConfiguration
+    val libjars = CacheService.moveJarsAndGetClasspath(conf) 
+    libjars match {
+      case null => LOG.warning("No jars to be included for "+task.getId)
+      case _ => {
+        LOG.info("Jars to be included in classpath are "+
+                 libjars.mkString(", "))
+        taskConf.setClassLoader(new URLClassLoader(libjars, 
+                                                   taskConf.getClassLoader))
+      }
+    } 
+  }
+
+  protected def configSyncClient(task: Task) =  
+    syncClient ! SetTaskAttemptId(task.getId)  
+
+  /**
+   * Internal sync to ensure all peers is registered/ ready.
+   * @param superstep indicate the curent superstep value.
+   */
+  //TODO: should the task's superstep be confiured to 0 instead?
+  protected def firstSync(task: Task) {
+    Utils.await[BarrierMessage](syncClient, Enter(task.getCurrentSuperstep)) 
+    Utils.await[BarrierMessage](syncClient, Leave(task.getCurrentSuperstep)) 
+    task.increatmentSuperstep
+  }
+  /**
+   * - Update task phase to sync 
    * - Enter barrier sync 
    */
   protected def enter: Receive = {
     case Enter(superstep) => {
-      task.map { (aTask) => transitToSync(aTask) }
+      task.map { (aTask) => transitToSync(aTask) } // TODO: more detail phase
       syncClient ! Enter(superstep)
     }
   }
@@ -201,68 +271,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     }
   }
 
-  /**
-   * BSPPeer ask controller which task attempt id it is.
-   */
-  protected def taskAttemptId: Receive = {
-    case GetTaskAttemptId => task.map { (aTask) => sender ! aTask.getId }
-  }
-
-  protected def clear() = messenger ! ClearOutgoingMessages
-
-  protected def clearOutgoingMessages: Receive = {
-    case Clear => clear
-  }
-
-  override def receive = enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse unknown 
-
-  /**
-   * Prepare related data for a specific task.
-   * Note: <pre>configuration != task.getConfiguration(). </pre>
-   *       The formor comes from child process, the later from the task.
-   * @param task contains setting for a specific job; task configuration differs
-   *             from conf provided by {@link Container}.
-  protected def setup(task: Task) {  
-    this.task = Option(task)
-    localize(conf)
-    settingFor(task)  
-    firstSync(task)  
-  }
-
-   * Copy necessary files to local (file) system so to speed up computation.
-   * @param conf should contain related cache files if any.
-  protected def localize(conf: HamaConfiguration) = 
-    CacheService.moveCacheToLocal(conf)
-  
-   * - Configure FileSystem's working directory with corresponded 
-   * <b>task.getConfiguration()</b>.
-   * - And add additional classpath to task's configuration.
-   * @param conf is the common setting from bsp peer container.
-   * @param task contains setting for particular job computation.
-  protected def settingFor(task: Task) = {
-    val taskConf = task.getConfiguration
-    val libjars = CacheService.moveJarsAndGetClasspath(conf) 
-    libjars match {
-      case null => LOG.warning("No jars to be included for "+task.getId)
-      case _ => {
-        LOG.info("Jars to be included in classpath are "+
-                 libjars.mkString(", "))
-        taskConf.setClassLoader(new URLClassLoader(libjars, 
-                                                   taskConf.getClassLoader))
-      }
-    } 
-  }
-
-   * Internal sync to ensure all peers is registered/ ready.
-   * @param superstep indicate the curent superstep value.
-  //TODO: should the task's superstep be confiured to 0 instead?
-  protected def firstSync(task: Task) {
-    enterBarrier(task.getId, task.getCurrentSuperstep)
-    leaveBarrier(task.getId, task.getCurrentSuperstep)
-    // TODO: controller ! IncreamentSuperstep // task.increatmentSuperstep
-  }
-   */
-
   protected def send: Receive = {
     case Send(peerName, msg) => messenger ! Send(peerName, msg)
   }
@@ -346,4 +354,20 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def allPeerNames: Receive = {
     case AllPeerNames(allPeers) => reply(GetAllPeerNames.toString, allPeers)
   }
+
+  /**
+   * BSPPeer ask controller which task attempt id it is.
+   */
+  protected def taskAttemptId: Receive = {
+    case GetTaskAttemptId => task.map { (aTask) => sender ! aTask.getId }
+  }
+
+  protected def clear() = messenger ! ClearOutgoingMessages
+
+  protected def clearOutgoingMessages: Receive = {
+    case Clear => clear
+  }
+
+  override def receive = customizeTask orElse enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse unknown 
+  
 }

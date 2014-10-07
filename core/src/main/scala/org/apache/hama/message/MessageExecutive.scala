@@ -79,7 +79,7 @@ final case object IsWaitingListEmpty
 class MessageExecutive[M <: Writable](conf: HamaConfiguration,
                                       slotSeq: Int,
                                       taskAttemptId: TaskAttemptID,
-                                      coordinator: ActorRef,
+                                      container: ActorRef,
                                       tasklog: ActorRef)
       extends RemoteService with LocalService with TaskLog with MessageView {
 
@@ -120,12 +120,12 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     queue
   }
 
-  protected def close() { // override
+  protected def close() { 
     outgoingMessageManager.clear
     localQueue.close  
   }
 
-  @throws(classOf[IOException]) // override
+  @throws(classOf[IOException])  
   protected def getCurrentMessage(): M = localQueue.poll 
 
   protected def currentMessage: Receive = {
@@ -143,7 +143,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     case ClearOutgoingMessages => clearOutgoingMessages
   } 
   
-  protected def clearOutgoingMessages() = {// override
+  protected def clearOutgoingMessages() = {
     outgoingMessageManager.clear
     //localQueue.close
     //localQueue.prepareRead
@@ -156,7 +156,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   protected def localQueueMessages: Receive = {
     case GetLocalQueueMessages => localMessages[Writable]() match {
       case Some(list) => sender ! LocalQueueMessages[Writable](list)
-      case None => sender ! EmptyLocalQueue // ideally list won't be none 
+      case None => sender ! EmptyLocalQueue // list won't be none 
     }
   }
 
@@ -173,7 +173,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
    */
   // TODO: report stats
   @throws(classOf[IOException])
-  protected def send(peerName: String, msg: M) = { // override
+  protected def send(peerName: String, msg: M) = { 
     LOG.debug("Message {} will be sent to {}", msg, peerName)
     outgoingMessageManager.addMessage(Peer.at(peerName), msg); 
   }
@@ -268,7 +268,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   override def offline(target: ActorRef) = auditor match { 
     case Some(peer) => peer ! TransferredFailure 
-    case None => coordinator ! Offline(target) // TODO: ask coordinator for instruction
+    case None => container ! Offline(target)  
   }
 
   /**
@@ -314,7 +314,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     loopBackMessages(bundle) 
 
   @throws(classOf[IOException])
-  protected def loopBackMessages(bundle: BSPMessageBundle[M]) = { // override
+  protected def loopBackMessages(bundle: BSPMessageBundle[M]) = { 
     val threshold = BSPMessageCompressor.threshold(Option(conf))
     bundle.setCompressor(BSPMessageCompressor.get(conf), threshold)
     asScalaIterator(bundle.iterator).foreach( msg => {
@@ -324,11 +324,11 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   // TODO: report stats
   @throws(classOf[IOException])
-  protected def loopBackMessage(message: Writable) { // override
+  protected def loopBackMessage(message: Writable) {
     localQueue.add(message.asInstanceOf[M])
   } 
 
-  protected def getListenerAddress(): ProxyInfo = currentPeer(conf) // override
+  protected def getListenerAddress(): ProxyInfo = currentPeer(conf) 
 
   protected def listenerAddress: Receive = {
     case GetListenerAddress => sender ! getListenerAddress
