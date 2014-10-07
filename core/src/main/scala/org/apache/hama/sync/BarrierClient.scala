@@ -39,7 +39,9 @@ final case class PeerNameByIndex(name: String) extends BarrierMessage
 final case object GetPeerName extends BarrierMessage
 final case class PeerName(peerName: String) extends BarrierMessage
 final case object GetNumPeers extends BarrierMessage
+final case class NumPeers(num: Int) extends BarrierMessage
 final case object GetAllPeerNames extends BarrierMessage
+final case class AllPeerNames(allPeers: Array[String]) extends BarrierMessage
 final case class Enter(superstep: Long) extends BarrierMessage
 final case object WithinBarrier extends BarrierMessage
 final case class Leave(superstep: Long) extends BarrierMessage
@@ -91,7 +93,10 @@ class BarrierClient(conf: HamaConfiguration, // common conf
   protected def peerNameByIndex: Receive = {
     case GetPeerNameBy(index) => taskAttemptId.map { (id) => 
       initPeers(id) match {
-        case null => LOG.error("Unlikely but the peers array found is null!")
+        case null => {
+          LOG.error("Unlikely but the peers array found is null!")
+          sender ! PeerNameByIndex(null)
+        }
         case allPeers@_ => allPeers.isEmpty match {
           case true => LOG.error("Empty peers with task {}! ", id)
           case false => {
@@ -107,13 +112,15 @@ class BarrierClient(conf: HamaConfiguration, // common conf
 
   protected def numPeers: Receive = {
     case GetNumPeers => taskAttemptId.map { (id) => initPeers(id) match {
-      case null => sender ! 0
-      case allPeers@_ => sender ! allPeers.length
+      case null => sender ! NumPeers(0)
+      case allPeers@_ => sender ! NumPeers(allPeers.length)
     }}
   }
   
   protected def allPeerNames: Receive = {
-    case GetAllPeerNames => taskAttemptId.map { (id) => sender ! initPeers(id) }
+    case GetAllPeerNames => taskAttemptId.map { (id) => 
+      sender ! AllPeerNames(initPeers(id))
+    }
   }
 
   protected def initPeers(taskAttemptId: TaskAttemptID): Array[String] = 

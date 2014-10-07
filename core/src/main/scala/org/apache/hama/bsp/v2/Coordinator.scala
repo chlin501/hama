@@ -21,6 +21,7 @@ import akka.actor.ActorRef
 import java.util.Iterator
 import java.util.Map.Entry
 import org.apache.hadoop.io.Writable
+import org.apache.hama.Clear
 import org.apache.hama.Close
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
@@ -43,12 +44,16 @@ import org.apache.hama.message.Transfer
 import org.apache.hama.message.TransferredCompleted
 import org.apache.hama.message.TransferredFailure
 import org.apache.hama.message.TransferredState
+import org.apache.hama.sync.AllPeerNames
 import org.apache.hama.sync.BarrierMessage
 import org.apache.hama.sync.Enter
 import org.apache.hama.sync.ExitBarrier
+import org.apache.hama.sync.GetAllPeerNames
+import org.apache.hama.sync.GetNumPeers
 import org.apache.hama.sync.GetPeerName
 import org.apache.hama.sync.GetPeerNameBy
 import org.apache.hama.sync.Leave
+import org.apache.hama.sync.NumPeers
 import org.apache.hama.sync.PeerName
 import org.apache.hama.sync.PeerNameByIndex
 import org.apache.hama.sync.PeerSyncClient
@@ -190,9 +195,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     }
   }
 
-  /**
-   * BSPPeer ask controller the index of this peer.
-   */
   protected def peerIndex: Receive = {
     case GetPeerIndex => task.map { (aTask) => 
       sender ! aTask.getId.getTaskID.getId 
@@ -208,7 +210,11 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   protected def clear() = messenger ! ClearOutgoingMessages
 
-  override def receive = enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse unknown 
+  protected def clearOutgoingMessages: Receive = {
+    case Clear => clear
+  }
+
+  override def receive = enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse unknown 
 
   /**
    * Prepare related data for a specific task.
@@ -319,37 +325,25 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case PeerNameByIndex(name) => reply(GetPeerNameBy.getClass.getName, name)
   }
 
-/*
-// bsp peer functions
-  @throws(classOf[IOException])
-  def send(peerName: String, msg: Writable) = 
-    messenger ! Send(peerName, msg.asInstanceOf[Writable])
+  protected def getNumPeers: Receive = {
+    case GetNumPeers => {
+      clients ++= Map(GetNumPeers.toString -> sender)
+      syncClient ! GetNumPeers
+    }
+  }
 
-  def getCurrentMessage(): Writable = 
-    Utils.await[Writable](messenger, GetCurrentMessage)
+  protected def numPeers: Receive = {
+    case NumPeers(num) => reply(GetNumPeers.toString, num)
+  }
 
-  def getNumCurrentMessages(): Int = 
-    Utils.await[Int](messenger, GetNumCurrentMessages)
+  protected def getAllPeerNames: Receive = {
+    case GetAllPeerNames => {
+      clients ++= Map(GetAllPeerNames.toString -> sender)
+      syncClient ! GetAllPeerNames
+    }
+  }
 
-  def getSuperstepCount(): Long = 
-    Utils.await[Long](controller, GetSuperstepCount)
-
-  def getPeerName(): String = 
-    Utils.await[String](syncClient, GetPeerName)
-
-  def getPeerName(index: Int): String = 
-    Utils.await[String](syncClient, GetPeerNameBy(index))
-
-  def getPeerIndex(): Int = Utils.await[Int](controller, GetPeerIndex)
-
-  def getNumPeers(): Int = Utils.await[Int](syncClient, GetNumPeers)
-
-  def getAllPeerNames(): Array[String] = 
-    Utils.await[Array[String]](syncClient, GetAllPeerNames)
-
-  def getTaskAttemptId(): TaskAttemptID = 
-    Utils.await[TaskAttemptID](controller, GetTaskAttemptId) 
-
-  def clear() = messenger ! ClearOutgoingMessages 
-*/
+  protected def allPeerNames: Receive = {
+    case AllPeerNames(allPeers) => reply(GetAllPeerNames.toString, allPeers)
+  }
 }
