@@ -36,6 +36,7 @@ import org.apache.hama.message.CurrentMessage
 import org.apache.hama.message.GetCurrentMessage
 import org.apache.hama.message.GetNumCurrentMessages
 import org.apache.hama.message.GetOutgoingBundles
+import org.apache.hama.message.NumCurrentMessages
 import org.apache.hama.message.IsTransferredCompleted
 import org.apache.hama.message.Send
 import org.apache.hama.message.Transfer
@@ -45,7 +46,11 @@ import org.apache.hama.message.TransferredState
 import org.apache.hama.sync.BarrierMessage
 import org.apache.hama.sync.Enter
 import org.apache.hama.sync.ExitBarrier
+import org.apache.hama.sync.GetPeerName
+import org.apache.hama.sync.GetPeerNameBy
 import org.apache.hama.sync.Leave
+import org.apache.hama.sync.PeerName
+import org.apache.hama.sync.PeerNameByIndex
 import org.apache.hama.sync.PeerSyncClient
 import org.apache.hama.sync.SyncException
 import org.apache.hama.sync.WithinBarrier
@@ -179,7 +184,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   /**
    * BSPPeer ask controller at which superstep count this task now is.
    */
-  protected def superstepCount: Receive = {
+  protected def getSuperstepCount: Receive = {
     case GetSuperstepCount => task.map { (aTask) => 
       sender ! aTask.getCurrentSuperstep
     }
@@ -203,7 +208,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   protected def clear() = messenger ! ClearOutgoingMessages
 
-  override def receive = enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse superstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse unknown 
+  override def receive = enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse unknown 
 
   /**
    * Prepare related data for a specific task.
@@ -267,23 +272,51 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    * Reply client's (usually superstep) GetCurrentMessage.
    */
   protected def currentMessage: Receive = {
-    case CurrentMessage(msg) => clients.find( 
-      p => p._1.equals(GetCurrentMessage.toString)
-    ) match {
-      case Some(found) => {
-        val who = found._2
-        LOG.debug("Reply {}'s GetCurrentMessage with value {}.", who, msg)
-        who ! msg
-      }
-      case None => LOG.error("Don't know who send GetCurrentMessage!")
-    }
+    case CurrentMessage(msg) => reply(GetCurrentMessage.toString, msg) 
   }
 
   protected def getNumCurrentMessages: Receive = {
     case GetNumCurrentMessages => {
-      clients ++= Map(GetCurrentMessage.toString -> sender)
-      messenger ! GetCurrentMessage 
+      clients ++= Map(GetNumCurrentMessages.toString -> sender)
+      messenger ! GetNumCurrentMessages 
     }
+  }
+
+  protected def numCurrentMessages: Receive = {
+    case NumCurrentMessages(num) => reply(GetNumCurrentMessages.toString, num)
+  }
+
+  protected def reply(key: String, result: Any) = clients.find( 
+    p => p._1.equals(key)
+  ) match {
+    case Some(found) => {
+      val who = found._2
+      LOG.debug("Reply {}'s {} with value {}.", who, key, result)
+      who ! result
+    }
+    case None => LOG.error("Don't know who send message {}!", key)
+  }
+
+  protected def getPeerName: Receive = {
+    case GetPeerName => {
+      clients ++= Map(GetPeerName.toString -> sender)
+      syncClient ! GetPeerName
+    }
+  }
+
+  protected def peerName: Receive = {
+    case PeerName(name) => reply(GetPeerName.toString, name)
+  }
+
+  protected def getPeerNameBy: Receive = {
+    case GetPeerNameBy(index) => {
+      clients ++= Map(GetPeerNameBy.getClass.getName -> sender)
+      syncClient ! GetPeerNameBy(index)
+    }
+  } 
+
+  protected def peerNameByIndex: Receive = {
+    case PeerNameByIndex(name) => reply(GetPeerNameBy.getClass.getName, name)
   }
 
 /*

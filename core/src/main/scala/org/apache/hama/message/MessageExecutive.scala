@@ -47,6 +47,7 @@ final case class Send(peerName: String, msg: Writable) extends MessengerMessage
 final case object GetCurrentMessage extends MessengerMessage
 final case class CurrentMessage[M <: Writable](msg: M) extends MessengerMessage
 final case object GetNumCurrentMessages extends MessengerMessage
+final case class NumCurrentMessages(num: Int) extends MessengerMessage
 final case object GetOutgoingBundles extends MessengerMessage
 final case object ClearOutgoingMessages extends MessengerMessage
 final case object GetListenerAddress extends MessengerMessage
@@ -134,7 +135,8 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   protected def getNumCurrentMessages(): Int = localQueue.size 
 
   protected def numberCurrentMessages: Receive = {
-    case GetNumCurrentMessages => sender ! getNumCurrentMessages
+    case GetNumCurrentMessages => 
+      sender ! NumCurrentMessages(getNumCurrentMessages)
   }
 
   protected def clear: Receive = {

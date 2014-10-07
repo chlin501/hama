@@ -35,7 +35,9 @@ sealed trait BarrierMessage
 final case class SetTaskAttemptId(taskAttemptId: TaskAttemptID) 
       extends BarrierMessage
 final case class GetPeerNameBy(index: Int) extends BarrierMessage
+final case class PeerNameByIndex(name: String) extends BarrierMessage
 final case object GetPeerName extends BarrierMessage
+final case class PeerName(peerName: String) extends BarrierMessage
 final case object GetNumPeers extends BarrierMessage
 final case object GetAllPeerNames extends BarrierMessage
 final case class Enter(superstep: Long) extends BarrierMessage
@@ -83,7 +85,7 @@ class BarrierClient(conf: HamaConfiguration, // common conf
   }
 
   protected def currentPeerName: Receive = {
-    case GetPeerName => sender ! syncClient.getPeerName
+    case GetPeerName => sender ! PeerName(syncClient.getPeerName)
   }
 
   protected def peerNameByIndex: Receive = {
@@ -96,7 +98,7 @@ class BarrierClient(conf: HamaConfiguration, // common conf
             val peer = allPeers(index)
             LOG.debug("Request index {} has value {}. All peers vlaue is {} ", 
                       index, peer, allPeers.mkString(", "))
-            sender ! peer
+            sender ! PeerNameByIndex(peer)
           }
         }
       }
