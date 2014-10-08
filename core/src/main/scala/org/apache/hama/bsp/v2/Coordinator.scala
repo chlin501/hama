@@ -153,13 +153,12 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     val taskConf = aTask.getConfiguration
     val taskAttemptId = aTask.getId.toString
     addJarToClasspath(taskAttemptId, taskConf)
-
     // instantiate, cache (ActorRef) and spwan superstep classes e.g. spawn(name, classOf, new BSPPeerAdapter(self))
     // find first superstep in cache 
     // execute the first superstep by sending msg e.g. 1stSueprstep ! Compute (superstep will report back to coordinator with next suprstep class name when compute func finishes, asking for sync, etc.; then coordinator find the next superstep for execution and repeats this process)
   }}
   
-  protected def configSupersteps(taskConf: HamaConfiguration) {
+  protected def setupSupersteps(taskConf: HamaConfiguration) {
     val classes = taskConf.get("hama.supersteps.class")
     LOG.info("Supersteps {} will be instantiated!", classes)
     val classNames = classes.split(",")
@@ -168,8 +167,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
         case Success(superstep) => { 
           val spawned = spawn("superstep-"+className, classOf[SuperstepWorker],
                                superstep)
-          // 
-          // spawn superstep actor with superstep instance
+          spawned ! Setup(BSPPeerAdapter(taskConf, self))
           supersteps ++= Map(className -> spawned)
         }
         case Failure(cause) => 
@@ -184,6 +182,9 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     Try(ReflectionUtils.newInstance(loader, taskConf).asInstanceOf[Superstep])
   }
 
+  /**
+   * Create class with class loader containing jar new added to classpath.
+   */
   protected def classWithLoader(className: String, 
                                 taskConf: HamaConfiguration): Class[_] = 
     task.map { (aTask) => 
@@ -386,8 +387,9 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case Send(peerName, msg) => messenger ! Send(peerName, msg)
   }
 
+// TODO: for bsp peer execution, might need to record current superstep in case other superstep worker issue the same message, which ideally should not happen!!! so the purpose is to verify
   protected def getCurrentMessage: Receive = {
-    case GetCurrentMessage => {
+    case GetCurrentMessage => { 
       clients ++= Map(GetCurrentMessage.toString -> sender)
       messenger ! GetCurrentMessage 
     }
