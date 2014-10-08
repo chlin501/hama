@@ -18,9 +18,12 @@
 package org.apache.hama.bsp.v2
 
 import akka.actor.ActorRef
+import java.io.File
+import java.net.URL
 import java.net.URLClassLoader
 import java.util.Iterator
 import java.util.Map.Entry
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Clear
 import org.apache.hama.Close
@@ -28,6 +31,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
 import org.apache.hama.fs.CacheService
+import org.apache.hama.fs.Operation
 import org.apache.hama.logging.Logging
 import org.apache.hama.logging.LoggingAdapter
 import org.apache.hama.logging.TaskLog
@@ -70,7 +74,9 @@ final case object GetSuperstepCount extends TaskStatMessage
 final case object GetPeerIndex extends TaskStatMessage
 final case object GetTaskAttemptId extends TaskStatMessage
 
-final case class Customize(task: Task)
+sealed trait CoordinatorMessage
+final case class Customize(task: Task) extends CoordinatorMessage
+final case object Execute extends CoordinatorMessage
 
 /**
  * {@link Coordinator} is responsible for providing related services, 
@@ -102,10 +108,11 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   override def configuration(): HamaConfiguration = conf
 
   /**
-   * Config all related setup before start executing supersteps.
+   * This is the first step:
+   * - Config related setting before supersteps are instantiated. 
    */
-  protected def customizeTask: Receive = {
-    case Customize(task) => customize(task)
+  protected def customize: Receive = {
+    case Customize(task) => customizeFor(task)
   }
 
   /**
@@ -115,13 +122,65 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    * @param task contains setting for a specific job; task configuration differs
    *             from conf provided by {@link Container}.
    */
-  protected def customize(task: Task) {  
+  protected def customizeFor(task: Task) {  
     this.task = Option(task)
     localize(conf)
     settingFor(task)  
     configSyncClient(task)
     firstSync(task)  
   }
+
+  protected def execute: Receive = {
+    case Execute => doExecute
+  }
+
+  protected def doExecute() {
+     
+  }
+
+  /**
+   * Add jar to classpath so that supersteps can be instantiated.
+   * @param taskAttemptId is a task attempt id.
+   * @param taskConf is configuration specific to a task.
+   */
+  protected def addJarToClasspath(taskAttemptId: String, 
+                                  taskConf: HamaConfiguration): 
+      Option[ClassLoader] = {
+    val jar = taskConf.get("bsp.jar")
+    LOG.info("Jar path found in task configuration is {}", jar)
+    jar match {
+      case null|"" => None
+      case remoteUrl@_ => {
+        val operation = Operation.get(taskConf)
+        // TODO: change working directory? see bsppeerimpl or taskworker
+        val localJarPath = createLocalPath(taskAttemptId, taskConf, operation) 
+        operation.copyToLocal(new Path(remoteUrl))(new Path(localJarPath))
+        LOG.info("Remote file {} is copied to {}", remoteUrl, localJarPath) 
+        val url = normalizePath(localJarPath)
+        val loader = Thread.currentThread.getContextClassLoader
+        val newLoader = new URLClassLoader(Array[URL](url), loader) 
+        taskConf.setClassLoader(newLoader) 
+        LOG.info("User jar {} is added to the newly created url class loader "+
+                 "for job {}", url, taskAttemptId)
+        Some(newLoader)   
+      }
+    }
+  }
+
+  protected def normalizePath(jarPath: String): URL = 
+    new File(jarPath).toURI.toURL // TODO: replace File with neutral api
+
+  protected def createLocalPath(taskAttemptId: String, 
+                      config: HamaConfiguration,
+                      operation: Operation): String = {
+    val localDir = config.get("bsp.local.dir", "/tmp/bsp/local")
+    val subDir = config.get("bsp.local.dir.sub_dir", "bspmaster")
+    if(!operation.local.exists(new Path(localDir, subDir)))
+      operation.local.mkdirs(new Path(localDir, subDir))
+    "%s/%s/%s.jar".format(localDir, subDir, taskAttemptId)
+  }
+
+
 
   /**
    * Copy necessary files to local (file) system so to speed up computation.
@@ -225,7 +284,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   protected def transferredFailure: Receive = {
-    case TransferredFailure =>  // TODO: report container, which in turns calls to master, do restart worker on other node!
+    case TransferredFailure => container ! TransferredFailure 
   }
  
   protected def leave: Receive = {
@@ -235,7 +294,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
  protected def exitBarrier: Receive = {
     case ExitBarrier => {
       // spawn checkpointer
-      // checkpointer ! StartCheckpoint
+      // checkpointer ! StartCheckpoint xxxxx
       // TODO: call to next superstep
     }
   }
@@ -368,6 +427,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case Clear => clear
   }
 
-  override def receive = customizeTask orElse enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse unknown 
+  override def receive = customize orElse execute orElse enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse unknown 
   
 }
