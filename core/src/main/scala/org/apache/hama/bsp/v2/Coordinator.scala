@@ -134,9 +134,14 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case Execute => doExecute
   }
 
-  protected def doExecute() {
-     
-  }
+  protected def doExecute() = task.map { (aTask) => {
+    val taskConf = aTask.getConfiguration
+    val taskAttemptId = aTask.getId.toString
+    addJarToClasspath(taskAttemptId, taskConf)
+    // instantiate, cache (ActorRef) and spwan superstep classes e.g. spawn(name, classOf, new BSPPeerAdapter(self))
+    // find first superstep in cache 
+    // execute the first superstep by sending msg e.g. 1stSueprstep ! Compute (superstep will report back to coordinator with next suprstep class name when compute func finishes, asking for sync, etc.; then coordinator find the next superstep for execution and repeats this process)
+  }}
 
   /**
    * Add jar to classpath so that supersteps can be instantiated.
