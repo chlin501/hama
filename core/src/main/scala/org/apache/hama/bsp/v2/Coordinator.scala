@@ -25,6 +25,7 @@ import java.util.Iterator
 import java.util.Map.Entry
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.Writable
+import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.Clear
 import org.apache.hama.Close
 import org.apache.hama.HamaConfiguration
@@ -68,6 +69,9 @@ import org.apache.hama.sync.SyncException
 import org.apache.hama.sync.WithinBarrier
 import org.apache.hama.util.Utils
 import scala.collection.JavaConversions._
+import scala.util.Try
+import scala.util.Success
+import scala.util.Failure
 
 sealed trait TaskStatMessage
 final case object GetSuperstepCount extends TaskStatMessage
@@ -77,6 +81,8 @@ final case object GetTaskAttemptId extends TaskStatMessage
 sealed trait CoordinatorMessage
 final case class Customize(task: Task) extends CoordinatorMessage
 final case object Execute extends CoordinatorMessage
+final case class InstantiationFailure(className: String, cause: Throwable)
+      extends CoordinatorMessage
 
 /**
  * {@link Coordinator} is responsible for providing related services, 
@@ -99,9 +105,18 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   type ProxyAndBundleIt = Iterator[Entry[ProxyInfo, BSPMessageBundle[Writable]]]
 
+  type ActorMessage = String
+
   protected var task: Option[Task] = None
 
-  protected var clients = Map.empty[String, ActorRef]
+  protected[v2] var supersteps = Map.empty[String, ActorRef]
+
+  /**
+   * This holds messge to the asker's (usually superstep worker) actor reference.
+   * Once the target replies, find in cache and reply to the original target ie superstep worker.
+   */
+  // TODO: perhaps replace with forward instead.
+  protected var clients = Map.empty[ActorMessage, ActorRef]
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
@@ -138,10 +153,42 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     val taskConf = aTask.getConfiguration
     val taskAttemptId = aTask.getId.toString
     addJarToClasspath(taskAttemptId, taskConf)
+
     // instantiate, cache (ActorRef) and spwan superstep classes e.g. spawn(name, classOf, new BSPPeerAdapter(self))
     // find first superstep in cache 
     // execute the first superstep by sending msg e.g. 1stSueprstep ! Compute (superstep will report back to coordinator with next suprstep class name when compute func finishes, asking for sync, etc.; then coordinator find the next superstep for execution and repeats this process)
   }}
+  
+  protected def configSupersteps(taskConf: HamaConfiguration) {
+    val classes = taskConf.get("hama.supersteps.class")
+    LOG.info("Supersteps {} will be instantiated!", classes)
+    val classNames = classes.split(",")
+    classNames.foreach( className => {
+      instantiate(className, taskConf) match {
+        case Success(superstep) => { 
+          val spawned = spawn("superstep-"+className, classOf[SuperstepWorker],
+                               superstep)
+          // 
+          // spawn superstep actor with superstep instance
+          supersteps ++= Map(className -> spawned)
+        }
+        case Failure(cause) => 
+          container ! InstantiationFailure(className, cause)
+      } 
+    })  
+  }
+
+  protected def instantiate(className: String, 
+                            taskConf: HamaConfiguration): Try[Superstep] = {
+    val loader = classWithLoader(className, taskConf)
+    Try(ReflectionUtils.newInstance(loader, taskConf).asInstanceOf[Superstep])
+  }
+
+  protected def classWithLoader(className: String, 
+                                taskConf: HamaConfiguration): Class[_] = 
+    task.map { (aTask) => 
+      Class.forName(className, true, taskConf.getClassLoader)
+    }.getOrElse(null)
 
   /**
    * Add jar to classpath so that supersteps can be instantiated.
