@@ -83,6 +83,10 @@ public final class Task implements Writable/*, Transformable*/ {
   private Marker marker = new Marker(false, ""); 
  
   public final static class Marker implements Writable {
+
+    // record this task is active (true) or passive (false) scheduling task
+    // default is passive
+    // TODO: private BooleanWritable active = new BooleanWritable(false);
     private BooleanWritable assigned = new BooleanWritable(false);
     private Text groomServerName = new Text();
    

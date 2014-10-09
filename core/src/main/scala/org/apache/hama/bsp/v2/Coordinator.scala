@@ -83,6 +83,10 @@ final case class Customize(task: Task) extends CoordinatorMessage
 final case object Execute extends CoordinatorMessage
 final case class InstantiationFailure(className: String, cause: Throwable)
       extends CoordinatorMessage
+final case class SuperstepNotFoundFailure(className: String) 
+      extends CoordinatorMessage
+final case class FinishCleanup(superstepClassName: String)
+      extends CoordinatorMessage 
 
 /**
  * {@link Coordinator} is responsible for providing related services, 
@@ -111,11 +115,13 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   protected[v2] var supersteps = Map.empty[String, ActorRef]
 
+  protected[v2] var superstepCleanupCount = 0
+
   /**
-   * This holds messge to the asker's (usually superstep worker) actor reference.
-   * Once the target replies, find in cache and reply to the original target ie superstep worker.
+   * This holds messge to the asker's actor reference.
+   * Once the target replies, find in cache and reply to the original target.
    */
-  // TODO: perhaps replace with forward instead.
+  // TODO: perhaps replace with forward func instead.
   protected var clients = Map.empty[ActorMessage, ActorRef]
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
@@ -152,12 +158,106 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def doExecute() = task.map { (aTask) => {
     val taskConf = aTask.getConfiguration
     val taskAttemptId = aTask.getId.toString
+    LOG.info("Start configuring for task {}", taskAttemptId)
     addJarToClasspath(taskAttemptId, taskConf)
-    // instantiate, cache (ActorRef) and spwan superstep classes e.g. spawn(name, classOf, new BSPPeerAdapter(self))
+    setupSupersteps(taskConf)
     // find first superstep in cache 
     // execute the first superstep by sending msg e.g. 1stSueprstep ! Compute (superstep will report back to coordinator with next suprstep class name when compute func finishes, asking for sync, etc.; then coordinator find the next superstep for execution and repeats this process)
   }}
+
+  /**
+   * Cached supersteps is mapped from class simple name to spawned actor ref.
+   * So the class name passed in should be 
+   * {@link Superstep#getClass#getSimpleName}.
+   * @param className is superstep's class name, not spawned actor ref.
+   * @param peer is the coordinator wrapped by {@link BSPPeerAdapter}.
+   * @param variables is a cached map data from previous superstep.
+   */
+  protected def findThenExecute(className: String, // getClass.getSimpleName
+                                peer: BSPPeer,
+                                variables: Map[String, Writable]) {
+    supersteps.find(entry => {
+      if(classOf[FirstSuperstep].getSimpleName.equals(className)) {
+        true
+      } else {
+        val classKey = entry._1
+        classKey.equals(className)
+      }
+    }) match {
+      case Some(found) => {
+        val superstepActorRef = found._2
+        beforeCompute(peer, superstepActorRef, variables)
+        whenCompute(peer, superstepActorRef)
+        afterCompute(peer, superstepActorRef)
+/* 
+        val next = superstep.next // <- TODO: in Receive
+        next match { // TODO: null==next causes sync is not executed. check if need to change to sync before going to cleanup!
+           case null => eventually(peer)
+           case clazz@_ => {
+             beforeSync(peer, superstep)
+             whenSync(peer, superstep)
+             afterSync(peer, superstep)
+             findThenExecute(clazz.getName, peer, superstep.getVariables)
+           }
+        }
+*/
+      }
+      case None => container ! SuperstepNotFoundFailure(className)
+       
+    }
+  }
+
+  protected def nextSuperstep: Receive = {
+    case NextSuperstep(next) => next match { 
+      case null => bspPeer.map { (peer) => eventually(peer) }
+      case clazz@_ => task.map { (aTask) => {
+        self ! Enter(aTask.getCurrentSuperstep) 
+      }}
+    }
+  }
+
+  protected def eventually(peer: BSPPeer) = cleanup(peer)
+
+  protected def beginCleanup(peer: BSPPeer) = task.map { (aTask) => 
+    aTask.transitToCleanup
+  }
+
+  protected def whenCleanup(peer: BSPPeer) = supersteps.foreach { case (k, v)=> 
+    v ! Cleanup(peer)
+  }
+
+  def cleanup(peer: BSPPeer) {  
+    beginCleanup(peer)
+    whenCleanup(peer)
+  }
+
+  //endOfCleanup(peer)  xx wait for reply
+  protected def finishCleanup: Receive = {
+    case FinishCleanup(superstepClassName) => {
+      // TODO: check if all superstep clean is called.
+    }
+  }
+
+  protected def beforeCompute(peer: BSPPeer, superstep: ActorRef,
+                              variables: Map[String, Writable]) = 
+    task.map { (aTask) => {
+      aTask.transitToCompute
+      superstep ! SetVariables(variables)
+    }}
+
+  protected def whenCompute(peer: BSPPeer, superstep: ActorRef) = 
+    superstep ! Compute(peer) 
+
+  protected def afterCompute(peer: BSPPeer, superstep: ActorRef) { } 
   
+  /**
+   * Setup {@link Superstep}s to be executed, including:
+   * - Instantiate superstep classes by {@link ReflectionsUtils}.
+   * - Spawn an actor that holds the superstep.
+   * - Setup superstep by sending message to the actor.
+   * - Cache the actor for flow control.
+   * @param taskConf is specific configuration of a task.
+   */
   protected def setupSupersteps(taskConf: HamaConfiguration) {
     val classes = taskConf.get("hama.supersteps.class")
     LOG.info("Supersteps {} will be instantiated!", classes)
@@ -167,13 +267,17 @@ class Coordinator(conf: HamaConfiguration,  // common conf
         case Success(superstep) => { 
           val spawned = spawn("superstep-"+className, classOf[SuperstepWorker],
                                superstep)
-          spawned ! Setup(BSPPeerAdapter(taskConf, self))
+          bspPeer.map { (peer) => spawned ! Setup(peer) }
           supersteps ++= Map(className -> spawned)
         }
         case Failure(cause) => 
           container ! InstantiationFailure(className, cause)
       } 
     })  
+  }
+
+  protected def bspPeer(): Option[BSPPeer] = task.map { (aTask) => 
+    BSPPeerAdapter(aTask.getConfiguration, self)
   }
 
   protected def instantiate(className: String, 
@@ -192,7 +296,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     }.getOrElse(null)
 
   /**
-   * Add jar to classpath so that supersteps can be instantiated.
+   * Add jar, containing {@link Superstep} implementation, to classpath so that 
+   * supersteps can be instantiated.
    * @param taskAttemptId is a task attempt id.
    * @param taskConf is configuration specific to a task.
    */
@@ -300,12 +405,12 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def withinBarrier(task: Task) = getBundles()
 
   /**
-   * Obtain message bundles sent through {@link BSPPeer#send} function.
+   * Obtain message bundles sent by calling {@link BSPPeer#send} function.
    */
   protected def getBundles() = messenger ! GetOutgoingBundles
 
   /**
-   * Transmit message bundles iterator to remote messenger.
+   * Transmit message bundles, wraped by iterator, to remote messenger.
    */
   protected def proxyBundleIterator: Receive = {
     case it: ProxyAndBundleIt => task.map { (aTask) => {
@@ -331,10 +436,12 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected def transferredCompleted: Receive = {
     case TransferredCompleted => task.map { (aTask) => 
-      clear
+      beforeLeave
       self ! Leave(aTask.getCurrentSuperstep)
     }
   }
+
+  protected def beforeLeave() = clear
 
   protected def transferredFailure: Receive = {
     case TransferredFailure => container ! TransferredFailure 
@@ -347,8 +454,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
  protected def exitBarrier: Receive = {
     case ExitBarrier => {
       // spawn checkpointer
-      // checkpointer ! StartCheckpoint xxxxx
-      // TODO: call to next superstep
+      // checkpointer ! StartCheckpoint 
+      // TODO: trigger/ call to next superstep
     }
   }
 
@@ -481,6 +588,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case Clear => clear
   }
 
-  override def receive = customize orElse execute orElse enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse unknown 
+  override def receive = customize orElse execute orElse enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse nextSuperstep orElse unknown 
   
 }

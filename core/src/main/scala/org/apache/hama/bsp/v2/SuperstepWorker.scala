@@ -17,28 +17,40 @@
  */
 package org.apache.hama.bsp.v2
 
+import akka.actor.ActorRef
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Agent
 
 sealed trait SuperstepMessage
 final case class Setup(peer: BSPPeer) extends SuperstepMessage
+final case class SetVariables(variables: Map[String, Writable]) 
+      extends SuperstepMessage
 final case class Compute(peer: BSPPeer) extends SuperstepMessage
+final case class NextSuperstep(next: Class[_]) extends SuperstepMessage
 final case class Cleanup(peer: BSPPeer) extends SuperstepMessage
 
-class SuperstepWorker(superstep: Superstep) extends Agent {
+class SuperstepWorker(superstep: Superstep, coordinator: ActorRef) 
+      extends Agent {
 
   protected def setup: Receive = {
     case Setup(peer) => superstep.setup(peer)
   }
 
+  protected def setVariables: Receive = {
+    case SetVariables(variables) => superstep.setVariables(variables)
+  }
+
   protected def compute: Receive = {
-    case Compute(peer) => superstep.compute(peer)
+    case Compute(peer) => {
+      superstep.compute(peer)
+      coordinator ! NextSuperstep(superstep.next)
+    }
   }
 
   protected def cleanup: Receive = {
     case Cleanup(peer) => superstep.cleanup(peer)
   }
 
-  override def receive = setup orElse compute orElse cleanup orElse unknown
+  override def receive = setup orElse setVariables orElse compute orElse cleanup orElse unknown
 
 }
