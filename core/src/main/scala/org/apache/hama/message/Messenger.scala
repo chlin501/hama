@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.message
-
+/*
 import akka.actor.Actor
 import akka.actor.ActorRef
 import org.apache.hadoop.io.Writable
@@ -31,11 +31,7 @@ trait Messenger {
                                            task: Task, 
                                            peerMessenger: ActorRef) {
 //TODO: default message manager is changed to actor. need other way to instantiate.
-/*
-    val mgr = MessageManager.get[M](conf, peerMessenger)
-    mgr.init(conf, task.getId)
-    messenger = mgr.asInstanceOf[MessageManager[Writable]]
-*/
-  }
 
+  }
 }
+*/

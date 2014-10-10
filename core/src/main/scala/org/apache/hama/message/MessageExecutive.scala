@@ -80,6 +80,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
                                       slotSeq: Int,
                                       taskAttemptId: TaskAttemptID,
                                       container: ActorRef,
+                                      coordinator: ActorRef,
                                       tasklog: ActorRef)
       extends RemoteService with LocalService with TaskLog with MessageView {
 
@@ -89,7 +90,6 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     conf.getInt("hama.messenger.max.cached.connections", 100)
   protected val peersLRUCache = initializeLRUCache(maxCachedConnections)
   protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
-  protected var auditor: Option[ActorRef] = None
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
@@ -250,7 +250,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
       case null => LOG.warning("Unknown sender for {} ", peer)
       case f@_ => {
         addToWaitingList(peer, MessageFrom(msgs, f))
-        LOG.info("Look up remote peer "+peer.getActorName+" at "+peer.getPath)
+        LOG.info("Lookup remote peer "+peer.getActorName+" at "+peer.getPath)
         lookupPeer(peer.getActorName, peer.getPath)     
       }
     }
@@ -266,10 +266,10 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   override def afterLinked(target: String, proxy: ActorRef) = 
     findThenSend(target, proxy) 
 
-  override def offline(target: ActorRef) = auditor match { 
-    case Some(peer) => peer ! TransferredFailure 
-    case None => container ! Offline(target)  
-  }
+  override def offline(target: ActorRef) = 
+    if(target.path.name.startsWith("messenger-")) {
+      coordinator ! TransferredFailure  
+    } else container ! Offline(target)  
 
   /**
    * Find the peer name equals to the target, and then send the bundler over
@@ -337,19 +337,16 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   protected def checkState: Receive = {
     case IsTransferredCompleted => waitingList.isEmpty match {
       case true => sender ! TransferredCompleted
-      case false => {
-        auditor = Option(sender)
-        request(self, IsWaitingListEmpty)
-      }
+      case false => request(self, IsWaitingListEmpty)
     }
   }
 
   protected def checkWaitingList: Receive = {
     case IsWaitingListEmpty => waitingList.isEmpty match {
-      case true => auditor.map { (peer) => {
-        peer ! TransferredCompleted 
-        removeFromRequestCache(IsWaitingListEmpty.toString)
-      }}
+      case true => {
+        coordinator ! TransferredCompleted 
+        cancelRequest(IsWaitingListEmpty.toString)
+      }
       case false => 
         LOG.debug("Messages are not yet transferred completed because " +
                   "waiting list for task {} is {}", taskAttemptId, 

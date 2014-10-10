@@ -43,10 +43,12 @@ class MockMessageExecutive[M <: Writable](conf: HamaConfiguration,
                                           slotSeq: Int,
                                           taskAttemptId: TaskAttemptID,
                                           container: ActorRef,
+                                          coordinator: ActorRef,
                                           tasklog: ActorRef,
                                           tester: ActorRef,
                                           target: ProxyInfo)
-extends MessageExecutive[M](conf, slotSeq, taskAttemptId, container, tasklog) {
+      extends MessageExecutive[M](conf, slotSeq, taskAttemptId, container, 
+                                  coordinator, tasklog) {
 
   def getSentMessage: Receive = {
     case GetSentMessage => {
@@ -154,12 +156,13 @@ class TestMessageExecutive extends TestEnv(TestMessageExecutive.sysName)
 
   def createMsgMgr(slotSeq: Int, taskAttemptId: TaskAttemptID, 
                    tasklog: ActorRef, proxy: ProxyInfo): ActorRef = {
-    val messenger = createWithArgs("messenger_BSPPeerSystem%s".format(slotSeq), 
+    val messenger = createWithArgs("messenger-BSPPeerSystem%s".format(slotSeq), 
                                    classOf[MockMessageExecutive[Writable]], 
                                    testConfiguration, 
                                    slotSeq, 
                                    taskAttemptId, 
-                                   null, // container not used here
+                                   null, // container not used right now 
+                                   null, // coordinator not used right now
                                    tasklog,
                                    tester, 
                                    proxy)

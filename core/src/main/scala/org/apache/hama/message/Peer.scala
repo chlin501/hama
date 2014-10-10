@@ -37,7 +37,7 @@ object Peer {
    */
   def at(actorSystem: String, host: String, port: Int): ProxyInfo = {
     val identifier = actorSystem+"@"+host+":"+port
-    ProxyInfo.fromString("akka.tcp://"+identifier+"/user/container/messenger"+
+    ProxyInfo.fromString("akka.tcp://"+identifier+"/user/container/messenger-"+
                          identifier.replaceAll("@", "_").replaceAll(":", "_"))
   }
 
@@ -51,22 +51,10 @@ object Peer {
    */
   def at(peer: String): ProxyInfo = 
     if(-1 == peer.indexOf("@") || -1 == peer.indexOf(":")) {
-      ProxyInfo.fromString("akka://"+peer+"/user/container/messenger_"+peer)
+      ProxyInfo.fromString("akka://"+peer+"/user/container/messenger-"+peer)
       
     } else {
-      ProxyInfo.fromString("akka.tcp://"+peer+"/user/container/messenger_"+
+      ProxyInfo.fromString("akka.tcp://"+peer+"/user/container/messenger-"+
                            peer.replaceAll("@", "_").replaceAll(":", "_"))
     }
-
-/*
-  def atLocal(actorSystemName: String): ProxyInfo = {
-    if(-1 != actorSystemName.indexOf("@") || 
-       -1 != actorSystemName.indexOf(":")) 
-      throw new IllegalArgumentException("Invalid local actor system name: "+
-                                         actorSystemName)
-    ProxyInfo.fromString("akka://"+actorSystemName+"/user/container/messenger_"+
-                         actorSystemName)
-  }
-*/
-
 }

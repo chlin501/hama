@@ -54,14 +54,17 @@ trait LocalService extends Service {
     import context.dispatcher
     val cancellable = context.system.scheduler.schedule(initial, delay, target, 
                                                         message)
-    putToRequestCache(message.toString, cancellable)
+    cacheRequest(message.toString, cancellable)
     cancellable
   }
 
-  protected def putToRequestCache(key: String, toBeCancelled: Cancellable) = 
+  protected def cacheRequest(key: String, toBeCancelled: Cancellable) = 
     requestCache ++= Map(key -> toBeCancelled)
 
-  protected def removeFromRequestCache(key: String) = requestCache -= key
+  protected def cancelRequest(key: String) {
+    requestCache.get(key).map { (v) => v.cancel }
+    requestCache -= key
+  }
   
   protected[hama] def getOrCreate[A <: Actor](serviceName: String, 
                                               target: Class[A],
