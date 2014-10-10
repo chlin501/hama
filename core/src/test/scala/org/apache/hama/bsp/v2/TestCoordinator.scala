@@ -25,7 +25,6 @@ import java.net.InetAddress
 import org.apache.hadoop.fs.Path
 import org.apache.hama.Agent
 import org.apache.hama.groom.Container
-import org.apache.hama.message.PeerMessenger
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.logging.TaskLogging
@@ -53,6 +52,6 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
 
   it("test bsp peer coordinator function.") {
 
-    LOG.info("Done testing Coordinator!")
+    LOG.info("(Not yet implemetned) Done testing Coordinator! ")
   }
 }

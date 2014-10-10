@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.message
-
+/*
 import akka.actor.ActorRef
 import akka.actor.TypedActor
 import akka.util.Timeout
@@ -36,40 +36,23 @@ import scala.collection.JavaConversions._
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-/**
- * An object that contains peer and message bundle. The bundle will be sent 
- * to peer accordingly.
- * @param peer is the destination to which will be sent.
- * @param msg is the actual data.
-final case class Transfer[M <: Writable](peer: ProxyInfo, msg: BSPMessageBundle[M])
- */
-
-/*
-final case class MessageFrom(msg: BSPMessageBundle[_ <: Writable], 
-                             from: ActorRef)
-*/
-
 object PeerMessenger {
 
   val loopbackQueue = new LinkedBlockingQueue[BSPMessageBundle[_]]()
 
 }
 
-/**
  * An messenger on behalf of {@link BSPPeer} sends messages to other peers.
- */
 class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
 
   import PeerMessenger._
 
-  /* This holds information to BSPPeer actors. */
+   * This holds information to BSPPeer actors. *
   protected val maxCachedConnections: Int = 
     conf.getInt("hama.messenger.max.cached.connections", 100)
   protected val peersLRUCache = initializeLRUCache(maxCachedConnections)
  
-  /**
    * Peer may not be available immediately, so store it in waiting list first.
-   */
   protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
 
   override def configuration(): HamaConfiguration = conf
@@ -89,13 +72,11 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
     }
   }
  
-  /**
    * Cache message bundle and {@link BSPPeer} in waiting list.
    * Lookup corresponded remote {@link BSPPeer}'s PeerMessenger.
    * @param peer is the remote PeerMessenger actor reference.
    * @param msg is the message to be sent.
    * @param from is the bsp peer who issues the transfer request.
-   */
   protected def findWith[M <: Writable](peer: ProxyInfo, 
                                         msgs: BSPMessageBundle[M],
                                         from: ActorRef) = msgs match {
@@ -143,16 +124,12 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
     }
   }
 
-  /**
    * Confirm that message bundle is sent to remote {@link BSPPeer}s.
    * @param from denotes the local BSPPeers that issues transfer request.
-   */
   def confirm(from: ActorRef) = from ! TransferredCompleted 
 
-  /**
    * Transfer message to peers. If peer is not found in cache, then lookup 
    * first, and transfer when remote peer is obtained.
-   */
   def transfer: Receive = {
     case Transfer(peer, bundle) => doTransfer(peer, bundle, sender)
   }
@@ -172,12 +149,10 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
     }
   }
 
-  /**
    * A {@link PeerMessenger} may receive messages bundle from remote peer 
    * messenger. Once it receives a message bundle, this method gets called, and
    * it puts the bundle to the queue that in another thread in turns retrieves
    * by calling {@link MessageManager#loopBackMessages}.
-   */
   def putMessageToLocal: Receive = {
     case bundle: BSPMessageBundle[_] => {
       LOG.info("Message received from {} is putting to loopback queue!", 
@@ -198,3 +173,4 @@ class PeerMessenger(conf: HamaConfiguration) extends RemoteService {
   override def receive = transfer orElse putMessageToLocal orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
 
 }
+*/

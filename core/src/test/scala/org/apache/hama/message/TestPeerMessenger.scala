@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.message
-
+/*
 import akka.actor.ActorRef
 //import java.util.concurrent.BlockingQueue
 //import java.util.concurrent.LinkedBlockingQueue
@@ -74,36 +74,6 @@ class TestPeerMessenger extends TestEnv("TestPeerMessenger") {
                              new IntWritable(23))
   var forVerification: BSPMessageBundle[IntWritable] = _
 
-/*
-  class MessageConsumer extends Callable[Boolean] with CommonLog {
-    override def call(): Boolean = {
-      var flag = true
-      while(!Thread.currentThread().isInterrupted() && flag) {
-        LOG.info("Start waiting for the incoming message ... ")
-        val bundle = localMsgQueue.take
-        if(null == bundle) 
-          throw new RuntimeException("Msg bundle in queue is null!")
-        forVerification = bundle.asInstanceOf[BSPMessageBundle[IntWritable]]
-        if(null != forVerification) flag = false
-      }
-      LOG.info("Escape while loop with flag set to "+flag)
-      true
-    } 
-  }
-*/
-
-/*
-  override def beforeAll {
-    super.beforeAll
-    //executor.submit(new MessageConsumer())
-  }
-
-  override def afterAll {
-    //executor.shutdown
-    super.afterAll
-  }
-*/
-
   def createPeer[M <: Writable](name: String,
                                 //queue: BlockingQueue[BSPMessageBundle[M]],
                                 clazz: Class[_]): ActorRef = //{ 
@@ -150,3 +120,4 @@ class TestPeerMessenger extends TestEnv("TestPeerMessenger") {
     LOG.info("Done testing peer messenger!")  
   }
 }
+*/

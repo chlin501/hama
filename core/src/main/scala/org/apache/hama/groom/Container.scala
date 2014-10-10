@@ -35,7 +35,7 @@ import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.LocalService
-import org.apache.hama.message.PeerMessenger
+//import org.apache.hama.message.PeerMessenger
 import org.apache.hama.monitor.Report
 import org.apache.hama.monitor.TaskStat
 import org.apache.hama.RemoteService
@@ -165,8 +165,8 @@ class Container(conf: HamaConfiguration) extends LocalService
 
   /**
    * This serves as internal communicator between peers.
-   */
   protected val peerMessenger = createPeerMessenger(identifier(conf))
+   */
 
   /**
    * A log class for tasks to be executed. Sending TaskAttemptID to switch
@@ -209,8 +209,10 @@ class Container(conf: HamaConfiguration) extends LocalService
     })
   }
 
+/*
   protected def createPeerMessenger(id: String): ActorRef = 
     spawn("peerMessenger_"+id, classOf[PeerMessenger], conf)
+*/
 
   /**
    * Check if the task worker is running. true if a worker is running; false 
@@ -365,7 +367,7 @@ class Container(conf: HamaConfiguration) extends LocalService
       case `ExecutorName` => self ! ShutdownContainer
       case rest@_ => {
         if(rest.startsWith("peerMessenger_")) {
-          // report 
+          // TODO: report 
         } else LOG.warning("Unexpected actor {} is offline!", rest)
       }
     }
