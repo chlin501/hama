@@ -33,9 +33,10 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
-class MockBarrierClient(conf: HamaConfiguration, client: PeerSyncClient, 
-                        tasklog: ActorRef, tester: ActorRef)
-      extends BarrierClient(conf, client, tasklog) {
+class MockBarrierClient(conf: HamaConfiguration, taskAttemptId: TaskAttemptID, 
+                        client: PeerSyncClient, tasklog: ActorRef, 
+                        tester: ActorRef)
+      extends BarrierClient(conf, taskAttemptId, client, tasklog) {
 
   override def withinBarrier(from: ActorRef) = {
     println("Notify "+from+" now is WithinBerrirer!")
@@ -94,8 +95,8 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
                    taskAttemptId: TaskAttemptID, tasklog: ActorRef): 
       ActorRef = {
     val client = BarrierClient.get(conf, taskAttemptId)
-    createWithArgs(name, classOf[MockBarrierClient], conf, client,
-                   tasklog, tester)
+    createWithArgs(name, classOf[MockBarrierClient], conf, taskAttemptId, 
+                   client, tasklog, tester)
   }
 
   it("test barrier client.") {
@@ -108,43 +109,45 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
     val client1 = createClient("client1", conf1, taskId1, tasklog)
     val client2 = createClient("client2", conf2, taskId2, tasklog)
 
-    client1 ! SetTaskAttemptId(taskId1)
-    client2 ! SetTaskAttemptId(taskId2)
+    //client1 ! SetTaskAttemptId(taskId1)
+    //client2 ! SetTaskAttemptId(taskId2)
 
+    LOG.info("'Enter' barrier ...")
     client1 ! Enter(superstep)
     client2 ! Enter(superstep)
     expect(WithinBarrier)
     expect(WithinBarrier)
 
-    superstep += 1
-    LOG.info("Superstep value, expected 1, is {}", superstep)
-    assert(superstep == 1)
+    //superstep += 1
+    //LOG.info("Superstep value, expected 1, is {}", superstep)
+    //assert(superstep == 1)
 
+    LOG.info("'Leave' barrier ...")
     client1 ! Leave(superstep)
     client2 ! Leave(superstep)
     expect(ExitBarrier)
     expect(ExitBarrier)
 
-    val peer1 = Utils.await[String](client1, GetPeerName) 
-    LOG.info("Actual peer1's name is {}, expected {}", peer1, sys1)
-    assert(sys1.equals(peer1))
+    val peer1 = Utils.await[PeerName](client1, GetPeerName) 
+    LOG.info("Actual peer1's name is {}, expected {}", peer1.peerName, sys1)
+    assert(sys1.equals(peer1.peerName))
 
-    val peer2 = Utils.await[String](client2, GetPeerName)
-    LOG.info("Actual peer2's name is {}, expected {}", peer2, sys2)
-    assert(sys2.equals(peer2))
+    val peer2 = Utils.await[PeerName](client2, GetPeerName)
+    LOG.info("Actual peer2's name is {}, expected {}", peer2.peerName, sys2)
+    assert(sys2.equals(peer2.peerName))
 
-    val peerAtIdx1 = Utils.await[String](client1, GetPeerNameBy(1))
-    LOG.info("Peer at index 1 value is {}", peerAtIdx1)
-    assert(sys2.equals(peerAtIdx1))
-    val peerAtIdx0 = Utils.await[String](client2, GetPeerNameBy(0))
-    LOG.info("Peer at index 0 value is {}", peerAtIdx0)
-    assert(sys1.equals(peerAtIdx0))
+    val peerAtIdx1 = Utils.await[PeerNameByIndex](client1, GetPeerNameBy(1))
+    LOG.info("Peer at index 1 value is {}", peerAtIdx1.name)
+    assert(sys2.equals(peerAtIdx1.name))
+    val peerAtIdx0 = Utils.await[PeerNameByIndex](client2, GetPeerNameBy(0))
+    LOG.info("Peer at index 0 value is {}", peerAtIdx0.name)
+    assert(sys1.equals(peerAtIdx0.name))
 
-    val foundLength1 = Utils.await[Int](client1, GetNumPeers)
-    val foundLength2 = Utils.await[Int](client2, GetNumPeers)
+    val foundLength1 = Utils.await[NumPeers](client1, GetNumPeers)
+    val foundLength2 = Utils.await[NumPeers](client2, GetNumPeers)
     LOG.info("Peer length found by client 1 is `{}', client 2 `{}'", 
-             foundLength1, foundLength2)
-    assert(foundLength1 == foundLength2)
+             foundLength1.num, foundLength2.num)
+    assert(foundLength1.num == foundLength2.num)
 
     LOG.info("Done testing barrier client!")  
   }

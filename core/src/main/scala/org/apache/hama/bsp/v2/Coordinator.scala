@@ -64,7 +64,7 @@ import org.apache.hama.sync.NumPeers
 import org.apache.hama.sync.PeerName
 import org.apache.hama.sync.PeerNameByIndex
 import org.apache.hama.sync.PeerSyncClient
-import org.apache.hama.sync.SetTaskAttemptId
+//import org.apache.hama.sync.SetTaskAttemptId
 import org.apache.hama.sync.SyncException
 import org.apache.hama.sync.WithinBarrier
 import org.apache.hama.util.Utils
@@ -95,13 +95,13 @@ final case class FinishCleanup(superstepClassName: String)
  * - <strik>io</strike>
  * - sync
  */
-// TODO: use task operator to collect metrics: 
+// TODO: report task stats through container
 //  - status
 //  - start time
 //  - finish time
 //  - progress, etc.
-// TODO: wrapped by BSPPeerAdapter which calls Coordinator instead!
 class Coordinator(conf: HamaConfiguration,  // common conf
+                  task: Task,
                   container: ActorRef, 
                   messenger: ActorRef, 
                   syncClient: ActorRef,
@@ -111,11 +111,9 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   type ActorMessage = String
 
-  protected var task: Option[Task] = None
-
   protected[v2] var supersteps = Map.empty[String, ActorRef]
 
-  protected[v2] var superstepCleanupCount = 0
+  //protected[v2] var superstepCleanupCount = 0
 
   /**
    * This holds messge to the asker's actor reference.
@@ -128,13 +126,20 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   override def configuration(): HamaConfiguration = conf
 
+  override def initializeServices() {
+    localize(conf)
+    settingFor(task)  
+    //configSyncClient(task)
+    firstSync(task)  
+  }
+
   /**
    * This is the first step:
    * - Config related setting before supersteps are instantiated. 
-   */
   protected def customize: Receive = {
     case Customize(task) => customizeFor(task)
   }
+   */
 
   /**
    * Prepare related data for a specific task.
@@ -142,28 +147,28 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    *       The formor comes from child process, the later from the task.
    * @param task contains setting for a specific job; task configuration differs
    *             from conf provided by {@link Container}.
-   */
   protected def customizeFor(task: Task) {  
     this.task = Option(task)
     localize(conf)
     settingFor(task)  
-    configSyncClient(task)
+    //configSyncClient(task)
     firstSync(task)  
   }
+   */
 
   protected def execute: Receive = {
     case Execute => doExecute
   }
 
-  protected def doExecute() = task.map { (aTask) => {
-    val taskConf = aTask.getConfiguration
-    val taskAttemptId = aTask.getId.toString
+  protected def doExecute() { 
+    val taskConf = task.getConfiguration
+    val taskAttemptId = task.getId.toString
     LOG.info("Start configuring for task {}", taskAttemptId)
     addJarToClasspath(taskAttemptId, taskConf)
     setupSupersteps(taskConf)
     // find first superstep in cache 
     // execute the first superstep by sending msg e.g. 1stSueprstep ! Compute (superstep will report back to coordinator with next suprstep class name when compute func finishes, asking for sync, etc.; then coordinator find the next superstep for execution and repeats this process)
-  }}
+  }
 
   /**
    * Cached supersteps is mapped from class simple name to spawned actor ref.
@@ -209,18 +214,14 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   protected def nextSuperstep: Receive = {
     case NextSuperstep(next) => next match { 
-      case null => bspPeer.map { (peer) => eventually(peer) }
-      case clazz@_ => task.map { (aTask) => {
-        self ! Enter(aTask.getCurrentSuperstep) 
-      }}
+      case null => eventually(bspPeer) 
+      case clazz@_ => self ! Enter(task.getCurrentSuperstep) 
     }
   }
 
   protected def eventually(peer: BSPPeer) = cleanup(peer)
 
-  protected def beginCleanup(peer: BSPPeer) = task.map { (aTask) => 
-    aTask.transitToCleanup
-  }
+  protected def beginCleanup(peer: BSPPeer) = task.transitToCleanup
 
   protected def whenCleanup(peer: BSPPeer) = supersteps.foreach { case (k, v)=> 
     v ! Cleanup(peer)
@@ -239,11 +240,10 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   protected def beforeCompute(peer: BSPPeer, superstep: ActorRef,
-                              variables: Map[String, Writable]) = 
-    task.map { (aTask) => {
-      aTask.transitToCompute
-      superstep ! SetVariables(variables)
-    }}
+                              variables: Map[String, Writable]) {
+    task.transitToCompute
+    superstep ! SetVariables(variables)
+  }
 
   protected def whenCompute(peer: BSPPeer, superstep: ActorRef) = 
     superstep ! Compute(peer) 
@@ -267,7 +267,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
         case Success(superstep) => { 
           val spawned = spawn("superstep-"+className, classOf[SuperstepWorker],
                                superstep)
-          bspPeer.map { (peer) => spawned ! Setup(peer) }
+          spawned ! Setup(bspPeer) 
           supersteps ++= Map(className -> spawned)
         }
         case Failure(cause) => 
@@ -276,9 +276,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     })  
   }
 
-  protected def bspPeer(): Option[BSPPeer] = task.map { (aTask) => 
-    BSPPeerAdapter(aTask.getConfiguration, self)
-  }
+  protected def bspPeer(): BSPPeer = BSPPeerAdapter(task.getConfiguration, self)
 
   protected def instantiate(className: String, 
                             taskConf: HamaConfiguration): Try[Superstep] = {
@@ -291,9 +289,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected def classWithLoader(className: String, 
                                 taskConf: HamaConfiguration): Class[_] = 
-    task.map { (aTask) => 
-      Class.forName(className, true, taskConf.getClassLoader)
-    }.getOrElse(null)
+    Class.forName(className, true, taskConf.getClassLoader)
 
   /**
    * Add jar, containing {@link Superstep} implementation, to classpath so that 
@@ -368,8 +364,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     } 
   }
 
-  protected def configSyncClient(task: Task) =  
-    syncClient ! SetTaskAttemptId(task.getId)  
+  //protected def configSyncClient(task: Task) =  
+    //syncClient ! SetTaskAttemptId(task.getId)  
 
   /**
    * Internal sync to ensure all peers is registered/ ready.
@@ -387,8 +383,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected def enter: Receive = {
     case Enter(superstep) => {
-      task.map { (aTask) => transitToSync(aTask) } // TODO: more detail phase
-      syncClient ! Enter(superstep)
+      transitToSync(task) 
+      syncClient ! Enter(superstep) 
     }
   }
 
@@ -399,7 +395,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    * {@link PeerSyncClient} reply passing enter function.
    */
   protected def inBarrier: Receive = {
-    case WithinBarrier => task.map { (aTask) => withinBarrier(aTask) }
+    case WithinBarrier => withinBarrier(task) 
   }
 
   protected def withinBarrier(task: Task) = getBundles()
@@ -413,10 +409,10 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    * Transmit message bundles, wraped by iterator, to remote messenger.
    */
   protected def proxyBundleIterator: Receive = {
-    case it: ProxyAndBundleIt => task.map { (aTask) => {
-      transmit(it, aTask) 
-      checkIfTransferredCompleted(aTask)
-    }}
+    case it: ProxyAndBundleIt => {
+      transmit(it, task) 
+      checkIfTransferredCompleted(task)
+    }
   }
 
   protected def checkIfTransferredCompleted(task: Task) = 
@@ -435,9 +431,9 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    * Leave barrier sync. 
    */
   protected def transferredCompleted: Receive = {
-    case TransferredCompleted => task.map { (aTask) => 
+    case TransferredCompleted => {
       beforeLeave
-      self ! Leave(aTask.getCurrentSuperstep)
+      self ! Leave(task.getCurrentSuperstep)
     }
   }
 
@@ -479,15 +475,11 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    * BSPPeer ask controller at which superstep count this task now is.
    */
   protected def getSuperstepCount: Receive = {
-    case GetSuperstepCount => task.map { (aTask) => 
-      sender ! aTask.getCurrentSuperstep
-    }
+    case GetSuperstepCount => sender ! task.getCurrentSuperstep
   }
 
   protected def peerIndex: Receive = {
-    case GetPeerIndex => task.map { (aTask) => 
-      sender ! aTask.getId.getTaskID.getId 
-    }
+    case GetPeerIndex => sender ! task.getId.getTaskID.getId 
   }
 
   protected def send: Receive = {
@@ -579,7 +571,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    * BSPPeer ask controller which task attempt id it is.
    */
   protected def taskAttemptId: Receive = {
-    case GetTaskAttemptId => task.map { (aTask) => sender ! aTask.getId }
+    case GetTaskAttemptId => sender ! task.getId 
   }
 
   protected def clear() = messenger ! ClearOutgoingMessages
@@ -588,6 +580,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case Clear => clear
   }
 
-  override def receive = customize orElse execute orElse enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse nextSuperstep orElse unknown 
+  override def receive = execute orElse enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse nextSuperstep orElse unknown 
   
 }
