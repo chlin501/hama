@@ -25,38 +25,7 @@ import org.apache.hama.message.BSPMessageBundle
 
 sealed trait CheckpointMessage
 final case object StartCheckpoint extends CheckpointMessage
+final case object GetCheckpointData extends CheckpointMessage
 final case class LocalQueueMessages[M <: Writable](list: List[M]) 
       extends CheckpointMessage
 final case object EmptyLocalQueue extends CheckpointMessage
-
-/**
- * Checkpoint {@link Superstep}'s variables map, {@link Superstep} next
- * superstep class, and messages in localQueue, which is {@link MessageQueue}.
- * @param variables is a map containing custom defined values during superstep.
- *                  computation.
- * @param nextSuperstep is the next superstep to be executed.
- * @param localMessages are messages, sent from other nodes or by itself, 
- *                      stored in local queue.
-final case class Checkpoint[M <: Writable](
-  variables: Map[String, Writable], nextSuperstep: Class[_ <: Superstep],
-  localMessages: List[M] 
-) extends CheckpointMessage
- */
-
-/**
- * Pack {@link Checkpointer}, {@link Superstep}'s variables, and next 
- * {@link Superstep} class for checkpoint process.
- * Checkpoint process will save the current superstep, e.g. the N-th superstep,
- * variables and the next (the N+1 th) superstep class. So during recovery, 
- * (assuming computation fails at the N+1 superstep,) nextSuperstep can be 
- * applied as the current superstep, and variables can be restored as 
- * nextSupestep's variables for computation.
- * @param ckpt is the Checkpointer actor. 
- * @param variable is a {@link scala.collection.immutable.Map} 
- * @param nextSuperstep is next superstep class to be executed.
-final case class Pack(ckpt: Option[ActorRef], 
-                      variables: Map[String, Writable],
-                      nextSuperstep: Class[_ <: Superstep]
-) extends CheckpointMessage
- */
-

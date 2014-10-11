@@ -57,7 +57,9 @@ class Checkpointer(commConf: HamaConfiguration,
                    taskConf: HamaConfiguration, 
                    taskAttemptId: String, 
                    superstepCount: Long, 
-                   messenger: ActorRef) extends LocalService with Curator {
+                   messenger: ActorRef,
+                   superstepWorker: ActorRef) 
+      extends LocalService with Curator {
 
   // TODO: may need to use more neutral interface for saving data to different
   //       storage.
@@ -70,8 +72,8 @@ class Checkpointer(commConf: HamaConfiguration,
   protected def getRootPath(taskConf: HamaConfiguration): String = 
     taskConf.get("bsp.checkpoint.root.path", "/bsp/checkpoint") 
 
-  protected def mkCheckpointDir(rootPath: String, 
-                                 superstepCount: Long): String = {
+  protected def mkDir(rootPath: String, 
+                      superstepCount: Long): String = {
     val currentTaskAttemptId = TaskAttemptID.forName(taskAttemptId)      
     val jobId = currentTaskAttemptId.getJobID.toString
     "%s/%s/%s".format(rootPath, jobId, superstepCount) 
@@ -80,18 +82,15 @@ class Checkpointer(commConf: HamaConfiguration,
   // TODO: we may need to divide <superstep> into sub category because 
   //       more than 10k znodes may lead to performance slow down for zk 
   //       at the final step marking with ok znode.
-  protected def mkCheckpointPath(rootPath: String, 
-                                 superstepCount: Long, 
-                                 taskAttemptId: String,
-                                 suffix: String = "ckpt"): String = {
+  protected def mkPath(rootPath: String, superstepCount: Long, 
+                       taskAttemptId: String, 
+                       suffix: String = "ckpt"): String = {
     val currentTaskAttemptId = TaskAttemptID.forName(taskAttemptId)      
     val jobId = currentTaskAttemptId.getJobID.toString
     "%s/%s/%s/%s.%s".format(rootPath, jobId, superstepCount, taskAttemptId,
                             suffix)
   }
 
-  // TODO: consider to open ckptPath stream at the beginning, then close stream
-  //       when receiving NoMoreBundle message would increase performance.
   protected def write(ckptPath: Path, writeTo: (DataOutputStream) => Boolean): 
       Boolean = Try(createOrAppend(ckptPath)) match {
     case Success(out) => { 
@@ -150,7 +149,10 @@ class Checkpointer(commConf: HamaConfiguration,
    * Entry point to start checkpoint process.
    */
   protected def startCheckpoint: Receive = {
-   case StartCheckpoint => messenger ! GetLocalQueueMessages  // xxxx TODO: need superstep's map, class, etc. as well
+   case StartCheckpoint => {
+     messenger ! GetLocalQueueMessages  
+     superstepWorker ! GetCheckpointData
+   }
   }
 
   protected def localQueueMessages: Receive = {
@@ -190,8 +192,7 @@ class Checkpointer(commConf: HamaConfiguration,
   protected def doCheckpoint[M <: Writable](variables: Map[String, Writable], 
                                             next: Class[_ <: Superstep], 
                                             messages: List[M]) {
-    mkCheckpointDir(getRootPath(taskConf), 
-                    superstepCount) match {
+    mkDir(getRootPath(taskConf), superstepCount) match {
       case null|"" => LOG.error("Checkpoint path not found for {}!", 
                                 taskAttemptId)
       case ckptDir@_ => {

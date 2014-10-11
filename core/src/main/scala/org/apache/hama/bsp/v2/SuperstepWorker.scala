@@ -25,8 +25,11 @@ sealed trait SuperstepMessage
 final case class Setup(peer: BSPPeer) extends SuperstepMessage
 final case class SetVariables(variables: Map[String, Writable]) 
       extends SuperstepMessage
+final case object GetVariables extends SuperstepMessage
+final case class Variables(variables: Map[String, Writable]) 
+      extends SuperstepMessage
 final case class Compute(peer: BSPPeer) extends SuperstepMessage
-final case class NextSuperstep(next: Class[_]) extends SuperstepMessage
+final case class NextSuperstepClass(next: Class[_]) extends SuperstepMessage
 final case class Cleanup(peer: BSPPeer) extends SuperstepMessage
 
 class SuperstepWorker(superstep: Superstep, coordinator: ActorRef) 
@@ -40,10 +43,14 @@ class SuperstepWorker(superstep: Superstep, coordinator: ActorRef)
     case SetVariables(variables) => superstep.setVariables(variables)
   }
 
+  protected def getVariables: Receive = {
+    case GetVariables => Variables(superstep.getVariables)
+  }
+
   protected def compute: Receive = {
     case Compute(peer) => {
       superstep.compute(peer)
-      coordinator ! NextSuperstep(superstep.next)
+      coordinator ! NextSuperstepClass(superstep.next)
     }
   }
 
@@ -51,6 +58,6 @@ class SuperstepWorker(superstep: Superstep, coordinator: ActorRef)
     case Cleanup(peer) => superstep.cleanup(peer)
   }
 
-  override def receive = setup orElse setVariables orElse compute orElse cleanup orElse unknown
+  override def receive = setup orElse setVariables orElse getVariables orElse compute orElse cleanup orElse unknown
 
 }
