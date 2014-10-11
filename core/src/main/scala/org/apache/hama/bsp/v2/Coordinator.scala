@@ -141,34 +141,33 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case Execute => doExecute
   }
 
-  protected def doExecute() { 
+  protected def doExecute() {  // TODO: move to TaskController?
     val taskConf = task.getConfiguration
     val taskAttemptId = task.getId.toString
     LOG.info("Start configuring for task {}", taskAttemptId)
     addJarToClasspath(taskAttemptId, taskConf)
     setupSupersteps(taskConf)
-
-    // find first superstep in cache 
-    currentSuperstep = execute(classOf[FirstSuperstep].getSimpleName,
-                               bspPeer, Map.empty[String, Writable])
-    // execute the first superstep by sending msg e.g. 1stSueprstep ! Compute (superstep will report back to coordinator with next suprstep class name when compute func finishes, asking for sync, etc.; then coordinator find the next superstep for execution and repeats this process)
+    currentSuperstep = startSuperstep
   }
+
+  protected def startSuperstep(): Option[ActorRef] =  
+    execute(classOf[FirstSuperstep].getSimpleName, bspPeer, 
+            Map.empty[String, Writable])
 
   /**
    * Cached supersteps is mapped from class simple name to spawned actor ref.
    * So the class name passed in should be 
    * {@link Superstep#getClass#getSimpleName}.
-   * @param className is superstep class's simple name, not spawned actor ref.
+   * @param className is superstep class's simple name witout prefix, i.e., 
+   *                  "superstep-", not spawned actor ref.
    * @param peer is the coordinator wrapped by {@link BSPPeerAdapter}.
    * @param variables is a cached map data from previous superstep.
    */
   protected def execute(className: String, // getClass.getSimpleName
                         peer: BSPPeer, // adaptor
                         variables: Map[String, Writable]): Option[ActorRef] = 
-    supersteps.find(entry => if(classOf[FirstSuperstep].getSimpleName.
-                                equals(className)) true else {
-      val classKey = entry._1
-      classKey.equals(className)
+    supersteps.find(entry => if(entry._1.equals(className)) true else {
+      entry._1.equals(className)
     }) match {
       case Some(found) => {
         val superstepActorRef = found._2
@@ -176,18 +175,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
         whenCompute(peer, superstepActorRef)
         afterCompute(peer, superstepActorRef)
         Option(superstepActorRef)
-/* 
-        val next = superstep.next // <- TODO: in Receive
-        next match { // TODO: null==next causes sync is not executed. check if need to change to sync before going to cleanup!
-           case null => eventually(peer)
-           case clazz@_ => {
-             beforeSync(peer, superstep)
-             whenSync(peer, superstep)
-             afterSync(peer, superstep)
-             findThenExecute(clazz.getName, peer, superstep.getVariables)
-           }
-        }
-*/
       }
       case None => {
         container ! SuperstepNotFoundFailure(className)
