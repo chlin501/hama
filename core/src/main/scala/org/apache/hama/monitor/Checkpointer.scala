@@ -64,6 +64,10 @@ class Checkpointer(commConf: HamaConfiguration,
   // TODO: may need to use more neutral interface for saving data to different
   //       storage.
   protected val operation = Operation.get(taskConf) 
+  
+  protected var doneTransmit = false
+
+  protected var superstepDataReceived = false 
 
   override def configuration(): HamaConfiguration = commConf
 

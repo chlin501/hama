@@ -66,7 +66,6 @@ import org.apache.hama.sync.NumPeers
 import org.apache.hama.sync.PeerName
 import org.apache.hama.sync.PeerNameByIndex
 import org.apache.hama.sync.PeerSyncClient
-//import org.apache.hama.sync.SetTaskAttemptId
 import org.apache.hama.sync.SyncException
 import org.apache.hama.sync.WithinBarrier
 import org.apache.hama.util.Utils
@@ -137,6 +136,10 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     firstSync(task)  
   }
 
+  /**
+   * Entry point to start task computation. 
+   * TODO: move execution flow logic to controller?
+   */
   protected def execute: Receive = {
     case Execute => doExecute
   }
@@ -170,6 +173,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
       entry._1.equals(className)
     }) match {
       case Some(found) => {
+        LOG.debug("Found superstep {} for execution.", className)
         val superstepActorRef = found._2
         beforeCompute(peer, superstepActorRef, variables)
         whenCompute(peer, superstepActorRef)
@@ -177,14 +181,16 @@ class Coordinator(conf: HamaConfiguration,  // common conf
         Option(superstepActorRef)
       }
       case None => {
+        LOG.error("Can't execute, for superstep {} is missing!", className)
         container ! SuperstepNotFoundFailure(className)
         None
       }
     }
 
   /**
-   * This function calls {@link Superstep#next} in obtaining next superstep
-   * class.
+   * This function is called by SuperstepWorker after finishing
+   * {@link Superstep#compute} supplied with {@link Superstep#next} as next
+   * {@link Superstep}.
    */
   protected def nextSuperstepClass: Receive = {
     case NextSuperstepClass(next) => next match { 
@@ -351,6 +357,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     Utils.await[BarrierMessage](syncClient, Leave(task.getCurrentSuperstep)) 
     task.increatmentSuperstep
   }
+
   /**
    * - Update task phase to sync 
    * - Enter barrier sync 
@@ -394,6 +401,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def checkIfTransferredCompleted(task: Task) = 
     messenger ! IsTransferredCompleted 
 
+  // TODO: send the entire iterator to messenger, let messenger iterate and
+  //       send msg through network, so it knows if transmission finishes.
   protected def transmit(it: ProxyAndBundleIt, task: Task) = 
     asScalaIterator(it).foreach( entry => {
       val peer = entry.getKey
@@ -434,7 +443,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def exitBarrier: Receive = {
     case ExitBarrier => {
       checkpoint
-      // TODO: trigger/ call to next superstep
       beforeNextSuperstep
     }
   }
@@ -443,17 +451,17 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     checkpointer ! StartCheckpoint  
   }
 
-  protected def beforeNextSuperstep() = retrieveVariables 
-
-  protected def retrieveVariables() = currentSuperstep.map { (current) => 
-    current ! GetVariables
-  }
-
   protected def createCheckpointer(): Option[ActorRef] = currentSuperstep.map {
     (current) => spawn("checkpointer-"+task.getCurrentSuperstep+"-"+
                        task.getId.toString, classOf[Checkpointer], 
                        conf, task.getConfiguration, task.getId, 
                        task.getCurrentSuperstep, messenger, current) 
+  }
+
+  protected def beforeNextSuperstep() = retrieveVariables 
+
+  protected def retrieveVariables() = currentSuperstep.map { (current) => 
+    current ! GetVariables
   }
 
   /**

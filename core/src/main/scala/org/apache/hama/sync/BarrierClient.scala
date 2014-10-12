@@ -32,8 +32,6 @@ import org.apache.hama.logging.TaskLogger
 import org.apache.hama.logging.TaskLogging
 
 sealed trait BarrierMessage
-//final case class SetTaskAttemptId(taskAttemptId: TaskAttemptID) 
-      //extends BarrierMessage
 final case class GetPeerNameBy(index: Int) extends BarrierMessage
 final case class PeerNameByIndex(name: String) extends BarrierMessage
 final case object GetPeerName extends BarrierMessage
@@ -81,13 +79,6 @@ class BarrierClient(conf: HamaConfiguration, // common conf
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
   override def configuration(): HamaConfiguration = conf
-
-/*
-  protected def setTaskAttemptId: Receive = {
-    case SetTaskAttemptId(taskAttemptId) =>
-      this.taskAttemptId = Option(taskAttemptId)
-  }
-*/
 
   protected def currentPeerName: Receive = {
     case GetPeerName => sender ! PeerName(syncClient.getPeerName)

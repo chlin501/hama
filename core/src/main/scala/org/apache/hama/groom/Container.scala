@@ -146,17 +146,7 @@ class Container(conf: HamaConfiguration) extends LocalService
 
   import Container._
 
-  // N.B.: When sending messages fails, Terminated message should be observed at
-  //       PeerMessenger because we send messages through peer messenger.
-  //       If remote peer messenger throws exception, it should be able to 
-  //       receives/ replies messages as usual.
-  //       So we should watch peer messenger and if remote peer messenger is 
-  //       terminated (offline); if remote terminated, notify container in 
-  //       reacting for such event.
-
-  // check what exceptions are thrown in superstep bsp, worker, coordinator.
-  // remove unnecessary exceptions or replace exceptions with notifying 
-  // container for reaction!
+  // TODO: check what exceptions are thrown 
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
        case _: IOException => Resume  
@@ -164,16 +154,10 @@ class Container(conf: HamaConfiguration) extends LocalService
     }
 
   /**
-   * This serves as internal communicator between peers.
-  protected val peerMessenger = createPeerMessenger(identifier(conf))
-   */
-
-  /**
    * A log class for tasks to be executed. Sending TaskAttemptID to switch
    * for logging to different directory. 
    */
   protected val tasklog = createTaskLogger[TaskLogger](classOf[TaskLogger], 
-                                                       //getLogDir(hamaHome), 
                                                        hamaHome, slotSeq) 
 
   protected var executor: Option[ActorRef] = None
@@ -191,8 +175,6 @@ class Container(conf: HamaConfiguration) extends LocalService
   // TODO: check if any better way to config hama home.
   protected def hamaHome: String = System.getProperty("hama.home.dir")
 
-  //protected def getLogDir(hamaHome: String): String = hamaHome+tasklogsPath
-
   protected def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", -1)
 
   protected def executorName: String = "groomServer_executor_"+slotSeq
@@ -208,11 +190,6 @@ class Container(conf: HamaConfiguration) extends LocalService
                found.path.name)
     })
   }
-
-/*
-  protected def createPeerMessenger(id: String): ActorRef = 
-    spawn("peerMessenger_"+id, classOf[PeerMessenger], conf)
-*/
 
   /**
    * Check if the task worker is running. true if a worker is running; false 
@@ -295,7 +272,6 @@ class Container(conf: HamaConfiguration) extends LocalService
     from ! new ResumeAck(slotSeq, taskAttemptId)
     LOG.debug("ResumeAck is sent back!")
   }
-    
 
   /**
    * Kill the task that is running.

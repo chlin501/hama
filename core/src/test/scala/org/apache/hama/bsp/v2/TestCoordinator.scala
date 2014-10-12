@@ -20,15 +20,15 @@ package org.apache.hama.bsp.v2
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
-import akka.event.Logging
-import java.net.InetAddress
-import org.apache.hadoop.fs.Path
-import org.apache.hama.Agent
-import org.apache.hama.groom.Container
+import org.apache.hadoop.io.IntWritable
+import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.logging.TaskLogger
-import org.apache.hama.logging.TaskLogging
 import org.apache.hama.TestEnv
+import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.groom.Container
+import org.apache.hama.message.MessageExecutive
+import org.apache.hama.sync.BarrierClient
+import org.apache.hama.logging.TaskLogger
 import org.apache.hama.util.JobUtil
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
@@ -36,12 +36,60 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
+class A extends FirstSuperstep {
+
+  var nextStep = classOf[B]
+
+  override def compute(peer: BSPPeer) {
+    find[IntWritable]("count") match {
+      case null => {
+        println("AAAAAAAAAAAAAAA initialize count to 0!")
+        collect[IntWritable]("count", new IntWritable(0))
+      } 
+      case count@_ => {
+        nextStep = null
+        println("BBBBBBBBBBBBB current count: "+count+" next step: "+nextStep)
+      }
+    }
+  }
+
+  override def next(): Class[_  <: Superstep] = nextStep
+}
+
+class B extends Superstep {
+
+  override def compute(peer: BSPPeer) {
+    find[IntWritable]("count") match {
+      case null => throw new NullPointerException("Count shouldn't be null!")
+      case count@_ => collect[IntWritable]("count", 
+                                           new IntWritable(count.get + 1))
+    }
+  }
+
+  override def next(): Class[_ <: Superstep] = classOf[C]
+
+}
+
+class C extends Superstep {
+
+  override def compute(peer: BSPPeer) {
+    find[IntWritable]("count") match {
+      case null => throw new NullPointerException("Count shouldn't be null!")
+      case count@_ => collect[IntWritable]("count", 
+                                           new IntWritable(count.get + 1))
+    }
+  }
+
+  override def next(): Class[_ <: Superstep] = classOf[A]
+}
+
 @RunWith(classOf[JUnitRunner])
 class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil 
                                                          with LocalZooKeeper {
 
   override def beforeAll {
     super.beforeAll
+    configSupersteps
     launchZk
   }
 
@@ -50,8 +98,45 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     super.afterAll
   }
 
-  it("test bsp peer coordinator function.") {
+  def configSupersteps() = {
+  }
 
+  def createSyncClient(taskAttemptId: TaskAttemptID, 
+                       tasklog: ActorRef): ActorRef = {
+    val client = BarrierClient.get(testConfiguration, taskAttemptId)
+    createWithArgs("sync", classOf[BarrierClient], testConfiguration,
+                   taskAttemptId, client, tasklog)
+  }
+
+  def createContainer(): ActorRef = 
+    createWithArgs("container", classOf[Container], testConfiguration)
+
+  def createMessenger(slotSeq: Int, taskAttemptId: TaskAttemptID,
+                      container: ActorRef, tasklog: ActorRef): ActorRef = {
+    val name = "BSPPeerSystem%s".format(slotSeq)
+    createWithArgs("messenger-"+name, classOf[MessageExecutive[Writable]],  
+                   testConfiguration, slotSeq, taskAttemptId, container, 
+                   tasklog)
+  }
+
+  def createTasklog(logDir: String = "/tmp/hama/log"): ActorRef = {
+    createWithArgs("tasklog", classOf[TaskLogger], logDir)
+  }
+
+  def createCoordinator(task: Task, container: ActorRef, messenger: ActorRef, 
+                        syncClient: ActorRef, tasklog: ActorRef): ActorRef = 
+    createWithArgs("coordinator", classOf[Coordinator], testConfiguration,
+                   task, container, messenger, syncClient, tasklog)
+
+  it("test bsp peer coordinator function.") {
+    val task = createTask() 
+    val taskAttemptId = task.getId
+    val container = createContainer      
+    val tasklog = createTasklog()
+    val msgmgr = createMessenger(1, taskAttemptId, container, tasklog)
+    val syncer = createSyncClient(taskAttemptId, tasklog)
+    val coordinator = createCoordinator(task, container, msgmgr, syncer, 
+                                        tasklog)
     LOG.info("(Not yet implemetned) Done testing Coordinator! ")
   }
 }

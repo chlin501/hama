@@ -31,6 +31,9 @@ abstract class Superstep {
    */
   protected var variables = Map.empty[String, Writable]
 
+  // TODO: log func for logging with task log.
+  // def log ...
+
   /**
    * Obtain value with cooresponded key provided in the previous supersteps.
    * @param key that identifies the value. 

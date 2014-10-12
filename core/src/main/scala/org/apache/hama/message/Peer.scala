@@ -23,7 +23,7 @@ import org.apache.hama.ProxyInfo
  * This is used for constructing Peer information when sending messages between
  * {@link BSPPeer}.
  * Actor lookup doesn't require distinguishing local from remote because remote
- * module can correctly dispatch message to the ator as long as the peer 
+ * module can correctly dispatch message to the actor as long as the peer 
  * host:port vlaue matches the target.
  */
 object Peer {
