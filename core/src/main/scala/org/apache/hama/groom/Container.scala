@@ -156,9 +156,9 @@ class Container(conf: HamaConfiguration) extends LocalService
   /**
    * A log class for tasks to be executed. Sending TaskAttemptID to switch
    * for logging to different directory. 
-   */
   protected val tasklog = createTaskLogger[TaskLogger](classOf[TaskLogger], 
                                                        hamaHome, slotSeq) 
+   */
 
   protected var executor: Option[ActorRef] = None
 
@@ -227,8 +227,9 @@ class Container(conf: HamaConfiguration) extends LocalService
 
   protected def createTaskLogger[A <: TaskLogger](logger: Class[A], 
                                                   logDir: String,
+                                                  taskAttemptId: TaskAttemptID,
                                                   seq: Int): ActorRef = 
-    spawn("taskLogger%s".format(seq), logger, logDir)
+    spawn("taskLogger%s".format(seq), logger, logDir, taskAttemptId)
 
   /**
    * Start executing the task in another actor.

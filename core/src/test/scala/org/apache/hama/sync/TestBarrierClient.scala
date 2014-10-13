@@ -27,6 +27,7 @@ import org.apache.hama.TestEnv
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.util.JobUtil
+import org.apache.hama.util.ZkUtil._
 import org.apache.hama.util.Utils
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
@@ -71,18 +72,6 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
   override def afterAll {
     closeZk
     super.afterAll 
-  }
-
-  def config(host: String, slotSeq: Int = 1, 
-             port: Int = 61000, numPeers: Int = 2): HamaConfiguration = {
-    val conf = new HamaConfiguration()
-    conf.set("hama.zookeeper.quorum", "localhost:2181")
-    conf.setInt("hama.zookeeper.property.clientPort", 2181)
-    conf.setInt("bsp.peers.num", numPeers)
-    conf.set("bsp.peer.hostname", InetAddress.getLocalHost.getHostName)
-    conf.setInt("bsp.peer.port", port)
-    conf.setInt("bsp.child.slot.seq", slotSeq)
-    conf
   }
 
   def createTaskLog(name: String, hamaHomePath: String, 

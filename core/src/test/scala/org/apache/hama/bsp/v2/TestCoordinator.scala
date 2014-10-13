@@ -30,11 +30,27 @@ import org.apache.hama.message.MessageExecutive
 import org.apache.hama.sync.BarrierClient
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.util.JobUtil
+import org.apache.hama.util.ZkUtil._
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
+
+class MockCoordinator(conf: HamaConfiguration, task: Task, container: ActorRef,
+                      messenger: ActorRef, syncClient: ActorRef, 
+                      tasklog: ActorRef, tester: ActorRef) 
+    extends Coordinator(conf, task, container, messenger, syncClient, tasklog) {
+
+  override def doExecute() {
+    super.doExecute
+    currentSuperstep.map { (current) => 
+      println("Current superstep name "+current.path.name)
+      tester ! current.path.name
+    }
+  }
+
+}
 
 class A extends FirstSuperstep {
 
@@ -89,7 +105,7 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
 
   override def beforeAll {
     super.beforeAll
-    configSupersteps
+    configSupersteps(classOf[A], classOf[B], classOf[C])
     launchZk
   }
 
@@ -98,45 +114,23 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     super.afterAll
   }
 
-  def configSupersteps() = {
-  }
-
-  def createSyncClient(taskAttemptId: TaskAttemptID, 
-                       tasklog: ActorRef): ActorRef = {
-    val client = BarrierClient.get(testConfiguration, taskAttemptId)
-    createWithArgs("sync", classOf[BarrierClient], testConfiguration,
-                   taskAttemptId, client, tasklog)
-  }
-
-  def createContainer(): ActorRef = 
-    createWithArgs("container", classOf[Container], testConfiguration)
-
-  def createMessenger(slotSeq: Int, taskAttemptId: TaskAttemptID,
-                      container: ActorRef, tasklog: ActorRef): ActorRef = {
-    val name = "BSPPeerSystem%s".format(slotSeq)
-    createWithArgs("messenger-"+name, classOf[MessageExecutive[Writable]],  
-                   testConfiguration, slotSeq, taskAttemptId, container, 
-                   tasklog)
-  }
-
-  def createTasklog(logDir: String = "/tmp/hama/log"): ActorRef = {
-    createWithArgs("tasklog", classOf[TaskLogger], logDir)
-  }
-
-  def createCoordinator(task: Task, container: ActorRef, messenger: ActorRef, 
-                        syncClient: ActorRef, tasklog: ActorRef): ActorRef = 
-    createWithArgs("coordinator", classOf[Coordinator], testConfiguration,
-                   task, container, messenger, syncClient, tasklog)
+  def configSupersteps(classes: Class[_]*) = classes.foreach( (clazz) =>
+    testConfiguration.setClass("hama.supersteps.class", clazz, 
+                               classOf[Superstep])
+  )
 
   it("test bsp peer coordinator function.") {
     val task = createTask() 
     val taskAttemptId = task.getId
-    val container = createContainer      
-    val tasklog = createTasklog()
-    val msgmgr = createMessenger(1, taskAttemptId, container, tasklog)
-    val syncer = createSyncClient(taskAttemptId, tasklog)
-    val coordinator = createCoordinator(task, container, msgmgr, syncer, 
-                                        tasklog)
+    val container = createContainer()
+    val tasklog = createTasklog(taskAttemptId)
+
+    //val msgmgr = createMessenger(1, taskAttemptId, container, tasklog)
+    //val syncer = createSyncClient(taskAttemptId, tasklog)
+
+    //val coordinator = createCoordinator(task, container, msgmgr, syncer, 
+                                        //tasklog)
+
     LOG.info("(Not yet implemetned) Done testing Coordinator! ")
   }
 }

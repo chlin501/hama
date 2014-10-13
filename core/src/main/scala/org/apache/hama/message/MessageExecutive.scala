@@ -43,6 +43,7 @@ import org.apache.hama.util.LRUCache
 import scala.collection.JavaConversions._
 
 sealed trait MessengerMessage
+final case class SetCoordinator(peer: ActorRef) extends MessengerMessage
 final case class Send(peerName: String, msg: Writable) extends MessengerMessage
 final case object GetCurrentMessage extends MessengerMessage
 final case class CurrentMessage[M <: Writable](msg: M) extends MessengerMessage
@@ -80,7 +81,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
                                       slotSeq: Int,
                                       taskAttemptId: TaskAttemptID,
                                       container: ActorRef,
-                                      coordinator: ActorRef,
+                                      //coordinator: ActorRef,
                                       tasklog: ActorRef)
       extends RemoteService with LocalService with TaskLog with MessageView {
 
@@ -90,6 +91,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     conf.getInt("hama.messenger.max.cached.connections", 100)
   protected val peersLRUCache = initializeLRUCache(maxCachedConnections)
   protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
+  protected var coordinator: Option[ActorRef] = None
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
@@ -268,7 +270,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   override def offline(target: ActorRef) = 
     if(target.path.name.startsWith("messenger-")) {
-      coordinator ! TransferredFailure  
+      coordinator.map { (bspPeer) =>  bspPeer ! TransferredFailure }
     } else container ! Offline(target)  
 
   /**
@@ -344,7 +346,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   protected def checkWaitingList: Receive = {
     case IsWaitingListEmpty => waitingList.isEmpty match {
       case true => {
-        coordinator ! TransferredCompleted 
+        coordinator.map { (bspPeer) => bspPeer ! TransferredCompleted }
         cancelRequest(IsWaitingListEmpty.toString)
       }
       case false => 
@@ -354,6 +356,10 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     }
   }
 
-  override def receive = sendMessage orElse currentMessage orElse numberCurrentMessages orElse outgoingBundles orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeIsTerminated orElse checkState orElse checkWaitingList orElse localQueueMessages orElse unknown 
+  protected def setCoordinator: Receive = {
+    case SetCoordinator(bspPeer) => coordinator = Option(bspPeer)
+  }
+
+  override def receive = setCoordinator orElse sendMessage orElse currentMessage orElse numberCurrentMessages orElse outgoingBundles orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeIsTerminated orElse checkState orElse checkWaitingList orElse localQueueMessages orElse unknown 
 
 }

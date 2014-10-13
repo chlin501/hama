@@ -47,6 +47,7 @@ import org.apache.hama.message.GetOutgoingBundles
 import org.apache.hama.message.NumCurrentMessages
 import org.apache.hama.message.IsTransferredCompleted
 import org.apache.hama.message.Send
+import org.apache.hama.message.SetCoordinator
 import org.apache.hama.message.Transfer
 import org.apache.hama.message.TransferredCompleted
 import org.apache.hama.message.TransferredFailure
@@ -134,7 +135,10 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     localize(conf)
     settingFor(task)  
     firstSync(task)  
+    configMessenger
   }
+
+  protected def configMessenger() = messenger ! SetCoordinator(self)
 
   /**
    * Entry point to start task computation. 

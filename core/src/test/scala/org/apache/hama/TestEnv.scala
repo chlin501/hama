@@ -26,7 +26,15 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import java.io.File
 import org.apache.commons.io.FileUtils
+import org.apache.hadoop.io.Writable
+import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.bsp.v2.Coordinator
+import org.apache.hama.bsp.v2.Task
+import org.apache.hama.groom.Container
 import org.apache.hama.logging.CommonLog
+import org.apache.hama.logging.TaskLogger
+import org.apache.hama.message.MessageExecutive
+import org.apache.hama.sync.BarrierClient
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.FunSpecLike
 import org.scalatest.ShouldMatchers
@@ -165,5 +173,58 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
    */
   protected def tester: ActorRef = probe.ref
 
+  // task actor related functions
+
+  def createContainer(): ActorRef =
+    createContainer("container", classOf[Container], testConfiguration)
+
+  def createContainer[C <: Container](container: Class[C]): ActorRef =
+    createContainer("container", container, testConfiguration)
+
+  def createContainer[C <: Container](name: String,
+                                      container: Class[C],
+                                      conf: HamaConfiguration): ActorRef =
+    createWithArgs(name, container, conf)
+
+  def createTasklog(taskAttemptId: TaskAttemptID, name: String = "tasklog",
+                    logDir: String = "/tmp/hama/log", 
+                    console: Boolean = true): ActorRef = 
+    createWithArgs(name, classOf[TaskLogger], logDir, taskAttemptId, console)
+
+  def createSyncClient[B <: BarrierClient](name: String,
+                                           barrier: Class[B],
+                                           conf: HamaConfiguration,
+                                           taskAttemptId: TaskAttemptID,
+                                           tasklog: ActorRef): ActorRef = {
+    val client = BarrierClient.get(testConfiguration, taskAttemptId)
+    createWithArgs(name, barrier, conf, taskAttemptId, client, tasklog)
+  }
+
+  def createMessenger[M <: MessageExecutive[Writable]](
+      name: String, messenger: Class[M], conf: HamaConfiguration,
+      slotSeq: Int, taskAttemptId: TaskAttemptID, container: ActorRef, 
+      tasklog: ActorRef, proxy: ProxyInfo): ActorRef = 
+    createWithArgs(name, messenger, conf, slotSeq, taskAttemptId, container, 
+                   tasklog, proxy, tester)
+
+  def createMessenger[M <: MessageExecutive[Writable]](
+      slotSeq: Int, messenger: Class[M], conf: HamaConfiguration,
+      taskAttemptId: TaskAttemptID, container: ActorRef, 
+      tasklog: ActorRef, proxy: ProxyInfo): ActorRef = {
+    val name = "messenger-BSPPeerSystem%s".format(slotSeq)
+    createMessenger(name, messenger, conf, slotSeq, taskAttemptId, container, 
+                    tasklog, proxy)
+  }
+
+  def createCoordinator[C <: Coordinator](name: String,
+                                          coordinator: Class[C], 
+                                          conf: HamaConfiguration,
+                                          task: Task, 
+                                          container: ActorRef, 
+                                          messenger: ActorRef,
+                                          syncClient: ActorRef, 
+                                          tasklog: ActorRef): ActorRef = 
+    createWithArgs(name, coordinator, conf, task, container, messenger, 
+                   syncClient, tasklog, tester)
   
 }
