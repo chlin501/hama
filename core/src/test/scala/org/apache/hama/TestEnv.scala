@@ -196,8 +196,8 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                                            conf: HamaConfiguration,
                                            taskAttemptId: TaskAttemptID,
                                            tasklog: ActorRef): ActorRef = {
-    val client = BarrierClient.get(testConfiguration, taskAttemptId)
-    createWithArgs(name, barrier, conf, taskAttemptId, client, tasklog)
+    val client = BarrierClient.get(conf, taskAttemptId)
+    createWithArgs(name, barrier, conf, taskAttemptId, client, tasklog, tester)
   }
 
   def createMessenger[M <: MessageExecutive[Writable]](

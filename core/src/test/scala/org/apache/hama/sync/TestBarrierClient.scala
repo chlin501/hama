@@ -74,32 +74,17 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
     super.afterAll 
   }
 
-  def createTaskLog(name: String, hamaHomePath: String, 
-                    taskAttemptId: TaskAttemptID, 
-                    console: Boolean = true): ActorRef = 
-    createWithArgs(name, classOf[TaskLogger], hamaHomePath, taskAttemptId,
-                   console)
-
-  def createClient(name: String, conf: HamaConfiguration, 
-                   taskAttemptId: TaskAttemptID, tasklog: ActorRef): 
-      ActorRef = {
-    val client = BarrierClient.get(conf, taskAttemptId)
-    createWithArgs(name, classOf[MockBarrierClient], conf, taskAttemptId, 
-                   client, tasklog, tester)
-  }
-
   it("test barrier client.") {
     var superstep = 0
     val taskId1 = createTaskAttemptId("test", 1, 1, 1)
     val taskId2 = createTaskAttemptId("test", 1, 2, 1)
 
-    val tasklog = createTaskLog("tasklog", testRootPath, taskId1)
+    val tasklog = createTasklog(taskId1)
 
-    val client1 = createClient("client1", conf1, taskId1, tasklog)
-    val client2 = createClient("client2", conf2, taskId2, tasklog)
-
-    //client1 ! SetTaskAttemptId(taskId1)
-    //client2 ! SetTaskAttemptId(taskId2)
+    val client1 = createSyncClient("client1", classOf[MockBarrierClient], 
+                                   conf1, taskId1, tasklog)
+    val client2 = createSyncClient("client2", classOf[MockBarrierClient],
+                                   conf2, taskId2, tasklog)
 
     LOG.info("'Enter' barrier ...")
     client1 ! Enter(superstep)
@@ -107,16 +92,13 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
     expect(WithinBarrier)
     expect(WithinBarrier)
 
-    //superstep += 1
-    //LOG.info("Superstep value, expected 1, is {}", superstep)
-    //assert(superstep == 1)
-
     LOG.info("'Leave' barrier ...")
     client1 ! Leave(superstep)
     client2 ! Leave(superstep)
     expect(ExitBarrier)
     expect(ExitBarrier)
 
+    LOG.info("Synchronous operations for obtaining peer information ...")
     val peer1 = Utils.await[PeerName](client1, GetPeerName) 
     LOG.info("Actual peer1's name is {}, expected {}", peer1.peerName, sys1)
     assert(sys1.equals(peer1.peerName))
