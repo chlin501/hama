@@ -182,7 +182,10 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
    */
   protected def combined(args: WrappedArray[Any]*): WrappedArray[Any] = 
     wrapped(args.flatten[Any].toArray[Any]: _*).filter((e) => 
-      !e.isInstanceOf[WrappedArray[_]]
+      e.isInstanceOf[WrappedArray[_]] match {
+        case true => !e.asInstanceOf[WrappedArray[_]].isEmpty
+        case false => true
+      }
     )
 
   // task actor related functions
@@ -211,7 +214,6 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                                            rest: Any*): ActorRef = {
     val client = BarrierClient.get(conf, taskAttemptId)
     val args = combined(wrapped(conf, taskAttemptId, client, tasklog, tester), wrapped(rest))
-    LOG.info("xxxxxxxxxxxx args: "+args)
     createWithArgs(name, barrier, args: _*)
   }
 
