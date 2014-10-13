@@ -125,7 +125,7 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     val container = createContainer()
     val tasklog = createTasklog(taskAttemptId)
 
-    //val msgmgr = createMessenger(1, taskAttemptId, container, tasklog)
+    //val messenger1 = createMessenger(1, taskAttemptId, container, tasklog)
     //val syncer = createSyncClient(taskAttemptId, tasklog)
 
     //val coordinator = createCoordinator(task, container, msgmgr, syncer, 

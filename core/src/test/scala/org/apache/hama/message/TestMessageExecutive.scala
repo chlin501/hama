@@ -147,7 +147,7 @@ class TestMessageExecutive extends TestEnv(TestMessageExecutive.sysName)
     val container: ActorRef = null
     createMessenger(slotSeq, classOf[MockMessageExecutive[Writable]],
                     testConfiguration, taskAttemptId, container, tasklog, 
-                    proxy)
+                    proxy, tester)
   }
 
   it("test message executive functions.") {

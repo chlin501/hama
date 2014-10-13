@@ -38,6 +38,7 @@ import org.apache.hama.sync.BarrierClient
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.FunSpecLike
 import org.scalatest.ShouldMatchers
+import scala.collection.mutable.WrappedArray
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
@@ -173,6 +174,17 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
    */
   protected def tester: ActorRef = probe.ref
 
+  protected def wrapped(args: Any*): WrappedArray[Any] = 
+    args.asInstanceOf[WrappedArray[Any]]
+
+  /**
+   * Combine variable arguments into a wrapped array.
+   */
+  protected def combined(args: WrappedArray[Any]*): WrappedArray[Any] = 
+    wrapped(args.flatten[Any].toArray[Any]: _*).filter((e) => 
+      !e.isInstanceOf[WrappedArray[_]]
+    )
+
   // task actor related functions
 
   def createContainer(): ActorRef =
@@ -195,25 +207,29 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                                            barrier: Class[B],
                                            conf: HamaConfiguration,
                                            taskAttemptId: TaskAttemptID,
-                                           tasklog: ActorRef): ActorRef = {
+                                           tasklog: ActorRef,
+                                           rest: Any*): ActorRef = {
     val client = BarrierClient.get(conf, taskAttemptId)
-    createWithArgs(name, barrier, conf, taskAttemptId, client, tasklog, tester)
+    val args = combined(wrapped(conf, taskAttemptId, client, tasklog, tester), wrapped(rest))
+    LOG.info("xxxxxxxxxxxx args: "+args)
+    createWithArgs(name, barrier, args: _*)
   }
 
   def createMessenger[M <: MessageExecutive[Writable]](
       name: String, messenger: Class[M], conf: HamaConfiguration,
       slotSeq: Int, taskAttemptId: TaskAttemptID, container: ActorRef, 
-      tasklog: ActorRef, proxy: ProxyInfo): ActorRef = 
-    createWithArgs(name, messenger, conf, slotSeq, taskAttemptId, container, 
-                   tasklog, proxy, tester)
+      tasklog: ActorRef, rest: Any*): ActorRef = {
+    val args = combined(wrapped(conf, slotSeq, taskAttemptId, container, tasklog, tester), wrapped(rest))
+    createWithArgs(name, messenger, args: _*)
+  }
 
   def createMessenger[M <: MessageExecutive[Writable]](
       slotSeq: Int, messenger: Class[M], conf: HamaConfiguration,
       taskAttemptId: TaskAttemptID, container: ActorRef, 
-      tasklog: ActorRef, proxy: ProxyInfo): ActorRef = {
+      tasklog: ActorRef, rest: Any*): ActorRef = {
     val name = "messenger-BSPPeerSystem%s".format(slotSeq)
     createMessenger(name, messenger, conf, slotSeq, taskAttemptId, container, 
-                    tasklog, proxy)
+                    tasklog, rest: _*)
   }
 
   def createCoordinator[C <: Coordinator](name: String,
