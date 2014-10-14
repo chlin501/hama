@@ -154,6 +154,8 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     coordinator2 ! Execute
     expect("superstep-"+classOf[A].getName)
 
+    
+
     LOG.info("Done testing Coordinator! ")
   }
 }

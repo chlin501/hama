@@ -159,11 +159,16 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     addJarToClasspath(taskAttemptId, taskConf)
     setupSupersteps(taskConf)
     currentSuperstep = startSuperstep
+    LOG.info("Start executing superstep {} for task {}", 
+             currentSuperstep.getOrElse(null), taskAttemptId)
   }
 
   protected def startSuperstep(): Option[ActorRef] =  
     execute(classOf[FirstSuperstep].getName, bspPeer, 
             Map.empty[String, Writable])
+
+  protected def isFirstSuperstep(className: String): Boolean =
+    classOf[FirstSuperstep].getName.equals(className)
 
   /**
    * Cached supersteps is mapped from class simple name to spawned actor ref.
@@ -177,14 +182,21 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def execute(className: String, // getClass.getName
                         peer: BSPPeer, // adaptor
                         variables: Map[String, Writable]): Option[ActorRef] = 
-    supersteps.find(entry => 
-     if(entry._2.superstep.isInstanceOf[FirstSuperstep]) 
-       true 
-     else 
-       entry._1.equals(className) 
-    ) match {
+    supersteps.find(entry => isFirstSuperstep(className) match {
+      case true => {
+        val instance = entry._2.superstep
+        LOG.debug("Firstsuperstep instance {}, className {} for task {}", 
+                  instance, className, task.getId)
+        instance.isInstanceOf[FirstSuperstep]
+      }  
+      case false => {
+        LOG.info("Non first superstep key {}, className {} for task {}", 
+                 entry._1, className, task.getId)
+        entry._1.equals(className) 
+      }
+    }) match {
       case Some(found) => {
-        LOG.debug("Found superstep {} for execution.", className)
+        LOG.debug("Found superstep {} for task {}.", className, task.getId)
         val superstepActorRef = found._2.actor
         beforeCompute(peer, superstepActorRef, variables)
         whenCompute(peer, superstepActorRef)
@@ -192,7 +204,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
         Option(superstepActorRef)
       }
       case None => {
-        LOG.error("Can't execute, for superstep {} is missing!", className)
+        LOG.error("Can't execute, superstep {} is missing for task {}!", 
+                  className, task.getId)
         container ! SuperstepNotFoundFailure(className)
         None
       }
@@ -251,7 +264,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected def setupSupersteps(taskConf: HamaConfiguration) {
     val classes = taskConf.get("hama.supersteps.class")
-    LOG.info("Supersteps {} will be instantiated!", classes)
+    LOG.info("Supersteps {} will be instantiated for task {}!", classes, 
+             task.getId)
     val classNames = classes.split(",")
     classNames.foreach( className => {
       instantiate(className, taskConf) match {
@@ -292,7 +306,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
                                   taskConf: HamaConfiguration): 
       Option[ClassLoader] = {
     val jar = taskConf.get("bsp.jar")
-    LOG.info("Jar path found in task configuration is {}", jar)
+    LOG.info("Jar path for task {} in task configuration: {}", taskAttemptId, 
+             jar)
     jar match {
       case null|"" => None
       case remoteUrl@_ => {
@@ -300,7 +315,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
         // TODO: change working directory? see bsppeerimpl or taskworker
         val localJarPath = createLocalPath(taskAttemptId, taskConf, operation) 
         operation.copyToLocal(new Path(remoteUrl))(new Path(localJarPath))
-        LOG.info("Remote file {} is copied to {}", remoteUrl, localJarPath) 
+        LOG.info("Remote file {} is copied to {} for task {}", remoteUrl, 
+                 localJarPath, taskAttemptId) 
         val url = normalizePath(localJarPath)
         val loader = Thread.currentThread.getContextClassLoader
         val newLoader = new URLClassLoader(Array[URL](url), loader) 
@@ -345,10 +361,10 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     val taskConf = task.getConfiguration
     val libjars = CacheService.moveJarsAndGetClasspath(conf) 
     libjars match {
-      case null => LOG.warning("No jars to be included for "+task.getId)
+      case null => LOG.warning("No jars to be included for task {}", task.getId)
       case _ => {
-        LOG.info("Jars to be included in classpath are "+
-                 libjars.mkString(", "))
+        LOG.info("Jars to be included in classpath for task {} are {}", 
+                 task.getId, libjars.mkString(", "))
         taskConf.setClassLoader(new URLClassLoader(libjars, 
                                                    taskConf.getClassLoader))
       }
@@ -390,6 +406,10 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case WithinBarrier => withinBarrier(task) 
   }
 
+  // TODO: instead of get bundle, send message to messenger asking for
+  //       trasmit messages!!! messenger can directly obtain msg from 
+  //       outgoing message queue, transmit messages, and cleanup outgoing 
+  //       message queue in one go!!!!
   protected def withinBarrier(task: Task) = getBundles()
 
   /**
@@ -458,8 +478,14 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     }
   }
 
-  protected def checkpoint() = createCheckpointer.map { (checkpointer) =>
-    checkpointer ! StartCheckpoint  
+  protected def isCheckpoint(): Boolean = 
+    conf.getBoolean("bsp.checkpoint.enabled", true)
+
+  protected def checkpoint() = isCheckpoint match {
+    case true => createCheckpointer.map { (checkpointer) =>
+                   checkpointer ! StartCheckpoint  
+                 }
+    case false => LOG.info("Checkpoint is not enabled for task {}", task.getId)
   }
 
   protected def createCheckpointer(): Option[ActorRef] = currentSuperstep.map {
@@ -483,6 +509,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case Variables(variables) => currentSuperstep.map { (current) => 
       currentSuperstep = execute(superstepClassName(current.path.name), bspPeer,
                                  variables)
+      LOG.debug("Superstep for task {} to be executed: {}", task.getId,
+                currentSuperstep.getOrElse(null))
     }
   }
 
@@ -550,10 +578,12 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   ) match {
     case Some(found) => {
       val who = found._2
-      LOG.debug("Reply {}'s {} with value {}.", who, key, result)
+      LOG.debug("Reply {}'s {} with value {} by task {}.", who, key, result,
+                task.getId)
       who ! result
     }
-    case None => LOG.error("Don't know who send message {}!", key)
+    case None => LOG.error("Don't know who send message {} for task {}!", key,
+                           task.getId)
   }
 
   protected def getPeerName: Receive = {

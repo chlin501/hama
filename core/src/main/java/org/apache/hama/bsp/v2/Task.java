@@ -140,7 +140,15 @@ public final class Task implements Writable/*, Transformable*/ {
    * SETUP -> COMPUTE -> BARRIER_SYNC -> CLEANUP
    */
   public static enum Phase {
-    SETUP, COMPUTE, BARRIER_SYNC, CLEANUP
+    SETUP, 
+    COMPUTE, 
+// TODO: add other phases!
+  /*BARRIER_ENTER, 
+    WITHIN_BARRIER,
+    BARRIER_LEAVE, 
+    EXIT_BARRIER,*/ 
+    BARRIER_SYNC, 
+    CLEANUP 
   }
 
   /**
