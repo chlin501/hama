@@ -75,6 +75,15 @@ import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 
+sealed trait TaskPhaseMessage
+final case object SetupPhase extends TaskPhaseMessage
+final case object ComputePhase extends TaskPhaseMessage
+final case object BarrierEnterPhase extends TaskPhaseMessage
+final case object WithinBarrierPhase extends TaskPhaseMessage
+final case object BarrierLeavePhase extends TaskPhaseMessage
+final case object ExitBarrierPhase extends TaskPhaseMessage
+final case object CleanupPhase extends TaskPhaseMessage
+
 sealed trait TaskStatMessage
 final case object GetSuperstepCount extends TaskStatMessage
 final case object GetPeerIndex extends TaskStatMessage
@@ -225,14 +234,14 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   protected def eventually(peer: BSPPeer) = cleanup(peer)
 
-  protected def beginCleanup(peer: BSPPeer) = task.cleanupPhase
+  //protected def beginCleanup(peer: BSPPeer) = task.cleanupPhase
 
   protected def whenCleanup(peer: BSPPeer) = supersteps.foreach { case (k, v)=> 
     v.actor ! Cleanup(peer)
   }
 
   def cleanup(peer: BSPPeer) {  
-    beginCleanup(peer)
+    //beginCleanup(peer)
     whenCleanup(peer)
   }
 
@@ -248,13 +257,10 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     superstep ! SetVariables(variables)
 
   protected def whenCompute(peer: BSPPeer, superstep: ActorRef) {
-    task.computePhase
     superstep ! Compute(peer) 
   }
 
   protected def afterCompute(peer: BSPPeer, superstep: ActorRef) { } 
-
-  protected def setupPhase() = task.setupPhase
   
   /**
    * Setup {@link Superstep}s to be executed, including:
@@ -265,7 +271,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    * @param taskConf is specific configuration of a task.
    */
   protected def setupSupersteps(taskConf: HamaConfiguration) {
-    setupPhase
     val classes = taskConf.get("hama.supersteps.class")
     LOG.info("Supersteps {} will be instantiated for task {}!", classes, 
              task.getId)
@@ -394,13 +399,13 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected def enter: Receive = {
     case Enter(superstep) => {
-      barrierEnterPhase(task) 
+      //barrierEnterPhase(task) 
       syncClient ! Enter(superstep) 
     }
   }
 
   // TODO: further divide task sync phase
-  protected def barrierEnterPhase(task: Task) = task.barrierEnterPhase
+  //protected def barrierEnterPhase(task: Task) = task.barrierEnterPhase
 
   /**
    * {@link PeerSyncClient} reply after passing `Enter' function.
@@ -414,7 +419,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   //       outgoing message queue, transmit messages, and cleanup outgoing 
   //       message queue in one go!!!!
   protected def withinBarrier(task: Task) = {
-    task.withinBarrierPhase
+    //task.withinBarrierPhase
     getBundles()
   }
 
@@ -479,13 +484,13 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected def exitBarrier: Receive = {
     case ExitBarrier => {
-      exitBarrierPhase
+      //exitBarrierPhase
       checkpoint
       beforeNextSuperstep
     }
   }
   
-  protected def exitBarrierPhase() = task.exitBarrierPhase
+  //protected def exitBarrierPhase() = task.exitBarrierPhase
 
   protected def isCheckpoint(): Boolean = 
     conf.getBoolean("bsp.checkpoint.enabled", true)
@@ -652,6 +657,49 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case Clear => clear
   }
 
-  override def receive = execute orElse enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse nextSuperstepClass orElse variables orElse unknown 
+  protected def setupPhase: Receive = {
+    case SetupPhase => atSetupPhase
+  }
+ 
+  protected def atSetupPhase() = task.setupPhase
+
+  protected def computePhase: Receive = {
+    case ComputePhase => atComputePhase
+  }
+
+  protected def atComputePhase() = task.computePhase
+
+  protected def barrierEnterPhase: Receive = {
+    case BarrierEnterPhase => atBarrierEnterPhase
+  }
+
+  protected def atBarrierEnterPhase() = task.barrierEnterPhase
+
+  protected def withinBarrierPhase: Receive = {
+    case WithinBarrierPhase => atWithinBarrierPhase
+  }
+
+  protected def atWithinBarrierPhase() = task.withinBarrierPhase
+
+  protected def barrierLeavePhase: Receive = {
+    case BarrierLeavePhase => atBarrierLeavePhase
+  } 
+
+  protected def atBarrierLeavePhase() = task.barrierLeavePhase
+
+  protected def exitBarrierPhase: Receive = {
+    case ExitBarrierPhase => atExitBarrierPhase
+  } 
+
+  protected def atExitBarrierPhase() = task.exitBarrierPhase
+
+  protected def cleanupPhase: Receive = {
+    case CleanupPhase => atCleanupPhase
+  } 
+
+  protected def atCleanupPhase() = task.cleanupPhase
+  
+
+  override def receive = execute orElse enter orElse inBarrier orElse proxyBundleIterator orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse nextSuperstepClass orElse variables orElse setupPhase orElse computePhase orElse barrierEnterPhase orElse withinBarrierPhase orElse barrierLeavePhase orElse exitBarrierPhase orElse cleanupPhase orElse unknown 
   
 }

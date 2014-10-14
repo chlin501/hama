@@ -36,7 +36,10 @@ class SuperstepWorker(superstep: Superstep, coordinator: ActorRef)
       extends Agent {
 
   protected def setup: Receive = {
-    case Setup(peer) => superstep.setup(peer)
+    case Setup(peer) => {
+      coordinator ! SetupPhase
+      superstep.setup(peer)
+    }
   }
 
   protected def setVariables: Receive = {
@@ -49,13 +52,17 @@ class SuperstepWorker(superstep: Superstep, coordinator: ActorRef)
 
   protected def compute: Receive = {
     case Compute(peer) => {
+      coordinator ! ComputePhase
       superstep.compute(peer)
       coordinator ! NextSuperstepClass(superstep.next)
     }
   }
 
   protected def cleanup: Receive = {
-    case Cleanup(peer) => superstep.cleanup(peer)
+    case Cleanup(peer) => {
+      coordinator ! CleanupPhase
+      superstep.cleanup(peer)
+    }
   }
 
   override def receive = setup orElse setVariables orElse getVariables orElse compute orElse cleanup orElse unknown

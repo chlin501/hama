@@ -54,14 +54,14 @@ class MockCoordinator(conf: HamaConfiguration, task: Task, container: ActorRef,
   def log() = LOG.info("Current task {} phase {}", task.getId, task.getPhase)
  
   // task phase
-  override def setupPhase() = {
-    super.setupPhase 
+  override def atSetupPhase() {
+    super.atSetupPhase 
     log
     tester ! task.getPhase
   }
 
-  override def whenCompute(peer: BSPPeer, superstep: ActorRef) {
-    super.whenCompute(peer, superstep)
+  override def atComputePhase() {
+    super.atComputePhase
     log
     tester ! task.getPhase
   }
@@ -168,12 +168,16 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
    
     coordinator1 ! Execute
     coordinator2 ! Execute
+    expect("superstep-"+classOf[A].getName)
+    expect("superstep-"+classOf[A].getName)
+    expect(Task.Phase.SETUP)
+    expect(Task.Phase.SETUP)
+    expect(Task.Phase.SETUP)
+    expect(Task.Phase.SETUP)
     expect(Task.Phase.SETUP)
     expect(Task.Phase.SETUP)
     expect(Task.Phase.COMPUTE)
     expect(Task.Phase.COMPUTE)
-    expect("superstep-"+classOf[A].getName)
-    expect("superstep-"+classOf[A].getName)
     
 
     LOG.info("Done testing Coordinator! ")
