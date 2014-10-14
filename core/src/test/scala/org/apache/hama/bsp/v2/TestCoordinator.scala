@@ -122,13 +122,13 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
   it("test bsp peer coordinator function.") {
     val task = createTask() 
     val taskAttemptId = task.getId
-    val container = createContainer()
-    val tasklog = createTasklog(taskAttemptId)
+    val container = defaultContainer()
+    val tasklog = tasklogOf(taskAttemptId)
 
-    //val messenger1 = createMessenger(1, taskAttemptId, container, tasklog)
-    //val syncer = createSyncClient(taskAttemptId, tasklog)
+    val messenger1 = messengerOf(1, taskAttemptId, container, tasklog) 
+    val sync1 = syncClientOf("sync1", taskAttemptId, tasklog)
 
-    //val coordinator = createCoordinator(task, container, msgmgr, syncer, 
+    //val coordinator = coordinator(task, container, msgmgr, syncer, 
                                         //tasklog)
 
     LOG.info("(Not yet implemetned) Done testing Coordinator! ")

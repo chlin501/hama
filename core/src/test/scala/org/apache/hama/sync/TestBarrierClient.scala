@@ -79,14 +79,16 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
     val taskId1 = createTaskAttemptId("test", 1, 1, 1)
     val taskId2 = createTaskAttemptId("test", 1, 2, 1)
 
-    val tasklog = createTasklog(taskId1)
+    val tasklog = tasklogOf(taskId1)
 
-    val client1 = 
-      createSyncClient[MockBarrierClient]("client1", classOf[MockBarrierClient],
-                                          conf1, taskId1, tasklog)
-    val client2 = 
-      createSyncClient[MockBarrierClient]("client2", classOf[MockBarrierClient],
-                                          conf2, taskId2, tasklog)
+    val client1 = syncClientOf[MockBarrierClient]("client1", 
+                                                  classOf[MockBarrierClient],
+                                                  conf1, taskId1, tasklog, 
+                                                  tester)
+    val client2 = syncClientOf[MockBarrierClient]("client2", 
+                                                  classOf[MockBarrierClient],
+                                                  conf2, taskId2, tasklog, 
+                                                  tester)
 
     LOG.info("'Enter' barrier ...")
     client1 ! Enter(superstep)

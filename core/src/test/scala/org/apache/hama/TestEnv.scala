@@ -180,65 +180,92 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
   /**
    * Combine variable arguments into a wrapped array.
    */
-  protected def combined(args: WrappedArray[Any]*): WrappedArray[Any] = 
-    wrapped(args.flatten[Any].toArray[Any]: _*).filter((e) => 
-      e.isInstanceOf[WrappedArray[_]] match {
-        case true => !e.asInstanceOf[WrappedArray[_]].isEmpty
-        case false => true
-      }
-    )
+  protected def combined(args: WrappedArray[Any], rest: Any*): 
+      WrappedArray[Any] = { var n = args; rest.foreach((e) => { n = n:+e }); n }
 
   // task actor related functions
 
-  def createContainer(): ActorRef =
-    createContainer("container", classOf[Container], testConfiguration)
+  /**
+   * Container with default testConfiguration and Container class; name is set
+   * to `container.'
+   */
+  def defaultContainer(): ActorRef =
+    containerOf("container", classOf[Container], testConfiguration)
 
-  def createContainer[C <: Container](container: Class[C]): ActorRef =
-    createContainer("container", container, testConfiguration)
+  /**
+   * Crate specific container with testConfiguration; name is `container.'
+   */
+  def containerOf[C <: Container](container: Class[C]): ActorRef =
+    containerOf("container", container, testConfiguration)
 
-  def createContainer[C <: Container](name: String,
-                                      container: Class[C],
-                                      conf: HamaConfiguration): ActorRef =
+  def containerOf[C <: Container](name: String,
+                                  container: Class[C],
+                                  conf: HamaConfiguration): ActorRef =
     createWithArgs(name, container, conf)
 
-  def createTasklog(taskAttemptId: TaskAttemptID, name: String = "tasklog",
-                    logDir: String = "/tmp/hama/log", 
-                    console: Boolean = true): ActorRef = 
+  def tasklogOf(taskAttemptId: TaskAttemptID, name: String = "tasklog",
+                logDir: String = "/tmp/hama/log", 
+                console: Boolean = true): ActorRef = 
     createWithArgs(name, classOf[TaskLogger], logDir, taskAttemptId, console)
 
-  def createSyncClient[B <: BarrierClient](name: String,
-                                           barrier: Class[B],
-                                           conf: HamaConfiguration,
-                                           taskAttemptId: TaskAttemptID,
-                                           tasklog: ActorRef,
-                                           rest: Any*): ActorRef = {
+  def syncClientOf[B <: BarrierClient](name: String,
+                                       barrier: Class[B],
+                                       conf: HamaConfiguration,
+                                       taskAttemptId: TaskAttemptID,
+                                       tasklog: ActorRef,
+                                       rest: Any*): ActorRef = {
     val client = BarrierClient.get(conf, taskAttemptId)
-    val args = combined(wrapped(conf, taskAttemptId, client, tasklog, tester), wrapped(rest))
+    val args = combined(wrapped(conf, taskAttemptId, client, tasklog), 
+                        rest: _*)
     createWithArgs(name, barrier, args: _*)
   }
 
-  def createMessenger[M <: MessageExecutive[Writable]](
+  /**
+   * Barrier with default BarrierClient class and testConfiguration.
+   */
+  def syncClientOf(name: String, taskAttemptId: TaskAttemptID,
+                   tasklog: ActorRef): ActorRef = 
+    syncClientOf(name, classOf[BarrierClient], testConfiguration, 
+                 taskAttemptId, tasklog)
+
+  def messengerOf[M <: MessageExecutive[Writable]](
       name: String, messenger: Class[M], conf: HamaConfiguration,
       slotSeq: Int, taskAttemptId: TaskAttemptID, container: ActorRef, 
       tasklog: ActorRef, rest: Any*): ActorRef = {
-    val args = combined(wrapped(conf, slotSeq, taskAttemptId, container, tasklog, tester), wrapped(rest))
+    val args = combined(wrapped(conf, slotSeq, taskAttemptId, container, 
+                                tasklog), 
+                        rest: _*)
     createWithArgs(name, messenger, args: _*)
   }
 
-  def createMessenger[M <: MessageExecutive[Writable]](
-      slotSeq: Int, messenger: Class[M], conf: HamaConfiguration,
-      taskAttemptId: TaskAttemptID, container: ActorRef, 
-      tasklog: ActorRef, rest: Any*): ActorRef = {
+  def messengerOf[M <: MessageExecutive[Writable]](
+     slotSeq: Int, 
+     messenger: Class[M],
+     conf: HamaConfiguration,
+     taskAttemptId: TaskAttemptID,
+     container: ActorRef, 
+     tasklog: ActorRef, 
+     rest: Any*): ActorRef = {
     val name = "messenger-BSPPeerSystem%s".format(slotSeq)
-    createMessenger(name, messenger, conf, slotSeq, taskAttemptId, container, 
-                    tasklog, rest: _*)
+    messengerOf(name, messenger, conf, slotSeq, taskAttemptId, container, 
+                tasklog, rest: _*)
   }
 
-  def createCoordinator[C <: Coordinator](name: String,
-                                          coordinator: Class[C], 
-                                          conf: HamaConfiguration,
-                                          task: Task, 
-                                          container: ActorRef, 
+  /**
+   * Messenger with default MessageExecutive class and testConfiguration.
+   */
+  def messengerOf[M <: MessageExecutive[Writable]](slotSeq: Int, 
+                                                   taskAttemptId: TaskAttemptID,
+                                                   container: ActorRef, 
+                                                   tasklog: ActorRef): 
+    ActorRef = messengerOf(slotSeq, classOf[MessageExecutive[Writable]], 
+                           testConfiguration, taskAttemptId, container, tasklog)
+
+  def coordinatorOf[C <: Coordinator](name: String,
+                                      coordinator: Class[C], 
+                                      conf: HamaConfiguration,
+                                      task: Task, 
+                                      container: ActorRef, 
                                           messenger: ActorRef,
                                           syncClient: ActorRef, 
                                           tasklog: ActorRef): ActorRef = 
