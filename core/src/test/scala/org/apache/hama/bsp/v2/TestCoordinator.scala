@@ -45,10 +45,27 @@ class MockCoordinator(conf: HamaConfiguration, task: Task, container: ActorRef,
   override def doExecute() {
     super.doExecute
     currentSuperstep.map { (current) => 
-      LOG.info("xxxxxxxxxxxxxxxxxxx Current superstep name "+current.path.name)
+      LOG.info("Current superstep {} for task {}", current.path.name, 
+               task.getId)
       tester ! current.path.name
     }
   }
+
+  def log() = LOG.info("Current task {} phase {}", task.getId, task.getPhase)
+ 
+  // task phase
+  override def setupPhase() = {
+    super.setupPhase 
+    log
+    tester ! task.getPhase
+  }
+
+  override def whenCompute(peer: BSPPeer, superstep: ActorRef) {
+    super.whenCompute(peer, superstep)
+    log
+    tester ! task.getPhase
+  }
+  
 
 }
 
@@ -150,10 +167,13 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
                                      tasklog, tester)
    
     coordinator1 ! Execute
-    expect("superstep-"+classOf[A].getName)
     coordinator2 ! Execute
+    expect(Task.Phase.SETUP)
+    expect(Task.Phase.SETUP)
+    expect(Task.Phase.COMPUTE)
+    expect(Task.Phase.COMPUTE)
     expect("superstep-"+classOf[A].getName)
-
+    expect("superstep-"+classOf[A].getName)
     
 
     LOG.info("Done testing Coordinator! ")

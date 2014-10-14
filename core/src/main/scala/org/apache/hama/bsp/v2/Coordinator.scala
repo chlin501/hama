@@ -244,15 +244,17 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   protected def beforeCompute(peer: BSPPeer, superstep: ActorRef,
-                              variables: Map[String, Writable]) {
-    task.computePhase
+                              variables: Map[String, Writable]) = 
     superstep ! SetVariables(variables)
+
+  protected def whenCompute(peer: BSPPeer, superstep: ActorRef) {
+    task.computePhase
+    superstep ! Compute(peer) 
   }
 
-  protected def whenCompute(peer: BSPPeer, superstep: ActorRef) = 
-    superstep ! Compute(peer) 
-
   protected def afterCompute(peer: BSPPeer, superstep: ActorRef) { } 
+
+  protected def setupPhase() = task.setupPhase
   
   /**
    * Setup {@link Superstep}s to be executed, including:
@@ -263,6 +265,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    * @param taskConf is specific configuration of a task.
    */
   protected def setupSupersteps(taskConf: HamaConfiguration) {
+    setupPhase
     val classes = taskConf.get("hama.supersteps.class")
     LOG.info("Supersteps {} will be instantiated for task {}!", classes, 
              task.getId)
@@ -410,7 +413,10 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   //       trasmit messages!!! messenger can directly obtain msg from 
   //       outgoing message queue, transmit messages, and cleanup outgoing 
   //       message queue in one go!!!!
-  protected def withinBarrier(task: Task) = getBundles()
+  protected def withinBarrier(task: Task) = {
+    task.withinBarrierPhase
+    getBundles()
+  }
 
   /**
    * Obtain message bundles sent by calling {@link BSPPeer#send} function.
@@ -473,10 +479,13 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected def exitBarrier: Receive = {
     case ExitBarrier => {
+      exitBarrierPhase
       checkpoint
       beforeNextSuperstep
     }
   }
+  
+  protected def exitBarrierPhase() = task.exitBarrierPhase
 
   protected def isCheckpoint(): Boolean = 
     conf.getBoolean("bsp.checkpoint.enabled", true)

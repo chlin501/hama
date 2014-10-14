@@ -398,7 +398,7 @@ public final class Task implements Writable/*, Transformable*/ {
     this.phase = Phase.BARRIER_ENTER;
   }
 
-  public void wihtinBarrierPhase() {
+  public void withinBarrierPhase() {
     this.phase = Phase.WITHIN_BARRIER;
   }
 
