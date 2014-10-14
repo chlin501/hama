@@ -228,6 +228,10 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
     syncClientOf(name, classOf[BarrierClient], testConfiguration, 
                  taskAttemptId, tasklog)
 
+  def syncClientOf(name: String, conf: HamaConfiguration, 
+                   taskAttemptId: TaskAttemptID, tasklog: ActorRef): ActorRef = 
+    syncClientOf(name, classOf[BarrierClient], conf, taskAttemptId, tasklog)
+
   def messengerOf[M <: MessageExecutive[Writable]](
       name: String, messenger: Class[M], conf: HamaConfiguration,
       slotSeq: Int, taskAttemptId: TaskAttemptID, container: ActorRef, 
@@ -266,10 +270,23 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                                       conf: HamaConfiguration,
                                       task: Task, 
                                       container: ActorRef, 
-                                          messenger: ActorRef,
-                                          syncClient: ActorRef, 
-                                          tasklog: ActorRef): ActorRef = 
-    createWithArgs(name, coordinator, conf, task, container, messenger, 
-                   syncClient, tasklog, tester)
-  
+                                      messenger: ActorRef,
+                                      syncClient: ActorRef, 
+                                      tasklog: ActorRef, 
+                                      rest: Any*): ActorRef = {
+    val args = combined(wrapped(conf, task, container, messenger, syncClient, 
+                                tasklog), rest:_*)
+    createWithArgs(name, coordinator, args: _*)
+  }
+
+  def coordinatorOf[C <: Coordinator](name: String,
+                                      coordinator: Class[C], 
+                                      task: Task, 
+                                      container: ActorRef, 
+                                      messenger: ActorRef,
+                                      syncClient: ActorRef, 
+                                      tasklog: ActorRef, 
+                                      rest: Any*): ActorRef = 
+    coordinatorOf(name, coordinator, testConfiguration, task, container, 
+                  messenger, syncClient, tasklog, rest: _*) 
 }

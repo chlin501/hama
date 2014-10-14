@@ -45,7 +45,7 @@ class MockCoordinator(conf: HamaConfiguration, task: Task, container: ActorRef,
   override def doExecute() {
     super.doExecute
     currentSuperstep.map { (current) => 
-      println("Current superstep name "+current.path.name)
+      LOG.info("xxxxxxxxxxxxxxxxxxx Current superstep name "+current.path.name)
       tester ! current.path.name
     }
   }
@@ -59,12 +59,13 @@ class A extends FirstSuperstep {
   override def compute(peer: BSPPeer) {
     find[IntWritable]("count") match {
       case null => {
-        println("AAAAAAAAAAAAAAA initialize count to 0!")
+        println(getClass.getName+" initializes count to 0!")
         collect[IntWritable]("count", new IntWritable(0))
       } 
       case count@_ => {
         nextStep = null
-        println("BBBBBBBBBBBBB current count: "+count+" next step: "+nextStep)
+        println(getClass.getName+"'s current count: "+count+
+                ", next superstep: "+nextStep)
       }
     }
   }
@@ -103,9 +104,11 @@ class C extends Superstep {
 class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil 
                                                          with LocalZooKeeper {
 
+  val conf1 = config(port = 61000)
+  val conf2 = config(port = 61100)
+
   override def beforeAll {
     super.beforeAll
-    configSupersteps(classOf[A], classOf[B], classOf[C])
     launchZk
   }
 
@@ -114,23 +117,43 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     super.afterAll
   }
 
-  def configSupersteps(classes: Class[_]*) = classes.foreach( (clazz) =>
-    testConfiguration.setClass("hama.supersteps.class", clazz, 
-                               classOf[Superstep])
-  )
+  def configSupersteps(conf: HamaConfiguration, 
+                       classes: Class[_]*) = 
+    conf.set("hama.supersteps.class", classes.map { (clazz) => clazz.getName }.
+                                      mkString(","))
 
   it("test bsp peer coordinator function.") {
-    val task = createTask() 
-    val taskAttemptId = task.getId
+    val task1 = createTask() 
+    configSupersteps(task1.getConfiguration, classOf[A], classOf[B], classOf[C])
+
+    val task2 = createTask(taskId = 2) 
+    configSupersteps(task2.getConfiguration, classOf[A], classOf[B], classOf[C])
+
+    val taskAttemptId1 = task1.getId
+    val taskAttemptId2 = task2.getId
+
     val container = defaultContainer()
-    val tasklog = tasklogOf(taskAttemptId)
+    val tasklog = tasklogOf(taskAttemptId1)
 
-    val messenger1 = messengerOf(1, taskAttemptId, container, tasklog) 
-    val sync1 = syncClientOf("sync1", taskAttemptId, tasklog)
+    val messenger1 = messengerOf(1, taskAttemptId1, container, tasklog) 
+    val sync1 = syncClientOf("sync1", conf1, taskAttemptId1, tasklog)
 
-    //val coordinator = coordinator(task, container, msgmgr, syncer, 
-                                        //tasklog)
+    val messenger2 = messengerOf(2, taskAttemptId2, container, tasklog) 
+    val sync2 = syncClientOf("sync2", conf2, taskAttemptId2, tasklog)
 
-    LOG.info("(Not yet implemetned) Done testing Coordinator! ")
+    val coordinator1 = coordinatorOf("coordinator1", classOf[MockCoordinator], 
+                                     task1, container, messenger1, sync1, 
+                                     tasklog, tester)
+
+    val coordinator2 = coordinatorOf("coordinator2", classOf[MockCoordinator], 
+                                     task2, container, messenger2, sync2, 
+                                     tasklog, tester)
+   
+    coordinator1 ! Execute
+    expect("superstep-"+classOf[A].getName)
+    coordinator2 ! Execute
+    expect("superstep-"+classOf[A].getName)
+
+    LOG.info("Done testing Coordinator! ")
   }
 }

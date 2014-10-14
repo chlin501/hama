@@ -89,6 +89,7 @@ final case class SuperstepNotFoundFailure(className: String)
       extends CoordinatorMessage
 final case class FinishCleanup(superstepClassName: String)
       extends CoordinatorMessage 
+final case class Spawned(superstep: Superstep, actor: ActorRef)
 
 /**
  * {@link Coordinator} is responsible for providing related services, 
@@ -113,7 +114,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   type ActorMessage = String
 
-  protected[v2] var supersteps = Map.empty[String, ActorRef]
+  protected[v2] var supersteps = Map.empty[String, Spawned]
 
   //protected[v2] var superstepCleanupCount = 0
 
@@ -138,6 +139,9 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     configMessenger
   }
 
+  override def beforeRestart(what: Throwable, message: Option[Any]) =
+    initializeServices
+
   protected def configMessenger() = messenger ! SetCoordinator(self)
 
   /**
@@ -158,27 +162,30 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   protected def startSuperstep(): Option[ActorRef] =  
-    execute(classOf[FirstSuperstep].getSimpleName, bspPeer, 
+    execute(classOf[FirstSuperstep].getName, bspPeer, 
             Map.empty[String, Writable])
 
   /**
    * Cached supersteps is mapped from class simple name to spawned actor ref.
    * So the class name passed in should be 
    * {@link Superstep#getClass#getSimpleName}.
-   * @param className is superstep class's simple name witout prefix, i.e., 
+   * @param className is superstep class's full name witout prefix, i.e., 
    *                  "superstep-", not spawned actor ref.
    * @param peer is the coordinator wrapped by {@link BSPPeerAdapter}.
    * @param variables is a cached map data from previous superstep.
    */
-  protected def execute(className: String, // getClass.getSimpleName
+  protected def execute(className: String, // getClass.getName
                         peer: BSPPeer, // adaptor
                         variables: Map[String, Writable]): Option[ActorRef] = 
-    supersteps.find(entry => if(entry._1.equals(className)) true else {
-      entry._1.equals(className)
-    }) match {
+    supersteps.find(entry => 
+     if(entry._2.superstep.isInstanceOf[FirstSuperstep]) 
+       true 
+     else 
+       entry._1.equals(className) 
+    ) match {
       case Some(found) => {
         LOG.debug("Found superstep {} for execution.", className)
-        val superstepActorRef = found._2
+        val superstepActorRef = found._2.actor
         beforeCompute(peer, superstepActorRef, variables)
         whenCompute(peer, superstepActorRef)
         afterCompute(peer, superstepActorRef)
@@ -208,7 +215,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def beginCleanup(peer: BSPPeer) = task.transitToCleanup
 
   protected def whenCleanup(peer: BSPPeer) = supersteps.foreach { case (k, v)=> 
-    v ! Cleanup(peer)
+    v.actor ! Cleanup(peer)
   }
 
   def cleanup(peer: BSPPeer) {  
@@ -249,10 +256,10 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     classNames.foreach( className => {
       instantiate(className, taskConf) match {
         case Success(superstep) => { 
-          val spawned = spawn("superstep-"+className, classOf[SuperstepWorker],
-                               superstep)
-          spawned ! Setup(bspPeer) 
-          supersteps ++= Map(className -> spawned)
+          val actor = spawn("superstep-"+className, classOf[SuperstepWorker],
+                               superstep, self)
+          actor ! Setup(bspPeer) 
+          supersteps ++= Map(className -> Spawned(superstep, actor))
         }
         case Failure(cause) => 
           container ! InstantiationFailure(className, cause)

@@ -143,7 +143,7 @@ class TestMessageExecutive extends TestEnv(TestMessageExecutive.sysName)
   }
 
   def messengerOf(slotSeq: Int, taskAttemptId: TaskAttemptID, 
-                      tasklog: ActorRef, proxy: ProxyInfo): ActorRef = {
+                  tasklog: ActorRef, proxy: ProxyInfo): ActorRef = {
     val container: ActorRef = null
     messengerOf(slotSeq, classOf[MockMessageExecutive[Writable]],
                 testConfiguration, taskAttemptId, container, tasklog, 

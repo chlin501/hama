@@ -22,13 +22,14 @@ import org.apache.hama.HamaConfiguration
 
 object ZkUtil {
 
-  def config(host: String, slotSeq: Int = 1,
-               port: Int = 61000, numPeers: Int = 2): HamaConfiguration = {
-    val conf = new HamaConfiguration()
+  def config(host: String = InetAddress.getLocalHost.getHostName, 
+             slotSeq: Int = 1, port: Int = 61000, numPeers: Int = 2): 
+      HamaConfiguration = {
+    val conf = new HamaConfiguration
     conf.set("hama.zookeeper.quorum", "localhost:2181")
     conf.setInt("hama.zookeeper.property.clientPort", 2181)
     conf.setInt("bsp.peers.num", numPeers)
-    conf.set("bsp.peer.hostname", InetAddress.getLocalHost.getHostName)
+    conf.set("bsp.peer.hostname", host)
     conf.setInt("bsp.peer.port", port)
     conf.setInt("bsp.child.slot.seq", slotSeq)
     conf

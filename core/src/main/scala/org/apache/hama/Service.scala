@@ -47,6 +47,25 @@ trait Service extends Agent {
   protected def offline(target: ActorRef) { }
 
   /**
+   * This function is executed before actor is restarted.
+   * @param what causes this restart.
+   * @param msgReceived identifies during which message execution leads to the
+   *        restart.
+   */
+  protected def beforeRestart(what: Throwable, msgReceived: Option[Any]) { }
+
+  /**
+   * This function is executed after actor is restarted.
+   * @param what causes this restart.
+   */
+  protected def afterRestart(what: Throwable) { }
+
+  override def preRestart(reason: Throwable, message: Option[Any]) =  
+    beforeRestart(reason, message)
+
+  override def postRestart(reason: Throwable) =  afterRestart(reason)
+
+  /**
    * when target service is offline.
    */
   protected def superviseeIsTerminated: Receive = {
