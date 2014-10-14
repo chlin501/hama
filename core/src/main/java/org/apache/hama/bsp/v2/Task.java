@@ -134,20 +134,19 @@ public final class Task implements Writable/*, Transformable*/ {
   /**
    * Describe in which phase a task is in terms of supersteps.
    * The procedure is
-   *             +------------ +
-   *             |             |
-   *             v             |
-   * SETUP -> COMPUTE -> BARRIER_SYNC -> CLEANUP
+   *             +-------------------------------------------------+
+   *             |                                                 | 
+   *             v                                                 | 
+   * SETUP -> COMPUTE -> BARRIER_ENETER -> WITHIN_BARRIER -> BARRIER_LEAVE -> 
+   * CLEANUP
    */
   public static enum Phase {
     SETUP, 
     COMPUTE, 
-// TODO: add other phases!
-  /*BARRIER_ENTER, 
+    BARRIER_ENTER, 
     WITHIN_BARRIER,
     BARRIER_LEAVE, 
-    EXIT_BARRIER,*/ 
-    BARRIER_SYNC, 
+    EXIT_BARRIER,
     CLEANUP 
   }
 
@@ -387,19 +386,31 @@ public final class Task implements Writable/*, Transformable*/ {
     return this.phase;
   }
 
-  public void transitToSetup() {
+  public void setupPhase() {
     this.phase = Phase.SETUP;
   }
 
-  public void transitToCompute() {
+  public void computePhase() {
     this.phase = Phase.COMPUTE;
   }
 
-  public void transitToSync() {
-    this.phase = Phase.BARRIER_SYNC;
+  public void barrierEnterPhase() {
+    this.phase = Phase.BARRIER_ENTER;
   }
 
-  public void transitToCleanup() {
+  public void wihtinBarrierPhase() {
+    this.phase = Phase.WITHIN_BARRIER;
+  }
+
+  public void barrierLeavePhase() {
+    this.phase = Phase.BARRIER_LEAVE;
+  }
+
+  public void exitBarrierPhase() {
+    this.phase = Phase.EXIT_BARRIER;
+  }
+
+  public void cleanupPhase() {
     this.phase = Phase.CLEANUP;
   }
 
@@ -517,12 +528,5 @@ public final class Task implements Writable/*, Transformable*/ {
                    getTotalBSPTasks()+")";
   }
 
-/*
-  @Override
-  public TaskStat toStat() {
-    return new TaskStat(getId(), getCurrentSuperstep(), getStartTime(), 
-                        getFinishTime(), getState(), getPhase(), isCompleted());
-  }
-*/
 }
 

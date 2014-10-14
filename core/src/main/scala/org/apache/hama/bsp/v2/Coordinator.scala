@@ -225,7 +225,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   protected def eventually(peer: BSPPeer) = cleanup(peer)
 
-  protected def beginCleanup(peer: BSPPeer) = task.transitToCleanup
+  protected def beginCleanup(peer: BSPPeer) = task.cleanupPhase
 
   protected def whenCleanup(peer: BSPPeer) = supersteps.foreach { case (k, v)=> 
     v.actor ! Cleanup(peer)
@@ -245,7 +245,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   protected def beforeCompute(peer: BSPPeer, superstep: ActorRef,
                               variables: Map[String, Writable]) {
-    task.transitToCompute
+    task.computePhase
     superstep ! SetVariables(variables)
   }
 
@@ -391,13 +391,13 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected def enter: Receive = {
     case Enter(superstep) => {
-      transitToSync(task) 
+      barrierEnterPhase(task) 
       syncClient ! Enter(superstep) 
     }
   }
 
   // TODO: further divide task sync phase
-  protected def transitToSync(task: Task) = task.transitToSync 
+  protected def barrierEnterPhase(task: Task) = task.barrierEnterPhase
 
   /**
    * {@link PeerSyncClient} reply after passing `Enter' function.
