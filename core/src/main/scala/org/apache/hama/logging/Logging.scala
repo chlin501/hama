@@ -203,7 +203,8 @@ object TaskLogger {
 // TODO: improve 
 //       - log level is{log-level}Enabled 
 //       - message detail at prefix 
-//       or replace with better mechanism.
+//       - performance e.g. io (println too slow)
+//       or better mechanism
 protected class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
                            console: Boolean) 
     extends Actor with akka.actor.ActorLogging {
