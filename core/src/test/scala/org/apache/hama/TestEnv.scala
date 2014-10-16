@@ -58,7 +58,6 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                                            with BeforeAndAfterAll 
                                            with CommonLog {
 
-
   val probe = TestProbe()
   val conf = new HamaConfiguration()
   val testRootPath = "/tmp/hama"
@@ -130,6 +129,9 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
   protected def createWithArgs(name: String, clazz: Class[_], args: Any*): 
     ActorRef = system.actorOf(Props(clazz, args:_*), name)
 
+  protected def createWithArgs(name: String, clazz: Class[_], 
+                               dispatcher: String, args: Any*): ActorRef = 
+    system.actorOf(Props(clazz, args:_*).withDispatcher(dispatcher), name)
   
   /**
    * Create testActor without any arguments supplied.
@@ -217,10 +219,23 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                                   conf: HamaConfiguration): ActorRef =
     createWithArgs(name, container, conf)
 
-  def tasklogOf(taskAttemptId: TaskAttemptID, name: String = "tasklog",
-                logDir: String = "/tmp/hama/log", 
+  def containerOf[C <: Container](name: String,
+                                  container: Class[C],
+                                  dispatcher: String,
+                                  conf: HamaConfiguration): ActorRef =
+    createWithArgs(name, container, dispatcher, conf)
+
+  def tasklogOf(dispatcher: String, taskAttemptId: TaskAttemptID, 
+                name: String = "tasklog", logDir: String = "/tmp/hama/log", 
                 console: Boolean = true): ActorRef = 
-    createWithArgs(name, classOf[TaskLogger], logDir, taskAttemptId, console)
+    createWithArgs(name, classOf[TaskLogger], dispatcher, logDir, taskAttemptId,
+                   console)
+
+  def tasklogOf(dispatcher: String, taskAttemptId: TaskAttemptID): ActorRef = 
+    tasklogOf(dispatcher, taskAttemptId)
+
+  def tasklogOf(taskAttemptId: TaskAttemptID): ActorRef = 
+    tasklogOf("fork-join-executor", taskAttemptId)
 
   def syncClientOf[B <: BarrierClient](name: String,
                                        barrier: Class[B],
@@ -232,6 +247,19 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
     val args = combined(wrapped(conf, taskAttemptId, client, tasklog), 
                         rest: _*)
     createWithArgs(name, barrier, args: _*)
+  }
+
+  def syncClientOf[B <: BarrierClient](name: String,
+                                       barrier: Class[B],
+                                       dispatcher: String,
+                                       conf: HamaConfiguration,
+                                       taskAttemptId: TaskAttemptID,
+                                       tasklog: ActorRef,
+                                       rest: Any*): ActorRef = {
+    val client = BarrierClient.get(conf, taskAttemptId)
+    val args = combined(wrapped(conf, taskAttemptId, client, tasklog), 
+                        rest: _*)
+    createWithArgs(name, barrier, dispatcher, args: _*)
   }
 
   /**
@@ -246,6 +274,11 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                    taskAttemptId: TaskAttemptID, tasklog: ActorRef): ActorRef = 
     syncClientOf(name, classOf[BarrierClient], conf, taskAttemptId, tasklog)
 
+  def syncClientOf(name: String, dispatcher: String, conf: HamaConfiguration, 
+                   taskAttemptId: TaskAttemptID, tasklog: ActorRef): ActorRef = 
+    syncClientOf(name, classOf[BarrierClient], dispatcher, conf, taskAttemptId,
+                 tasklog)
+
   def messengerOf[M <: MessageExecutive[Writable]](
       name: String, messenger: Class[M], conf: HamaConfiguration,
       slotSeq: Int, taskAttemptId: TaskAttemptID, container: ActorRef, 
@@ -254,6 +287,16 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                                 tasklog), 
                         rest: _*)
     createWithArgs(name, messenger, args: _*)
+  }
+
+  def messengerOf[M <: MessageExecutive[Writable]](
+      name: String, messenger: Class[M], dispatcher: String,
+      conf: HamaConfiguration, slotSeq: Int, taskAttemptId: TaskAttemptID, 
+      container: ActorRef, tasklog: ActorRef, rest: Any*): ActorRef = {
+    val args = combined(wrapped(conf, slotSeq, taskAttemptId, container, 
+                                tasklog), 
+                        rest: _*)
+    createWithArgs(name, messenger, dispatcher, args: _*)
   }
 
   def messengerOf[M <: MessageExecutive[Writable]](
@@ -269,6 +312,20 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                 tasklog, rest: _*)
   }
 
+  def messengerOf[M <: MessageExecutive[Writable]](
+     slotSeq: Int, 
+     messenger: Class[M],
+     dispatcher: String,
+     conf: HamaConfiguration,
+     taskAttemptId: TaskAttemptID,
+     container: ActorRef, 
+     tasklog: ActorRef, 
+     rest: Any*): ActorRef = {
+    val name = "messenger-BSPPeerSystem%s".format(slotSeq)
+    messengerOf(name, messenger, dispatcher, conf, slotSeq, taskAttemptId, 
+                container, tasklog, rest: _*)
+  }
+
   /**
    * Messenger with default MessageExecutive class and testConfiguration.
    */
@@ -278,6 +335,15 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                                                    tasklog: ActorRef): 
     ActorRef = messengerOf(slotSeq, classOf[MessageExecutive[Writable]], 
                            testConfiguration, taskAttemptId, container, tasklog)
+
+  def messengerOf[M <: MessageExecutive[Writable]](slotSeq: Int, 
+                                                   dispatcher: String,
+                                                   taskAttemptId: TaskAttemptID,
+                                                   container: ActorRef, 
+                                                   tasklog: ActorRef): 
+    ActorRef = messengerOf(slotSeq, classOf[MessageExecutive[Writable]],
+                           dispatcher, testConfiguration, taskAttemptId, 
+                           container, tasklog)
 
   def coordinatorOf[C <: Coordinator](name: String,
                                       coordinator: Class[C], 
@@ -291,6 +357,20 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
     val args = combined(wrapped(conf, task, container, messenger, syncClient, 
                                 tasklog), rest:_*)
     createWithArgs(name, coordinator, args: _*)
+  }
+
+  def coordinatorOf[C <: Coordinator](name: String,
+                                      coordinator: Class[C], 
+                                      dispatcher: String,
+                                      task: Task, 
+                                      container: ActorRef, 
+                                      messenger: ActorRef,
+                                      syncClient: ActorRef, 
+                                      tasklog: ActorRef, 
+                                      rest: Any*): ActorRef = {
+    val args = combined(wrapped(conf, task, container, messenger, syncClient, 
+                                tasklog), rest:_*)
+    createWithArgs(name, coordinator, dispatcher, args: _*)
   }
 
   def coordinatorOf[C <: Coordinator](name: String,

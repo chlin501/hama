@@ -123,9 +123,10 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
           size--;
         }
 
-        LOG.debug("At znode path " + pathToSuperstepZnode + ", superstep "+
-                  superstep + ", current znode size is " + znodes.size() + 
-                  ", including " + znodes);
+        LOG.debug("At znode path " + pathToSuperstepZnode + 
+                 ", superstep "+ superstep + ", current znode size is " + 
+                 znodes.size() + ", numBSPTasks: "+numBSPTasks+ ", including "+
+                 znodes);
 
         if (size < numBSPTasks) {
           while (!barrierWatcher.isComplete()) {
@@ -138,7 +139,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
           LOG.debug("At superstep: " + superstep + " after waiting ..." +
                     taskId.toString());
         } else {
-          LOG.debug("At superstep: " + superstep
+          LOG.debug("[enter barrier]At superstep: " + superstep
               + " task that is creating /ready znode:" + taskId.toString());
           writeNode(pathToSuperstepZnode + "/ready", null, false, null);
         }
@@ -360,6 +361,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
 
   @Override
   public void process(WatchedEvent event) {
+    LOG.info("Zk client's watched event: "+event);
     synchronized (mutex) {
       mutex.notify();
     }

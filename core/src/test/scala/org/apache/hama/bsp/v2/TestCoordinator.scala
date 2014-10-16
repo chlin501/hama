@@ -20,6 +20,8 @@ package org.apache.hama.bsp.v2
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
 import java.util.concurrent.LinkedBlockingQueue
 import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.Writable
@@ -52,57 +54,57 @@ class MockCoordinator(conf: HamaConfiguration, task: Task, container: ActorRef,
   override def doExecute() {
     super.doExecute
     currentSuperstep.map { (current) => {
-      LOG.info("[{}] Current superstep {}", task.getId, current.path.name)
+      //LOG.info("[{}] Current superstep {}", task.getId, current.path.name)
       sequencer ! Store(current.path.name)
     }}
   }
 
   override def beforeExecuteNext(clazz: Class[_]) { 
-    LOG.info("[{}] Superstep to be executed next: {}", task.getId, 
-             clazz.getName)
+    //LOG.info("[{}] Superstep to be executed next: {}", task.getId, 
+             //clazz.getName)
     sequencer ! Store(clazz.getName)
   }
  
   // task phase
   override def setupPhase() {
     super.setupPhase 
-    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    //LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
     sequencer ! Store(task.getPhase)
   }
 
   override def computePhase() {
     super.computePhase
-    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    //LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
     sequencer ! Store(task.getPhase)
   }
   
   override def barrierEnterPhase() {
     super.barrierEnterPhase
-    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    //LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
     sequencer ! Store(task.getPhase)
   }
 
   override def withinBarrierPhase() {
     super.withinBarrierPhase
-    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    //LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
     sequencer ! Store(task.getPhase)
   }
 
   override def barrierLeavePhase() {
     super.barrierLeavePhase
-    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    //LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
     sequencer ! Store(task.getPhase)
   }
 
   override def exitBarrierPhase() {
     super.exitBarrierPhase
-    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    //LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
     sequencer ! Store(task.getPhase)
   }
   
   override def cleanupPhase() {
     super.cleanupPhase
-    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    //LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
     sequencer ! Store(task.getPhase)
   }
 }
@@ -163,7 +165,7 @@ class Sequencer(taskAttemptId: String, tester: ActorRef) extends Agent {
 
   def store: Receive = {
     case Store(msg) => {
-      LOG.info("Store {} for task {}", msg, taskAttemptId)
+      //LOG.info("Store {} for task {}", msg, taskAttemptId)
       seq ++= Seq(msg)
     }
   }
@@ -178,10 +180,26 @@ class Sequencer(taskAttemptId: String, tester: ActorRef) extends Agent {
   override def receive = store orElse retrieve orElse unknown
 }
 
-@RunWith(classOf[JUnitRunner])
-class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil 
-                                                         with LocalZooKeeper {
+object Setting {
 
+  import TestEnv._
+
+  def toConfig(): Config = parseString("""
+    testCoordinator {
+      akka.actor.my-pinned-dispatcher {
+        type = PinnedDispatcher
+        executor = "thread-pool-executor"
+      }
+    }
+  """)
+}
+
+@RunWith(classOf[JUnitRunner])
+class TestCoordinator extends TestEnv("TestCoordinator", Setting.toConfig.
+                                      getConfig("testCoordinator")) 
+                      with JobUtil with LocalZooKeeper {
+
+  val pinned = "akka.actor.my-pinned-dispatcher"
 
   val conf1 = config(port = 61000)
   val conf2 = config(port = 61100)
@@ -213,33 +231,32 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     val taskAttemptId1 = task1.getId
     val taskAttemptId2 = task2.getId
 
-    val container = defaultContainer()
-    val tasklog = tasklogOf(taskAttemptId1)
+    val container = createWithArgs("container", classOf[Container], pinned, testConfiguration)
+    val tasklog = createWithArgs("tasklog", classOf[TaskLogger], pinned, "/tmp/hama/log", taskAttemptId1, true)
 
-    val messenger1 = messengerOf(1, taskAttemptId1, container, tasklog) 
-    val sync1 = syncClientOf("sync1", conf1, taskAttemptId1, tasklog)
+    val messengerName1 = "messenger-BSPPeerSystem1"
+    val messenger1 = createWithArgs(messengerName1, classOf[MessageExecutive[Writable]], pinned, testConfiguration, 1, taskAttemptId1, container, tasklog)
 
-    val messenger2 = messengerOf(2, taskAttemptId2, container, tasklog) 
-    val sync2 = syncClientOf("sync2", conf2, taskAttemptId2, tasklog)
+    val messengerName2 = "messenger-BSPPeerSystem2"
+    val messenger2 = createWithArgs(messengerName2, classOf[MessageExecutive[Writable]], pinned, testConfiguration, 2, taskAttemptId2, container, tasklog)
 
-    val sequencer1 = createWithArgs("seq-for-task1", classOf[Sequencer], 
-                                    taskAttemptId1.toString, tester)
+    // TODO: current sync client impl process is too long. need refactor!!!
+    val syncClient1 = BarrierClient.get(conf1, taskAttemptId1)
+    val sync1 = createWithArgs("sync1", classOf[BarrierClient], pinned, conf1, taskAttemptId1, syncClient1, tasklog) 
 
-    val coordinator1 = coordinatorOf("coordinator1", classOf[MockCoordinator], 
-                                     task1, container, messenger1, sync1, 
-                                     tasklog, sequencer1)
+    val syncClient2 = BarrierClient.get(conf2, taskAttemptId2)
+    val sync2 = createWithArgs("sync2", classOf[BarrierClient], pinned, conf2, taskAttemptId2, syncClient2, tasklog) 
 
-    val sequencer2 = createWithArgs("seq-for-task2", classOf[Sequencer], 
-                                    taskAttemptId2.toString, tester)
+    val sequencer1 = createWithArgs("seq-for-task1", classOf[Sequencer], pinned, taskAttemptId1.toString, tester)
+    val coordinator1 = createWithArgs("coordinator1", classOf[MockCoordinator], pinned, testConfiguration, task1, container, messenger1, sync1, tasklog, sequencer1)
 
-    val coordinator2 = coordinatorOf("coordinator2", classOf[MockCoordinator], 
-                                     task2, container, messenger2, sync2, 
-                                     tasklog, sequencer2)
+    val sequencer2 = createWithArgs("seq-for-task2", classOf[Sequencer], pinned, taskAttemptId2.toString, tester)
+    val coordinator2 = createWithArgs("coordinator2", classOf[MockCoordinator], pinned, testConfiguration, task2, container, messenger2, sync2, tasklog, sequencer2)
    
     coordinator1 ! Execute
     coordinator2 ! Execute
 
-    val t = 3*60*1000
+    val t = 2*60*1000
     LOG.info("Waiting for {} secs before information collected ...", (t/1000d))
     Thread.sleep(t)
 
