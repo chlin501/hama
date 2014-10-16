@@ -20,53 +20,91 @@ package org.apache.hama.bsp.v2
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
+import java.util.concurrent.LinkedBlockingQueue
 import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.Writable
+import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.bsp.v2.Task.Phase._
 import org.apache.hama.groom.Container
 import org.apache.hama.message.MessageExecutive
 import org.apache.hama.sync.BarrierClient
 import org.apache.hama.logging.TaskLogger
+import org.apache.hama.logging.CommonLog
 import org.apache.hama.util.JobUtil
 import org.apache.hama.util.ZkUtil._
+import org.apache.hama.util.Utils
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
+final case class Store(msg: Any)
+
 class MockCoordinator(conf: HamaConfiguration, task: Task, container: ActorRef,
                       messenger: ActorRef, syncClient: ActorRef, 
-                      tasklog: ActorRef, tester: ActorRef) 
+                      tasklog: ActorRef, sequencer: ActorRef)
     extends Coordinator(conf, task, container, messenger, syncClient, tasklog) {
 
   override def doExecute() {
     super.doExecute
-    currentSuperstep.map { (current) => 
-      LOG.info("Current superstep {} for task {}", current.path.name, 
-               task.getId)
-      tester ! current.path.name
-    }
+    currentSuperstep.map { (current) => {
+      LOG.info("[{}] Current superstep {}", task.getId, current.path.name)
+      sequencer ! Store(current.path.name)
+    }}
   }
 
-  def log() = LOG.info("Current task {} phase {}", task.getId, task.getPhase)
+  override def beforeExecuteNext(clazz: Class[_]) { 
+    LOG.info("[{}] Superstep to be executed next: {}", task.getId, 
+             clazz.getName)
+    sequencer ! Store(clazz.getName)
+  }
  
   // task phase
-  override def atSetupPhase() {
-    super.atSetupPhase 
-    log
-    tester ! task.getPhase
+  override def setupPhase() {
+    super.setupPhase 
+    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    sequencer ! Store(task.getPhase)
   }
 
-  override def atComputePhase() {
-    super.atComputePhase
-    log
-    tester ! task.getPhase
+  override def computePhase() {
+    super.computePhase
+    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    sequencer ! Store(task.getPhase)
   }
   
+  override def barrierEnterPhase() {
+    super.barrierEnterPhase
+    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    sequencer ! Store(task.getPhase)
+  }
 
+  override def withinBarrierPhase() {
+    super.withinBarrierPhase
+    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    sequencer ! Store(task.getPhase)
+  }
+
+  override def barrierLeavePhase() {
+    super.barrierLeavePhase
+    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    sequencer ! Store(task.getPhase)
+  }
+
+  override def exitBarrierPhase() {
+    super.exitBarrierPhase
+    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    sequencer ! Store(task.getPhase)
+  }
+  
+  override def cleanupPhase() {
+    super.cleanupPhase
+    LOG.info("[{}] Current phase {}", task.getId, task.getPhase)
+    sequencer ! Store(task.getPhase)
+  }
 }
 
 class A extends FirstSuperstep {
@@ -117,15 +155,40 @@ class C extends Superstep {
   override def next(): Class[_ <: Superstep] = classOf[A]
 }
 
+final case class Retrieve
+
+class Sequencer(taskAttemptId: String, tester: ActorRef) extends Agent {
+
+  var seq = Seq.empty[Any]
+
+  def store: Receive = {
+    case Store(msg) => {
+      LOG.info("Store {} for task {}", msg, taskAttemptId)
+      seq ++= Seq(msg)
+    }
+  }
+
+  def retrieve: Receive = {
+    case Retrieve => {
+      LOG.info("Retrieve stored messages {} for task {}", seq, taskAttemptId)
+      sender ! seq
+    }
+  }
+
+  override def receive = store orElse retrieve orElse unknown
+}
+
 @RunWith(classOf[JUnitRunner])
 class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil 
                                                          with LocalZooKeeper {
+
 
   val conf1 = config(port = 61000)
   val conf2 = config(port = 61100)
 
   override def beforeAll {
     super.beforeAll
+    testConfiguration.setBoolean("bsp.checkpoint.enabled", false)
     launchZk
   }
 
@@ -140,6 +203,7 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
                                       mkString(","))
 
   it("test bsp peer coordinator function.") {
+   
     val task1 = createTask() 
     configSupersteps(task1.getConfiguration, classOf[A], classOf[B], classOf[C])
 
@@ -158,27 +222,39 @@ class TestCoordinator extends TestEnv("TestCoordinator") with JobUtil
     val messenger2 = messengerOf(2, taskAttemptId2, container, tasklog) 
     val sync2 = syncClientOf("sync2", conf2, taskAttemptId2, tasklog)
 
+    val sequencer1 = createWithArgs("seq-for-task1", classOf[Sequencer], 
+                                    taskAttemptId1.toString, tester)
+
     val coordinator1 = coordinatorOf("coordinator1", classOf[MockCoordinator], 
                                      task1, container, messenger1, sync1, 
-                                     tasklog, tester)
+                                     tasklog, sequencer1)
+
+    val sequencer2 = createWithArgs("seq-for-task2", classOf[Sequencer], 
+                                    taskAttemptId2.toString, tester)
 
     val coordinator2 = coordinatorOf("coordinator2", classOf[MockCoordinator], 
                                      task2, container, messenger2, sync2, 
-                                     tasklog, tester)
+                                     tasklog, sequencer2)
    
     coordinator1 ! Execute
     coordinator2 ! Execute
-    expect("superstep-"+classOf[A].getName)
-    expect("superstep-"+classOf[A].getName)
-    expect(Task.Phase.SETUP)
-    expect(Task.Phase.SETUP)
-    expect(Task.Phase.SETUP)
-    expect(Task.Phase.SETUP)
-    expect(Task.Phase.SETUP)
-    expect(Task.Phase.SETUP)
-    expect(Task.Phase.COMPUTE)
-    expect(Task.Phase.COMPUTE)
-    
+
+    val t = 3*60*1000
+    LOG.info("Waiting for {} secs before information collected ...", (t/1000d))
+    Thread.sleep(t)
+
+    val expect_seq1 = Seq[Any](SETUP, COMPUTE, "superstep-org.apache.hama.bsp.v2.A", BARRIER_ENTER, WITHIN_BARRIER, BARRIER_LEAVE, EXIT_BARRIER, "org.apache.hama.bsp.v2.B", COMPUTE, BARRIER_ENTER, WITHIN_BARRIER, BARRIER_LEAVE, EXIT_BARRIER, "org.apache.hama.bsp.v2.C", COMPUTE, BARRIER_ENTER, WITHIN_BARRIER, BARRIER_LEAVE, EXIT_BARRIER, "org.apache.hama.bsp.v2.A", COMPUTE, CLEANUP)
+
+    val expect_seq2 = Seq[Any](SETUP, COMPUTE, "superstep-org.apache.hama.bsp.v2.A", BARRIER_ENTER, WITHIN_BARRIER, BARRIER_LEAVE, EXIT_BARRIER, "org.apache.hama.bsp.v2.B", COMPUTE, BARRIER_ENTER, WITHIN_BARRIER, BARRIER_LEAVE, EXIT_BARRIER, "org.apache.hama.bsp.v2.C", COMPUTE, BARRIER_ENTER, WITHIN_BARRIER, BARRIER_LEAVE, EXIT_BARRIER, "org.apache.hama.bsp.v2.A", COMPUTE, CLEANUP)
+
+    val actual_seq1 = Utils.await[Seq[Any]](sequencer1, Retrieve)
+    LOG.info("Total stats collected for task {}: {}", taskAttemptId1, 
+             actual_seq1)
+    val actual_seq2 = Utils.await[Seq[Any]](sequencer2, Retrieve)
+    LOG.info("Total stats collected for task {}: {}", taskAttemptId2, 
+             actual_seq2)
+    assert(expect_seq1.equals(actual_seq1))
+    assert(expect_seq2.equals(actual_seq2))
 
     LOG.info("Done testing Coordinator! ")
   }

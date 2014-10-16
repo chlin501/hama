@@ -74,8 +74,6 @@ class BarrierClient(conf: HamaConfiguration, // common conf
                     tasklog: ActorRef) 
       extends LocalService with TaskLog { 
 
-  //protected var taskAttemptId: Option[TaskAttemptID] = None
-
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
   override def configuration(): HamaConfiguration = conf
@@ -118,9 +116,16 @@ class BarrierClient(conf: HamaConfiguration, // common conf
 
   protected def enter: Receive = {
     case Enter(superstep) => {
-      LOG.debug("Enter barrier with task attempt id {}", taskAttemptId)
+      LOG.debug("Enter barrier at superstep {} for task attempt id {}", 
+                superstep, taskAttemptId)
+      val start = System.currentTimeMillis // TODO: move to util
       syncClient.enterBarrier(taskAttemptId.getJobID, taskAttemptId, superstep)
+      val elapsed = System.currentTimeMillis - start
+      LOG.debug("After java enter barrier func, time spent: {} for task {}", 
+                (elapsed/1000d), taskAttemptId)
       withinBarrier(sender)
+      LOG.debug("WithinBarrier msg sent to coordinator for task {}", 
+                taskAttemptId)
     }
   }
 
@@ -128,17 +133,26 @@ class BarrierClient(conf: HamaConfiguration, // common conf
 
   protected def leave: Receive = {
     case Leave(superstep) => {
+      LOG.debug("Leave barrier at superstep {} for task attempt id {}", 
+                superstep, taskAttemptId)
+      val start = System.currentTimeMillis // TODO: move to util
       syncClient.leaveBarrier(taskAttemptId.getJobID, taskAttemptId, superstep)
-      LOG.debug("Leave barrier with task attempt id {}", taskAttemptId)
+      val elapsed = System.currentTimeMillis - start
+      LOG.debug("After java leave barrier func, time spent: {} for task {}", 
+               (elapsed/1000d), taskAttemptId)
       exitBarrier(sender)
+      LOG.debug("ExitBarrier msg sent to coordinator for task {}", 
+                taskAttemptId)
     }
   }
 
   protected def exitBarrier(from: ActorRef) = from ! ExitBarrier
 
+  /**
+   * Perform some close operations and then stop the actor.
+   */
   protected def close: Receive = {
     case Close => {
-      // perform some close operations and then stop the actor
       context.stop(self) 
     }
   }

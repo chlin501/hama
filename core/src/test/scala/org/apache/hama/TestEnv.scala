@@ -156,6 +156,20 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
   protected def expect(message: Any) = probe.expectMsg(message)
 
   /**
+   * Expect message by waiting 10 seconds.
+   * @param msg to be exaimed.
+   */
+  protected def expect10(msg: Any) = expect(10.seconds, msg)
+
+  /**
+   * Expect message by waiting up to max seconds
+   * @param max duration waiting mesage to be verified.
+   * @param msg to be exaimed.
+   */
+  protected def expect(max: FiniteDuration, message: Any) = 
+    probe.expectMsg(max, message)
+
+  /**
    * Check if messages is one of provided messages.
    * @param messages that may be returned.
    */

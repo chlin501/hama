@@ -74,8 +74,9 @@ trait Agent extends Actor with ActorLog {
    */
   protected def spawn[A <: Actor](childName: String, actorClass: Class[A],
                                   args: Any*): ActorRef = {
-    LOG.debug("Spawn child {} actor as {} with args {}", 
-              actorClass, childName, args.mkString(", "))
+    //LOG.debug("Spawn child {} actor with name {} with args {}", 
+              //actorClass, childName, args.mkString(", "))
+    LOG.debug("Spawn child {} actor with name {}", actorClass, childName)
     context.actorOf(Props(actorClass, args:_*), childName)
   }
 }

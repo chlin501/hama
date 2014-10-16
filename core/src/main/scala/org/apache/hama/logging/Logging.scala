@@ -205,7 +205,8 @@ object TaskLogger {
 //       - message detail at prefix 
 //       or replace with better mechanism.
 protected class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
-                           console: Boolean) extends Actor {
+                           console: Boolean) 
+    extends Actor with akka.actor.ActorLogging {
 
   import TaskLogging._
   import TaskLogger._
@@ -242,8 +243,8 @@ protected class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
     case Debug(msg) => write(out, msg)
     case Warning(msg) => write(err, msg)
     case Error(msg) => write(err, msg)
-    case msg@_ => println("Unknown msg "+msg+" found for task attempt id "+
-                          taskAttemptId)
+    case msg@_ => println("Unknown msg "+msg+" found for logging task attempt "+
+                          "id "+ taskAttemptId)
   }
 
   protected def closeIfNotNull(fw: Option[FileWriter]) = fw.map { (found) => 
@@ -253,9 +254,9 @@ protected class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
   protected def write(writer: Option[FileWriter], msg: String) = writer match {
     case Some(found) => if(!console) {
       found.write(msg+"\n")
-    } else println(msg)
-    case None => 
-      System.err.println("Either stdout or stderr is missing for task logger!")
+    } else log.info("[{}] {}", taskAttemptId , msg)  
+    case None => log.error("Stdout or stderr is missing for task {}!", 
+                           taskAttemptId)
   }
 
   protected def mkdirs(logPath: String, jobId: String): (JobIDPath, Boolean) = {

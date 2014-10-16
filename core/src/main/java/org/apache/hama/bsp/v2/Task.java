@@ -65,6 +65,7 @@ public final class Task implements Writable/*, Transformable*/ {
   /* The input data for this task. */
   private PartitionedSplit split; 
 
+  // TODO: change current superstep type to long!
   private IntWritable currentSuperstep = new IntWritable(1);
 
   /* The state of this task. */

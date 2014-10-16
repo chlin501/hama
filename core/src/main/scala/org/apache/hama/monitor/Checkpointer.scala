@@ -55,7 +55,7 @@ import scala.collection.JavaConversions._
  */
 class Checkpointer(commConf: HamaConfiguration, 
                    taskConf: HamaConfiguration, 
-                   taskAttemptId: String, 
+                   taskAttemptId: TaskAttemptID, 
                    superstepCount: Long, 
                    messenger: ActorRef,
                    superstepWorker: ActorRef) 
@@ -78,8 +78,7 @@ class Checkpointer(commConf: HamaConfiguration,
 
   protected def mkDir(rootPath: String, 
                       superstepCount: Long): String = {
-    val currentTaskAttemptId = TaskAttemptID.forName(taskAttemptId)      
-    val jobId = currentTaskAttemptId.getJobID.toString
+    val jobId = taskAttemptId.getJobID.toString
     "%s/%s/%s".format(rootPath, jobId, superstepCount) 
   }
 
@@ -87,12 +86,10 @@ class Checkpointer(commConf: HamaConfiguration,
   //       more than 10k znodes may lead to performance slow down for zk 
   //       at the final step marking with ok znode.
   protected def mkPath(rootPath: String, superstepCount: Long, 
-                       taskAttemptId: String, 
                        suffix: String = "ckpt"): String = {
-    val currentTaskAttemptId = TaskAttemptID.forName(taskAttemptId)      
-    val jobId = currentTaskAttemptId.getJobID.toString
-    "%s/%s/%s/%s.%s".format(rootPath, jobId, superstepCount, taskAttemptId,
-                            suffix)
+    val jobId = taskAttemptId.getJobID.toString
+    "%s/%s/%s/%s.%s".format(rootPath, jobId, superstepCount, 
+                           taskAttemptId.toString, suffix)
   }
 
   protected def write(ckptPath: Path, writeTo: (DataOutputStream) => Boolean): 

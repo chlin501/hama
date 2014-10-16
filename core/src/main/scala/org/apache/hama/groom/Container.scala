@@ -36,8 +36,6 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.LocalService
 //import org.apache.hama.message.PeerMessenger
-import org.apache.hama.monitor.Report
-import org.apache.hama.monitor.TaskStat
 import org.apache.hama.RemoteService
 import org.apache.hama.sync.SyncException
 import org.apache.hama.util.ActorLocator
@@ -163,12 +161,6 @@ class Container(conf: HamaConfiguration) extends LocalService
   protected var executor: Option[ActorRef] = None
 
   protected var taskWorker: Option[ActorRef] = None
-
-  /**
-   * The stat to a specific task. Used to check the execution of a task and
-   * related operation.
-   */
-  protected var taskStat: Option[TaskStat] = None
 
   override def configuration: HamaConfiguration = conf
 
@@ -337,10 +329,10 @@ class Container(conf: HamaConfiguration) extends LocalService
    * @param target actor is {@link Executor}
    */
   override def offline(target: ActorRef) {
-    LOG.info("{} is offline!", target.path.name)
+    LOG.warning("{} is offline!", target.path.name)
     val ExecutorName = executorName
     target.path.name match {
-      case "taskWorker" => // TODO: mark task as failure (update taskStat), report task manager
+      case "taskWorker" => // TODO: report task manager
       case `ExecutorName` => self ! ShutdownContainer
       case rest@_ => {
         if(rest.startsWith("peerMessenger_")) {
@@ -350,19 +342,5 @@ class Container(conf: HamaConfiguration) extends LocalService
     }
   }
 
-  /**
-   * Report running worker's task stat data.
-   * @return Receive is partial function.
-   */
-  def reportStat: Receive = {
-    case Report(stat) => updateStat(stat)
-  }
-
-  /**
-   * Update task stat data.
-   * @param stat contains the Task currently executed.
-   */
-  protected def updateStat(stat: TaskStat) = taskStat = Option(stat)
-
-  override def receive = reportStat orElse launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
 }
