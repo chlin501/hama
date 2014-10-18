@@ -22,7 +22,7 @@ import java.net.InetAddress
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.LocalService
+import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Close
 import org.apache.hama.logging.Logging
@@ -53,7 +53,6 @@ object BarrierClient {
    * @param taskAttemptId denotes on which task this client operate. 
    * @param host denotes the machine on which the process runs.
    * @param port denotes the port used by the process.
-   */
   def get(conf: HamaConfiguration, taskAttemptId: TaskAttemptID): 
       PeerSyncClient = {
     val syncClient = SyncServiceFactory.getPeerSyncClient(conf)
@@ -64,6 +63,7 @@ object BarrierClient {
     syncClient.register(taskAttemptId.getJobID, taskAttemptId, host, port)
     syncClient
   }
+   */
 
 }
 
@@ -73,16 +73,15 @@ object BarrierClient {
 //       enter/ leave code, everything works fine!
 class BarrierClient(conf: HamaConfiguration, // common conf
                     taskAttemptId: TaskAttemptID,
-                    syncClient: PeerSyncClient,
-                    tasklog: ActorRef) 
-      extends LocalService with TaskLog { 
+                    //syncClient: PeerSyncClient,
+                    tasklog: ActorRef) extends Agent with TaskLog { 
 
   //override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
-  override def configuration(): HamaConfiguration = conf
+  //override def configuration(): HamaConfiguration = conf
 
   protected def currentPeerName: Receive = {
-    case GetPeerName => sender ! PeerName(syncClient.getPeerName)
+    case GetPeerName => //sender ! PeerName(syncClient.getPeerName)
   }
 
   protected def peerNameByIndex: Receive = {
@@ -115,14 +114,14 @@ class BarrierClient(conf: HamaConfiguration, // common conf
   }
 
   protected def initPeers(taskAttemptId: TaskAttemptID): Array[String] = 
-    syncClient.getAllPeerNames(taskAttemptId)
+    {null}//syncClient.getAllPeerNames(taskAttemptId)
 
   protected def enter: Receive = {
     case Enter(superstep) => {
       LOG.debug("Enter barrier at superstep {} for task attempt id {}", 
                 superstep, taskAttemptId)
       val start = System.currentTimeMillis // TODO: move to util
-      syncClient.enterBarrier(taskAttemptId.getJobID, taskAttemptId, superstep)
+      //syncClient.enterBarrier(taskAttemptId.getJobID, taskAttemptId, superstep)
       val elapsed = System.currentTimeMillis - start
       LOG.debug("After java enter barrier func, time spent: {} for task {}", 
                 (elapsed/1000d), taskAttemptId)
@@ -139,7 +138,7 @@ class BarrierClient(conf: HamaConfiguration, // common conf
       LOG.debug("Leave barrier at superstep {} for task attempt id {}", 
                 superstep, taskAttemptId)
       val start = System.currentTimeMillis // TODO: move to util
-      /syncClient.leaveBarrier(taskAttemptId.getJobID, taskAttemptId, superstep)
+      //syncClient.leaveBarrier(taskAttemptId.getJobID, taskAttemptId, superstep)
       val elapsed = System.currentTimeMillis - start
       LOG.debug("After java leave barrier func, time spent: {} for task {}", 
                (elapsed/1000d), taskAttemptId)

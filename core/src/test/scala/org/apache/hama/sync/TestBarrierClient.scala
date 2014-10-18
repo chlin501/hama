@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.sync
-
+/*
 import akka.actor.ActorRef
 import java.net.InetAddress
 import org.apache.hadoop.io.IntWritable
@@ -35,9 +35,9 @@ import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
 class MockBarrierClient(conf: HamaConfiguration, taskAttemptId: TaskAttemptID, 
-                        client: PeerSyncClient, tasklog: ActorRef, 
+                        //tasklog: ActorRef, 
                         tester: ActorRef)
-      extends BarrierClient(conf, taskAttemptId, client, tasklog) {
+      extends BarrierClient(conf, taskAttemptId,  tasklog) {/*client,*/ 
 
   override def withinBarrier(from: ActorRef) = {
     println("Notify "+from+" now is WithinBerrirer!")
@@ -80,15 +80,8 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
     val taskId2 = createTaskAttemptId("test", 1, 2, 1)
 
     val tasklog = tasklogOf(taskId1)
-
-    val client1 = syncClientOf[MockBarrierClient]("client1", 
-                                                  classOf[MockBarrierClient],
-                                                  conf1, taskId1, tasklog, 
-                                                  tester)
-    val client2 = syncClientOf[MockBarrierClient]("client2", 
-                                                  classOf[MockBarrierClient],
-                                                  conf2, taskId2, tasklog, 
-                                                  tester)
+    val client1 = createWithArgs("client1", classOf[MockBarrierCleint], conf1, taskId1, tasklog, tester)
+    val client2 = createWithArgs("client2", classOf[MockBarrierCleint], conf2, taskId1, tasklog, tester)
 
     LOG.info("'Enter' barrier ...")
     client1 ! Enter(superstep)
@@ -127,3 +120,4 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
     LOG.info("Done testing barrier client!")  
   }
 }
+*/

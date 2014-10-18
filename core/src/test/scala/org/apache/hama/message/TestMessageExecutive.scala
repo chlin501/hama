@@ -142,12 +142,15 @@ class TestMessageExecutive extends TestEnv(TestMessageExecutive.sysName)
     bundle
   }
 
-  def messengerOf(slotSeq: Int, taskAttemptId: TaskAttemptID, 
+  def messengerOf(name: String, slotSeq: Int, taskAttemptId: TaskAttemptID, 
                   tasklog: ActorRef, proxy: ProxyInfo): ActorRef = {
     val container: ActorRef = null
-    messengerOf(slotSeq, classOf[MockMessageExecutive[Writable]],
+    createWithArgs(name, classOf[MessageExecutive[Writable]], testConfiguration, slotSeq, taskAttemptId, container, tasklog, proxy, tester) 
+/*
+    createWithArgs(slotSeq, classOf[MockMessageExecutive[Writable]],
                 testConfiguration, taskAttemptId, container, tasklog, 
                 proxy, tester)
+*/
   }
 
   it("test message executive functions.") {
@@ -156,14 +159,18 @@ class TestMessageExecutive extends TestEnv(TestMessageExecutive.sysName)
     val taskAttemptId2 = createTaskAttemptId(jobId, 4, 2)
   
     // log dir will both create at logDir/jobId so we only create 1 task logger
+/*
     val tasklog = tasklogOf(taskAttemptId1) 
-
+*/
+    val tasklog = createWithArgs("tasklog", classOf[TaskLogger], "/tmp/hama/log", taskAttemptId1, true)
     val proxy1 = Peer.at(bspPeerSystem1) 
     val proxy2 = Peer.at(bspPeerSystem2) 
     LOG.info("proxy1 is at{}. proxy2 is at {}", proxy1, proxy2)
 
-    val messenger1 = messengerOf(slotSeq1, taskAttemptId1, tasklog, proxy2)
-    val messenger2 = messengerOf(slotSeq2, taskAttemptId2, tasklog, proxy1)
+    val name1 = "messenger-BSPPeerSystem1"
+    val messenger1 = messengerOf(name1, slotSeq1, taskAttemptId1, tasklog, proxy2)
+    val name2 = "messenger-BSPPeerSystem2"
+    val messenger2 = messengerOf(name2, slotSeq2, taskAttemptId2, tasklog, proxy1)
 
     val bundle1 = createBundle[IntWritable](new IntWritable(3), 
                                             new IntWritable(6), 
