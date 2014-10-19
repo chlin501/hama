@@ -89,7 +89,13 @@ trait Curator extends Conversion with CommonLog {
     }
   }
 
-  protected def ifMatch[R <: Any](f: (CuratorFramework) => R): R = 
+  /**
+   * Operate a function if {@link CuratorFramework} exists.
+   * @param f is a function that takes in curator framework instance and 
+   *          return a value.
+   * @throw if curator framework is missing.
+   */
+  protected def exist[R <: Any](f: (CuratorFramework) => R): R = 
     curatorFramework match {
       case Some(client) => f(client)
       case None => throw new RuntimeException("Curator not initialized!")
@@ -111,7 +117,7 @@ trait Curator extends Conversion with CommonLog {
     var p = ""
     nodes.foreach( node => {
       p += "/"+node
-      ifMatch({ (client) => client.checkExists.forPath(p) match {
+      exist({ (client) => client.checkExists.forPath(p) match {
         case stat: Stat =>
         case _ => client.create.forPath(p)
       }})
@@ -122,7 +128,7 @@ trait Curator extends Conversion with CommonLog {
    * List all children under a particular znode.
    * @param znode contains a list of child znodes. 
    */
-  def list(znode: String): Array[String] = ifMatch({ (client) => 
+  def list(znode: String): Array[String] = exist({ (client) => 
     client.checkExists.forPath(znode) match {
       case stat: Stat => client.getChildren.forPath(znode).toArray.
                                 asInstanceOf[Array[String]]
@@ -135,7 +141,7 @@ trait Curator extends Conversion with CommonLog {
    * @param znode the absolute path where data to be set.
    * @param value is the data to be set. 
    */
-  def set(znode: String, value: Array[Byte]) = ifMatch({ (client) => 
+  def set(znode: String, value: Array[Byte]) = exist({ (client) => 
     client.setData.forPath(znode, value) 
   })
 
@@ -145,7 +151,7 @@ trait Curator extends Conversion with CommonLog {
    * @return Option[Array[Byte]] is the data retrieved out of znode.
    */
   protected def getBytes(znode: String): Option[Array[Byte]] = 
-    ifMatch[Option[Array[Byte]]]({ (client) =>
+    exist[Option[Array[Byte]]]({ (client) =>
       client.getData.forPath(znode) match {
         case data: Array[Byte] => Option(data)
         case _ => None
@@ -237,7 +243,7 @@ trait Curator extends Conversion with CommonLog {
    * @return String the value found at the znode path.
    */
   def getOrElse(znode: String, initialValue: String): String = 
-    ifMatch[String]({ (client) => client.checkExists.forPath(znode) match {
+    exist[String]({ (client) => client.checkExists.forPath(znode) match {
       case stat: Stat => get(znode, initialValue)
       case _ => {
         create(znode) 
@@ -254,7 +260,7 @@ trait Curator extends Conversion with CommonLog {
    * @return Int is the value found at the znode path.
    */
   def getOrElse(znode: String, initialValue: Int): Int = 
-    ifMatch[Int]({ (client) => client.checkExists.forPath(znode) match {
+    exist[Int]({ (client) => client.checkExists.forPath(znode) match {
       case stat: Stat => get(znode, initialValue)
       case _ => {
         create(znode) 
@@ -271,7 +277,7 @@ trait Curator extends Conversion with CommonLog {
    * @return Float is the value found at the znode path.
    */
   def getOrElse(znode: String, initialValue: Float): Float = 
-    ifMatch[Float]({ (client) => client.checkExists.forPath(znode) match {
+    exist[Float]({ (client) => client.checkExists.forPath(znode) match {
       case stat: Stat => get(znode, initialValue)
       case _ => {
         create(znode) 
@@ -288,7 +294,7 @@ trait Curator extends Conversion with CommonLog {
    * @return Long is the value found at the znode path.
    */
   def getOrElse(znode: String, initialValue: Long): Long = 
-    ifMatch[Long]({ (client) => client.checkExists.forPath(znode) match {
+    exist[Long]({ (client) => client.checkExists.forPath(znode) match {
       case stat: Stat => get(znode, initialValue)
       case _ => {
         create(znode) 
@@ -305,7 +311,7 @@ trait Curator extends Conversion with CommonLog {
    * @return Double is the value found at the znode path.
    */
   def getOrElse(znode: String, initialValue: Double): Double = 
-    ifMatch[Double]({ (client) => client.checkExists.forPath(znode) match {
+    exist[Double]({ (client) => client.checkExists.forPath(znode) match {
       case stat: Stat => get(znode, initialValue)
       case _ => {
         create(znode) 
