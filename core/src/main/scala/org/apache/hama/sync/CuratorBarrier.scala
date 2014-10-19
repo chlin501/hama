@@ -17,37 +17,39 @@
  */
 package org.apache.hama.sync
 
-import org.apache.curator.framework.recipes.barriers.DistributedDoubleBarrier
+import org.apache.curator.framework.recipes.barriers.DistributedDoubleBarrierV1
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.logging.CommonLog
 import org.apache.hama.util.Curator
 
 object CuratorBarrier {
 
-  def barrierPath(superstep: Long, taskAttemptId: TaskAttemptID): String = 
-    "%s/%s".format(taskAttemptId.getJobID.toString, superstep)
-
   /**
    * Create barrier instance implemented by curator.
-   * @param conf common conf contains curator information.
-   * @param barrierPath points to redevouz path used by curator receipe.
+   * @param conf is common conf that contains curator information.
+   * @param taskAttemptId 
    * @param numBSPTasks are tasks that will meet at the barrier path.
-   */
-  def apply(conf: HamaConfiguration, barrierPath: String, numBSPTasks: Int): 
-      CuratorBarrier = Curator.build(conf) match {
-    case null => 
-      throw new RuntimeException("Can't initialize CuratorFramework!")
-    case client@_ => 
-      new CuratorBarrier(new DistributedDoubleBarrier(client, barrierPath, 
-                                                      numBSPTasks))
-  }
+   */  
+  def apply(conf: HamaConfiguration, taskAttemptId: TaskAttemptID, 
+            numBSPTasks: Int): CuratorBarrier = Curator.build(conf) match {
+      case null => 
+        throw new RuntimeException("Can't initialize CuratorFramework!")
+      case client@_ => {
+        Curator.start(client)
+        val root = conf.get("bsp.zookeeper.root.path", "/sync")
+        new CuratorBarrier(new DistributedDoubleBarrierV1(client, root, 
+                           taskAttemptId, numBSPTasks))
+      }
+    }
 
 }
 
-class CuratorBarrier(barrier: DistributedDoubleBarrier) extends Barrier {
+class CuratorBarrier(barrier: DistributedDoubleBarrierV1) extends Barrier 
+                                                        with CommonLog {
 
-  override def enter() = barrier.enter
+  override def enter(superstep: Long) = barrier.enter(superstep)
 
-  override def leave() = barrier.leave
+  override def leave(superstep: Long) = barrier.leave(superstep) 
 
 }

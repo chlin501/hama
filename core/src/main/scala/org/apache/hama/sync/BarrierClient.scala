@@ -116,6 +116,7 @@ class BarrierClient(conf: HamaConfiguration, // common conf
   protected def initPeers(taskAttemptId: TaskAttemptID): Array[String] = 
     {null}//syncClient.getAllPeerNames(taskAttemptId)
 
+/*
   protected def enter: Receive = {
     case Enter(superstep) => {
       LOG.debug("Enter barrier at superstep {} for task attempt id {}", 
@@ -130,9 +131,11 @@ class BarrierClient(conf: HamaConfiguration, // common conf
                 taskAttemptId)
     }
   }
+*/
 
   protected def withinBarrier(from: ActorRef) = from ! WithinBarrier
 
+/*
   protected def leave: Receive = {
     case Leave(superstep) => {
       LOG.debug("Leave barrier at superstep {} for task attempt id {}", 
@@ -147,6 +150,7 @@ class BarrierClient(conf: HamaConfiguration, // common conf
                 taskAttemptId)
     }
   }
+*/
 
   protected def exitBarrier(from: ActorRef) = from ! ExitBarrier
 
@@ -159,6 +163,6 @@ class BarrierClient(conf: HamaConfiguration, // common conf
     }
   }
 
-  override def receive = currentPeerName orElse peerNameByIndex orElse numPeers orElse allPeerNames orElse enter orElse leave orElse close orElse unknown
+  override def receive = currentPeerName orElse peerNameByIndex orElse numPeers orElse allPeerNames orElse /*enter orElse leave orElse close orElse*/ unknown
 
 }

@@ -19,10 +19,12 @@ package org.apache.hama.sync
 
 import org.apache.hama
 
+// Note: this is intended to be used internal api. need refactor if additional 
+//       requirement raises.
 trait Barrier {
 
-  def enter()
+  def enter(superstep: Long)
 
-  def leave()
+  def leave(superstep: Long)
 
 }

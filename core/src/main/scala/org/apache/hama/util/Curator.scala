@@ -53,6 +53,19 @@ object Curator extends CommonLog {
              servers, sessionTimeout, retryN, sleepBeforeRetry)
     build(servers, sessionTimeout, retryN, sleepBeforeRetry) 
   }
+
+  def start(client: CuratorFramework) = client.getState match {
+    case LATENT => {
+      LOG.info("Start CuratorFramework ...")
+      client.start
+    }
+    case STARTED => LOG.info("CuratorFramework is started!")
+    case STOPPED => {
+      LOG.info("CuratorFramework is stopped! Restart it again ...")
+      client.start
+    }
+  }
+
 }
 
 trait Curator extends Conversion with CommonLog {
@@ -80,18 +93,6 @@ trait Curator extends Conversion with CommonLog {
         curatorFramework
       }
     }
- 
-  protected def start(client: CuratorFramework) = client.getState match {
-    case LATENT => {
-      LOG.info("Start CuratorFramework ...")
-      client.start
-    }
-    case STARTED => LOG.info("CuratorFramework is started!")
-    case STOPPED => {
-      LOG.info("CuratorFramework is stopped! Restart it again ...")
-      client.start
-    }
-  }
 
   /**
    * Operate a function if {@link CuratorFramework} exists.
@@ -124,7 +125,7 @@ trait Curator extends Conversion with CommonLog {
       p += "/"+node
       exist({ (client) => client.checkExists.forPath(p) match {
         case stat: Stat =>
-        case _ => client.create.forPath(p)
+        case _ => client.create.creatingParentsIfNeeded.forPath(p)
       }})
     })
   }
@@ -324,4 +325,5 @@ trait Curator extends Conversion with CommonLog {
         initialValue
       }
     }})
+
 }
