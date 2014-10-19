@@ -202,8 +202,7 @@ object TaskLogger {
  */
 // TODO: improve 
 //       - log level is{log-level}Enabled 
-//       - message detail at prefix 
-//       - performance e.g. io (println too slow)
+//       - message detail with prefix 
 //       or better mechanism
 protected class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
                            console: Boolean) 
@@ -255,7 +254,7 @@ protected class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
   protected def write(writer: Option[FileWriter], msg: String) = writer match {
     case Some(found) => if(!console) {
       found.write(msg+"\n")
-    } //else log.info("[TASK] [{}] {}", taskAttemptId , msg)  
+    } else log.info("[{}] {}", taskAttemptId , msg)  
     case None => log.error("Stdout or stderr is missing for task {}!", 
                            taskAttemptId)
   }

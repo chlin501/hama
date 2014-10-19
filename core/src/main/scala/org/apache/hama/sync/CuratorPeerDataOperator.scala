@@ -21,21 +21,25 @@ import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.SystemInfo
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.util.Curator
+import org.apache.hama.logging.CommonLog
 
-/**
- * @param conf is common configuration
- */
-class CuratorPeerDataOperator(conf: HamaConfiguration) extends PeerDataOperator
-                                                       with Curator {
+trait CuratorPeerDataOperator extends PeerDataOperator with Curator 
+                              with CommonLog {
 
   import PeerDataOperator._
 
   /**
-   * Parent znode of peer address to be created.
+   * Provide ZooKeeper configuration parameters for starting curator.
+   * @param conf is common configuration
+   */
+  def configuration(): HamaConfiguration  
+
+  /**
+   * Parent znode, started with '/', of peer address to be created
    * @param jobId is the job id string.
    * @return String is the parent znode of this peer system.
    */
-  protected def pathTo(jobId: String): String = "%s/%s".format(peers, jobId)
+  protected def pathTo(jobId: String): String = "/%s/%s".format(peers, jobId)
 
   /**
    * Peer address in the form of ${actor_system}@${host}:${port}.
@@ -48,7 +52,7 @@ class CuratorPeerDataOperator(conf: HamaConfiguration) extends PeerDataOperator
     String = new SystemInfo(actorSystem, host, port).getAddress
 
   /**
-   * Peer path is in the form of peers/${job_id}/${peer_address} where 
+   * Peer path is in a form of "/peers/${job_id}/${peer_address}" where 
    * peer address is consisted of ${actor_system}@${host}:${port}
    */
   protected def peerPath(pathTo: String, peerAddress: String): String = 
@@ -56,9 +60,11 @@ class CuratorPeerDataOperator(conf: HamaConfiguration) extends PeerDataOperator
 
   override def register(taskAttemptId: TaskAttemptID, actorSystem: String, 
                         host: String, port: Int) {
-    initializeCurator(conf)
+    initializeCurator(configuration)
     val znodePath = peerPath(pathTo(taskAttemptId.getJobID.toString), 
                              peerAddress(actorSystem, host, port))
+    LOG.debug("Znode path to be created {} for task {}", znodePath, 
+             taskAttemptId)
     create(znodePath)
   }
 

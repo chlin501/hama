@@ -23,12 +23,16 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.CommonLog
 import org.apache.curator.framework.CuratorFramework
 import org.apache.curator.framework.CuratorFrameworkFactory
+import org.apache.curator.framework.api.Pathable
 import org.apache.curator.framework.imps.CuratorFrameworkState._
 import org.apache.curator.framework.recipes.barriers.DistributedDoubleBarrier
 import org.apache.curator.retry.RetryNTimes
 import org.apache.zookeeper.data.Stat
+import scala.collection.JavaConversions._
 
 object Curator extends CommonLog {
+
+  val threeMinutes: Int = 3*60*1000
 
   def build(servers: String, sessionTimeout: Int, retryN: Int,
             delay: Int): CuratorFramework =
@@ -40,7 +44,7 @@ object Curator extends CommonLog {
     val servers = conf.get("hama.zookeeper.property.connectString", 
                            "localhost:2181")
     val sessionTimeout = conf.getInt("hama.zookeeper.session.timeout",
-                                     3*60*1000)
+                                     threeMinutes)
     val retryN = conf.getInt("bsp.zookeeper.client.retry_n_times", 10)
     val sleepBeforeRetry =
       conf.getInt("bsp.zookeeper.client.sleep_before_retry", 1000)
@@ -112,7 +116,8 @@ trait Curator extends Conversion with CommonLog {
    */
   def create(znode: String) {
     if(null == znode || znode.isEmpty || !znode.startsWith("/"))
-      throw new IllegalArgumentException("Invalid znode "+znode)
+      throw new IllegalArgumentException("Znode is not started from '/', empty"+
+                                         " or null value => "+znode)
     val nodes = znode.split("/").drop(1)
     var p = ""
     nodes.foreach( node => {
@@ -130,8 +135,8 @@ trait Curator extends Conversion with CommonLog {
    */
   def list(znode: String): Array[String] = exist({ (client) => 
     client.checkExists.forPath(znode) match {
-      case stat: Stat => client.getChildren.forPath(znode).toArray.
-                                asInstanceOf[Array[String]]
+      case stat: Stat => client.getChildren.forPath(znode).map { _.toString }.
+                                toArray
       case _ => Array[String]()
     }
   })
