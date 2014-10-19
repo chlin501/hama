@@ -63,22 +63,30 @@ trait Curator extends Conversion with CommonLog {
    *             connectString, sessionTimeout, retriesN, and 
    *             sleepBetweenRetries.
    */
-  def initializeCurator(conf: HamaConfiguration): Option[CuratorFramework] = {
-    curatorFramework = Option(build(conf))
-    curatorFramework.map { (client) => 
-      client.getState match {
-        case LATENT => {
-          LOG.info("Start CuratorFramework ...")
-          client.start
-        }
-        case STARTED => LOG.info("CuratorFramework is started!")
-        case STOPPED => {
-          LOG.info("CuratorFramework is stopped! Restart it again ...")
-          client.start
-        }
+  def initializeCurator(conf: HamaConfiguration): Option[CuratorFramework] = 
+    curatorFramework match { 
+      case Some(client) => { 
+        start(client) 
+        curatorFramework
+      }
+      case None => {
+        val client = build(conf)
+        start(client)
+        curatorFramework = Option(client)
+        curatorFramework
       }
     }
-    curatorFramework
+ 
+  protected def start(client: CuratorFramework) = client.getState match {
+    case LATENT => {
+      LOG.info("Start CuratorFramework ...")
+      client.start
+    }
+    case STARTED => LOG.info("CuratorFramework is started!")
+    case STOPPED => {
+      LOG.info("CuratorFramework is stopped! Restart it again ...")
+      client.start
+    }
   }
 
   protected def ifMatch[R <: Any](f: (CuratorFramework) => R): R = 

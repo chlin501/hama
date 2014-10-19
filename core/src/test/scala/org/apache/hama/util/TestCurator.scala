@@ -39,8 +39,8 @@ class TestCurator extends TestEnv("TestCurator") with LocalZooKeeper {
     LOG.info("Test curator methods ...")
     val curator = new MockCurator()
     curator.initializeCurator(testConfiguration)
-    val materPath = "/bsp/masters/bspmaster/id"
-    val masterId = curator.getOrElse(materPath, "master")
+    val masterPath = "/bsp/masters/bspmaster/id"
+    val masterId = curator.getOrElse(masterPath, "master")
     LOG.info("MasterId is "+masterId)
     assert("master".equals(masterId))
     val jobSeqPath = "/bsp/masters/bspmaster/seq"

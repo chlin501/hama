@@ -22,6 +22,9 @@ import org.apache.hama.SystemInfo
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.util.Curator
 
+/**
+ * @param conf is common configuration
+ */
 class CuratorPeerDataOperator(conf: HamaConfiguration) extends PeerDataOperator
                                                        with Curator {
 
@@ -48,10 +51,8 @@ class CuratorPeerDataOperator(conf: HamaConfiguration) extends PeerDataOperator
    * Peer path is in the form of peers/${job_id}/${peer_address} where 
    * peer address is consisted of ${actor_system}@${host}:${port}
    */
-  protected def peerPath(pathTo: String, peerAddress: String): 
-     String = {
+  protected def peerPath(pathTo: String, peerAddress: String): String = 
     "%s/%s".format(pathTo, peerAddress)
-  }
 
   override def register(taskAttemptId: TaskAttemptID, actorSystem: String, 
                         host: String, port: Int) {
