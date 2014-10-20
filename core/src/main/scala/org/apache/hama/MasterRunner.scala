@@ -27,11 +27,12 @@ import com.typesafe.config.ConfigFactory
 import org.apache.hama.master.Master
 
 /**
- * TODO: stores in HamaConfiguration, translating to Config
+ * TODO: create another conf class for converting between hama configuration and
+ *       type safe config.
  */
 object MasterConfig {
 
-  def toConfig(): Config =   // TODO: post to zk
+  def toConfig(): Config =   
     ConfigFactory.parseString("""
       master {
         akka {
@@ -58,7 +59,7 @@ object MasterConfig {
     """)
 }
 
-object MasterRunner {
+object MasterRunner { // TODO: merge to BSPMaster
 
   def main(args: Array[String]) {
     val conf = new HamaConfiguration() 

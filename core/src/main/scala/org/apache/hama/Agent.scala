@@ -23,6 +23,7 @@ import akka.actor.ActorIdentity
 import akka.actor.Props
 import org.apache.hama.logging.ActorLog
 
+// TODO: rename?
 trait Agent extends Actor with ActorLog {
 
   /**

@@ -17,10 +17,8 @@
  */
 package org.apache.hama.sync
 
-import org.apache.hama
-
-// Note: this is intended to be used internal api. need refactor if additional 
-//       requirement raises.
+// Note: this is intended to be used as internal api. need refactor if there are
+//       additional requirements
 trait Barrier {
 
   def enter(superstep: Long)

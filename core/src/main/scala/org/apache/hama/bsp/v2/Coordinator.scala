@@ -55,7 +55,7 @@ import org.apache.hama.message.TransferredState
 import org.apache.hama.monitor.Checkpointer
 import org.apache.hama.monitor.StartCheckpoint
 import org.apache.hama.sync.AllPeerNames
-import org.apache.hama.sync.BarrierMessage
+import org.apache.hama.sync.PeerClientMessage
 import org.apache.hama.sync.Enter
 import org.apache.hama.sync.ExitBarrier
 import org.apache.hama.sync.GetAllPeerNames
@@ -417,8 +417,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   //TODO: should the task's superstep be confiured to 0 instead?
   protected def firstSync(task: Task) {
-    Utils.await[BarrierMessage](syncClient, Enter(task.getCurrentSuperstep)) 
-    Utils.await[BarrierMessage](syncClient, Leave(task.getCurrentSuperstep)) 
+    Utils.await[PeerClientMessage](syncClient, Enter(task.getCurrentSuperstep)) 
+    Utils.await[PeerClientMessage](syncClient, Leave(task.getCurrentSuperstep)) 
     task.increatmentSuperstep
   }
 

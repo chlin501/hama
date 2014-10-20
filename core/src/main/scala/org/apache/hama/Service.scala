@@ -33,7 +33,8 @@ trait Service extends Agent {
   /**
    * A configuration file specific to Hama system.
    */
-  protected def configuration: HamaConfiguration // TODO: remove this?
+// TODO: move to config related trait?
+  protected def configuration: HamaConfiguration 
 
   /**
    * Initialize necessary subservices.
@@ -73,7 +74,7 @@ trait Service extends Agent {
   }
 
   /**
-   * Stop services needed.
+   * Stop services.
    */
   protected def stopServices = {}
 

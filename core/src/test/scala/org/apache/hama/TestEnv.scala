@@ -27,18 +27,10 @@ import com.typesafe.config.ConfigFactory
 import java.io.File
 import org.apache.commons.io.FileUtils
 import org.apache.hadoop.io.Writable
-import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.bsp.v2.Coordinator
-import org.apache.hama.bsp.v2.Task
-import org.apache.hama.groom.Container
 import org.apache.hama.logging.CommonLog
-import org.apache.hama.logging.TaskLogger
-import org.apache.hama.message.MessageExecutive
-import org.apache.hama.sync.BarrierClient
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.FunSpecLike
 import org.scalatest.ShouldMatchers
-import scala.collection.mutable.WrappedArray
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 

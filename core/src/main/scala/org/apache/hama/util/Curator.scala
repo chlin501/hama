@@ -95,7 +95,7 @@ trait Curator extends Conversion with CommonLog {
     }
 
   /**
-   * Operate a function if {@link CuratorFramework} exists.
+   * Operate on a function if {@link CuratorFramework} exists.
    * @param f is a function that takes in curator framework instance and 
    *          return a value.
    * @throw if curator framework is missing.
@@ -108,9 +108,9 @@ trait Curator extends Conversion with CommonLog {
 
   /**
    * Recursively create znode. 
-   * No value is set with this function.
+   * No value is set for znode with this function.
    * The znode must be an absolute path.
-   * This is not an atomic operation. 
+   * Note this is not an atomic operation. 
    * Use {@link org.apache.curator.framework.api.transaction.CuratorTransaction}
    * instead if needed.
    * @param znode denote the path to be created in ZooKeeper.
@@ -132,7 +132,8 @@ trait Curator extends Conversion with CommonLog {
  
   /**
    * List all children under a particular znode.
-   * @param znode contains a list of child znodes. 
+   * @param znode points to the parent path where children znodes exist. 
+   * @return Array of String type; at least an empty String array.
    */
   def list(znode: String): Array[String] = exist({ (client) => 
     client.checkExists.forPath(znode) match {
@@ -182,11 +183,9 @@ trait Curator extends Conversion with CommonLog {
    * @param defaultValue is applied if not found.
    * @return String if found at znode; otherwise returns defaultValue.
    */
-  def get(znode: String, defaultValue: String): String = {
-    getBytes(znode) match {
-      case Some(bytes) => new String(bytes)
-      case None => defaultValue 
-    }
+  def get(znode: String, defaultValue: String): String = getBytes(znode) match {
+    case Some(bytes) => new String(bytes)
+    case None => defaultValue 
   }
 
   /**
@@ -195,11 +194,9 @@ trait Curator extends Conversion with CommonLog {
    * @param defaultValue is applied if not found.
    * @return Int if found at znode; otherwise returns defaultValue.
    */
-  def get(znode: String, defaultValue: Int): Int = {
-    getBytes(znode) match {
-      case Some(bytes) => toInt(bytes)
-      case None => defaultValue
-    }
+  def get(znode: String, defaultValue: Int): Int = getBytes(znode) match {
+    case Some(bytes) => toInt(bytes)
+    case None => defaultValue
   }
 
   /**
@@ -208,11 +205,9 @@ trait Curator extends Conversion with CommonLog {
    * @param defaultValue is applied if not found.
    * @return Float if found at znode; otherwise returns defaultValue.
    */
-  def get(znode: String, defaultValue: Float): Float = {
-    getBytes(znode) match {
-      case Some(bytes) => toFloat(bytes)
-      case None => defaultValue
-    }
+  def get(znode: String, defaultValue: Float): Float = getBytes(znode) match {
+    case Some(bytes) => toFloat(bytes)
+    case None => defaultValue
   }
 
   /**
@@ -221,11 +216,9 @@ trait Curator extends Conversion with CommonLog {
    * @param defaultValue is applied if not found.
    * @return Long if found at znode; otherwise returns defaultValue.
    */
-  def get(znode: String, defaultValue: Long): Long = {
-    getBytes(znode) match {
-      case Some(bytes) => toLong(bytes)
-      case None => defaultValue
-    }
+  def get(znode: String, defaultValue: Long): Long = getBytes(znode) match {
+    case Some(bytes) => toLong(bytes)
+    case None => defaultValue
   }
 
   /**
@@ -234,11 +227,9 @@ trait Curator extends Conversion with CommonLog {
    * @param defaultValue is applied if not found.
    * @return Double if found at znode; otherwise returns defaultValue.
    */
-  def get(znode: String, defaultValue: Double): Double = {
-    getBytes(znode) match {
-      case Some(bytes) => toDouble(bytes)
-      case None => defaultValue
-    }
+  def get(znode: String, defaultValue: Double): Double = getBytes(znode) match {
+    case Some(bytes) => toDouble(bytes)
+    case None => defaultValue
   }
 
   /**

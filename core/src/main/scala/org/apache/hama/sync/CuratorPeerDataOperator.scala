@@ -28,6 +28,8 @@ trait CuratorPeerDataOperator extends PeerDataOperator with Curator
 
   import PeerDataOperator._
 
+  protected var peer: Option[SystemInfo] = None
+
   /**
    * Provide ZooKeeper configuration parameters for starting curator.
    * @param conf is common configuration
@@ -48,8 +50,8 @@ trait CuratorPeerDataOperator extends PeerDataOperator with Curator
    * @param port is that used by this peer system.
    * @return String is the peer address.
    */
-  protected def peerAddress(actorSystem: String, host: String, port: Int):
-    String = new SystemInfo(actorSystem, host, port).getAddress
+  protected def toPeer(actorSystem: String, host: String, port: Int):
+    SystemInfo = new SystemInfo(actorSystem, host, port)
 
   /**
    * Peer path is in a form of "/peers/${job_id}/${peer_address}" where 
@@ -61,8 +63,10 @@ trait CuratorPeerDataOperator extends PeerDataOperator with Curator
   override def register(taskAttemptId: TaskAttemptID, actorSystem: String, 
                         host: String, port: Int) {
     initializeCurator(configuration)
+    val p = toPeer(actorSystem, host, port)
+    peer = Option(p)
     val znodePath = peerPath(pathTo(taskAttemptId.getJobID.toString), 
-                             peerAddress(actorSystem, host, port))
+                             p.getAddress)
     LOG.debug("Znode path to be created {} for task {}", znodePath, 
              taskAttemptId)
     create(znodePath)
@@ -71,5 +75,10 @@ trait CuratorPeerDataOperator extends PeerDataOperator with Curator
 
   override def getAllPeerNames(taskAttemptId: TaskAttemptID): Array[String] = 
     list(pathTo(taskAttemptId.getJobID.toString))
+
+  override def getPeerName(): String = peer match {
+    case Some(p) => p.getAddress
+    case None => throw new RuntimeException("Peer is not yet registered!")
+  }
 
 }

@@ -54,4 +54,10 @@ trait PeerDataOperator {
    */
   def getAllPeerNames(taskAttemptId: TaskAttemptID): Array[String]
 
+  /**
+   * Peer name consisted of ${actor-system}@${host}:${port}.
+   * @return String of this peer name.
+   */
+  def getPeerName(): String
+
 }
