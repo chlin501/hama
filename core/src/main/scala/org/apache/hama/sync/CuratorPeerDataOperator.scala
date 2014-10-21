@@ -23,18 +23,19 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.util.Curator
 import org.apache.hama.logging.CommonLog
 
-trait CuratorPeerDataOperator extends PeerDataOperator with Curator 
-                              with CommonLog {
+object CuratorPeerDataOperator {
+
+  def apply(conf: HamaConfiguration): CuratorPeerDataOperator = 
+    new CuratorPeerDataOperator(conf)
+}
+
+class CuratorPeerDataOperator(conf: HamaConfiguration) extends PeerDataOperator 
+                                                       with Curator 
+                                                       with CommonLog {
 
   import PeerDataOperator._
 
   protected var peer: Option[SystemInfo] = None
-
-  /**
-   * Provide ZooKeeper configuration parameters for starting curator.
-   * @param conf is common configuration
-   */
-  def configuration(): HamaConfiguration  
 
   /**
    * Parent znode, started with '/', of peer address to be created
@@ -62,7 +63,7 @@ trait CuratorPeerDataOperator extends PeerDataOperator with Curator
 
   override def register(taskAttemptId: TaskAttemptID, actorSystem: String, 
                         host: String, port: Int) {
-    initializeCurator(configuration)
+    initializeCurator(conf)
     val p = toPeer(actorSystem, host, port)
     peer = Option(p)
     val znodePath = peerPath(pathTo(taskAttemptId.getJobID.toString), 

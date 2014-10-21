@@ -75,7 +75,7 @@ class TestCuratorBarrier extends TestEnv("TestCuratorBarrier")
     val b2 = CuratorBarrier(testConfiguration, taskId2, numBSPTasks)
     val barrier2 = createWithArgs("barrier2", classOf[MockBarrier], b2, tester)
 
-    for (superstep <- 1 to 5) {
+    for (superstep <- 1 to 16) {
       LOG.info("Before Enter superstep {}", superstep)
       barrier1 ! Enter(superstep)
       barrier2 ! Enter(superstep)

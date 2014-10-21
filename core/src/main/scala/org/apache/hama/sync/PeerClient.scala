@@ -32,6 +32,7 @@ import org.apache.hama.logging.TaskLogger
 import org.apache.hama.logging.TaskLogging
 
 sealed trait PeerClientMessage
+final case object Register extends PeerClientMessage
 final case class GetPeerNameBy(index: Int) extends PeerClientMessage
 final case class PeerNameByIndex(name: String) extends PeerClientMessage
 final case object GetPeerName extends PeerClientMessage
@@ -48,17 +49,34 @@ final case object ExitBarrier extends PeerClientMessage
 /**
  * An wrapper that help deal with barrier synchronization and post/ retrieve
  * peer name, etc. information.
+ * @param conf denotes comon conf that contains actor system, etc. information.
  * @param taskAttemptId denotes to which id this peer is bound.
  * @param syncer provides barrier synchronization functions.
  * @param operator deals with peer data registration and retrievation. 
  * @param tasklog logs task info.
  */
-class PeerClient(taskAttemptId: TaskAttemptID,
+class PeerClient(conf: HamaConfiguration, 
+                 taskAttemptId: TaskAttemptID,
                  syncer: Barrier,
                  operator: PeerDataOperator, 
                  tasklog: ActorRef) extends Agent with TaskLog { 
  
   protected var allPeers: Option[Array[String]] = None
+
+  protected def register: Receive = {
+    case Register => {
+      val seq = conf.getInt("bsp.child.slot.seq", -1)  
+      if(-1 == seq) throw new RuntimeException("Peer's slot seq `-1' is not "+
+                                               "correctly configured!")
+      val sys = conf.get("bsp.child.actor-system.name", "BSPPeerSystem"+seq)
+      val host = conf.get("bsp.peer.hostname", 
+                          InetAddress.getLocalHost.getHostName)
+      val port = conf.getInt("bsp.peer.port", 61000)
+      LOG.debug("ActorSystem {}, host {}, port {} is going to be registered!", 
+                sys, host, port)  
+      operator.register(taskAttemptId, sys, host, port)
+    }
+  }
 
   protected def currentPeerName: Receive = {
     case GetPeerName => sender ! PeerName(operator.getPeerName) 
@@ -99,8 +117,8 @@ class PeerClient(taskAttemptId: TaskAttemptID,
 
   protected def initPeers(taskAttemptId: TaskAttemptID): Array[String] = 
     allPeers match { 
-      case None => operator.getAllPeerNames(taskAttemptId)
-      case Some(array) => array
+      case None => operator.getAllPeerNames(taskAttemptId).sorted
+      case Some(array) => array.sorted
     }
 
   protected def enter: Receive = {
@@ -146,6 +164,6 @@ class PeerClient(taskAttemptId: TaskAttemptID,
     }
   }
 
-  override def receive = currentPeerName orElse peerNameByIndex orElse numPeers orElse allPeerNames orElse enter orElse leave orElse close orElse unknown
+  override def receive = register orElse currentPeerName orElse peerNameByIndex orElse numPeers orElse allPeerNames orElse enter orElse leave orElse close orElse unknown
 
 }

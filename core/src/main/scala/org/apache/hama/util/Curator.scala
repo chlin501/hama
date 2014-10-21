@@ -119,15 +119,7 @@ trait Curator extends Conversion with CommonLog {
     if(null == znode || znode.isEmpty || !znode.startsWith("/"))
       throw new IllegalArgumentException("Znode is not started from '/', empty"+
                                          " or null value => "+znode)
-    val nodes = znode.split("/").drop(1)
-    var p = ""
-    nodes.foreach( node => {
-      p += "/"+node
-      exist({ (client) => client.checkExists.forPath(p) match {
-        case stat: Stat =>
-        case _ => client.create.creatingParentsIfNeeded.forPath(p)
-      }})
-    })
+    exist({ (client) => client.create.creatingParentsIfNeeded.forPath(znode) })
   }
  
   /**
@@ -135,13 +127,13 @@ trait Curator extends Conversion with CommonLog {
    * @param znode points to the parent path where children znodes exist. 
    * @return Array of String type; at least an empty String array.
    */
-  def list(znode: String): Array[String] = exist({ (client) => 
+  def list(znode: String): Array[String] = exist({ (client) => {
     client.checkExists.forPath(znode) match {
       case stat: Stat => client.getChildren.forPath(znode).map { _.toString }.
                                 toArray
       case _ => Array[String]()
     }
-  })
+  }})
 
   /**
    * Set data at znode with corresponded value.

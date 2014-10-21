@@ -28,12 +28,6 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
-class MockOperator(conf: HamaConfiguration) extends CuratorPeerDataOperator {
-
-  override def configuration(): HamaConfiguration = conf
-
-}
-
 @RunWith(classOf[JUnitRunner])
 class TestCuratorPeerDataOperator extends TestEnv("TestPeerDataOperator") 
                         with LocalZooKeeper 
@@ -55,10 +49,10 @@ class TestCuratorPeerDataOperator extends TestEnv("TestPeerDataOperator")
     val taskId1 = createTaskAttemptId("test", 1, 1, 1)
     val taskId2 = createTaskAttemptId("test", 1, 2, 1)
  
-    val operator1 = new MockOperator(conf)
+    val operator1 = CuratorPeerDataOperator(conf)
     operator1.register(taskId1, "BSPPeerSystem1", "host12", 12398)
 
-    val operator2 = new MockOperator(conf)
+    val operator2 = CuratorPeerDataOperator(conf)
     operator2.register(taskId2, "BSPPeerSystem3", "dummy2", 3192)
 
     val peersFoundByOp1 = operator1.getAllPeerNames(taskId1)

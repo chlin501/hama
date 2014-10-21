@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.sync
-/*
+
 import akka.actor.ActorRef
 import java.net.InetAddress
 import org.apache.hadoop.io.IntWritable
@@ -34,10 +34,13 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
-class MockBarrierClient(conf: HamaConfiguration, taskAttemptId: TaskAttemptID, 
-                        //tasklog: ActorRef, 
-                        tester: ActorRef)
-      extends BarrierClient(conf, taskAttemptId,  tasklog) {/*client,*/ 
+class MockPeerClient(conf: HamaConfiguration,
+                     taskAttemptId: TaskAttemptID, 
+                     syncer: Barrier,
+                     operator: PeerDataOperator, 
+                     tasklog: ActorRef,
+                     tester: ActorRef)
+      extends PeerClient(conf, taskAttemptId, syncer, operator, tasklog) {
 
   override def withinBarrier(from: ActorRef) = {
     println("Notify "+from+" now is WithinBerrirer!")
@@ -52,17 +55,24 @@ class MockBarrierClient(conf: HamaConfiguration, taskAttemptId: TaskAttemptID,
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestBarrierClient extends TestEnv("TestBarrierClient") 
+class TestPeerClient extends TestEnv("TestPeerClient") 
                         with LocalZooKeeper 
                         with JobUtil {
 
   val host = InetAddress.getLocalHost.getHostName
 
-  val sys1 = "BSPPeerSystem1@%s:61000".format(host)
-  val sys2 = "BSPPeerSystem1@%s:61100".format(host)
+  val slotSeq = 1
 
+  val sys1 = "BSPPeerSystem%s@%s:61000".format(slotSeq, host)
+  val sys2 = "BSPPeerSystem%s@%s:61100".format(slotSeq, host)
+
+  // common conf for client 1
   val conf1 = config(host)
+  // common conf for client 2
   val conf2 = config(host, port = 61100)
+
+  val superstep = 0
+  val numBSPTasks = 2
 
   override def beforeAll {
     super.beforeAll
@@ -74,22 +84,31 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
     super.afterAll 
   }
 
-  it("test barrier client.") {
-    var superstep = 0
+  it("test peer client that holds barrier sync and name registrator.") {
     val taskId1 = createTaskAttemptId("test", 1, 1, 1)
     val taskId2 = createTaskAttemptId("test", 1, 2, 1)
 
-    val tasklog = tasklogOf(taskId1)
-    val client1 = createWithArgs("client1", classOf[MockBarrierCleint], conf1, taskId1, tasklog, tester)
-    val client2 = createWithArgs("client2", classOf[MockBarrierCleint], conf2, taskId1, tasklog, tester)
+    val tasklog = createWithArgs("tasklog", classOf[TaskLogger], "/tmp/hama/log", taskId1, true)
 
-    LOG.info("'Enter' barrier ...")
+    val syncer1 = CuratorBarrier(conf1, taskId1, numBSPTasks) 
+    val operator1 = CuratorPeerDataOperator(conf1) 
+    val client1 = createWithArgs("client1", classOf[MockPeerClient], conf1, taskId1, syncer1, operator1, tasklog, tester)
+
+    val syncer2 = CuratorBarrier(conf2, taskId2, numBSPTasks) 
+    val operator2 = CuratorPeerDataOperator(conf2) 
+    val client2 = createWithArgs("client2", classOf[MockPeerClient], conf2, taskId2, syncer2, operator2, tasklog, tester)
+
+    LOG.info("Peer registers itself to ZooKeeper ...")
+    client1 ! Register
+    client2 ! Register
+
+    LOG.info("Peer 'Enter' barrier ...")
     client1 ! Enter(superstep)
     client2 ! Enter(superstep)
     expect(WithinBarrier)
     expect(WithinBarrier)
 
-    LOG.info("'Leave' barrier ...")
+    LOG.info("Peer 'Leave' barrier ...")
     client1 ! Leave(superstep)
     client2 ! Leave(superstep)
     expect(ExitBarrier)
@@ -104,9 +123,11 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
     LOG.info("Actual peer2's name is {}, expected {}", peer2.peerName, sys2)
     assert(sys2.equals(peer2.peerName))
 
+    LOG.info("Find peer name at index 1 ...")
     val peerAtIdx1 = Utils.await[PeerNameByIndex](client1, GetPeerNameBy(1))
     LOG.info("Peer at index 1 value is {}", peerAtIdx1.name)
     assert(sys2.equals(peerAtIdx1.name))
+    LOG.info("Find peer name at index 0 ...")
     val peerAtIdx0 = Utils.await[PeerNameByIndex](client2, GetPeerNameBy(0))
     LOG.info("Peer at index 0 value is {}", peerAtIdx0.name)
     assert(sys1.equals(peerAtIdx0.name))
@@ -120,4 +141,4 @@ class TestBarrierClient extends TestEnv("TestBarrierClient")
     LOG.info("Done testing barrier client!")  
   }
 }
-*/
+
