@@ -58,7 +58,7 @@ final case object ExitBarrier extends PeerClientMessage
 class PeerClient(conf: HamaConfiguration, 
                  taskAttemptId: TaskAttemptID,
                  syncer: Barrier,
-                 operator: PeerDataOperator, 
+                 operator: PeerRegistrator, 
                  tasklog: ActorRef) extends Agent with TaskLog { 
  
   protected var allPeers: Option[Array[String]] = None

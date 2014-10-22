@@ -23,17 +23,17 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.util.Curator
 import org.apache.hama.logging.CommonLog
 
-object CuratorPeerDataOperator {
+object CuratorRegistrator {
 
-  def apply(conf: HamaConfiguration): CuratorPeerDataOperator = 
-    new CuratorPeerDataOperator(conf)
+  def apply(conf: HamaConfiguration): CuratorRegistrator = 
+    new CuratorRegistrator(conf)
 }
 
-class CuratorPeerDataOperator(conf: HamaConfiguration) extends PeerDataOperator 
-                                                       with Curator 
-                                                       with CommonLog {
+class CuratorRegistrator(conf: HamaConfiguration) extends PeerRegistrator 
+                                                  with Curator 
+                                                  with CommonLog {
 
-  import PeerDataOperator._
+  import PeerRegistrator._
 
   protected var peer: Option[SystemInfo] = None
 

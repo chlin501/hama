@@ -21,7 +21,7 @@ import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
 
-object PeerDataOperator {
+object PeerRegistrator {
 
   val peers = "peers" 
 
@@ -30,7 +30,7 @@ object PeerDataOperator {
 /**
  * Provide functions in looking up data stored via peer.
  */
-trait PeerDataOperator { // TODO: rename to PeerRegistrator
+trait PeerRegistrator { 
 
   /**
    * Registers a specific task with a its host and port to the sync daemon.

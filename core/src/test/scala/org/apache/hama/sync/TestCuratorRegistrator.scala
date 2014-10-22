@@ -29,7 +29,7 @@ import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
 @RunWith(classOf[JUnitRunner])
-class TestCuratorPeerDataOperator extends TestEnv("TestPeerDataOperator") 
+class TestCuratorRegistrator extends TestEnv("TestCuratorRegistrator") 
                         with LocalZooKeeper 
                         with JobUtil {
 
@@ -45,14 +45,14 @@ class TestCuratorPeerDataOperator extends TestEnv("TestPeerDataOperator")
     super.afterAll 
   }
 
-  it("test peer data operator.") {
+  it("test peer registration functions.") {
     val taskId1 = createTaskAttemptId("test", 1, 1, 1)
     val taskId2 = createTaskAttemptId("test", 1, 2, 1)
  
-    val operator1 = CuratorPeerDataOperator(conf)
+    val operator1 = CuratorRegistrator(conf)
     operator1.register(taskId1, "BSPPeerSystem1", "host12", 12398)
 
-    val operator2 = CuratorPeerDataOperator(conf)
+    val operator2 = CuratorRegistrator(conf)
     operator2.register(taskId2, "BSPPeerSystem3", "dummy2", 3192)
 
     val peersFoundByOp1 = operator1.getAllPeerNames(taskId1)

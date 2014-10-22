@@ -37,7 +37,7 @@ import scala.collection.JavaConversions._
 class MockPeerClient(conf: HamaConfiguration,
                      taskAttemptId: TaskAttemptID, 
                      syncer: Barrier,
-                     operator: PeerDataOperator, 
+                     operator: PeerRegistrator, 
                      tasklog: ActorRef,
                      tester: ActorRef)
       extends PeerClient(conf, taskAttemptId, syncer, operator, tasklog) {
@@ -91,11 +91,11 @@ class TestPeerClient extends TestEnv("TestPeerClient")
     val tasklog = createWithArgs("tasklog", classOf[TaskLogger], "/tmp/hama/log", taskId1, true)
 
     val syncer1 = CuratorBarrier(conf1, taskId1, numBSPTasks) 
-    val operator1 = CuratorPeerDataOperator(conf1) 
+    val operator1 = CuratorRegistrator(conf1) 
     val client1 = createWithArgs("client1", classOf[MockPeerClient], conf1, taskId1, syncer1, operator1, tasklog, tester)
 
     val syncer2 = CuratorBarrier(conf2, taskId2, numBSPTasks) 
-    val operator2 = CuratorPeerDataOperator(conf2) 
+    val operator2 = CuratorRegistrator(conf2) 
     val client2 = createWithArgs("client2", classOf[MockPeerClient], conf2, taskId2, syncer2, operator2, tasklog, tester)
 
     LOG.info("Peer registers itself to ZooKeeper ...")
