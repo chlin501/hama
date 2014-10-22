@@ -30,8 +30,7 @@ object PeerDataOperator {
 /**
  * Provide functions in looking up data stored via peer.
  */
-trait PeerDataOperator {
-
+trait PeerDataOperator { // TODO: rename to PeerRegistrator
 
   /**
    * Registers a specific task with a its host and port to the sync daemon.

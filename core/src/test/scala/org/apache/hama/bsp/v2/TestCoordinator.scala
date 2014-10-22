@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.bsp.v2
-/*
+
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
@@ -32,7 +32,9 @@ import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Task.Phase._
 import org.apache.hama.groom.Container
 import org.apache.hama.message.MessageExecutive
-import org.apache.hama.sync.BarrierClient
+import org.apache.hama.sync.CuratorBarrier
+import org.apache.hama.sync.CuratorPeerDataOperator
+import org.apache.hama.sync.PeerClient
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.util.JobUtil
@@ -46,10 +48,13 @@ import scala.concurrent.duration.DurationInt
 
 final case class Store(msg: Any)
 
-class MockCoordinator(conf: HamaConfiguration, task: Task, container: ActorRef,
-                      messenger: ActorRef, syncClient: ActorRef, 
+class MockCoordinator(conf: HamaConfiguration, 
+                      task: Task, 
+                      container: ActorRef,
+                      messenger: ActorRef, 
+                      peer: ActorRef, 
                       tasklog: ActorRef, sequencer: ActorRef)
-    extends Coordinator(conf, task, container, messenger, syncClient, tasklog) {
+    extends Coordinator(conf, task, container, messenger, peer, tasklog) {
 
   override def doExecute() {
     super.doExecute
@@ -180,6 +185,7 @@ class Sequencer(taskAttemptId: String, tester: ActorRef) extends Agent {
   override def receive = store orElse retrieve orElse unknown
 }
 
+/*
 object Setting {
 
   import TestEnv._
@@ -198,8 +204,14 @@ object Setting {
 class TestCoordinator extends TestEnv("TestCoordinator", Setting.toConfig.
                                       getConfig("testCoordinator")) 
                       with JobUtil with LocalZooKeeper {
+*/
+@RunWith(classOf[JUnitRunner])
+class TestCoordinator extends TestEnv("TestCoordinator") 
+                      with JobUtil with LocalZooKeeper {
 
-  val pinned = "akka.actor.my-pinned-dispatcher"
+  //val pinned = "akka.actor.my-pinned-dispatcher"
+
+  val numBSPTasks = 2
 
   val conf1 = config(port = 61000)
   val conf2 = config(port = 61100)
@@ -231,32 +243,33 @@ class TestCoordinator extends TestEnv("TestCoordinator", Setting.toConfig.
     val taskAttemptId1 = task1.getId
     val taskAttemptId2 = task2.getId
 
-    val container = createWithArgs("container", classOf[Container], pinned, testConfiguration)
-    val tasklog = createWithArgs("tasklog", classOf[TaskLogger], pinned, "/tmp/hama/log", taskAttemptId1, true)
+    val container = createWithArgs("container", classOf[Container], testConfiguration)
+    val tasklog = createWithArgs("tasklog", classOf[TaskLogger], "/tmp/hama/log", taskAttemptId1, true)
 
     val messengerName1 = "messenger-BSPPeerSystem1"
-    val messenger1 = createWithArgs(messengerName1, classOf[MessageExecutive[Writable]], pinned, testConfiguration, 1, taskAttemptId1, container, tasklog)
+    val messenger1 = createWithArgs(messengerName1, classOf[MessageExecutive[Writable]], testConfiguration, 1, taskAttemptId1, container, tasklog)
 
     val messengerName2 = "messenger-BSPPeerSystem2"
-    val messenger2 = createWithArgs(messengerName2, classOf[MessageExecutive[Writable]], pinned, testConfiguration, 2, taskAttemptId2, container, tasklog)
+    val messenger2 = createWithArgs(messengerName2, classOf[MessageExecutive[Writable]], testConfiguration, 2, taskAttemptId2, container, tasklog)
 
-    // TODO: current sync client impl process is too long. need refactor!!!
-    val syncClient1 = BarrierClient.get(conf1, taskAttemptId1)
-    val sync1 = createWithArgs("sync1", classOf[BarrierClient], pinned, conf1, taskAttemptId1, syncClient1, tasklog) 
+    val syncer1 = CuratorBarrier(conf1, taskAttemptId1, numBSPTasks)
+    val op1 = CuratorPeerDataOperator(conf1)
+    val peer1 = createWithArgs("peer1", classOf[PeerClient], conf1, taskAttemptId1, syncer1, op1, tasklog) 
 
-    val syncClient2 = BarrierClient.get(conf2, taskAttemptId2)
-    val sync2 = createWithArgs("sync2", classOf[BarrierClient], pinned, conf2, taskAttemptId2, syncClient2, tasklog) 
+    val syncer2 = CuratorBarrier(conf2, taskAttemptId2, numBSPTasks)
+    val op2 = CuratorPeerDataOperator(conf2)
+    val peer2 = createWithArgs("peer2", classOf[PeerClient], conf2, taskAttemptId2, syncer2, op2, tasklog) 
 
-    val sequencer1 = createWithArgs("seq-for-task1", classOf[Sequencer], pinned, taskAttemptId1.toString, tester)
-    val coordinator1 = createWithArgs("coordinator1", classOf[MockCoordinator], pinned, testConfiguration, task1, container, messenger1, sync1, tasklog, sequencer1)
+    val sequencer1 = createWithArgs("seq-for-task1", classOf[Sequencer], taskAttemptId1.toString, tester)
+    val coordinator1 = createWithArgs("coordinator1", classOf[MockCoordinator], testConfiguration, task1, container, messenger1, peer1, tasklog, sequencer1)
 
-    val sequencer2 = createWithArgs("seq-for-task2", classOf[Sequencer], pinned, taskAttemptId2.toString, tester)
-    val coordinator2 = createWithArgs("coordinator2", classOf[MockCoordinator], pinned, testConfiguration, task2, container, messenger2, sync2, tasklog, sequencer2)
+    val sequencer2 = createWithArgs("seq-for-task2", classOf[Sequencer], taskAttemptId2.toString, tester)
+    val coordinator2 = createWithArgs("coordinator2", classOf[MockCoordinator], testConfiguration, task2, container, messenger2, peer2, tasklog, sequencer2)
    
     coordinator1 ! Execute
     coordinator2 ! Execute
 
-    val t = 5*60*1000
+    val t = 1*60*1000
     LOG.info("Waiting for {} secs before information collected ...", (t/1000d))
     Thread.sleep(t)
 
@@ -276,4 +289,4 @@ class TestCoordinator extends TestEnv("TestCoordinator", Setting.toConfig.
     LOG.info("Done testing Coordinator! ")
   }
 }
-*/
+
