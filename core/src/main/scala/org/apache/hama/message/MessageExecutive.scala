@@ -54,22 +54,12 @@ final case object ClearOutgoingMessages extends MessengerMessage
 final case object GetListenerAddress extends MessengerMessage
 final case object GetLocalQueueMessages extends MessengerMessage
 
-/**
- * An object that contains peer and message bundle. The bundle will be sent
- * to peer accordingly.
- * @param peer is the destination to which will be sent.
- * @param msg is the actual data.
- */
-final case class Transfer[M <: Writable](
-   peer: ProxyInfo, msg: BSPMessageBundle[M]
-) extends MessengerMessage
+final case object Transfer extends MessengerMessage
 
 
 final protected[message] case class MessageFrom(
   msg: BSPMessageBundle[_ <: Writable], from: ActorRef
 )
-
-final case object IsWaitingListEmpty
 
 /**
  * Provide default functionality of {@link MessageExecutive}.
@@ -81,7 +71,6 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
                                       slotSeq: Int,
                                       taskAttemptId: TaskAttemptID,
                                       container: ActorRef,
-                                      //coordinator: ActorRef,
                                       tasklog: ActorRef)
       extends RemoteService with LocalService with TaskLog with MessageView {
 
@@ -91,6 +80,9 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     conf.getInt("hama.messenger.max.cached.connections", 100)
   protected val peersLRUCache = initializeLRUCache(maxCachedConnections)
   protected var waitingList = Map.empty[ProxyInfo, MessageFrom]
+  /**
+   * Put coordinator in constructor would lead to circular dependent issue.
+   */
   protected var coordinator: Option[ActorRef] = None
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
@@ -184,21 +176,22 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     case Send(peerName, msg) => send(peerName, msg.asInstanceOf[M])
   }
 
-  // TODO: refactor methods return types
-  protected def getOutgoingBundles(): // override
-    Iter[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] = 
-    outgoingMessageManager.getBundleIterator
-
-  protected def outgoingBundles: Receive = {
-    case GetOutgoingBundles => sender ! getOutgoingBundles
+  protected def transferMessages: Receive = {
+    case Transfer => transferAll(sender)
   }
 
   /**
-   * Client can use ask pattern for synchronous execution (blocking call).
+   * Transfer all messages stored in outgoing queue to remote messenger.
+   * @param from is coordinator who triggers the Transfer operation.
    */
-  protected def transferMessages: Receive = {
-    case Transfer(peer, bundle) => 
-      transfer(peer, bundle.asInstanceOf[BSPMessageBundle[M]], sender)
+  protected def transferAll(from: ActorRef) = {
+    val it = asScalaIterator(outgoingMessageManager.iterator)
+    it.foreach( (entry) => {
+      val peer = entry.getKey
+      val bundle = entry.getValue
+      it.remove
+      transfer(peer, bundle.asInstanceOf[BSPMessageBundle[M]], from)
+    })
   }
 
   /**
@@ -239,8 +232,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   }
 
   /**
-   * This is used to notify client, usually Coordinator, that messages are sent
-   * out.
+   * Notify {@link Coordinator} that messages are sent out to remote.
    */
   def confirm(from: ActorRef) = from ! TransferredCompleted 
 
@@ -306,8 +298,8 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   protected def putMessagesToLocal: Receive = {
     case bundle: BSPMessageBundle[M] => {
-      LOG.info("Message received from {} is putting to local queue!", 
-               sender)
+      LOG.info("Message bundle {} received from {} is putting to local queue!", 
+               sender, bundle)
       putToLocal(bundle)
     }
   }
@@ -319,9 +311,13 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   protected def loopBackMessages(bundle: BSPMessageBundle[M]) = { 
     val threshold = BSPMessageCompressor.threshold(Option(conf))
     bundle.setCompressor(BSPMessageCompressor.get(conf), threshold)
-    asScalaIterator(bundle.iterator).foreach( msg => {
-      loopBackMessage(msg)
-    })
+    // TODO: bundle.iterator might need investigate because inside bundle is 
+    //       another bundle looks weired.
+    asScalaIterator(bundle.iterator).foreach( b => {
+      val b2 = b.asInstanceOf[BSPMessageBundle[M]]
+      asScalaIterator(b2.iterator).foreach( msg => {
+        loopBackMessage(msg)
+    })})
   }
 
   // TODO: report stats
@@ -336,30 +332,10 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     case GetListenerAddress => sender ! getListenerAddress
   }
 
-  protected def checkState: Receive = {
-    case IsTransferredCompleted => waitingList.isEmpty match {
-      case true => sender ! TransferredCompleted
-      case false => request(self, IsWaitingListEmpty)
-    }
-  }
-
-  protected def checkWaitingList: Receive = {
-    case IsWaitingListEmpty => waitingList.isEmpty match {
-      case true => {
-        coordinator.map { (bspPeer) => bspPeer ! TransferredCompleted }
-        cancelRequest(IsWaitingListEmpty.toString)
-      }
-      case false => 
-        LOG.debug("Messages are not yet transferred completed because " +
-                  "waiting list for task {} is {}", taskAttemptId, 
-                  waitingList.size)
-    }
-  }
-
   protected def setCoordinator: Receive = {
     case SetCoordinator(bspPeer) => coordinator = Option(bspPeer)
   }
 
-  override def receive = setCoordinator orElse sendMessage orElse currentMessage orElse numberCurrentMessages orElse outgoingBundles orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeIsTerminated orElse checkState orElse checkWaitingList orElse localQueueMessages orElse unknown 
+  override def receive = setCoordinator orElse sendMessage orElse currentMessage orElse numberCurrentMessages orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeIsTerminated orElse localQueueMessages orElse unknown 
 
 }

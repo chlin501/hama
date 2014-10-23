@@ -75,6 +75,8 @@ class OutgoingPOJOMessageBundle[M <: Writable]
     outgoingBundles.containsKey(peer) match {
       case true => 
       case false => {
+LOG.info("1111111111111111111 new a bundle and add bundle to outgoing queue!")
+
         val bundle = new BSPMessageBundle[M]()
         bundle.setCompressor(compressor.getOrElse(null), 
                              BSPMessageCompressor.threshold(this.conf))
@@ -82,8 +84,12 @@ class OutgoingPOJOMessageBundle[M <: Writable]
       }
     } 
     combiner match {
-      case None => outgoingBundles.get(peer).addMessage(msg)
+      case None => {
+LOG.info("222222222222222 add msg {} to bundle!", msg)
+        outgoingBundles.get(peer).addMessage(msg)
+      }
       case Some(found) => {
+LOG.info("33333333333 found combiner! combine msg {} and add to !", msg)
           val bundle = outgoingBundles.get(peer)
           bundle.addMessage(msg)
           val combined = new BSPMessageBundle[M]()
@@ -97,6 +103,6 @@ class OutgoingPOJOMessageBundle[M <: Writable]
 
   override def clear() = outgoingBundles.clear
 
-  override def getBundleIterator(): java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] = outgoingBundles.entrySet.iterator 
+  override def iterator(): java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] = outgoingBundles.entrySet.iterator 
 
 }

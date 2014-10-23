@@ -70,8 +70,6 @@ trait OutgoingMessageManager[M <: Writable] {
    * Iterator of the entire messages.
    * @return Iterator contains peer info associated with message bundles.
    */
-  def getBundleIterator(): java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] 
+  def iterator(): java.util.Iterator[java.util.Map.Entry[ProxyInfo, BSPMessageBundle[M]]] 
 
-  // TODO: use flapmap to flatten value stored in bsp message bundle 
-  //def getBundleIterator(): Iterator[ProxyInfo, Seq[M]]
 }

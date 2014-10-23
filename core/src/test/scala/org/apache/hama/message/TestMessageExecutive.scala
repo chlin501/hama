@@ -50,8 +50,8 @@ class MockMessageExecutive[M <: Writable](conf: HamaConfiguration,
                                   tasklog) {
 
   def getSentMessage: Receive = {
-    case GetSentMessage => {
-      asScalaIterator(getOutgoingBundles).foreach ( entry => {
+    case GetSentMessage => { 
+      asScalaIterator(outgoingMessageManager.iterator).foreach ( entry => {
         val proxy = entry.getKey
         val bundle = entry.getValue
         asScalaIterator(bundle.iterator).foreach ( bundle1 => {
@@ -67,7 +67,7 @@ class MockMessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   override def lookupPeer(name: String, addr: String) = {
     val containerRemoved = addr.replaceAll("container/", "")
-    println("remove container within actor path: "+containerRemoved)
+    println("Remove container within actor path: "+containerRemoved)
     val sysName = target.getActorSystemName
     val replaced = containerRemoved.replaceFirst(sysName, context.system.name)
     println("replace first system address ("+sysName+") with ("+
@@ -80,10 +80,10 @@ class MockMessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   override def putToLocal(bundle: BSPMessageBundle[M]) {
     val beforeSize = localQueue.size
-    println("actor name: "+name+" [before] local queue's size is "+beforeSize) 
+    println("Actor name: "+name+" [before] local queue's size is "+beforeSize) 
     super.putToLocal(bundle)
     val afterSize = localQueue.size
-    println("actor name: "+name+" [after] local queue's size is "+afterSize) 
+    println("Actor name: "+name+" [after] local queue's size is "+afterSize) 
     tester ! afterSize
   } 
 
@@ -145,12 +145,7 @@ class TestMessageExecutive extends TestEnv(TestMessageExecutive.sysName)
   def messengerOf(name: String, slotSeq: Int, taskAttemptId: TaskAttemptID, 
                   tasklog: ActorRef, proxy: ProxyInfo): ActorRef = {
     val container: ActorRef = null
-    createWithArgs(name, classOf[MessageExecutive[Writable]], testConfiguration, slotSeq, taskAttemptId, container, tasklog, proxy, tester) 
-/*
-    createWithArgs(slotSeq, classOf[MockMessageExecutive[Writable]],
-                testConfiguration, taskAttemptId, container, tasklog, 
-                proxy, tester)
-*/
+    createWithArgs(name, classOf[MockMessageExecutive[Writable]], testConfiguration, slotSeq, taskAttemptId, container, tasklog, proxy, tester) 
   }
 
   it("test message executive functions.") {
@@ -159,9 +154,6 @@ class TestMessageExecutive extends TestEnv(TestMessageExecutive.sysName)
     val taskAttemptId2 = createTaskAttemptId(jobId, 4, 2)
   
     // log dir will both create at logDir/jobId so we only create 1 task logger
-/*
-    val tasklog = tasklogOf(taskAttemptId1) 
-*/
     val tasklog = createWithArgs("tasklog", classOf[TaskLogger], "/tmp/hama/log", taskAttemptId1, true)
     val proxy1 = Peer.at(bspPeerSystem1) 
     val proxy2 = Peer.at(bspPeerSystem2) 
@@ -198,10 +190,11 @@ class TestMessageExecutive extends TestEnv(TestMessageExecutive.sysName)
     messenger2 ! GetSentMessage
     expect((proxy1.getPath, seq1))
 
-    messenger1 ! Transfer(proxy2, bundle2a)
-    expect(3)
-    messenger1 ! Transfer(proxy2, bundle2b)
+    // coordinator send Transfer message once and messenger iterates all msgs
+    // transferring to remote messenger.
+    messenger1 ! Transfer 
     expect(6)
+
     messenger2 ! GetCurrentMessage
     expectAnyOf("mem: 4096", "cpu: 486", "disk: 512")
     messenger2 ! GetCurrentMessage
@@ -218,8 +211,11 @@ class TestMessageExecutive extends TestEnv(TestMessageExecutive.sysName)
     messenger1 ! GetListenerAddress
     expect(currentPeer(slotSeq1))
 
-    messenger2 ! Transfer(proxy1, bundle1)
+    // coordinator send Transfer message once and messenger iterates all msgs
+    // transferring to remote messenger.
+    messenger2 ! Transfer
     expect(3)
+
     messenger1 ! GetCurrentMessage
     expectAnyOf("3", "6", "9")
     messenger1 ! GetCurrentMessage

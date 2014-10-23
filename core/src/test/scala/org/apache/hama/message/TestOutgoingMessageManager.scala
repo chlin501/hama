@@ -38,7 +38,7 @@ class TestOutgoingMessageManager extends TestEnv("TestOutgoingMessageManager") {
     outgoing.addMessage(Peer.at("BSPPeerSystem9@host1:29184"), 
                         new IntWritable(11))
     var msgCnt = 0
-    asScalaIterator(outgoing.getBundleIterator).foreach( entry => {
+    asScalaIterator(outgoing.iterator).foreach( entry => {
       val key = entry.getKey
       val value = entry.getValue
       LOG.info("Message key: "+key+" value: "+value)
