@@ -37,6 +37,7 @@ import org.apache.hama.logging.TaskLogging
 import org.apache.hama.message.compress.BSPMessageCompressor
 import org.apache.hama.message.queue.MessageQueue
 import org.apache.hama.message.queue.Viewable
+import org.apache.hama.monitor.GetLocalQueueMsgs
 import org.apache.hama.monitor.LocalQueueMessages
 import org.apache.hama.monitor.NotViewableQueue
 import org.apache.hama.util.LRUCache
@@ -52,7 +53,7 @@ final case class NumCurrentMessages(num: Int) extends MessengerMessage
 final case object GetOutgoingBundles extends MessengerMessage
 final case object ClearOutgoingMessages extends MessengerMessage
 final case object GetListenerAddress extends MessengerMessage
-final case object GetLocalQueueMessages extends MessengerMessage
+//final case object GetLocalQueueMessages extends MessengerMessage
 
 final case object Transfer extends MessengerMessage
 
@@ -144,13 +145,13 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   }
 
   /**
-   * Checkpoint should call this function asking for the messages at the 
-   * beginning of superstep.
+   * Coordinator, i.e. sender, send the messages. But the result need to 
+   * send to Checkpointer, which peforms actual checkpointing task instead.  
    */
-  protected def localQueueMessages: Receive = {
-    case GetLocalQueueMessages => localMessages[Writable]() match {
-      case Some(list) => sender ! LocalQueueMessages(list)
-      case None => sender ! NotViewableQueue
+  protected def getLocalQueueMsgs:Receive = {
+    case GetLocalQueueMsgs(ckpt) => localMessages[Writable]() match {
+      case Some(list) => ckpt ! LocalQueueMessages(list)
+      case None => ckpt ! NotViewableQueue
     }
   }
 
@@ -336,6 +337,6 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     case SetCoordinator(bspPeer) => coordinator = Option(bspPeer)
   }
 
-  override def receive = setCoordinator orElse sendMessage orElse currentMessage orElse numberCurrentMessages orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeIsTerminated orElse localQueueMessages orElse unknown 
+  override def receive = setCoordinator orElse sendMessage orElse currentMessage orElse numberCurrentMessages orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeIsTerminated orElse getLocalQueueMsgs orElse unknown 
 
 }

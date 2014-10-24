@@ -32,7 +32,6 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.Combiner
 import org.apache.hama.message.compress.BSPMessageCompressor
-import org.apache.hama.message.GetLocalQueueMessages
 //import org.apache.hama.ProxyInfo
 import org.apache.hama.util.Curator
 import scala.util.Failure
@@ -71,14 +70,17 @@ class Checkpointer(commConf: HamaConfiguration,
    */
   protected var msgsReceived = false
 
-  protected var varReceived = false 
+  protected var mapNextReceived = false 
 
   override def configuration(): HamaConfiguration = commConf
 
   override def initializeServices = initializeCurator(commConf)
 
+  /**
+   * Root path to external storage.
+   */
   protected def getRootPath(taskConf: HamaConfiguration): String = 
-    taskConf.get("bsp.checkpoint.root.path", "/bsp/checkpoint") 
+    taskConf.get("bsp.checkpoint.root.path", "/checkpoint") 
 
   protected def mkDir(rootPath: String, 
                       superstepCount: Long): String = {
@@ -96,6 +98,9 @@ class Checkpointer(commConf: HamaConfiguration,
                            taskAttemptId.toString, suffix)
   }
 
+  /**
+   * Write to the output stream.
+   */
   protected def write(ckptPath: Path, writeTo: (DataOutputStream) => Boolean): 
       Boolean = Try(createOrAppend(ckptPath)) match {
     case Success(out) => { 
@@ -151,25 +156,80 @@ class Checkpointer(commConf: HamaConfiguration,
   }
 
   /**
-   * Entry point to start checkpoint process.
-  protected def startCheckpoint: Receive = {
-   case StartCheckpoint => {
-     messenger ! GetLocalQueueMessages  
-     superstepWorker ! GetCkptData
-   }
-  }
+   * MessageExecutive replies with messages in localQueue for checkpoint.
    */
-
   protected def localQueueMessages: Receive = {
-    case LocalQueueMessages(list) => {
+    case LocalQueueMessages(messages) => {
       msgsReceived = true
-      writeMessages(list)
+      writeMessages(messages)/* match {
+        case true => {
+          val ckptZnode = ckptDir + "/" + taskAttemptId + ".ok"  
+          LOG.info("Mark finishing to znode {}", ckptZnode)
+          markFinish(ckptZnode)
+        }
+        case false => {
+          val ckptZnode = ckptDir + "/" + taskAttemptId + ".fail"  
+          LOG.info("Mark failure to znode {}", ckptZnode)
+          markFinish(ckptZnode)
+        }
+      }
+      doClose
+      */
     }
   }
 
-  // TODO: write to external storage
-  protected def writeMessages(list: List[Writable]) { 
-  // xxxxx  
+  protected def ckptPath(): String = 
+    mkDir(getRootPath(taskConf), superstepCount) + "/"+ taskAttemptId + ".ckpt" 
+
+  protected def writeMessages(messages: List[Writable]): Boolean = 
+    write(new Path(ckptPath), (out) => { 
+      val flag = toBundle(messages) match {
+        case Some(bundle) => { bundle.write(out); true }
+        case None => {
+           LOG.error("Can't create BSPMessageBundle for checkpointer {} at {}", 
+                     taskAttemptId, superstepCount)
+           false
+        }
+      }
+      flag
+    })
+
+  protected def getBundle(compressor: BSPMessageCompressor): 
+      BSPMessageBundle[Writable] = {
+    val bundle = new BSPMessageBundle[Writable]()
+    bundle.setCompressor(compressor, 
+                         BSPMessageCompressor.threshold(Option(commConf)))
+    bundle
+  }
+
+  protected def toBundle(messages: List[Writable]): 
+    Option[BSPMessageBundle[Writable]] = Combiner.get(Option(commConf)) match {
+    case None => {
+      val compressor = BSPMessageCompressor.get(commConf)
+      val bundle = getBundle(compressor)
+      messages.foreach( msg => bundle.addMessage(msg))
+      Option(bundle)
+    } 
+    case Some(combiner) => {
+      val compressor = BSPMessageCompressor.get(commConf) 
+      val bundle = getBundle(compressor)
+      messages.foreach( msg => bundle.addMessage(msg))
+      val combined = getBundle(compressor)
+      val itor = bundle.asInstanceOf[java.lang.Iterable[Nothing]]
+      combined.addMessage(combiner.combine(itor))
+      Option(combined)
+    }
+  }
+
+  protected def mapVarNextClass: Receive = {
+    case MapVarNextClass(map, next) => {
+      mapNextReceived = true
+      writeMapNext(map, next)
+    }
+  }
+
+  protected def writeMapNext(map: Map[String, Writable], next: Class[_]) { 
+    
   }
 
   /**
@@ -260,32 +320,9 @@ class Checkpointer(commConf: HamaConfiguration,
     }
   } 
 
-  protected def toBundle[M <: Writable](messages: List[M]): 
-      Option[BSPMessageBundle[M]] = Combiner.get(Option(commConf)) match {
-    case None => {
-      val compressor = BSPMessageCompressor.get(commConf)
-      val bundle = getBundle[M](compressor)
-      messages.foreach( msg => bundle.addMessage(msg))
-      Option(bundle)
-    } 
-    case Some(combiner) => {
-      val compressor = BSPMessageCompressor.get(commConf) 
-      val bundle = getBundle[M](compressor)
-      messages.foreach( msg => bundle.addMessage(msg))
-      val combined = getBundle[M](compressor)
-      val itor = bundle.asInstanceOf[java.lang.Iterable[Nothing]]
-      combined.addMessage(combiner.combine(itor))
-      Option(combined)
-    }
-  }
+
   
-  protected def getBundle[M <: Writable](compressor: BSPMessageCompressor): 
-      BSPMessageBundle[M] = {
-    val bundle = new BSPMessageBundle[M]()
-    bundle.setCompressor(compressor, 
-                         BSPMessageCompressor.threshold(Option(commConf)))
-    bundle
-  }
+  
    
   protected def toMapWritable(variables: Map[String, Writable]): MapWritable = 
     variables.isEmpty match {
@@ -300,7 +337,7 @@ class Checkpointer(commConf: HamaConfiguration,
     }
 */
 
-  override def receive = localQueueMessages orElse notViewable orElse close orElse unknown
+  override def receive = localQueueMessages orElse notViewable orElse mapVarNextClass orElse close orElse unknown
 
 }
 

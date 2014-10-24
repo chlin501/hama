@@ -25,8 +25,12 @@ import org.apache.hama.message.BSPMessageBundle
 
 sealed trait CheckpointMessage
 final case class GetLocalQueueMsgs(ckpt: ActorRef) extends CheckpointMessage
-// map variable and next superstep class
+/**
+ * This requests for replying map variables and next class to checkpointer.
+ */
 final case class GetMapVarNextClass(ckpt: ActorRef) extends CheckpointMessage
 final case class LocalQueueMessages(list: List[Writable]) 
       extends CheckpointMessage
 final case object NotViewableQueue extends CheckpointMessage
+final case class MapVarNextClass(map: Map[String, Writable], next: Class[_]) 
+      extends CheckpointMessage

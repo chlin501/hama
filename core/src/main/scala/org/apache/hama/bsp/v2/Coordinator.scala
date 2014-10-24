@@ -521,7 +521,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    * worker by coordinator to ensure the checkpoint data would be obtained 
    * before next computation is started. 
    */
-  protected def checkpoint() = isCheckpoint match  {
+  protected def checkpoint() = isCheckpointEnabled match  {
     case true => createCheckpointer.map { (checkpointer) =>
       messenger ! GetLocalQueueMsgs(checkpointer)
       currentSuperstep.map { (current) => 
@@ -531,7 +531,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case false => 
   }
 
-  protected def isCheckpoint(): Boolean = {
+  protected def isCheckpointEnabled(): Boolean = {
     val isEnabled = conf.getBoolean("bsp.checkpoint.enabled", true)
     LOG.debug("Is checkpoint enabled for task {}? {}", task.getId, isEnabled)
     isEnabled
