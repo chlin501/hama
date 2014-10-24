@@ -65,9 +65,13 @@ class Checkpointer(commConf: HamaConfiguration,
   //       storage.
   protected val operation = Operation.get(taskConf) 
   
-  protected var doneTransmit = false
+  /**
+   * Record if messages and map variables received or not, regardless of 
+   * successfully checkpointing. If anything goes wrong, stop and close it.
+   */
+  protected var msgsReceived = false
 
-  protected var superstepDataReceived = false 
+  protected var varReceived = false 
 
   override def configuration(): HamaConfiguration = commConf
 
@@ -148,31 +152,38 @@ class Checkpointer(commConf: HamaConfiguration,
 
   /**
    * Entry point to start checkpoint process.
-   */
   protected def startCheckpoint: Receive = {
    case StartCheckpoint => {
      messenger ! GetLocalQueueMessages  
-     superstepWorker ! GetCheckpointData
+     superstepWorker ! GetCkptData
    }
   }
+   */
 
   protected def localQueueMessages: Receive = {
-    case LocalQueueMessages(list) => checkpoint(list)
+    case LocalQueueMessages(list) => {
+      msgsReceived = true
+      writeMessages(list)
+    }
   }
 
-  protected def checkpoint[M <: Writable](list: List[M]) { /* xxxx TODO: checkpoint msgs */ }
+  // TODO: write to external storage
+  protected def writeMessages(list: List[Writable]) { 
+  // xxxxx  
+  }
 
   /**
    * Ideally this won't happen because viewable will at least return empty 
    * list instead of None.
    */
-  protected def emptyLocalQueue: Receive = {
-    case EmptyLocalQueue => {
-      LOG.error("No messages for checkpointer with task {} at superstep {}!",
-                taskAttemptId, superstepCount) 
+  protected def notViewable: Receive = {
+    case NotViewableQueue => {
+      LOG.error("LocalQueue is not an instance of Viewable for task {} "+
+                "at superstep {}!", taskAttemptId, superstepCount) 
       close
     }
   }
+
 
 /*
   protected def checkpoint: Receive = {
@@ -289,6 +300,7 @@ class Checkpointer(commConf: HamaConfiguration,
     }
 */
 
-  override def receive = startCheckpoint orElse localQueueMessages orElse close orElse unknown
+  override def receive = localQueueMessages orElse notViewable orElse close orElse unknown
+
 }
 

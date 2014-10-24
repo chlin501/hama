@@ -24,8 +24,9 @@ import org.apache.hama.ProxyInfo
 import org.apache.hama.message.BSPMessageBundle
 
 sealed trait CheckpointMessage
-final case object StartCheckpoint extends CheckpointMessage
-final case object GetCheckpointData extends CheckpointMessage
-final case class LocalQueueMessages[M <: Writable](list: List[M]) 
+final case class GetLocalQueueMsgs(ckpt: ActorRef) extends CheckpointMessage
+// map variable and next superstep class
+final case class GetMapVarNextClass(ckpt: ActorRef) extends CheckpointMessage
+final case class LocalQueueMessages(list: List[Writable]) 
       extends CheckpointMessage
-final case object EmptyLocalQueue extends CheckpointMessage
+final case object NotViewableQueue extends CheckpointMessage

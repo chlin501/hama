@@ -52,7 +52,8 @@ import org.apache.hama.message.TransferredCompleted
 import org.apache.hama.message.TransferredFailure
 import org.apache.hama.message.TransferredState
 import org.apache.hama.monitor.Checkpointer
-import org.apache.hama.monitor.StartCheckpoint
+import org.apache.hama.monitor.GetLocalQueueMsgs
+import org.apache.hama.monitor.GetMapVarNextClass
 import org.apache.hama.sync.AllPeerNames
 import org.apache.hama.sync.PeerClientMessage
 import org.apache.hama.sync.Enter
@@ -115,17 +116,16 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   protected[v2] var supersteps = Map.empty[String, Spawned]
 
-  //protected[v2] var superstepCleanupCount = 0
-
   protected[v2] var currentSuperstep: Option[ActorRef] = None
 
   protected[v2] var nextSuperstep: Option[Class[_]] = None
 
-  var start: Long = 0 // test
 
-  var start_superstep: Long = 0 // test
-  var finished_superstep: Long = 0 // test
-  var elapsed_superstep: Long = 0 // test
+  // TODO: move to Utils.time() function
+  var start: Long = 0 
+  var start_superstep: Long = 0 
+  var finished_superstep: Long = 0 
+  var elapsed_superstep: Long = 0 
 
   var start_enter: Long = 0
   var finished_enter: Long = 0
@@ -516,17 +516,25 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     }
   }
 
+  /**
+   * Send GetlocalQueueMsgs and GetMapVarNextClass to messenger and superstep
+   * worker by coordinator to ensure the checkpoint data would be obtained 
+   * before next computation is started. 
+   */
+  protected def checkpoint() = isCheckpoint match  {
+    case true => createCheckpointer.map { (checkpointer) =>
+      messenger ! GetLocalQueueMsgs(checkpointer)
+      currentSuperstep.map { (current) => 
+        current ! GetMapVarNextClass(checkpointer)
+      } 
+    }
+    case false => 
+  }
+
   protected def isCheckpoint(): Boolean = {
     val isEnabled = conf.getBoolean("bsp.checkpoint.enabled", true)
     LOG.debug("Is checkpoint enabled for task {}? {}", task.getId, isEnabled)
     isEnabled
-  }
-
-  protected def checkpoint() = isCheckpoint match  {
-    case true => createCheckpointer.map { (checkpointer) =>
-                   checkpointer ! StartCheckpoint  
-    }
-    case false => 
   }
   
   protected def checkpointerName = 

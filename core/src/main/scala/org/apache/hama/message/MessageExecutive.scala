@@ -38,7 +38,7 @@ import org.apache.hama.message.compress.BSPMessageCompressor
 import org.apache.hama.message.queue.MessageQueue
 import org.apache.hama.message.queue.Viewable
 import org.apache.hama.monitor.LocalQueueMessages
-import org.apache.hama.monitor.EmptyLocalQueue
+import org.apache.hama.monitor.NotViewableQueue
 import org.apache.hama.util.LRUCache
 import scala.collection.JavaConversions._
 
@@ -149,8 +149,8 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
    */
   protected def localQueueMessages: Receive = {
     case GetLocalQueueMessages => localMessages[Writable]() match {
-      case Some(list) => sender ! LocalQueueMessages[Writable](list)
-      case None => sender ! EmptyLocalQueue // list won't be none 
+      case Some(list) => sender ! LocalQueueMessages(list)
+      case None => sender ! NotViewableQueue
     }
   }
 
