@@ -72,6 +72,16 @@ class Checkpointer(commConf: HamaConfiguration,
 
   protected var mapNextReceived = false 
 
+  /**
+   * Set to true when messages is successfully written to external storage.
+   */
+  protected var msgsStatus = false
+
+  /**
+   * Set to true when map and next is successfully written to external storage.
+   */
+  protected var mapNextStatus = false
+ 
   override def configuration(): HamaConfiguration = commConf
 
   override def initializeServices = initializeCurator(commConf)
@@ -82,38 +92,37 @@ class Checkpointer(commConf: HamaConfiguration,
   protected def getRootPath(taskConf: HamaConfiguration): String = 
     taskConf.get("bsp.checkpoint.root.path", "/checkpoint") 
 
-  protected def mkDir(rootPath: String, 
-                      superstepCount: Long): String = {
-    val jobId = taskAttemptId.getJobID.toString
-    "%s/%s/%s".format(rootPath, jobId, superstepCount) 
-  }
+  protected def mkDir(rootPath: String, superstepCount: Long): String = 
+    "%s/%s/%s".format(rootPath, taskAttemptId.getJobID.toString, superstepCount)
 
   // TODO: we may need to divide <superstep> into sub category because 
   //       more than 10k znodes may lead to performance slow down for zk 
   //       at the final step marking with ok znode.
   protected def mkPath(rootPath: String, superstepCount: Long, 
-                       suffix: String = "ckpt"): String = {
-    val jobId = taskAttemptId.getJobID.toString
-    "%s/%s/%s/%s.%s".format(rootPath, jobId, superstepCount, 
-                           taskAttemptId.toString, suffix)
-  }
+                       suffix: String = "ckpt"): String = 
+    "%s/%s/%s/%s.%s".format(rootPath, taskAttemptId.getJobID.toString,
+                            superstepCount, taskAttemptId.toString, suffix)
 
   /**
-   * Write to the output stream.
+   * Write data to the output stream, and close the stream when finishing 
+   * writing.
+   * @param ckptPath points to the dest where data to be written.
+   * @param writeTo data output stream.
+   * @return Boolean denotes if writing successes or not.
    */
   protected def write(ckptPath: Path, writeTo: (DataOutputStream) => Boolean): 
       Boolean = Try(createOrAppend(ckptPath)) match {
     case Success(out) => { 
-      var flag = true
+      var flag = false 
       try { 
         flag = writeTo(out) 
       } catch { 
         case e: Exception => {
           LOG.error("Exception is thrown when writing to "+ckptPath, e)
-          flag = false 
+          flag = false  
         }
       } finally { 
-        out.close 
+        out.close // TODO: maybe a better mechansim for closing output stream.
       }
       flag
     }
@@ -143,9 +152,17 @@ class Checkpointer(commConf: HamaConfiguration,
    * Write to znode denoting the checkpoint process is completed!
    * @param destPath denotes the path at zk and checkpoint process is completed.
    */
-  protected def markFinish(destPath: String) = create(destPath)      
+  protected def markIfFinish() = if(msgsReceived && mapNextReceived) { 
+    val dest = ckptDir + "/" + taskAttemptId  
+    if(msgsStatus && mapNextStatus)  // decide fail or success
+      create(dest + ".ok") 
+    else 
+      create(dest + ".fail") 
+  } 
 
-  protected def doClose() = self ! Close
+  protected def ifClose() = if(msgsReceived && mapNextReceived) {
+    self ! Close
+  }
 
   /**
    * Close this checkpointer.
@@ -155,34 +172,38 @@ class Checkpointer(commConf: HamaConfiguration,
     case Close => context.stop(self)
   }
 
+/* true
+          val ckptZnode = ckptDir + "/" + taskAttemptId + ".ok"  
+          LOG.info("Mark finishing to znode {}", ckptZnode)
+          markFinish(ckptZnode)
+*/
+/* false
+          val ckptZnode = ckptDir + "/" + taskAttemptId + ".fail"  
+          LOG.info("Mark failure to znode {}", ckptZnode)
+          markFinish(ckptZnode)
+*/  
   /**
    * MessageExecutive replies with messages in localQueue for checkpoint.
    */
   protected def localQueueMessages: Receive = {
     case LocalQueueMessages(messages) => {
       msgsReceived = true
-      writeMessages(messages)/* match {
-        case true => {
-          val ckptZnode = ckptDir + "/" + taskAttemptId + ".ok"  
-          LOG.info("Mark finishing to znode {}", ckptZnode)
-          markFinish(ckptZnode)
-        }
-        case false => {
-          val ckptZnode = ckptDir + "/" + taskAttemptId + ".fail"  
-          LOG.info("Mark failure to znode {}", ckptZnode)
-          markFinish(ckptZnode)
-        }
-      }
-      doClose
-      */
+      msgsStatus = writeMessages(messages) 
+      markIfFinish
+      ifClose
     }
   }
 
-  protected def ckptPath(): String = 
-    mkDir(getRootPath(taskConf), superstepCount) + "/"+ taskAttemptId + ".ckpt" 
+  protected def ckptDir(): String = mkDir(getRootPath(taskConf), superstepCount)
+
+  /**
+   * Checkpoint path with suffix supplied.
+   */
+  protected def ckptPath(suffix: String): String = ckptDir + "/"+ 
+    taskAttemptId + "." + suffix
 
   protected def writeMessages(messages: List[Writable]): Boolean = 
-    write(new Path(ckptPath), (out) => { 
+    write(new Path(ckptPath("msg")), (out) => { 
       val flag = toBundle(messages) match {
         case Some(bundle) => { bundle.write(out); true }
         case None => {
@@ -224,12 +245,38 @@ class Checkpointer(commConf: HamaConfiguration,
   protected def mapVarNextClass: Receive = {
     case MapVarNextClass(map, next) => {
       mapNextReceived = true
-      writeMapNext(map, next)
+      mapNextStatus = writeMapNext(map, next) 
+      markIfFinish
+      ifClose
     }
   }
 
-  protected def writeMapNext(map: Map[String, Writable], next: Class[_]) { 
-    
+  protected def writeMapNext(map: Map[String, Writable], next: Class[_]): 
+    Boolean = write(new Path(ckptPath("sup")), (out) => { 
+      toMapWritable(map).write(out)
+      writeText(next)(out)
+      true
+    })
+
+  protected def toMapWritable(variables: Map[String, Writable]): MapWritable = 
+    variables.isEmpty match {
+      case true => new MapWritable
+      case false => {
+        val writable = new MapWritable
+        writable.putAll(mapAsJavaMap(variables.map { e => 
+          (new Text(e._1), e._2)
+        }))
+        writable
+      }
+    }
+
+  protected def writeText(next: Class[_])(out: DataOutputStream) = next match {
+    case null => out.writeBoolean(false)
+    case clazz@_ => { 
+      out.writeBoolean(true)
+      val text = new Text(next.getClass.getName)
+      text.write(out)
+    }
   }
 
   /**
@@ -306,35 +353,13 @@ class Checkpointer(commConf: HamaConfiguration,
       flag
     })
 
-  protected def writeText(next: Class[_ <: Superstep])(out: DataOutputStream):
-      Option[Text] = next match {
-    case null => { 
-      out.writeBoolean(false)
-      None
-    }
-    case clazz@_ => {
-      out.writeBoolean(true)
-      val text = new Text(next.getClass.getName)
-      text.write(out)
-      Some(text) 
-    }
-  } 
+   
 
 
   
   
    
-  protected def toMapWritable(variables: Map[String, Writable]): MapWritable = 
-    variables.isEmpty match {
-      case true => new MapWritable
-      case false => {
-        val writable = new MapWritable
-        writable.putAll(mapAsJavaMap(variables.map { e => 
-          (new Text(e._1), e._2)
-        }))
-        writable
-      }
-    }
+  
 */
 
   override def receive = localQueueMessages orElse notViewable orElse mapVarNextClass orElse close orElse unknown
