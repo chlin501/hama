@@ -20,6 +20,8 @@ package org.apache.hama.bsp.v2
 import akka.actor.ActorRef
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Agent
+import org.apache.hama.monitor.GetMapVarNextClass
+import org.apache.hama.monitor.MapVarNextClass
 
 sealed trait SuperstepMessage
 final case class Setup(peer: BSPPeer) extends SuperstepMessage
@@ -58,6 +60,11 @@ class SuperstepWorker(superstep: Superstep, coordinator: ActorRef)
     case Cleanup(peer) => superstep.cleanup(peer)
   }
 
-  override def receive = setup orElse setVariables orElse getVariables orElse compute orElse cleanup orElse unknown
+  protected def mapVarNextClass: Receive =  {
+    case GetMapVarNextClass(ckpt) => 
+      ckpt ! MapVarNextClass(superstep.getVariables, superstep.next)
+  }
+
+  override def receive = setup orElse setVariables orElse getVariables orElse compute orElse cleanup orElse mapVarNextClass orElse unknown
 
 }

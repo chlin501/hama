@@ -16,9 +16,11 @@
  * limitations under the License.
  */
 package org.apache.hama.monitor
-/*
+
 import akka.actor.ActorRef
+import java.io.DataInputStream
 import java.io.DataOutputStream
+import java.io.File
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.BooleanWritable
 import org.apache.hadoop.io.IntWritable
@@ -26,20 +28,24 @@ import org.apache.hadoop.io.LongWritable
 import org.apache.hadoop.io.MapWritable
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
+import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Superstep
+import org.apache.hama.bsp.v2.BSPPeer
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.TestEnv
+import org.apache.hama.fs.Operation
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.Combiner
 import org.apache.hama.message.compress.BSPMessageCompressor
-//import org.apache.hama.message.OutgoingMessageManager
 import org.apache.hama.message.Peer
-//import org.apache.hama.ProxyInfo
-import org.apache.hama.TestEnv
 import org.apache.hama.util.JobUtil
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
+
+final case class Done
+final case class NotYetFinished
 
 final case class Msgs(arg1: Int, arg2: Int, arg3: Int)
 
@@ -51,10 +57,13 @@ object MockCheckpointer {
 
 class MockCheckpointer(commConf: HamaConfiguration,
                        taskConf: HamaConfiguration,
-                       taskAttemptId: String,
+                       taskAttemptId: TaskAttemptID,
                        superstep: Long,
+                       messenger: ActorRef,
+                       superstepWorker: ActorRef,
                        tester: ActorRef) 
-      extends Checkpointer(commConf, taskConf, taskAttemptId, superstep) {
+      extends Checkpointer(commConf, taskConf, taskAttemptId, superstep, 
+                           messenger, superstepWorker) {
 
   import MockCheckpointer._
 
@@ -64,49 +73,25 @@ class MockCheckpointer(commConf: HamaConfiguration,
     path 
   }
 
-  override def toMapWritable(variables: Map[String, Writable]): MapWritable = {
-    val mapWritable = super.toMapWritable(variables)
-    LOG.info("MapWritable to be verified -> {}", mapWritable)
-    if(1 != mapWritable.size) 
-      throw new RuntimeException("Map variables size is not 1!")
-    val count = mapWritable.get(new Text("superstepCount"))
-    tester ! count.asInstanceOf[LongWritable].get
-    mapWritable
-  }  
-
-  override def writeText(next: Class[_ <: Superstep])(out: DataOutputStream): 
-      Option[Text] = {
-    val text = super.writeText(next)(out)
-    LOG.info("Text to be verified -> {}", text)
-    tester ! text
-    text
-  } 
-  
-  override def toBundle[M <: Writable](messages: List[M]): 
-      Option[BSPMessageBundle[M]] = {
-    val combined = super.toBundle[M](messages)
-    asScalaIterator(combined.iterator).foreach { bundle => 
-      LOG.info("Bundle to be verified -> {}", bundle)
-      asScalaIterator(bundle.iterator).foreach { m =>
-        tester ! m.asInstanceOf[IntWritable].get 
+  override def markIfFinish(): Boolean = {
+    val finishOrNot = super.markIfFinish 
+    finishOrNot match {
+      case true => tester ! Done 
+      case false => {
+        LOG.info("Not yet finish checkpoint process!")
+        tester ! NotYetFinished
       }
     }
-    combined
-  }
-
-  override def markFinish(destPath: String) {
-    LOG.info("Zk dest path is {} ", destPath)
-    tester ! destPath
+    finishOrNot
   }
 
 }
 
-class MockSuperstep(superstepCount: Long) extends Superstep {
+class B extends Superstep {
 
-   override def getVariables(): Map[String, Writable] = 
-     Map("superstepCount" -> new LongWritable(superstepCount))
-   override def compute(peer: org.apache.hama.bsp.v2.BSPPeer) { }
-   override def next: Class[_ <: Superstep] = null
+  def compute(peer: BSPPeer) = println("Test only so compute nothing! ...")
+
+  def next: Class[_ <: Superstep] = null.asInstanceOf[Class[Superstep]]
 
 }
 
@@ -115,7 +100,18 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
                                                            with JobUtil {
   val superstepCount: Long = 1654
   val threshold = BSPMessageCompressor.threshold(Option(testConfiguration))
-  val taskAttemptId = createTaskAttemptId("test", 9, 3, 2).toString
+  val commConf = testConfiguration
+  val taskConf = testConfiguration
+  val taskAttemptId = createTaskAttemptId("test", 9, 3, 2)
+
+  val mapVar = Map("superstepCount" -> new LongWritable(superstepCount))
+  val next = classOf[B]
+  val messages: List[Writable] = List[Writable](new IntWritable(192), 
+                                                new IntWritable(112), 
+                                                new IntWritable(23))
+  val messenger: ActorRef = null 
+  val superstepWorker: ActorRef = null
+
 
   override protected def beforeAll = launchZk
 
@@ -124,16 +120,66 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
     super.afterAll
   }
 
-  def messages(): List[Writable] = List[Writable](new IntWritable(192), 
-                                                  new IntWritable(112), 
-                                                  new IntWritable(23))
+  def bundle(): BSPMessageBundle[Writable] = {
+    val bundle = new BSPMessageBundle[Writable]()
+    bundle.setCompressor(BSPMessageCompressor.get(commConf), 
+                         BSPMessageCompressor.threshold(Option(commConf)))
+    bundle
+  }
 
   it("test checkpointer.") {
-    val superstep = new MockSuperstep(superstepCount)
-    // no specific setting for task, so use testConfiguration instead.
     val ckpt = createWithArgs("checkpointer", classOf[MockCheckpointer], 
-                              testConfiguration, testConfiguration, 
-                              taskAttemptId, superstepCount, tester)
+                              commConf, taskConf, taskAttemptId, superstepCount,
+                              messenger, superstepWorker, tester)
+
+    ckpt ! LocalQueueMessages(messages)
+    expect(NotYetFinished)
+    ckpt ! MapVarNextClass(mapVar, next)
+    expect(Done)
+
+    val jobDir = new File(MockCheckpointer.tmpRootPath, 
+                          taskAttemptId.getJobID.toString)
+    val superstepDir = new File(jobDir, ""+superstepCount)
+    val msgPath = new File(superstepDir, taskAttemptId.toString+"."+"msg") 
+    LOG.info("Does path to {} exist? {}", msgPath, msgPath.exists)
+    assert(msgPath.exists) 
+    val supPath = new File(superstepDir, taskAttemptId.toString+"."+"sup") 
+    LOG.info("Does path to {} exist? {}", supPath, supPath.exists)
+    assert(supPath.exists) 
+
+    val operation = Operation.get(commConf)
+      
+    val msgBundle = bundle
+    val msg4Read = operation.open(new Path(msgPath.getPath))
+    msgBundle.readFields(new DataInputStream(msg4Read))
+    
+    asScalaIterator(msgBundle.iterator).foreach( msg => {
+      LOG.info("Msg, expected 192, 112, or 23, in bundle is {}", msg)
+      val v = msg.asInstanceOf[IntWritable]
+      assert(192 == v.get || 112 == v.get || 23 == v.get) 
+    })
+    msg4Read.close
+
+    val sup4Read = operation.open(new Path(supPath.getPath))
+    val input = new DataInputStream(sup4Read)
+    val map = new MapWritable 
+    map.readFields(input)
+    val count1654 = map.get(new Text("superstepCount")).
+                        asInstanceOf[LongWritable]
+    LOG.info("Checkpointed superstep count, expected {}, is {}", 
+             superstepCount, count1654)
+    assert(superstepCount == count1654.get)
+
+    // TODO: reaplce by Supersstep.readFields instead
+    val hasNext = input.readBoolean
+    LOG.info("Has next superstep (expect true)? {}", hasNext)
+    assert(true == hasNext)
+    val clazzName = Text.readString(input) 
+    LOG.info("Next superstep, expect {}, is {}", next.getName, clazzName)
+    assert(clazzName.toString.equals(next.getName))
+    sup4Read.close
+
+/*
 
     ckpt ! Checkpoint(superstep.getVariables, superstep.next, messages)
 
@@ -144,7 +190,8 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
     expect(23)
     expect(MockCheckpointer.tmpRootPath+
            "/job_test_0009/1654/attempt_test_0009_000003_2.ok")
+*/
     LOG.info("Done TestCheckpointer test case!")
   }
 }
-*/
+

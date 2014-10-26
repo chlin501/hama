@@ -152,13 +152,14 @@ class Checkpointer(commConf: HamaConfiguration,
    * Write to znode denoting the checkpoint process is completed!
    * @param destPath denotes the path at zk and checkpoint process is completed.
    */
-  protected def markIfFinish() = if(msgsReceived && mapNextReceived) { 
+  protected def markIfFinish(): Boolean = if(msgsReceived && mapNextReceived) { 
     val dest = ckptDir + "/" + taskAttemptId  
-    if(msgsStatus && mapNextStatus)  // decide fail or success
-      create(dest + ".ok") 
-    else 
-      create(dest + ".fail") 
-  } 
+    (msgsStatus && mapNextStatus) match {  // decide fail or success
+      case true => create(dest + ".ok") 
+      case false => create(dest + ".fail") 
+    }
+    true
+  } else false
 
   protected def ifClose() = if(msgsReceived && mapNextReceived) {
     self ! Close
@@ -189,6 +190,7 @@ class Checkpointer(commConf: HamaConfiguration,
     case LocalQueueMessages(messages) => {
       msgsReceived = true
       msgsStatus = writeMessages(messages) 
+LOG.info("path to {} exists? {}", ckptPath("msg"), new java.io.File(ckptPath("msg")).exists)
       markIfFinish
       ifClose
     }
@@ -204,24 +206,15 @@ class Checkpointer(commConf: HamaConfiguration,
 
   protected def writeMessages(messages: List[Writable]): Boolean = 
     write(new Path(ckptPath("msg")), (out) => { 
-      val flag = toBundle(messages) match {
+      toBundle(messages) match {
         case Some(bundle) => { bundle.write(out); true }
         case None => {
-           LOG.error("Can't create BSPMessageBundle for checkpointer {} at {}", 
-                     taskAttemptId, superstepCount)
-           false
+          LOG.error("Can't create BSPMessageBundle for checkpointer {} at {}", 
+                    taskAttemptId, superstepCount)
+          false
         }
       }
-      flag
     })
-
-  protected def getBundle(compressor: BSPMessageCompressor): 
-      BSPMessageBundle[Writable] = {
-    val bundle = new BSPMessageBundle[Writable]()
-    bundle.setCompressor(compressor, 
-                         BSPMessageCompressor.threshold(Option(commConf)))
-    bundle
-  }
 
   protected def toBundle(messages: List[Writable]): 
     Option[BSPMessageBundle[Writable]] = Combiner.get(Option(commConf)) match {
@@ -242,6 +235,15 @@ class Checkpointer(commConf: HamaConfiguration,
     }
   }
 
+  protected def getBundle(compressor: BSPMessageCompressor): 
+      BSPMessageBundle[Writable] = {
+    val bundle = new BSPMessageBundle[Writable]()
+    bundle.setCompressor(compressor, 
+                         BSPMessageCompressor.threshold(Option(commConf)))
+    bundle
+  }
+
+
   protected def mapVarNextClass: Receive = {
     case MapVarNextClass(map, next) => {
       mapNextReceived = true
@@ -257,7 +259,8 @@ class Checkpointer(commConf: HamaConfiguration,
       writeText(next)(out)
       true
     })
-
+  
+  // TODO: replace by Superstep.write instead
   protected def toMapWritable(variables: Map[String, Writable]): MapWritable = 
     variables.isEmpty match {
       case true => new MapWritable
@@ -274,8 +277,7 @@ class Checkpointer(commConf: HamaConfiguration,
     case null => out.writeBoolean(false)
     case clazz@_ => { 
       out.writeBoolean(true)
-      val text = new Text(next.getClass.getName)
-      text.write(out)
+      Text.writeString(out, next.getName)
     }
   }
 

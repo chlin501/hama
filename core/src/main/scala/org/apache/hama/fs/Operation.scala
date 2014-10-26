@@ -135,14 +135,6 @@ trait Operation {
   @throws(classOf[IOException])
   def list[T](path: Path): java.util.List[T]
 
-  /**
-   * Copy file to local path.
-   * @param from the source path the file to be copied. 
-   * @param to the dest path the file to be copied.
-  @throws(classOf[IOException])
-  def copy(from: Path)(to: Path)
-   */
-
   @throws(classOf[IOException])
   def copyToLocal(from: Path)(to: Path)
 
