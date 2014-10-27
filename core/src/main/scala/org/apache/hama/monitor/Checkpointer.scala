@@ -32,7 +32,6 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.Combiner
 import org.apache.hama.message.compress.BSPMessageCompressor
-//import org.apache.hama.ProxyInfo
 import org.apache.hama.util.Curator
 import scala.util.Failure
 import scala.util.Success
@@ -40,12 +39,12 @@ import scala.util.Try
 import scala.collection.JavaConversions._
 
 /**
- * Checkpoint related superstep data to HDFS.
+ * Checkpoint related superstep data to external storage.
  * This class is created corresponded to a particular task attempt id, so 
  * sending to the same Checkpointer ActorRef indicates checkpointing for the 
  * same task.
- * N.B.: Checkpointer will not be recovered because we assume at least some   
- *       checkpoint will success.
+ * Note: Checkpointer will not be recovered because we assume at least some   
+ *       checkpoints will success.
  * @param commConf is common configuration.
  * @param taskConf contains configuration specific to a task.
  * @param taskAttemptId denotes with which task content this checkpointer will
@@ -172,17 +171,7 @@ class Checkpointer(commConf: HamaConfiguration,
   protected def close: Receive = {
     case Close => context.stop(self)
   }
-
-/* true
-          val ckptZnode = ckptDir + "/" + taskAttemptId + ".ok"  
-          LOG.info("Mark finishing to znode {}", ckptZnode)
-          markFinish(ckptZnode)
-*/
-/* false
-          val ckptZnode = ckptDir + "/" + taskAttemptId + ".fail"  
-          LOG.info("Mark failure to znode {}", ckptZnode)
-          markFinish(ckptZnode)
-*/  
+  
   /**
    * MessageExecutive replies with messages in localQueue for checkpoint.
    */
@@ -190,7 +179,6 @@ class Checkpointer(commConf: HamaConfiguration,
     case LocalQueueMessages(messages) => {
       msgsReceived = true
       msgsStatus = writeMessages(messages) 
-LOG.info("path to {} exists? {}", ckptPath("msg"), new java.io.File(ckptPath("msg")).exists)
       markIfFinish
       ifClose
     }
@@ -292,77 +280,6 @@ LOG.info("path to {} exists? {}", ckptPath("msg"), new java.io.File(ckptPath("ms
       close
     }
   }
-
-
-/*
-  protected def checkpoint: Receive = {
-    case Checkpoint(variablesMap, nextSuperstepClass, localMessages) => 
-      doCheckpoint(variablesMap, nextSuperstepClass, localMessages)
-  }
-
-   * This function performs following steps for checkpoint.
-   * - Create path e.g. hdfs, zk used for checkpoint.
-   * - Save variables map, class name, messages to hdfs.
-   * - Mark successfully finishing ckpt at zk.
-   * - Close checkpoint actor.
-   * @param variables are map users exploit to store data during superstep  
-   *                  computation.
-   * @param next is the class for next superstep computation.
-   * @param messages are sent from other peers or by itself for next superstep
-   *                 computation.
-  protected def doCheckpoint[M <: Writable](variables: Map[String, Writable], 
-                                            next: Class[_ <: Superstep], 
-                                            messages: List[M]) {
-    mkDir(getRootPath(taskConf), superstepCount) match {
-      case null|"" => LOG.error("Checkpoint path not found for {}!", 
-                                taskAttemptId)
-      case ckptDir@_ => {
-        LOG.info("Checkpoint directory is at {}", ckptDir)
-        val ckptPath = ckptDir + "/" + taskAttemptId + ".ckpt"  
-        LOG.info("Checkpoint data to {}", ckptPath)
-        writeMessages(ckptPath, variables, next, messages) match {
-          case true => {
-            val ckptZnode = ckptDir + "/" + taskAttemptId + ".ok"  
-            LOG.info("Mark finishing to znode {}", ckptZnode)
-            markFinish(ckptZnode)
-          }
-          case false => {
-            val ckptZnode = ckptDir + "/" + taskAttemptId + ".fail"  
-            LOG.info("Mark failure to znode {}", ckptZnode)
-            markFinish(ckptZnode)
-          }
-        }
-        doClose
-      }
-    }
-  }
-
-  protected def writeMessages[M <: Writable](ckptPath: String, 
-                                             variables: Map[String, Writable],
-                                             next: Class[_ <: Superstep], 
-                                             messages: List[M]): Boolean = 
-    write(new Path(ckptPath), (out) => { 
-      toMapWritable(variables).write(out)
-      writeText(next)(out) 
-      val flag = toBundle(messages) match {
-        case Some(bundle) => { bundle.write(out); true }
-        case None => {
-           LOG.error("Can't create BSPMessageBundle for checkpointer {} at {}", 
-                     taskAttemptId, superstepCount)
-           false
-        }
-      }
-      flag
-    })
-
-   
-
-
-  
-  
-   
-  
-*/
 
   override def receive = localQueueMessages orElse notViewable orElse mapVarNextClass orElse close orElse unknown
 

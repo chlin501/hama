@@ -319,7 +319,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   protected def afterCompute(peer: BSPPeer, superstep: ActorRef) { } 
-  
 
   /**
    * This function is called by SuperstepWorker after finishing
@@ -580,7 +579,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   protected def beforeExecuteNext(clazz: Class[_]) { }
-
 
   protected def afterExecuteNext(clazz: Class[_]) { }
 

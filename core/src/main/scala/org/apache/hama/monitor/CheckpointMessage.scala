@@ -19,9 +19,6 @@ package org.apache.hama.monitor
 
 import akka.actor.ActorRef
 import org.apache.hadoop.io.Writable
-import org.apache.hama.bsp.v2.Superstep
-import org.apache.hama.ProxyInfo
-import org.apache.hama.message.BSPMessageBundle
 
 sealed trait CheckpointMessage
 final case class GetLocalQueueMsgs(ckpt: ActorRef) extends CheckpointMessage
