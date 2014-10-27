@@ -114,12 +114,25 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   type ActorMessage = String
 
+  /**
+   * Map from superstep name to the superstep instance and its holder (actor).
+   */
   protected[v2] var supersteps = Map.empty[String, Spawned]
 
+  /**
+   * Superstep actor that is currently running.
+   */
   protected[v2] var currentSuperstep: Option[ActorRef] = None
 
+  /**
+   * Superstep class to be executed next.
+   */
   protected[v2] var nextSuperstep: Option[Class[_]] = None
 
+  /**
+   * This is applied for check if all supersteps finish cleanup phase.
+   */
+  protected[v2] var cleanupCount = 0
 
   // TODO: move to Utils.time() function
   var start: Long = 0 
@@ -158,21 +171,17 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     configMessenger
   }
 
-  override def beforeRestart(what: Throwable, message: Option[Any]) =
-    initializeServices
-
   protected def configMessenger() = messenger ! SetCoordinator(self)
 
   /**
    * Entry point to start task computation. 
-   * TODO: move execution flow logic to controller?
    */
   protected def execute: Receive = {
     case Execute => doExecute
   }
 
-  protected def doExecute() {  // TODO: move to TaskController?
-    start = System.currentTimeMillis // test
+  protected def doExecute() {  
+    start = System.currentTimeMillis 
     val s = System.currentTimeMillis 
     val taskConf = task.getConfiguration
     val taskAttemptId = task.getId.toString
@@ -356,10 +365,14 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     v.actor ! Cleanup(peer)
   }
 
-  //endOfCleanup(peer)  wait for reply
   protected def finishCleanup: Receive = {
     case FinishCleanup(superstepClassName) => {
-      // TODO: check if all superstep clean is called.
+      cleanupCount += 1 
+      if(cleanupCount == supersteps.size) { 
+        succeedState
+        context.children foreach context.stop
+        context.stop(self) 
+      }
     }
   }
 
@@ -724,6 +737,22 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def exitBarrierPhase() = task.exitBarrierPhase
 
   protected def cleanupPhase() = task.cleanupPhase
+
+  // task state
+  protected def waitingState() = task.waitingState
+
+  protected def runningState() = task.runningState
+
+  protected def succeedState() = task.succeedState
+
+  protected def failedState() = task.failedState
+
+  protected def cancelledState() = task.cancelledState
+
+  /**
+   * Close all services after this actor is stopped.
+   */
+  override def stopServices = close
 
   override def receive = execute orElse enter orElse inBarrier orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse nextSuperstepClass orElse variables orElse unknown 
   

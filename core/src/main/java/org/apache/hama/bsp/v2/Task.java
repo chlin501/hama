@@ -32,10 +32,6 @@ import org.apache.hadoop.io.WritableUtils;
 import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.io.PartitionedSplit;
-//import org.apache.hama.monitor.metrics.Metric;
-//import org.apache.hama.monitor.metrics.MetricsRecord;
-//import org.apache.hama.monitor.Transformable;
-//import org.apache.hama.monitor.TaskStat;
 
 /**
  * A view to task information. 
@@ -44,7 +40,7 @@ import org.apache.hama.io.PartitionedSplit;
  * old one provided.
  * This class can also produce metrics stats for monitor.
  */
-public final class Task implements Writable/*, Transformable*/ { 
+public final class Task implements Writable { 
 
   final Log LOG = LogFactory.getLog(Task.class);
 
@@ -363,23 +359,23 @@ public final class Task implements Writable/*, Transformable*/ {
     return this.state;
   }
 
-  public void markAsWaiting() {
+  public void waitingState() {
     this.state = State.WAITING; 
   } 
 
-  public void markAsRunning() {
+  public void runningState() {
     this.state = State.RUNNING;
   }
 
-  public void markAsSucceed() {
+  public void succeedState() {
     this.state = State.SUCCEEDED;
   }
 
-  public void markAsFailed() {
+  public void failedState() {
     this.state = State.FAILED;
   }
 
-  public void markAsCancelled() {
+  public void cancelledState() {
     this.state = State.CANCELLED;
   }
 
