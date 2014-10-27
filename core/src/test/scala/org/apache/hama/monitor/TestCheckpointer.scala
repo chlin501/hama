@@ -179,18 +179,6 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
     assert(clazzName.toString.equals(next.getName))
     sup4Read.close
 
-/*
-
-    ckpt ! Checkpoint(superstep.getVariables, superstep.next, messages)
-
-    expect(superstepCount)
-    expect(None)
-    expect(192)
-    expect(112)
-    expect(23)
-    expect(MockCheckpointer.tmpRootPath+
-           "/job_test_0009/1654/attempt_test_0009_000003_2.ok")
-*/
     LOG.info("Done TestCheckpointer test case!")
   }
 }

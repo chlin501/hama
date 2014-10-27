@@ -248,7 +248,7 @@ class Checkpointer(commConf: HamaConfiguration,
       true
     })
   
-  // TODO: replace by Superstep.write instead
+  // TODO: replace by (immutable) Superstep.write instead 
   protected def toMapWritable(variables: Map[String, Writable]): MapWritable = 
     variables.isEmpty match {
       case true => new MapWritable
