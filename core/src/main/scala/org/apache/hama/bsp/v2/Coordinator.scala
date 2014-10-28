@@ -54,6 +54,7 @@ import org.apache.hama.message.TransferredState
 import org.apache.hama.monitor.Checkpointer
 import org.apache.hama.monitor.GetLocalQueueMsgs
 import org.apache.hama.monitor.GetMapVarNextClass
+import org.apache.hama.monitor.Report
 import org.apache.hama.sync.AllPeerNames
 import org.apache.hama.sync.PeerClientMessage
 import org.apache.hama.sync.Enter
@@ -733,30 +734,68 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   // task phase switch
-  protected def setupPhase() = task.setupPhase
+  protected def setupPhase() = {
+    task.setupPhase
+    report
+  }
 
-  protected def computePhase() = task.computePhase
+  protected def computePhase() = {
+    task.computePhase
+    report
+  }
 
-  protected def barrierEnterPhase() = task.barrierEnterPhase
+  protected def barrierEnterPhase() = {
+    task.barrierEnterPhase
+    report
+  }
 
-  protected def withinBarrierPhase() = task.withinBarrierPhase
+  protected def withinBarrierPhase() = {
+    task.withinBarrierPhase
+    report
+  }
 
-  protected def barrierLeavePhase() = task.barrierLeavePhase
+  protected def barrierLeavePhase() = {
+    task.barrierLeavePhase
+    report
+  }
 
-  protected def exitBarrierPhase() = task.exitBarrierPhase
+  protected def exitBarrierPhase() = {
+    task.exitBarrierPhase
+    report
+  }
 
-  protected def cleanupPhase() = task.cleanupPhase
+  protected def cleanupPhase() = {
+    task.cleanupPhase
+    report
+  }
 
   // task state
-  protected def waitingState() = task.waitingState
+  protected def waitingState() = {
+    task.waitingState
+    report
+  }
 
-  protected def runningState() = task.runningState
+  protected def runningState() = {
+    task.runningState
+    report
+  }
 
-  protected def succeedState() = task.succeedState
+  protected def succeedState() = {
+    task.succeedState
+    report
+  }
 
-  protected def failedState() = task.failedState
+  protected def failedState() = {
+    task.failedState
+    report
+  }
 
-  protected def cancelledState() = task.cancelledState
+  protected def cancelledState() = {
+    task.cancelledState
+    report
+  }
+
+  protected def report() = container ! new Report(new Task.Builder(task).build)
 
   /**
    * Close all services after this actor is stopped.
