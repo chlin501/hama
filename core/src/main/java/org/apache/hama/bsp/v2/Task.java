@@ -79,7 +79,7 @@ public final class Task implements Writable {
    */
   private Marker marker = new Marker(false, ""); 
  
-  public final static class Marker implements Writable {
+  final static class Marker implements Writable {
 
     // record this task is active (true) or passive (false) scheduling task
     // default is passive
@@ -174,7 +174,7 @@ public final class Task implements Writable {
       if(null == old) 
         throw new IllegalArgumentException("Previous task not found!");
       this.id = old.getId();
-      this.conf = old.getConfiguration();
+      this.conf = new HamaConfiguration(old.getConfiguration());
       this.startTime = old.getStartTime();
       this.finishTime = old.getFinishTime();
       this.split = old.getSplit(); 
@@ -182,7 +182,8 @@ public final class Task implements Writable {
       this.phase = old.getPhase();
       this.state = old.getState();
       this.completed = old.isCompleted();
-      this.marker = old.marker;
+      this.marker = new Marker(old.marker.isAssigned(), 
+                               old.marker.getAssignedTarget()); 
     }
 
     public Builder setId(final TaskAttemptID id) {
@@ -244,8 +245,20 @@ public final class Task implements Writable {
       return this;
     }
 
-    public Builder setMarker(final boolean assigned, final String groom) {
-      this.marker = new Marker(assigned, groom);
+    public Builder scheduleTo(final String groom) {
+      if(null == groom || groom.isEmpty()) 
+        throw new IllegalArgumentException("Mark assigned, but groom server "+
+                                           "name is not provided!");
+      this.marker = new Marker(true, groom);
+      return this;
+    }
+
+    /**
+     * Revoke schedule target from a particular GroomServer, and mark it as 
+     * unassigned (false).
+     */
+    public Builder unschedule() {
+      this.marker = new Marker(false, "");
       return this;
     }
 
@@ -434,7 +447,7 @@ public final class Task implements Writable {
     return this.marker.getAssignedTarget();
   } 
 
-  public void markWithTarget(final String name) {
+  public void markWithTarget(final String name) { // TODO: rename -> assignTo?
     this.marker = new Marker(true, name);
   }
 
@@ -477,6 +490,7 @@ public final class Task implements Writable {
     this.finishTime = new LongWritable(0);
     this.finishTime.readFields(in);
     if(in.readBoolean()) {
+      this.split = new PartitionedSplit();
       this.split.readFields(in);
     } else {
       this.split = null;

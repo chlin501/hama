@@ -33,6 +33,8 @@ class TestHamaConfiguration extends TestEnv("TestHamaConfiguration") {
              clonedLoader, loader)
     assert(clonedLoader.equals(loader))
 
+    // most of class loader methods are for reading. That somehow fulfills
+    // current requirement. 
     val newLoader = new java.net.URLClassLoader(Array[java.net.URL](new java.io.File("/tmp/").toURI.toURL))
     conf.setClassLoader(newLoader)
     val clonedLoader1 = cloned.getClassLoader()

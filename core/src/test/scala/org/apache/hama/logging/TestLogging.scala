@@ -137,8 +137,6 @@ class TestLogging extends TestEnv("TestLogging") with JobUtil {
                                         taskAttemptId, 
                                         tester)
 
-    //mockTaskLogger ! Initialize(taskAttemptId)
-
     // Note: expectMsg may fail for unknown reason
     mockTaskLogger ! Info(f(testMsg, "info"))
     expectAnyOf(f(testMsg, "info")) 
@@ -151,8 +149,6 @@ class TestLogging extends TestEnv("TestLogging") with JobUtil {
 
     mockTaskLogger ! Error(f(testMsg, "error"))
     expectAnyOf(f(testMsg, "error"))
-
-    //mockTaskLogger ! Close(taskAttemptId)
 
     LOG.info("Done with TestLogging ...")
     

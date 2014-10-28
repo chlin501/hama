@@ -133,4 +133,27 @@ public class TestTask extends TestCase {
                  task.isCompleted(), forVerification.isCompleted());
   }
 
+  public void testBuildFromOldTask() throws Exception {
+    final Task old = createTask(7);
+    final Task newTask1 = new Task.Builder(old).scheduleTo("groom12").build();
+    LOG.info("Old task: "+old+" newTask1: "+newTask1);
+    assertTrue("Old task is not assigned, but new task should be assigned!", 
+               old.isAssigned() != newTask1.isAssigned());
+
+    newTask1.barrierEnterPhase();
+    final Task.Phase newTask1Phase = newTask1.getPhase();
+    LOG.info("Change new task 1 phase to ..."+newTask1Phase);
+    final Task.Phase oldPhase = old.getPhase();
+    LOG.info("Old task phase: "+oldPhase+" new task 1 phase: "+newTask1Phase);
+    assertTrue("Old task phase should be different from new task 1 phase.", 
+               !oldPhase.equals(newTask1Phase));
+
+    newTask1.succeedState();
+    final Task.State newTask1State = newTask1.getState();
+    LOG.info("Change new task 1 state to ..."+newTask1State);
+    final Task.State oldState = old.getState();
+    LOG.info("Old task state: "+oldState+" new task 1 state: "+newTask1State);
+    assertTrue("Old task state should be different from new task 1 state.",
+               !oldState.equals(newTask1State));
+  }
 }

@@ -26,9 +26,6 @@ import org.apache.hadoop.fs.Path;
 
 /**
  * Adds Hama configuration files to a Configuration.
- * TODO: - decouple configuration object from underlying file system.
- *       - ability to convert from/to string/ conf object. 
- *       - need immutable conf object.
  */
 public class HamaConfiguration extends Configuration {
   /** constructor */

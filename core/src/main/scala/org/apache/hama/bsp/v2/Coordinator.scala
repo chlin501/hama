@@ -183,6 +183,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def doExecute() {  
     start = System.currentTimeMillis 
     val s = System.currentTimeMillis 
+    task.markTaskStarted
     val taskConf = task.getConfiguration
     val taskAttemptId = task.getId.toString
     LOG.debug("Start configuring for task {}", taskAttemptId)
@@ -264,8 +265,10 @@ class Coordinator(conf: HamaConfiguration,  // common conf
           actor ! Setup(bspPeer) 
           supersteps ++= Map(className -> Spawned(superstep, actor))
         }
-        case Failure(cause) => 
+        case Failure(cause) => {
+          failedState
           container ! InstantiationFailure(className, cause)
+        }
       } 
     })  
   }
@@ -313,6 +316,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
       case None => {
         LOG.error("Can't execute, superstep {} is missing for task {}!", 
                   className, task.getId)
+        failedState
         container ! SuperstepNotFoundFailure(className)
         None
       }
@@ -325,14 +329,15 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def whenCompute(peer: BSPPeer, superstep: ActorRef) {
     computePhase
     superstep ! Compute(peer) 
+    runningState
   }
 
   protected def afterCompute(peer: BSPPeer, superstep: ActorRef) { } 
 
   /**
-   * This function is called by SuperstepWorker after finishing
-   * {@link Superstep#compute} supplied with {@link Superstep#next} as next
-   * {@link Superstep}.
+   * Once SuperstepWorker finishing its compute function 
+   * {@link Superstep#compute} will send this message with 
+   * {@link Superstep#next} supplied as next {@link Superstep}.
    */
   protected def nextSuperstepClass: Receive = {
     case NextSuperstepClass(next) => next match { 
@@ -370,6 +375,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
       cleanupCount += 1 
       if(cleanupCount == supersteps.size) { 
         succeedState
+        task.markTaskFinished
         context.children foreach context.stop
         context.stop(self) 
       }
@@ -494,7 +500,10 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def beforeLeave() = clear
 
   protected def transferredFailure: Receive = {
-    case TransferredFailure => container ! TransferredFailure 
+    case TransferredFailure => {
+      failedState
+      container ! TransferredFailure 
+    }
   }
  
   protected def leave: Receive = {
