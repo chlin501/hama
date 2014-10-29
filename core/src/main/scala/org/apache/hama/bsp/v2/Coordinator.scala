@@ -68,7 +68,6 @@ import org.apache.hama.sync.NumPeers
 import org.apache.hama.sync.PeerName
 import org.apache.hama.sync.PeerNameByIndex
 import org.apache.hama.sync.PeerSyncClient
-import org.apache.hama.sync.SyncException
 import org.apache.hama.sync.WithinBarrier
 import org.apache.hama.util.Utils
 import scala.collection.JavaConversions._

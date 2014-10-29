@@ -28,15 +28,12 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import java.net.InetAddress
 import org.apache.hama.bsp.TaskAttemptID
-//import org.apache.hama.bsp.v2.ConfigureFor
-//import org.apache.hama.bsp.v2.Execute
 import org.apache.hama.bsp.v2.Task
-//import org.apache.hama.bsp.v2.TaskWorker
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.logging.TaskLogger
 import org.apache.hama.LocalService
-//import org.apache.hama.message.PeerMessenger
 import org.apache.hama.RemoteService
+import org.apache.hama.logging.TaskLogger
+import org.apache.hama.monitor.Report
 import org.apache.hama.sync.SyncException
 import org.apache.hama.util.ActorLocator
 import org.apache.hama.util.ExecutorLocator
@@ -61,7 +58,7 @@ final case class Args(actorSystemName: String, listeningTo: String, port: Int,
 
 object Container {
 
-  // TODO: all config need to post to zk
+  // TODO: 1. move to setting obj. 2. post to zk?
   def toConfig(listeningTo: String, port: Int): Config = {
     ConfigFactory.parseString(s"""
       peerContainer {
@@ -110,7 +107,7 @@ object Container {
     defaultConf.set("bsp.child.actor-system.name", arguments.actorSystemName)
     val listeningTo = defaultConf.get("bsp.peer.hostname", 
                                       arguments.listeningTo)
-    // N.B.: if default listening to 0.0.0.0, change host to host name.
+    // Note: if default listening to 0.0.0.0, change host to host name.
     if("0.0.0.0".equals(listeningTo)) { 
        defaultConf.set("bsp.peer.hostname", 
                        InetAddress.getLocalHost.getHostName)
@@ -144,11 +141,22 @@ class Container(conf: HamaConfiguration) extends LocalService
 
   import Container._
 
-  // TODO: check what exceptions are thrown 
+  /**
+   * Once detecting exceptions thrown by children, report master and stop 
+   * actors.
+   */
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
-       case _: IOException => Resume  
-       case _: SyncException => Resume  
+       case _: IOException => {  
+         stopAll
+         latestTask.map { (task) => notifyExecutor(task) }
+         Stop 
+       }
+       case _: RuntimeException => { 
+         stopAll
+         latestTask.map { (task) => notifyExecutor(task) }
+         Stop 
+       }
     }
 
   /**
@@ -160,11 +168,23 @@ class Container(conf: HamaConfiguration) extends LocalService
 
   protected var executor: Option[ActorRef] = None
 
-  protected var taskWorker: Option[ActorRef] = None
+  protected var coordinator: Option[ActorRef] = None
+
+  /**
+   * This variable records the latest task information, which might be slightly 
+   * outdated from that held by {@link Coordinator}.
+   */
+  protected var latestTask: Option[Task] = None
 
   override def configuration: HamaConfiguration = conf
 
-  // TODO: check if any better way to config hama home.
+  protected def stopAll() {
+    coordinator.map { (c) => context.stop(c) }
+    // messeenger
+    // syncer
+  }
+
+  // TODO: refactor if there's better way to config hama home.
   protected def hamaHome: String = System.getProperty("hama.home.dir")
 
   protected def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", -1)
@@ -189,16 +209,17 @@ class Container(conf: HamaConfiguration) extends LocalService
    * @param worker wraps the task worker as option.
    * @return Boolean denotes worker is running if true; otherwise false.
    */
-  protected def isOccupied(worker: Option[ActorRef]): Boolean = 
-    worker.map( v => true).getOrElse(false)
+  protected def isOccupied(coordinator: Option[ActorRef]): Boolean = 
+    coordinator.map { v => true}.getOrElse(false)
 
   /**
-   * - Asynchronouly create task with an actor.
+   * - Create coordinator 
    * - When that actor finishes setup, sending ack back to executor.
    * @param Receive is partial function.
    */
   def launchTask: Receive = {
-    case action: LaunchTask => if(!isOccupied(taskWorker)) {
+    case action: LaunchTask => if(!isOccupied(coordinator)) {
+      this.latestTask = Option(action.task)
       doLaunch(action.task)
       postLaunch(slotSeq, action.task.getId, sender)
     } else reply(sender, slotSeq, action.task.getId)
@@ -251,7 +272,7 @@ class Container(conf: HamaConfiguration) extends LocalService
    * @param Receive is partial function.
    */
   def resumeTask: Receive = {
-    case action: ResumeTask => if(!isOccupied(taskWorker)) {
+    case action: ResumeTask => if(!isOccupied(coordinator)) {
       doResume(action.task)
       postResume(slotSeq, action.task.getId, sender)
     }
@@ -332,15 +353,19 @@ class Container(conf: HamaConfiguration) extends LocalService
     LOG.warning("{} is offline!", target.path.name)
     val ExecutorName = executorName
     target.path.name match {
-      case "taskWorker" => // TODO: report task manager
       case `ExecutorName` => self ! ShutdownContainer
-      case rest@_ => {
-        if(rest.startsWith("peerMessenger_")) {
-          // TODO: report 
-        } else LOG.warning("Unexpected actor {} is offline!", rest)
-      }
+      case rest@_ => LOG.warning("Unexpected actor {} is offline!", rest)
     }
   }
 
-  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
+  def report: Receive = {
+    case r: Report => {
+      this.latestTask = Option(r.getTask)
+      notifyExecutor(r.getTask)
+    }
+  }
+
+  def notifyExecutor(task: Task) = executor.map { (e) => e ! new Report(task) }
+
+  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse report orElse unknown
 }
