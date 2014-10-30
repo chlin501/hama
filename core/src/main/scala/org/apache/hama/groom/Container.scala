@@ -214,6 +214,9 @@ class Container(conf: HamaConfiguration) extends LocalService
   protected def isOccupied(coordinator: Option[ActorRef]): Boolean = 
     coordinator.map { v => true }.getOrElse(false)
 
+  protected def reply(from: ActorRef, seq: Int, taskAttemptId: TaskAttemptID) = 
+    from ! new Occupied(seq, taskAttemptId) 
+
   /**
    * - Create coordinator 
    * - When that actor finishes setup, sending ack back to executor.
@@ -221,31 +224,11 @@ class Container(conf: HamaConfiguration) extends LocalService
    */
   def launchTask: Receive = {
     case action: LaunchTask => if(!isOccupied(coordinator)) {
-      this.latestTask = Option(action.task)
+      this.latestTask = Option(new Task.Builder(action.task).build)
       doLaunch(action.task)
       postLaunch(slotSeq, action.task.getId, sender)
     } else reply(sender, slotSeq, action.task.getId)
   }
-
-  protected def reply(from: ActorRef, seq: Int, taskAttemptId: TaskAttemptID) = 
-    from ! new Occupied(seq, taskAttemptId) 
-
-  protected def identifier(conf: HamaConfiguration): String = slotSeq match {
-    case -1 => throw new RuntimeException("Slot seq shouldn't be -1!")
-    case seq@_ => {
-      val host = conf.get("bsp.peer.hostname",
-                          InetAddress.getLocalHost.getHostName)
-      val port = conf.getInt("bsp.peer.port", 61000)
-      "BSPPeerSystem%d@%s:%d".format(seq, host, port)
-    }
-  }
-
-/*
-  protected def createTaskLogger[A <: TaskLogger](logger: Class[A], 
-                                                  logDir: String,
-                                                  taskAttemptId: TaskAttemptID,
-                                                  seq: Int): ActorRef = 
-*/
 
   /**
    * Start executing the task in another actor.

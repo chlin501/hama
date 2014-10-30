@@ -22,8 +22,10 @@ import org.apache.hama.LocalService
 import org.apache.hama.groom.monitor.TasksReporter
 import org.apache.hama.groom.monitor.GroomReporter
 import org.apache.hama.groom.monitor.SysMetricsReporter
+import org.apache.hama.monitor.Report
+import org.apache.hama.util.Curator
 
-class Monitor(conf: HamaConfiguration) extends LocalService {// TODO: rename to Reporter?
+class Reporter(conf: HamaConfiguration) extends LocalService with Curator {
 
   override def configuration: HamaConfiguration = conf
 
@@ -32,8 +34,14 @@ class Monitor(conf: HamaConfiguration) extends LocalService {// TODO: rename to 
     getOrCreate("groomReporter", classOf[GroomReporter], configuration)
     getOrCreate("sysMetricsReporter", classOf[SysMetricsReporter], 
                 configuration)
+    initializeCurator(conf)
   }
 
-  def receive = unknown
+  def report: Receive = {
+    case r: Report =>  // TODO: write to zk
+  }
+
+
+  def receive = report orElse unknown
 
 }

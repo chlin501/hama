@@ -29,6 +29,11 @@ import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
+/**
+ * The latest GroomServer statistic data.
+ * TaskManager will report to zk and request for task with this stat data.
+ */
+//TODO: move to groom.
 public final class GroomServerStat implements Writable {
 
   public static final Log LOG = LogFactory.getLog(GroomServerStat.class);

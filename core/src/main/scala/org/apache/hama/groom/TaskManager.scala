@@ -29,12 +29,10 @@ import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
-//import org.apache.hama.lang.Executor
-//import org.apache.hama.lang.Fork
-//import org.apache.hama.lang.StopProcess
 import org.apache.hama.master._
 import org.apache.hama.master.Directive._
 import org.apache.hama.master.Directive.Action._
+import org.apache.hama.monitor.Report
 import org.apache.hama.util.ActorLocator
 import org.apache.hama.util.GroomManagerLocator
 import org.apache.hama.util.SchedulerLocator
@@ -42,10 +40,8 @@ import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-class TaskManager(conf: HamaConfiguration, monitor: ActorRef) 
+class TaskManager(conf: HamaConfiguration, reporter: ActorRef) 
       extends LocalService with RemoteService with ActorLocator {
-
-  type ForkedChild = String
 
   val groomServerHost = configuration.get("bsp.groom.address", "127.0.0.1")
   val groomServerPort = configuration.getInt("bsp.groom.port", 50000)
@@ -53,11 +49,10 @@ class TaskManager(conf: HamaConfiguration, monitor: ActorRef)
   val maxTasks = configuration.getInt("bsp.tasks.maximum", 3) 
   val bspmaster = configuration.get("bsp.master.name", "bspmaster")
 
+  // TODO: refactor
   var sched: ActorRef = _
   var cancellable: Cancellable = _
   var groomManager: ActorRef = _
-
-  var children = Map.empty[ForkedChild, ActorRef]
 
   /**
    * The max size of slots can't exceed configured maxTasks.
@@ -80,7 +75,7 @@ class TaskManager(conf: HamaConfiguration, monitor: ActorRef)
   protected def getGroomServerHost(): String = groomServerHost
   protected def getGroomServerPort(): Int = groomServerPort
   protected def getMaxTasks(): Int = maxTasks
-  //protected def getSchedulerPath: String = schedPath
+
   protected def getSchedulerPath: String = 
     locate(SchedulerLocator(configuration))
 
@@ -100,7 +95,6 @@ class TaskManager(conf: HamaConfiguration, monitor: ActorRef)
 
   override def initializeServices {
     initializeSlots(getMaxTasks)
-    //lookup("sched", schedPath)
     lookup("sched", locate(SchedulerLocator(configuration)))
     lookup("groomManager", locate(GroomManagerLocator(configuration)))
   }
@@ -479,34 +473,43 @@ class TaskManager(conf: HamaConfiguration, monitor: ActorRef)
   def containerStopped: Receive = {
     case ContainerStopped => {
       preContainerStopped(sender)
-      slots.find( slot => slot.executor match {
-        case Some(found) => found.path.name.equals(sender.path.name)
-        case None => false
-      }) match { 
-        case Some(found) => found.executor match {
-          case Some(executor) => {
-            LOG.debug("Send shutdown container message to {} ...", executor)
-            executor ! ShutdownContainer
-            if(!None.equals(found.task)) 
-              throw new RuntimeException("Task at slot seq "+found.seq+
-                                         " is not"+ "empty! task: "+found.task)
-            val newSlot = Slot(found.seq, found.task, found.master, None)
-            slots -= found
-            slots += newSlot
-          }
-          case None => throw new RuntimeException("Impossible! Executor not "+
-                                                "found for "+sender.path.name)
-        }
-        case None => throw new RuntimeException("No executor found for "+
-                                                sender.path.name)
-      }
+      whenContainerStopped(sender)
       postContainerStopped(sender)
     }
   }
  
   def preContainerStopped(executor: ActorRef) {}
+
+  def whenContainerStopped(from: ActorRef) = slots.find( slot => 
+    slot.executor match {
+      case Some(found) => found.path.name.equals(from.path.name)
+      case None => false
+    }
+  ) match { 
+    case Some(found) => found.executor match {
+      case Some(executor) => {
+        LOG.debug("Send shutdown container message to {} ...", executor)
+        executor ! ShutdownContainer
+        if(!None.equals(found.task)) 
+          throw new RuntimeException("Task at slot seq "+found.seq+
+                                     " is not"+ "empty! task: "+found.task)
+        val newSlot = Slot(found.seq, found.task, found.master, None)
+        slots -= found
+        slots += newSlot
+      }
+      case None => throw new RuntimeException("Impossible! Executor not "+
+                                              "found for "+from.path.name)
+    }
+    case None => throw new RuntimeException("No executor found for "+
+                                            from.path.name)
+  }
+
   def postContainerStopped(executor: ActorRef) {}
 
-  override def receive = launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse taskRequest orElse receiveDirective orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
+  def report: Receive = {
+    case r: Report => reporter ! r
+  }
+
+  override def receive = launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse taskRequest orElse receiveDirective orElse actorReply orElse timeout orElse superviseeIsTerminated orElse report orElse unknown
 
 }

@@ -97,7 +97,7 @@ class MockScheduler(conf: HamaConfiguration, tester: ActorRef,
       if(null != tm) 
         throw new IllegalArgumentException("Parameter tm should be null!")
       val reporter = 
-         context.actorOf(Props(classOf[org.apache.hama.groom.Monitor],
+         context.actorOf(Props(classOf[org.apache.hama.groom.Reporter],
                                configuration))
       val taskManager = context.actorOf(Props(classOf[MockTaskMgr], 
                                               conf, 

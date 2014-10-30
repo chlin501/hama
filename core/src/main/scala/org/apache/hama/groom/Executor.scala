@@ -38,6 +38,7 @@ import org.apache.hadoop.io.IOUtils
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.fs.Operation
+import org.apache.hama.monitor.Report
 import org.apache.hama.util.BSPNetUtils
 import scala.collection.immutable.Queue
 import scala.collection.JavaConversions._
@@ -389,7 +390,11 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
     }
   }
 
-  def receive = launchAck orElse occupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownContainer orElse unknown
+  protected def report: Receive = {
+    case r: Report => taskManagerListener ! r
+  }
+
+  def receive = launchAck orElse occupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownContainer orElse report orElse unknown
      
 }
 

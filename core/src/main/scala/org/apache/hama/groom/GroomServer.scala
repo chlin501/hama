@@ -39,7 +39,7 @@ final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
   override def configuration: HamaConfiguration = conf
 
   override def initializeServices {
-    val monitor = getOrCreate("monitor", classOf[Monitor], configuration) 
+    val monitor = getOrCreate("monitor", classOf[Reporter], configuration) 
     getOrCreate("taskManager", classOf[TaskManager], configuration, monitor) 
   }
 
