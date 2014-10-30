@@ -27,14 +27,22 @@ import akka.actor.Props
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import java.net.InetAddress
+import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.bsp.v2.Coordinator
+import org.apache.hama.bsp.v2.Execute
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
 import org.apache.hama.logging.TaskLogger
+import org.apache.hama.message.BSPMessageBundle
+import org.apache.hama.message.MessageExecutive
+import org.apache.hama.message.Peer
 import org.apache.hama.monitor.Report
-import org.apache.hama.sync.SyncException
+import org.apache.hama.sync.CuratorBarrier
+import org.apache.hama.sync.CuratorRegistrator
+import org.apache.hama.sync.PeerClient
 import org.apache.hama.util.ActorLocator
 import org.apache.hama.util.ExecutorLocator
 import scala.concurrent.duration.FiniteDuration
@@ -159,12 +167,6 @@ class Container(conf: HamaConfiguration) extends LocalService
        }
     }
 
-  /**
-   * A log class for tasks to be executed. Sending TaskAttemptID to switch
-   * for logging to different directory. 
-  protected val tasklog = createTaskLogger[TaskLogger](classOf[TaskLogger], 
-                                                       hamaHome, slotSeq) 
-   */
 
   protected var executor: Option[ActorRef] = None
 
@@ -210,7 +212,7 @@ class Container(conf: HamaConfiguration) extends LocalService
    * @return Boolean denotes worker is running if true; otherwise false.
    */
   protected def isOccupied(coordinator: Option[ActorRef]): Boolean = 
-    coordinator.map { v => true}.getOrElse(false)
+    coordinator.map { v => true }.getOrElse(false)
 
   /**
    * - Create coordinator 
@@ -238,27 +240,48 @@ class Container(conf: HamaConfiguration) extends LocalService
     }
   }
 
+/*
   protected def createTaskLogger[A <: TaskLogger](logger: Class[A], 
                                                   logDir: String,
                                                   taskAttemptId: TaskAttemptID,
                                                   seq: Int): ActorRef = 
-    spawn("taskLogger%s".format(seq), logger, logDir, taskAttemptId)
+*/
 
   /**
    * Start executing the task in another actor.
    * @param task that is supplied to be executed.
    */
   def doLaunch(task: Task) { 
-/*
-    taskWorker = Option(spawn("taskWoker", classOf[TaskWorker], configuration, 
-                              self, peerMessenger, tasklog)).map( worker => {
-      context.watch(worker)
-      worker ! ConfigureFor(task)
-      worker ! Execute(task.getId.toString, configuration, 
-                       task.getConfiguration)
-      worker
-    })
-*/
+    val tasklog = spawn("taskLogger%s".format(slotSeq),  
+                        classOf[TaskLogger], 
+                        hamaHome, 
+                        task.getId, 
+                        slotSeq)
+
+    val messenger = spawn("messenger-"+Peer.nameFrom(conf), 
+                          classOf[MessageExecutive[BSPMessageBundle[Writable]]],
+                          slotSeq, 
+                          task.getId,
+                          self, 
+                          tasklog)
+
+    val peer = spawn("syncer", 
+                     classOf[PeerClient], 
+                     conf, 
+                     task.getId,
+                     CuratorBarrier(conf, task.getId, task.getTotalBSPTasks),
+                     CuratorRegistrator(conf),
+                     tasklog)
+
+    this.coordinator = Option(spawn("coordinator", 
+                                    classOf[Coordinator], 
+                                    conf, 
+                                    task, 
+                                    self, 
+                                    messenger,
+                                    peer,
+                                    tasklog))
+    this.coordinator.map { c => c ! Execute }
   }
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {

@@ -52,13 +52,13 @@ final case object ExitBarrier extends PeerClientMessage
  * @param conf denotes comon conf that contains actor system, etc. information.
  * @param taskAttemptId denotes to which id this peer is bound.
  * @param syncer provides barrier synchronization functions.
- * @param operator deals with peer data registration and retrievation. 
+ * @param registrator deals with peer data registration and retrievation. 
  * @param tasklog logs task info.
  */
 class PeerClient(conf: HamaConfiguration, 
                  taskAttemptId: TaskAttemptID,
                  syncer: Barrier,
-                 operator: PeerRegistrator, 
+                 registrator: PeerRegistrator, 
                  tasklog: ActorRef) extends Agent with TaskLog { 
  
   protected var allPeers: Option[Array[String]] = None
@@ -74,12 +74,12 @@ class PeerClient(conf: HamaConfiguration,
       val port = conf.getInt("bsp.peer.port", 61000)
       LOG.debug("ActorSystem {}, host {}, port {} is going to be registered!", 
                 sys, host, port)  
-      operator.register(taskAttemptId, sys, host, port)
+      registrator.register(taskAttemptId, sys, host, port)
     }
   }
 
   protected def currentPeerName: Receive = {
-    case GetPeerName => sender ! PeerName(operator.getPeerName) 
+    case GetPeerName => sender ! PeerName(registrator.getPeerName) 
   }
 
   protected def peerNameByIndex: Receive = {
@@ -117,7 +117,7 @@ class PeerClient(conf: HamaConfiguration,
 
   protected def initPeers(taskAttemptId: TaskAttemptID): Array[String] = 
     allPeers match { 
-      case None => operator.getAllPeerNames(taskAttemptId).sorted
+      case None => registrator.getAllPeerNames(taskAttemptId).sorted
       case Some(array) => array.sorted
     }
 
