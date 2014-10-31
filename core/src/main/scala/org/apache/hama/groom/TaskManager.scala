@@ -23,7 +23,6 @@ import akka.actor.Cancellable
 import akka.actor.Deploy
 import akka.actor.Props
 import akka.remote.RemoteScope
-import org.apache.hama.bsp.v2.GroomServerStat
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration

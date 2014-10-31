@@ -21,8 +21,7 @@ import akka.actor.ActorRef
 import akka.actor.Cancellable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
-//import org.apache.hama.Request
-import org.apache.hama.bsp.v2.GroomServerStat
+import org.apache.hama.groom.GroomServerStat
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.collection.immutable.Queue

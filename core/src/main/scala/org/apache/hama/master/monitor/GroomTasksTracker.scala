@@ -17,9 +17,9 @@
  */
 package org.apache.hama.master.monitor
 
-import org.apache.hama.bsp.v2.GroomServerStat
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
+import org.apache.hama.groom.GroomServerStat
 
 final class GroomTasksTracker(conf: HamaConfiguration) extends LocalService {
  

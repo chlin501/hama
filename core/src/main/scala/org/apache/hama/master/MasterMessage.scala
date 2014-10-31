@@ -19,8 +19,8 @@ package org.apache.hama.master
 
 import akka.actor.ActorRef
 import org.apache.hama.bsp.BSPJobID
-import org.apache.hama.bsp.v2.GroomServerStat
 import org.apache.hama.bsp.v2.Job
+import org.apache.hama.groom.GroomServerStat
 
 
 
