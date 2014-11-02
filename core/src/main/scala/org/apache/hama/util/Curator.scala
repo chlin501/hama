@@ -107,8 +107,7 @@ trait Curator extends Conversion with CommonLog {
     }
 
   /**
-   * Recursively create znode. 
-   * No value is set for znode with this function.
+   * Recursively create znode without value being set.
    * The znode must be an absolute path.
    * Note this is not an atomic operation. 
    * Use {@link org.apache.curator.framework.api.transaction.CuratorTransaction}
@@ -121,15 +120,53 @@ trait Curator extends Conversion with CommonLog {
                                          " or null value => "+znode)
     exist({ (client) => client.create.creatingParentsIfNeeded.forPath(znode) })
   }
- 
+
   /**
+   * Create znode children based on parent znode and children znode array.
+   * @param parent points the parent znode. 
+   * @param children is an array containing all children znode.
+   */
+  def create(parent: String, children: Array[String]): Unit = 
+    create(parent, children, None) 
+
+  /**
+   * Create children znodes with values supplided.
+   * @param parent points to the parent znode.
+   * @param children is an array containing all children znode.
+   * @param values is an array containing all children values.
+   */
+  def create(parent: String, children: Array[String], values: Array[Any]): 
+    Unit = create(parent, children, Option(values))
+
+  /**
+   * Create children znodes with values supplided.
+   * @param parent points to the parent znode.
+   * @param children is an array containing all children znode.
+   * @param values is an array option containing all children values.
+   */
+  def create(parent: String, children: Array[String], 
+             values: Option[Array[Any]]): Unit = 
+    children.map { child => {
+      val znodeToChild = "%s/%s".format(parent, child)
+      create(znodeToChild)
+      znodeToChild
+    }}.zipWithIndex.foreach( e => values.map { value => value(e._2) match {
+      case i: Int => set(e._1, toBytes(i))
+      case f: Float => set(e._1, toBytes(f))
+      case l: Long => set(e._1, toBytes(l))
+      case d: Double => set(e._1, toBytes(d))
+      case s: String => set(e._1, toBytes(s))
+      case rest@_  => throw new RuntimeException("Not yet supported: "+rest)
+    }}) 
+ 
+  /*
    * List all children under a particular znode.
    * @param znode points to the parent path where children znodes exist. 
    * @return Array of String type; at least an empty String array.
    */
-  def list(znode: String): Array[String] = exist({ (client) => {
-    client.checkExists.forPath(znode) match {
-      case stat: Stat => client.getChildren.forPath(znode).map { _.toString }.
+  def list(parent: String): Array[String] = exist({ (client) => {
+    client.checkExists.forPath(parent) match {
+      case stat: Stat => client.getChildren.forPath(parent).map { _.toString }.
                                 toArray
       case _ => Array[String]()
     }
@@ -149,7 +186,7 @@ trait Curator extends Conversion with CommonLog {
    * @param znode is the destination path where data is stored.
    * @return Option[Array[Byte]] is the data retrieved out of znode.
    */
-  protected def getBytes(znode: String): Option[Array[Byte]] = 
+  def getBytes(znode: String): Option[Array[Byte]] = 
     exist[Option[Array[Byte]]]({ (client) =>
       client.getData.forPath(znode) match {
         case data: Array[Byte] => Option(data)
@@ -163,22 +200,23 @@ trait Curator extends Conversion with CommonLog {
    * @param defaultValue is applied if not found.
    * @return Array[Byte] if found at znode; otherwise returns defaultValue.
    */
-  def getBytes(znode: String, defaultValue: Array[Byte]): Array[Byte] = 
-    getBytes(znode) match {
+  def getBytes(znode: String, defaultValue: Array[Byte]): 
+    Array[Byte] = getBytes(znode) match {
       case Some(bytes) => bytes
       case None => defaultValue
     }
-
+  
   /**
    * Get string with default value.
    * @param znode denotes the absolute path in ZooKeeper.
    * @param defaultValue is applied if not found.
    * @return String if found at znode; otherwise returns defaultValue.
    */
-  def get(znode: String, defaultValue: String): String = getBytes(znode) match {
-    case Some(bytes) => new String(bytes)
-    case None => defaultValue 
-  }
+  def get(znode: String, defaultValue: String): String = 
+    getBytes(znode) match {
+      case Some(bytes) => new String(bytes)
+      case None => defaultValue 
+    }
 
   /**
    * Get int with default value.

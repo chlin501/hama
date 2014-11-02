@@ -79,9 +79,9 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
   /** 
    * This map holds GroomServer name as key to its TaskManager Reference and
    * maxTasks value. 
-   */
   protected var groomTaskManagers = 
     Map.empty[GroomServerName, (TaskManagerRef, MaxTasksAllowed)]
+   */
 
   var taskAssignQueueChecker: Cancellable = _
 
@@ -144,9 +144,9 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
     val groomServers = job.getTargets  
     var from = Queue[Job](); var to = Queue[Job]()
     groomServers.foreach( groomName => {
-      LOG.debug("Check if groomTaskManagers cache contains {}", groomName)
-      val (taskManagerActor, maxTasksAllowed) = 
-        groomTaskManagers.getOrElse(groomName, (null, 0)) 
+      //LOG.debug("Check if groomTaskManagers cache contains {}", groomName)
+      val (taskManagerActor, maxTasksAllowed) = (null, 0)
+        //groomTaskManagers.getOrElse(groomName, (null, 0)) 
       if(null != taskManagerActor) {
         LOG.debug("GroomServer's taskManager {} found!", groomName)
         val currentTaskScheduled = job.getTaskCountFor(groomName)
@@ -218,12 +218,12 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
   /**
    * From GroomManager to notify a groom server's task manager is ready for
    * receiving tasks.
-   */
   def enrollment: Receive = {
     case GroomEnrollment(groomServerName, taskManager, maxTasks) => {
       groomTaskManagers ++= Map(groomServerName -> (taskManager, maxTasks)) 
     }
   }
+   */
 
   /**
    * GroomServer's TaskManager requests for assigning a task.
@@ -306,5 +306,5 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
     }
   }
 */
-  override def receive = requestTask orElse dispense orElse nextPlease orElse enrollment orElse actorReply orElse timeout orElse unknown
+  override def receive = requestTask orElse dispense orElse nextPlease /*orElse enrollment*/ orElse actorReply orElse timeout orElse unknown
 }

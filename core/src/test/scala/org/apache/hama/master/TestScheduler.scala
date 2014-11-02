@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.master
-
+/*
 import akka.actor.ActorRef
 import akka.actor.Props
 import akka.event.Logging
@@ -33,28 +33,12 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-/*
-class MockMaster2(conf: HamaConfiguration) extends Master(conf) {
-
-  override def initializeServices {
-    val receptionist = getOrCreate("receptionist", classOf[Receptionist], 
-                                   configuration)
-    getOrCreate("sched", classOf[MockScheduler], configuration, tester, 
-                receptionist)
-    getOrCreate("taskManager", classOf[MockTaskMgr], configuration)
-  }
-
-}
-*/
-
 class MockTaskMgr(conf: HamaConfiguration, reporter: ActorRef, 
                   mockSched: ActorRef, name: String, constraint: Int) 
       extends TaskManager(conf, reporter) {
 
-  /**
    * Disable remote lookup sched.
    * Replace sched with mock sched.
-   */
   override def initializeServices = {
     initializeSlots(constraint)
     sched = mockSched
@@ -145,3 +129,4 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     expectAnyOf("groom2", "groom9")
   }
 }
+*/

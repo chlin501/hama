@@ -41,11 +41,39 @@ class TestCurator extends TestEnv("TestCurator") with LocalZooKeeper {
     curator.initializeCurator(testConfiguration)
     val masterPath = "/bsp/masters/bspmaster/id"
     val masterId = curator.getOrElse(masterPath, "master")
-    LOG.info("MasterId is "+masterId)
+    LOG.info("MasterId is {}", masterId)
     assert("master".equals(masterId))
+
     val jobSeqPath = "/bsp/masters/bspmaster/seq"
     val seq = curator.getOrElse(jobSeqPath, 1)
-    LOG.info("The job seq value is "+seq)
+    LOG.info("The job seq value is {}", seq)
     assert(1 == seq)
+
+    val parent = "/masters/master1"
+    val children = Array[String]("actor-system", "host", "port")
+    val values = Array("bspmaster", "host123", 1923)
+    curator.create(parent, children, values)
+    curator.list(parent).foreach( znode => znode match {
+      case "actor-system" => {
+        val path = parent+"/"+znode
+        val sys = curator.get(path, null)
+        LOG.info("Value of znode path {} is {}", path, sys)
+        assert("bspmaster".equals(sys))
+      }
+      case "host" => {
+        val path = parent+"/"+znode
+        val host = curator.get(path, null)
+        LOG.info("Value of znode path {} is {}", path, host)
+        assert("host123".equals(host))  
+      }
+      case "port" => {
+        val path = parent+"/"+znode
+        val port = curator.get(path, -1)
+        LOG.info("Value of znode path {} is {}", path, port)
+        assert(1923 == port)  
+      }
+      case rest@_ => throw new RuntimeException("Unexpected value "+rest+" at "+
+                                                parent+"/"+znode)
+    })
   }
 }

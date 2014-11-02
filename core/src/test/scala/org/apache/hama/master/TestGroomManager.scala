@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.master
-
+/*
 import akka.actor.ActorRef
 import akka.event.Logging
 import org.apache.hama.bsp.BSPJobID
@@ -131,3 +131,4 @@ class TestGroomManager extends TestEnv("TestGroomManager") {
     expectAnyOf(MaxTasksSum(3), MaxTasksSum(5), MaxTasksSum(12))
   }
 }
+*/

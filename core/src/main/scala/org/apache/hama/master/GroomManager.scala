@@ -26,10 +26,14 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.collection.immutable.Queue
 
+final case class Groom(name: String, taskManager: ActorRef)
+
+/*
 final case class GroomRegistration(groomServerName: String,
                                    taskManager: ActorRef, 
                                    maxTasks: Int,
                                    var notified: Boolean = false) 
+*/
 
 /**
  * A service that manages a set of {@link org.apache.hama.groom.GroomServer}s.
@@ -44,14 +48,15 @@ class GroomManager(conf: HamaConfiguration, receptionist: ActorRef,
   type GroomServerName = String
   type CrashCount = Int
 
-  private var registrationWatcher: Cancellable = _
+  //private var registrationWatcher: Cancellable = _
 
   /** 
    * Store the GroomServerStat information.
    * We don't use Map because Set can "filter" for updating `notified' 
    * variable.
    */
-  protected[this] var grooms = Set.empty[GroomRegistration] 
+  //protected[this] var grooms = Set.empty[GroomRegistration] 
+  protected[this] var grooms = Set.empty[Groom] 
  
   /**
    * Identical GroomServer host name logically represents the same GroomServer, 
@@ -67,6 +72,7 @@ class GroomManager(conf: HamaConfiguration, receptionist: ActorRef,
    * Quarantine offline GroomServer.
    */
   def quarantine(offline: ActorRef, reaction:(GroomServerName) => Unit) {
+/*
     grooms.find(p=>p.taskManager.equals(offline)) match {//move to offlineGrooms
       case Some(groom) => {
         grooms -= groom 
@@ -81,6 +87,7 @@ class GroomManager(conf: HamaConfiguration, receptionist: ActorRef,
         LOG.warning("GroomServer {} is watched but not found in the list!")
     }
     LOG.info("OfflineGroomsStat: {}", offlineGroomsStat.mkString(", "))
+*/
   }
 
   /**
@@ -103,7 +110,6 @@ class GroomManager(conf: HamaConfiguration, receptionist: ActorRef,
    * @param from which GroomServer the stat information is.
    * @param groomServerName denotes the name of the GroomServer. 
    * @param maxTasks tells the capacity, max tasks allowed, of the GroomServer.
-   */
   def register(from: ActorRef, groomServerName: String, maxTasks: Int) {
     LOG.debug("{} registers {} with capacity set to {}.", 
              from, groomServerName, maxTasks)
@@ -120,21 +126,23 @@ class GroomManager(conf: HamaConfiguration, receptionist: ActorRef,
     // 1. specific stat info recording groom crash info.
     // 2. if stat is with refresh hardware, reset crashed count to 0
   }
+   */
 
   /**
    * GroomServer's TaskManager enroll itself for being monitored.
    * @return Actor.Receive 
-   */
   def enroll: Receive = {
     case reg: Register => {
       LOG.info("{} requests to enroll {}, which allows {} max tasks.", 
                sender.path.name, reg.getGroomServerName, reg.getMaxTasks) 
       register(sender, reg.getGroomServerName, reg.getMaxTasks)
-      context.watch(sender) // watch remote taskManager
-      notifying()
+      context.watch(sender) 
+      //notifying()
     }
   }
+   */
  
+/*
   protected def notifying() = grooms.filter(groom => !groom.notified) match {
     case fresh: Set[GroomRegistration] => fresh.foreach( newjoin => {
       sched ! GroomEnrollment(newjoin.groomServerName, newjoin.taskManager,
@@ -143,7 +151,8 @@ class GroomManager(conf: HamaConfiguration, receptionist: ActorRef,
     })
     case _ => 
   }
+*/
 
-  override def receive = enroll orElse superviseeIsTerminated orElse unknown
+  override def receive = /*enroll orElse*/ superviseeIsTerminated orElse unknown
 
 }

@@ -50,6 +50,8 @@ private[groom] final case class RemoveTask(
  * @param executor that executes the task for this slot.
  */
 private[groom] final case class Slot(
+  // TODO: change Task to taskAttemptId because Task would be obselete once
+  //       task gets executed by superstep worker.
   seq: Int, task: Option[Task], master: String, executor: Option[ActorRef]
 ) extends GroomMessage
 

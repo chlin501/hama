@@ -25,12 +25,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.ServiceStateMachine
-import org.apache.hama.util.Curator
+//import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
 final private[hama] case class Id(value: String)
 
+/*
 object Master {
 
   val defaultMasterId = 
@@ -39,17 +40,18 @@ object Master {
   val masterPath = (name: String) => "/bsp/masters/%s/id".format(name)
  
 }
+*/
 
-class Master(conf: HamaConfiguration) extends ServiceStateMachine 
-                                      with Curator {
+class Master(conf: HamaConfiguration) extends ServiceStateMachine {
+                                      //with Curator {
 
-  import Master._
+  //import Master._
 
-  private var identifier: String = _
+  //private var identifier: String = _
 
   override def configuration: HamaConfiguration = conf
  
-  // TODO: define Exception, etc. for different level recovery.
+/*
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
       case _: NullPointerException     => Restart
@@ -58,11 +60,12 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine
     }
 
   def createMasterId: String = getOrElse(masterPath(name), defaultMasterId)
+*/
 
   override def initializeServices {
-    initializeCurator(configuration)
-    identifier = createMasterId
-    LOG.info("Master identifier is {}", identifier)
+    //initializeCurator(configuration)
+    //identifier = createMasterId
+    //LOG.info("Master identifier is {}", identifier)
     val receptionist = getOrCreate("receptionist", classOf[Receptionist], 
                                    configuration) 
     getOrCreate("monitor", classOf[Monitor], configuration) 

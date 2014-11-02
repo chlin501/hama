@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.master;
-
+/**
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -25,20 +25,16 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
-/**
  * An object for identify GroomServer basic information, including 
  * GroomServer's name and its max tasks allowed to run.
- */
 public final class Register implements Writable {
  
   private Text groomServerName = new Text("");  
   private IntWritable maxTasks = new IntWritable(3); 
 
-  /**
    * Information when a Groomserver registers to the Master server.
    * @param groomName identifies the groom server.
    * @param maxTasks denotes the max tasks allowed to run on the groom server.
-   */
   public Register(final String groomName, final int maxTasks) {
     if(null == groomName || groomName.isEmpty())
       throw new IllegalArgumentException("GroomName is not provided.");
@@ -64,12 +60,10 @@ public final class Register implements Writable {
     return result;
   }
 
-  /**
    * MaxTasks may be updated so we only use GroomServerName for identification.
    * @param o for object to be compared.
    * @return boolean identifies if it's the same object when true; otherwise
    *                 false when object is not the same.
-   */
   @Override
   public boolean equals(Object o) {
     if (o == this)
@@ -99,3 +93,4 @@ public final class Register implements Writable {
     maxTasks.readFields(in);
   }
 }
+*/
