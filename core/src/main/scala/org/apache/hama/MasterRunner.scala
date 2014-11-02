@@ -24,7 +24,7 @@ import akka.actor.Props
 import akka.event.Logging
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import org.apache.hama.master.Master
+import org.apache.hama.master.BSPMaster
 
 /**
  * TODO: create another conf class for converting between hama configuration and
@@ -73,8 +73,8 @@ object MasterRunner { // TODO: merge to BSPMaster
 class MasterRunner(conf: HamaConfiguration) extends Agent { //TODO: replace this with Master.
 
   override def preStart {
-// TODO: perhaps find other way to give the name. reigster name to zk.
-    val master = context.system.actorOf(Props(classOf[Master], conf), 
+    val masterName = conf.get("bsp.master.name", "bspmaster")
+    val master = context.system.actorOf(Props(classOf[BSPMaster], conf), 
                                         "bspmaster")
     LOG.info("Subscribe to receive notificaiton when master is in ready "+ 
              "state.")

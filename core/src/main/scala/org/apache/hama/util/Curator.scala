@@ -159,7 +159,7 @@ trait Curator extends Conversion with CommonLog {
       case rest@_  => throw new RuntimeException("Not yet supported: "+rest)
     }}) 
  
-  /*
+  /**
    * List all children under a particular znode.
    * @param znode points to the parent path where children znodes exist. 
    * @return Array of String type; at least an empty String array.

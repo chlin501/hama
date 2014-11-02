@@ -25,14 +25,14 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.ServiceStateMachine
-//import org.apache.hama.util.Curator
+import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
 final private[hama] case class Id(value: String)
 
 /*
-object Master {
+object BSPMaster {
 
   val defaultMasterId = 
     new SimpleDateFormat("yyyyMMddHHmm").format(new Date())
@@ -42,10 +42,10 @@ object Master {
 }
 */
 
-class Master(conf: HamaConfiguration) extends ServiceStateMachine {
-                                      //with Curator {
+class BSPMaster(conf: HamaConfiguration) extends ServiceStateMachine 
+                                         with Curator {
 
-  //import Master._
+  //import BSPMaster._
 
   //private var identifier: String = _
 
@@ -65,7 +65,7 @@ class Master(conf: HamaConfiguration) extends ServiceStateMachine {
   override def initializeServices {
     //initializeCurator(configuration)
     //identifier = createMasterId
-    //LOG.info("Master identifier is {}", identifier)
+    //LOG.info("BSPMaster identifier is {}", identifier)
     val receptionist = getOrCreate("receptionist", classOf[Receptionist], 
                                    configuration) 
     getOrCreate("monitor", classOf[Monitor], configuration) 
