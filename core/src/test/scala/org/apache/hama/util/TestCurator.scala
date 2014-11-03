@@ -20,6 +20,7 @@ package org.apache.hama.util
 import org.apache.hama.TestEnv
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
+import org.scalatest.Assertions._
 import org.scalatest.junit.JUnitRunner
 
 class MockCurator extends Curator 

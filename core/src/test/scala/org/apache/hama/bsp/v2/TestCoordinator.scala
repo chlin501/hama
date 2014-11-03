@@ -162,7 +162,7 @@ class C extends Superstep {
   override def next(): Class[_ <: Superstep] = classOf[A]
 }
 
-final case class Retrieve
+final case object Retrieve
 
 class Sequencer(taskAttemptId: String, tester: ActorRef) extends Agent {
 

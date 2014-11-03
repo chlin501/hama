@@ -44,8 +44,8 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
-final case class Done
-final case class NotYetFinished
+final case object Done
+final case object NotYetFinished
 
 final case class Msgs(arg1: Int, arg2: Int, arg3: Int)
 

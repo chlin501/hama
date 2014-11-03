@@ -103,8 +103,9 @@
     <zookeeper.version>3.4.5</zookeeper.version>
     <curator.version>2.6.0</curator.version>
     <ant.version>1.7.1</ant.version>
-    <scala.version>2.10</scala.version>
-    <akka.version>2.2.3</akka.version>
+    <scala.version>2.11</scala.version>
+    <scalatest.version>2.2.1</scalatest.version>
+    <akka.version>2.3.6</akka.version>
     <logback.version>1.0.13</logback.version>
   </properties>
 

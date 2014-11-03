@@ -204,7 +204,7 @@ object TaskLogger {
 //       - log level is{log-level}Enabled 
 //       - message detail with prefix 
 //       or better mechanism
-protected class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
+class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
                            console: Boolean) 
     extends Actor with akka.actor.ActorLogging {
 

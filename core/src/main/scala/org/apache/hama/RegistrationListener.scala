@@ -17,11 +17,8 @@
  */
 package org.apache.hama
 
-import org.apache.curator.framework.recipes.cache.PathChildrenCache
 
 trait RegistrationListener {
-
-  protected var cache: Option[PathChildrenCache] = None
 
   def register()
 
