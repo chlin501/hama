@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama
-
+/*
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
@@ -26,10 +26,8 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.apache.hama.master.BSPMaster
 
-/**
  * TODO: create another conf class for converting between hama configuration and
  *       type safe config.
- */
 object MasterConfig {
 
   def toConfig(): Config =   
@@ -93,3 +91,4 @@ class MasterRunner(conf: HamaConfiguration) extends Agent { //TODO: replace this
     }
   }
 }
+*/

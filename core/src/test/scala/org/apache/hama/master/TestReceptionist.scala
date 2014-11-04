@@ -33,13 +33,15 @@ private final case class GetJob(tester: ActorRef)
 private final case class JobContent(jobId: BSPJobID, 
                                     localJarFile: String)
 
-class MockMaster(conf: HamaConfiguration) extends BSPMaster(conf) {
+/*
+class MockMaster(setting: Setting) extends BSPMaster(setting) {
 
   override def initializeServices {
     getOrCreate("receptionist", classOf[MockReceptionist], configuration)
   }
   
 }
+*/
 
 class MockReceptionist(conf: HamaConfiguration) extends Receptionist(conf) {
 

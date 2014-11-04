@@ -18,54 +18,34 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
-import akka.actor.OneForOneStrategy
-import akka.actor.SupervisorStrategy.Restart
-import akka.actor.SupervisorStrategy.Stop
-import java.text.SimpleDateFormat
-import java.util.Date
+import akka.actor.ActorSystem
+import akka.actor.Props
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.conf.Setting
 import org.apache.hama.ServiceStateMachine
 import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-final private[hama] case class Id(value: String)
-
-/*
 object BSPMaster {
 
-  val defaultMasterId = 
-    new SimpleDateFormat("yyyyMMddHHmm").format(new Date())
-
-  val masterPath = (name: String) => "/bsp/masters/%s/id".format(name)
+  def main(args: Array[String]) {
+    val master = Setting.master
+    //TODO: post seed node info to zk
+    val sys = ActorSystem(master.info.getActorSystemName, master.config)
+    sys.actorOf(Props(classOf[BSPMaster], master), 
+                master.name)
+  }
  
 }
-*/
 
-class BSPMaster(conf: HamaConfiguration) extends ServiceStateMachine 
-                                         with Curator {
+class BSPMaster(setting: Setting) extends ServiceStateMachine {
 
-  //import BSPMaster._
+  import BSPMaster._
 
-  //private var identifier: String = _
-
-  override def configuration: HamaConfiguration = conf
- 
-/*
-  override val supervisorStrategy =
-    OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
-      case _: NullPointerException     => Restart
-      case _: IllegalArgumentException => Stop
-      case _: Exception                => Restart
-    }
-
-  def createMasterId: String = getOrElse(masterPath(name), defaultMasterId)
-*/
+  override def configuration: HamaConfiguration = setting.hama
 
   override def initializeServices {
-    //initializeCurator(configuration)
-    //identifier = createMasterId
-    //LOG.info("BSPMaster identifier is {}", identifier)
     val receptionist = getOrCreate("receptionist", classOf[Receptionist], 
                                    configuration) 
     getOrCreate("monitor", classOf[Monitor], configuration) 
