@@ -204,7 +204,7 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
    */
   protected def dispatch(from: TaskManagerRef, action: Action, task: Task) {
     from ! new Directive(action, task,  
-                         conf.get("bsp.master.name", "bspmaster"))  
+                         conf.get("master.name", "bspmaster"))  
   }
 
   /**

@@ -46,7 +46,7 @@ class TaskManager(conf: HamaConfiguration, reporter: ActorRef)
   val groomServerPort = configuration.getInt("bsp.groom.port", 50000)
   val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
   val maxTasks = configuration.getInt("bsp.tasks.maximum", 3) 
-  val bspmaster = configuration.get("bsp.master.name", "bspmaster")
+  val bspmaster = configuration.get("master.name", "bspmaster")
 
   // TODO: refactor
   var sched: ActorRef = _
