@@ -83,26 +83,24 @@ class MasterRegistrator(setting: Setting) extends Curator {
   initializeCurator(setting.hama)
 
   def register() {
-    val masterPath = "/%s/%s".format("masters", setting.name)
     val sys = setting.info.getActorSystemName
     val host = setting.info.getHost
     val port = setting.info.getPort
-    create(masterPath, Array("actor-system", "host", "port"), 
-           Option(Array(sys, host, port)), CreateMode.EPHEMERAL) 
+    val path = "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host, 
+                                        port)
+    create(path) 
   }
 
   def masters(): Array[SystemInfo] = list("/masters").map { child => {
-    val znode = "/masters/%s".format(child)
-    val sys = get("%s/%s".format(znode, "actor-system"), null) 
-    if(null == sys) 
-      throw new RuntimeException("ActorSystem not found at "+znode+"!")
-    val host = get("%s/%s".format(znode, "host"), null) 
-    if(null == host) 
-      throw new RuntimeException("Host not found at "+znode+"!")
-    val port = get("%s/%s".format(znode, "port"), -1) 
-    if(-1 == port) 
-      throw new RuntimeException("Port not found at "+znode+"!")
-    new SystemInfo(sys, host, port) 
+    LOG.debug("Master znode found is {}", child)
+    val ary = child.split("_")
+    val name = ary(0)
+    val ary1 = ary(1).split("@")
+    val sys = ary1(0) 
+    val ary2 = ary1(1).split(":")
+    val host = ary2(0)
+    val port = ary2(1)
+    new SystemInfo(sys, host, port.toInt)
   }}.toArray
 
 }
