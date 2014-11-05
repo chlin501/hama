@@ -27,6 +27,7 @@ import org.apache.curator.framework.api.Pathable
 import org.apache.curator.framework.imps.CuratorFrameworkState._
 import org.apache.curator.framework.recipes.barriers.DistributedDoubleBarrier
 import org.apache.curator.retry.RetryNTimes
+import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.data.Stat
 import scala.collection.JavaConversions._
 
@@ -112,13 +113,29 @@ trait Curator extends Conversion with CommonLog {
    * Note this is not an atomic operation. 
    * Use {@link org.apache.curator.framework.api.transaction.CuratorTransaction}
    * instead if needed.
-   * @param znode denote the path to be created in ZooKeeper.
+   * @param znode denotes the path to be created in ZooKeeper.
    */
-  def create(znode: String) {
-    if(null == znode || znode.isEmpty || !znode.startsWith("/"))
-      throw new IllegalArgumentException("Znode is not started from '/', empty"+
-                                         " or null value => "+znode)
-    exist({ (client) => client.create.creatingParentsIfNeeded.forPath(znode) })
+  def create(znode: String): Unit = create(znode, CreateMode.PERSISTENT)
+
+ 
+  /**
+   * Recursively create znode. This function doesn't set znode with value, and 
+   * CreateMode needs to be specified.
+   * The znode must be an absolute path.
+   * Note this is not an atomic operation. 
+   * @param znode denotes the path to be created in ZooKeeper.
+   * @param mode denotes created znode type according to ZooKeeper CreateMode.
+   */  
+  def create(znode: String, mode: CreateMode): Unit = mode match {
+    case null => throw new IllegalArgumentException("Create mode is missing!")
+    case m@_ => {
+      if(null == znode || znode.isEmpty || !znode.startsWith("/"))
+        throw new IllegalArgumentException("Znode is not started from '/', " +
+                                           "empty or null value: "+znode)
+      exist({ (client) => 
+        client.create.creatingParentsIfNeeded.withMode(m).forPath(znode) 
+      })
+    }
   }
 
   /**
@@ -143,12 +160,15 @@ trait Curator extends Conversion with CommonLog {
    * @param parent points to the parent znode.
    * @param children is an array containing all children znode.
    * @param values is an array option containing all children values.
+   * @param mode denotes created znode type according to ZooKeeper CreateMode. 
    */
-  def create(parent: String, children: Array[String], 
-             values: Option[Array[Any]]): Unit = 
+  def create(parent: String, 
+             children: Array[String], 
+             values: Option[Array[Any]], 
+             mode: CreateMode = CreateMode.PERSISTENT): Unit = 
     children.map { child => {
       val znodeToChild = "%s/%s".format(parent, child)
-      create(znodeToChild)
+      create(znodeToChild, mode)
       znodeToChild
     }}.zipWithIndex.foreach( e => values.map { value => value(e._2) match {
       case i: Int => set(e._1, toBytes(i))

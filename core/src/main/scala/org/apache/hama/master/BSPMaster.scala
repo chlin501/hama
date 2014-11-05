@@ -30,6 +30,7 @@ import org.apache.hama.SystemInfo
 import org.apache.hama.conf.Setting
 import org.apache.hama.ServiceStateMachine
 import org.apache.hama.util.Curator
+import org.apache.zookeeper.CreateMode
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
@@ -40,6 +41,8 @@ object BSPMaster {
     //       post self as seed node info to zk
     //       combine all seed nodes as indexedSeq and put into setting
     val master = Setting.master
+    val registrator = new MasterRegistrator(master)
+    registrator.register
     val sys = ActorSystem(master.info.getActorSystemName, master.config)
     sys.actorOf(Props(classOf[BSPMaster], master), 
                 master.name)
@@ -55,8 +58,6 @@ class BSPMaster(setting: Setting) extends ServiceStateMachine {
   //val cluster = Cluster(context.system)
 
   import BSPMaster._
-
-  //override def configuration: HamaConfiguration = setting.hama
 
   override def initializeServices {
     // TODO: member management trait
@@ -87,7 +88,7 @@ class MasterRegistrator(setting: Setting) extends Curator {
     val host = setting.info.getHost
     val port = setting.info.getPort
     create(masterPath, Array("actor-system", "host", "port"), 
-           Array(sys, host, port)) 
+           Option(Array(sys, host, port)), CreateMode.EPHEMERAL) 
   }
 
   def masters(): Array[SystemInfo] = list("/masters").map { child => {
