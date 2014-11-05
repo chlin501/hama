@@ -51,9 +51,9 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
   */
 
   /* Operation against underlying storage. may need reload. */
-  protected val operation = Operation.get(configuration)
+  protected val operation = Operation.get(conf)
  
-  override def configuration: HamaConfiguration = conf
+  //override def configuration: HamaConfiguration = conf
 
   /**
    * Calculate maxTasks of all GroomServers.

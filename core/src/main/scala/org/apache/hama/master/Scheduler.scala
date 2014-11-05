@@ -85,7 +85,7 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
 
   var taskAssignQueueChecker: Cancellable = _
 
-  override def configuration: HamaConfiguration = conf
+  //override def configuration: HamaConfiguration = conf
 
   def isTaskAssignQueueEmpty: Boolean = taskAssignQueue.isEmpty
 

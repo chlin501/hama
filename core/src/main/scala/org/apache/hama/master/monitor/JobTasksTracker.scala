@@ -26,7 +26,7 @@ final class JobTasksTracker(conf: HamaConfiguration) extends LocalService {
 
   var tasksStat = Map.empty[BSPJobID, Set[Task]]
 
-  override def configuration: HamaConfiguration = conf
+  //override def configuration: HamaConfiguration = conf
 
   def reportTask: Receive = {
     case newTask: Task => {  // report

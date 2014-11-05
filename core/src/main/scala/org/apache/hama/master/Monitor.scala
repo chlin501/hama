@@ -26,12 +26,12 @@ import org.apache.hama.master.monitor.SysMetricsTracker
 // TODO: rename to Auditor/ Tracker?
 class Monitor(conf: HamaConfiguration) extends LocalService {
 
-  override def configuration: HamaConfiguration = conf
+  //override def configuration: HamaConfiguration = conf
 
   override def initializeServices {
-    getOrCreate("jobTasksTracker", classOf[JobTasksTracker], configuration)
-    getOrCreate("groomTasksTracker", classOf[GroomTasksTracker], configuration)
-    getOrCreate("sysMetricsTracker", classOf[SysMetricsTracker], configuration)
+    getOrCreate("jobTasksTracker", classOf[JobTasksTracker], conf)
+    getOrCreate("groomTasksTracker", classOf[GroomTasksTracker], conf)
+    getOrCreate("sysMetricsTracker", classOf[SysMetricsTracker], conf)
   }
 
   override def receive = unknown

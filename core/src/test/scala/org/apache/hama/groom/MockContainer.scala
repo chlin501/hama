@@ -61,7 +61,7 @@ class MockContainer(conf: HamaConfiguration) extends Container(conf)
   }
 
   override def initializeServices {
-    lookup(executorName, locate(MockExecutorLocator(configuration)))
+    lookup(executorName, locate(MockExecutorLocator(conf)))
   }
  
   override def receive = super.receive

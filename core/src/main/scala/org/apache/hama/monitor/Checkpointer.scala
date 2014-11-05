@@ -81,7 +81,7 @@ class Checkpointer(commConf: HamaConfiguration,
    */
   protected var mapNextStatus = false
  
-  override def configuration(): HamaConfiguration = commConf
+  //override def configuration(): HamaConfiguration = commConf
 
   override def initializeServices = initializeCurator(commConf)
 

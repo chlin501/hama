@@ -62,11 +62,11 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
     ManagementFactory.getThreadMXBean
   private val M: Long = 1024*1024
 
-  override def configuration: HamaConfiguration = conf
+  //override def configuration: HamaConfiguration = conf
 
   override def initializeServices {
     lookup("sysMetricsTracker", 
-           locate(SysMetricsTrackerLocator(configuration)))
+           locate(SysMetricsTrackerLocator(conf)))
   }
 
   override def afterLinked(proxy: ActorRef) = {

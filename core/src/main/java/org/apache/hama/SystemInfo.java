@@ -141,12 +141,6 @@ public class SystemInfo implements Writable {
     return result;
   }
 
-/*
-  public String getSystemPath() {
-    return getActorSystemName()+"@"+getHost()+":"+getPort();
-  }
-*/
-
   @Override 
   public String toString() {
     return "SystemInfo("+getProtocol()+","+

@@ -88,8 +88,8 @@ trait Curator extends Conversion with CommonLog {
       }
       case None => {
         val client = build(conf)
-        start(client)
         curatorFramework = Option(client)
+        start(client)
         curatorFramework
       }
     }
@@ -182,7 +182,7 @@ trait Curator extends Conversion with CommonLog {
   })
 
   /**
-   * Get bytes from the designated znode.
+   * Get bytes from the designated znode, but value won't be set at ZooKeeper.
    * @param znode is the destination path where data is stored.
    * @return Option[Array[Byte]] is the data retrieved out of znode.
    */
@@ -195,7 +195,7 @@ trait Curator extends Conversion with CommonLog {
     })
 
   /**
-   * Get bytes with default value.
+   * Get bytes with default value, but value won't be set at ZooKeeper.
    * @param znode denotes the absolute path in ZooKeeper.
    * @param defaultValue is applied if not found.
    * @return Array[Byte] if found at znode; otherwise returns defaultValue.
@@ -207,7 +207,7 @@ trait Curator extends Conversion with CommonLog {
     }
   
   /**
-   * Get string with default value.
+   * Get string with default value, but value won't be set at ZooKeeper.
    * @param znode denotes the absolute path in ZooKeeper.
    * @param defaultValue is applied if not found.
    * @return String if found at znode; otherwise returns defaultValue.
@@ -219,7 +219,7 @@ trait Curator extends Conversion with CommonLog {
     }
 
   /**
-   * Get int with default value.
+   * Get int with default value, but value won't be set at ZooKeeper.
    * @param znode denotes the absolute path in ZooKeeper.
    * @param defaultValue is applied if not found.
    * @return Int if found at znode; otherwise returns defaultValue.
@@ -230,7 +230,7 @@ trait Curator extends Conversion with CommonLog {
   }
 
   /**
-   * Get float with default value.
+   * Get float with default value, but value won't be set at ZooKeeper.
    * @param znode denotes the absolute path in ZooKeeper.
    * @param defaultValue is applied if not found.
    * @return Float if found at znode; otherwise returns defaultValue.
@@ -241,7 +241,7 @@ trait Curator extends Conversion with CommonLog {
   }
 
   /**
-   * Get long with default value.
+   * Get long with default value, but value won't be set at ZooKeeper.
    * @param znode denotes the absolute path in ZooKeeper.
    * @param defaultValue is applied if not found.
    * @return Long if found at znode; otherwise returns defaultValue.
@@ -252,7 +252,7 @@ trait Curator extends Conversion with CommonLog {
   }
 
   /**
-   * Get double with default value.
+   * Get double with default value, but value won't be set at ZooKeeper.
    * @param znode denotes the absolute path in ZooKeeper.
    * @param defaultValue is applied if not found.
    * @return Double if found at znode; otherwise returns defaultValue.
@@ -263,7 +263,7 @@ trait Curator extends Conversion with CommonLog {
   }
 
   /**
-   * Get the value with the given znode path. Znode path will be created if
+   * Get the value with the given znode path, that will be created if
    * corresponded znode is not found with initial value.
    * @param znode denotes the destination path at which the value is stored.
    * @param initialValue if no value found.
@@ -280,7 +280,7 @@ trait Curator extends Conversion with CommonLog {
     }})
 
   /**
-   * Get the value with the given znode path. Znode path will be created if
+   * Get the value with the given znode path, that will be created if
    * corresponded znode is not found with initial value.
    * @param znode denotes the destination path at which the value is stored.
    * @param initialValue if no value found.
@@ -297,7 +297,7 @@ trait Curator extends Conversion with CommonLog {
     }})
 
   /**
-   * Get the value with the given znode path. Znode path will be created if
+   * Get the value with the given znode path, that path will be created if
    * corresponded znode is not found with initial value.
    * @param znode denotes the destination path at which the value is stored.
    * @param initialValue if no value found.
@@ -314,7 +314,7 @@ trait Curator extends Conversion with CommonLog {
     }})
 
   /**
-   * Get the value with the given znode path. Znode path will be created if
+   * Get the value with the given znode path, that will be created if
    * corresponded znode is not found with initial value.
    * @param znode denotes the destination path at which the value is stored.
    * @param initialValue if no value found.
@@ -331,7 +331,7 @@ trait Curator extends Conversion with CommonLog {
     }})
 
   /**
-   * Get the value with the given znode path. Znode path will be created if
+   * Get the value with the given znode path, that will be created if
    * corresponded znode is not found with initial value.
    * @param znode denotes the destination path at which the value is stored.
    * @param initialValue if no value found.

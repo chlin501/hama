@@ -66,7 +66,7 @@ class GroomManager(conf: HamaConfiguration, receptionist: ActorRef,
    */
   private[this] var offlineGroomsStat = Map.empty[GroomServerName, CrashCount] 
 
-  override def configuration: HamaConfiguration = conf
+  //override def configuration: HamaConfiguration = conf
 
   /**
    * Quarantine offline GroomServer.

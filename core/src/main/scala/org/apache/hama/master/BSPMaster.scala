@@ -20,7 +20,13 @@ package org.apache.hama.master
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
+//import akka.cluster.Cluster
+//import akka.cluster.ClusterEvent.MemberUp
+//import akka.cluster.ClusterEvent.UnreachableMember
+//import akka.cluster.ClusterEvent.MemberRemoved
+//import akka.cluster.ClusterEvent.MemberEvent
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.SystemInfo
 import org.apache.hama.conf.Setting
 import org.apache.hama.ServiceStateMachine
 import org.apache.hama.util.Curator
@@ -30,8 +36,10 @@ import scala.concurrent.duration.FiniteDuration
 object BSPMaster {
 
   def main(args: Array[String]) {
+    // TODO: get seed nodes from zk  (another helper class get/post from/to zk?)
+    //       post self as seed node info to zk
+    //       combine all seed nodes as indexedSeq and put into setting
     val master = Setting.master
-    //TODO: post seed node info to zk
     val sys = ActorSystem(master.info.getActorSystemName, master.config)
     sys.actorOf(Props(classOf[BSPMaster], master), 
                 master.name)
@@ -39,22 +47,61 @@ object BSPMaster {
  
 }
 
+// TODO: member management trait for harness groom registration, leave, etc.
+//       BSPMaster extends member management trait
+//       refactor FSM (perhaps remove it)
 class BSPMaster(setting: Setting) extends ServiceStateMachine {
+
+  //val cluster = Cluster(context.system)
 
   import BSPMaster._
 
-  override def configuration: HamaConfiguration = setting.hama
+  //override def configuration: HamaConfiguration = setting.hama
 
   override def initializeServices {
+    // TODO: member management trait
+    // cluster.joinSeedNodes(...)
+    // cluster.subscribe ...
     val receptionist = getOrCreate("receptionist", classOf[Receptionist], 
-                                   configuration) 
-    getOrCreate("monitor", classOf[Monitor], configuration) 
-    val sched = getOrCreate("sched", classOf[Scheduler], configuration, 
+                                   setting.hama) 
+    getOrCreate("monitor", classOf[Monitor], setting.hama) 
+    val sched = getOrCreate("sched", classOf[Scheduler], setting.hama, 
                             receptionist) 
-    getOrCreate("groomManager", classOf[Scheduler], configuration, 
+    getOrCreate("groomManager", classOf[Scheduler], setting.hama, 
                 receptionist, sched) 
   }
 
+  //override def postStop = cluster.unsubscribe
+
   override def receive = serviceStateListenerManagement orElse super.receive orElse unknown
   
+}
+
+class MasterRegistrator(setting: Setting) extends Curator {
+
+  initializeCurator(setting.hama)
+
+  def register() {
+    val masterPath = "/%s/%s".format("masters", setting.name)
+    val sys = setting.info.getActorSystemName
+    val host = setting.info.getHost
+    val port = setting.info.getPort
+    create(masterPath, Array("actor-system", "host", "port"), 
+           Array(sys, host, port)) 
+  }
+
+  def masters(): Array[SystemInfo] = list("/masters").map { child => {
+    val znode = "/masters/%s".format(child)
+    val sys = get("%s/%s".format(znode, "actor-system"), null) 
+    if(null == sys) 
+      throw new RuntimeException("ActorSystem not found at "+znode+"!")
+    val host = get("%s/%s".format(znode, "host"), null) 
+    if(null == host) 
+      throw new RuntimeException("Host not found at "+znode+"!")
+    val port = get("%s/%s".format(znode, "port"), -1) 
+    if(-1 == port) 
+      throw new RuntimeException("Port not found at "+znode+"!")
+    new SystemInfo(sys, host, port) 
+  }}.toArray
+
 }

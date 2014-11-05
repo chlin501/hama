@@ -27,13 +27,12 @@ import org.apache.hama.util.Curator
 
 class Reporter(conf: HamaConfiguration) extends LocalService with Curator {
 
-  override def configuration: HamaConfiguration = conf
+  //override def configuration: HamaConfiguration = conf
 
   override def initializeServices {
-    getOrCreate("tasksReporter", classOf[TasksReporter], configuration)
-    getOrCreate("groomReporter", classOf[GroomReporter], configuration)
-    getOrCreate("sysMetricsReporter", classOf[SysMetricsReporter], 
-                configuration)
+    getOrCreate("tasksReporter", classOf[TasksReporter], conf)
+    getOrCreate("groomReporter", classOf[GroomReporter], conf)
+    getOrCreate("sysMetricsReporter", classOf[SysMetricsReporter], conf)
     initializeCurator(conf)
   }
 

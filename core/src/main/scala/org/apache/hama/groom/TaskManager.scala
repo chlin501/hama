@@ -42,11 +42,11 @@ import scala.concurrent.duration.FiniteDuration
 class TaskManager(conf: HamaConfiguration, reporter: ActorRef) 
       extends LocalService with RemoteService with ActorLocator {
 
-  val groomServerHost = configuration.get("bsp.groom.address", "127.0.0.1")
-  val groomServerPort = configuration.getInt("bsp.groom.port", 50000)
+  val groomServerHost = conf.get("bsp.groom.address", "127.0.0.1")
+  val groomServerPort = conf.getInt("bsp.groom.port", 50000)
   val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
-  val maxTasks = configuration.getInt("bsp.tasks.maximum", 3) 
-  val bspmaster = configuration.get("master.name", "bspmaster")
+  val maxTasks = conf.getInt("bsp.tasks.maximum", 3) 
+  val bspmaster = conf.get("master.name", "bspmaster")
 
   // TODO: refactor
   var sched: ActorRef = _
@@ -75,10 +75,9 @@ class TaskManager(conf: HamaConfiguration, reporter: ActorRef)
   protected def getGroomServerPort(): Int = groomServerPort
   protected def getMaxTasks(): Int = maxTasks
 
-  protected def getSchedulerPath: String = 
-    locate(SchedulerLocator(configuration))
+  protected def getSchedulerPath: String = locate(SchedulerLocator(conf))
 
-  override def configuration: HamaConfiguration = conf
+  //override def configuration: HamaConfiguration = conf
 
   /**
    * Initialize slots with default slots value to 3, which comes from maxTasks,
@@ -94,8 +93,8 @@ class TaskManager(conf: HamaConfiguration, reporter: ActorRef)
 
   override def initializeServices {
     initializeSlots(getMaxTasks)
-    lookup("sched", locate(SchedulerLocator(configuration)))
-    lookup("groomManager", locate(GroomManagerLocator(configuration)))
+    lookup("sched", locate(SchedulerLocator(conf)))
+    lookup("groomManager", locate(GroomManagerLocator(conf)))
   }
 
   def hasTaskInQueue: Boolean = !directiveQueue.isEmpty
@@ -133,7 +132,7 @@ class TaskManager(conf: HamaConfiguration, reporter: ActorRef)
   override def offline(target: ActorRef) {
     // TODO: if only groomManager actor fails, simply re-"lookup" will fail.
     //lookup("groomManager", groomManagerPath)
-    lookup("groomManager", locate(GroomManagerLocator(configuration)))
+    lookup("groomManager", locate(GroomManagerLocator(conf)))
   }
 
   /**
@@ -218,11 +217,11 @@ class TaskManager(conf: HamaConfiguration, reporter: ActorRef)
     pickUp match {
       case Some(slot) => { 
         LOG.debug("Initialize executor for slot seq {}.", slot.seq)
-        val executorName = configuration.get("bsp.groom.name", "groomServer") +
+        val executorName = conf.get("bsp.groom.name", "groomServer") +
                            "_executor_" + slot.seq 
         // TODO: move to spawn()
         val executor = context.actorOf(Props(classOf[Executor], 
-                                             configuration,
+                                             conf,
                                              self),
                                        executorName)
         executor ! Fork(slot.seq) 

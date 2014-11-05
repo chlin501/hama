@@ -38,11 +38,11 @@ final class GroomReporter(conf: HamaConfiguration) extends LocalService
                                                    with ActorLocator {
   var tracker: ActorRef = _
 
-  override def configuration: HamaConfiguration = conf
+  //override def configuration: HamaConfiguration = conf
 
   override def initializeServices {
     lookup("groomTasksTracker", 
-           locate(GroomTasksTrackerLocator(configuration)))
+           locate(GroomTasksTrackerLocator(conf)))
   }
 
   override def afterLinked(proxy: ActorRef) = tracker = proxy

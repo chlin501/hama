@@ -178,7 +178,7 @@ class Container(conf: HamaConfiguration) extends LocalService
    */
   protected var latestTask: Option[Task] = None
 
-  override def configuration: HamaConfiguration = conf
+  //override def configuration: HamaConfiguration = conf
 
   protected def stopAll() {
     coordinator.map { (c) => context.stop(c) }
@@ -189,12 +189,12 @@ class Container(conf: HamaConfiguration) extends LocalService
   // TODO: refactor if there's better way to config hama home.
   protected def hamaHome: String = System.getProperty("hama.home.dir")
 
-  protected def slotSeq: Int = configuration.getInt("bsp.child.slot.seq", -1)
+  protected def slotSeq: Int = conf.getInt("bsp.child.slot.seq", -1)
 
   protected def executorName: String = "groomServer_executor_"+slotSeq
  
   override def initializeServices =
-    lookup(executorName, locate(ExecutorLocator(configuration)))
+    lookup(executorName, locate(ExecutorLocator(conf)))
 
   override def afterLinked(proxy: ActorRef) {
     executor = Option(proxy)

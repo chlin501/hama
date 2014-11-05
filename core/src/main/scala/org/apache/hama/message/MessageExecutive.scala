@@ -90,7 +90,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   override def stopServices() = close
 
-  override def configuration(): HamaConfiguration = conf
+  //override def configuration(): HamaConfiguration = conf
 
   /**
    * Indicate the local peer.

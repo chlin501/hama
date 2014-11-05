@@ -43,11 +43,11 @@ final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
   //       move task manager register to groom server (let groom register)
   //   
 
-  override def configuration: HamaConfiguration = conf
+  //override def configuration: HamaConfiguration = conf
 
   override def initializeServices {
-    val monitor = getOrCreate("monitor", classOf[Reporter], configuration) 
-    getOrCreate("taskManager", classOf[TaskManager], configuration, monitor) 
+    val monitor = getOrCreate("monitor", classOf[Reporter], conf) 
+    getOrCreate("taskManager", classOf[TaskManager], conf, monitor) 
   }
 
   override def receive = serviceStateListenerManagement orElse super.receive orElse unknown

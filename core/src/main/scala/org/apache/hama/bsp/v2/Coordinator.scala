@@ -162,7 +162,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
-  override def configuration(): HamaConfiguration = conf
+  //override def configuration(): HamaConfiguration = conf
 
   override def initializeServices() {
     localize(conf)

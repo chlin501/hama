@@ -35,10 +35,10 @@ final class TasksReporter(conf: HamaConfiguration) extends LocalService
 
   var tracker: ActorRef = _
 
-  override def configuration: HamaConfiguration = conf
+  //override def configuration: HamaConfiguration = conf
 
   override def initializeServices {
-    lookup("jobTasksTracker", locate(JobTasksTrackerLocator(configuration)))
+    lookup("jobTasksTracker", locate(JobTasksTrackerLocator(conf)))
   }
 
   override def afterLinked(proxy: ActorRef) = tracker = proxy
