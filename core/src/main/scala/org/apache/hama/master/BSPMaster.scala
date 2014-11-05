@@ -81,6 +81,7 @@ class BSPMaster(setting: Setting) extends ServiceStateMachine {
 class MasterRegistrator(setting: Setting) extends Curator {
 
   initializeCurator(setting.hama)
+  protected val pattern = """(\w+)_(\w+)@(\w+):(\d+)""".r
 
   def register() {
     val sys = setting.info.getActorSystemName
@@ -88,19 +89,19 @@ class MasterRegistrator(setting: Setting) extends Curator {
     val port = setting.info.getPort
     val path = "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host, 
                                         port)
-    create(path) 
+    create(path, CreateMode.EPHEMERAL) 
   }
 
   def masters(): Array[SystemInfo] = list("/masters").map { child => {
     LOG.debug("Master znode found is {}", child)
-    val ary = child.split("_")
-    val name = ary(0)
-    val ary1 = ary(1).split("@")
-    val sys = ary1(0) 
-    val ary2 = ary1(1).split(":")
-    val host = ary2(0)
-    val port = ary2(1)
-    new SystemInfo(sys, host, port.toInt)
+    val ary = pattern.findAllMatchIn(child).map { m =>
+      val name = m.group(1)
+      val sys = m.group(2)
+      val host = m.group(3)
+      val port = m.group(4).toInt
+      new SystemInfo(sys, host, port)
+    }.toArray
+    ary(0)
   }}.toArray
 
 }
