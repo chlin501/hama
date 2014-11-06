@@ -41,10 +41,12 @@ private case object WhichState extends StateChecker
 trait ServiceStateMachine extends FSM[ServiceState, HamaServices] 
                           with LocalService {
 
+  // TODO: remove listener broadcast related methods variables.
+
   /**
    * Mapping ServiceState to a set of Actor to be notified.
    */
-  private var stateListeners = Map.empty[ServiceState, Set[ActorRef]]
+  private var stateListeners = Map.empty[ServiceState, Set[ActorRef]] 
   var stateChecker: Cancellable = _
   var isNotifiedInNormal = false 
   var isNotifiedInStopped = false
@@ -64,10 +66,6 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
     super.preStart
     stateChecker = check(WhichState)
   }
-
-  /**
-  protected def afterLoaded(service: ActorRef) { } // TODO: remove this!
-   */
 
   startWith(StartUp, Cache(Set.empty[ActorRef]))
 

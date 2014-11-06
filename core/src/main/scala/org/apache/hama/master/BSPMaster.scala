@@ -21,16 +21,18 @@ import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Address
 import akka.actor.Props
+/*
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.InitialStateAsEvents 
 import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.ClusterEvent.UnreachableMember
 import akka.cluster.ClusterEvent.MemberRemoved
 import akka.cluster.ClusterEvent.MemberEvent
-import org.apache.hama.HamaConfiguration
+*/
+import org.apache.hama.LocalService
 import org.apache.hama.SystemInfo
 import org.apache.hama.conf.Setting
-import org.apache.hama.ServiceStateMachine
+//import org.apache.hama.ServiceStateMachine
 import org.apache.hama.util.Curator
 import org.apache.zookeeper.CreateMode
 import scala.concurrent.duration.DurationInt
@@ -45,8 +47,7 @@ object BSPMaster {
     val registrator = new MasterRegistrator(master)
     registrator.register
     val sys = ActorSystem(master.info.getActorSystemName, master.config)
-    sys.actorOf(Props(classOf[BSPMaster], master), 
-                master.name)
+    sys.actorOf(Props(classOf[BSPMaster], master), master.name)
   }
  
 }
@@ -54,16 +55,13 @@ object BSPMaster {
 // TODO: member management trait for harness groom registration, leave, etc.
 //       BSPMaster extends member management trait
 //       refactor FSM (perhaps remove it)
-class BSPMaster(setting: Setting) extends ServiceStateMachine {
+class BSPMaster(setting: Setting) extends MembershipDirector { //ServiceStateMachine {
 
   import BSPMaster._
 
-  protected val cluster = Cluster(context.system)
-
   override def initializeServices {
-    cluster.joinSeedNodes(seedNodes)
-    cluster.subscribe(self, initialStateMode = InitialStateAsEvents,
-                      classOf[MemberEvent], classOf[UnreachableMember])
+    join(seedNodes)
+    subscribe(self)
     val receptionist = getOrCreate("receptionist", classOf[Receptionist], 
                                    setting.hama) 
     getOrCreate("monitor", classOf[Monitor], setting.hama) 
@@ -71,30 +69,14 @@ class BSPMaster(setting: Setting) extends ServiceStateMachine {
                             receptionist) 
     getOrCreate("groomManager", classOf[Scheduler], setting.hama, 
                 receptionist, sched) 
+    // TODO: change master state
   }
 
-  override def stopServices = cluster.unsubscribe(self)
+  override def stopServices = unsubscribe(self) 
 
-  def seedNodes(): IndexedSeq[Address] = 
-    Vector(Address(setting.info.getProtocol.toString,
-                   setting.info.getActorSystemName,
-                   setting.info.getHost,
-                   setting.info.getPort))
+  def seedNodes(): IndexedSeq[SystemInfo] = Vector(setting.info)
 
-  def membership: Receive = {
-    //case GroomRegistration => register(sender)
-    case MemberUp(member) =>
-      LOG.debug("Member is Up: {}", member.address)
-    case UnreachableMember(member) =>
-      LOG.debug("Member detected as unreachable: {}", member)
-    case MemberRemoved(member, previousStatus) =>
-      LOG.debug("Member is Removed: {} after {}", member.address, 
-                previousStatus)
-    case event: MemberEvent => 
-      LOG.warning("Unknown membership event {}", event)
-  }
-
-  override def receive = membership orElse serviceStateListenerManagement orElse super.receive orElse unknown
+  override def receive = membership orElse unknown
   
 }
 
