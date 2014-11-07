@@ -56,6 +56,8 @@ trait ActorLocator {
 
 }
 
+final case class MasterLocator(info: ProxyInfo)
+// TODO: remove? 
 final case class SysMetricsTrackerLocator(conf: HamaConfiguration)
 final case class GroomTasksTrackerLocator(conf: HamaConfiguration)
 final case class JobTasksTrackerLocator(conf: HamaConfiguration)
@@ -67,6 +69,12 @@ object ActorPathMagnet {
 
   import scala.language.implicitConversions 
 
+  implicit def locateMaster(locator: MasterLocator) = new ActorPathMagnet {
+    type Path = String
+    def apply(): Path = locator.info.getPath
+  }
+
+  // TODO: need refactor for retrieving path 
   implicit def locateSmr(locator: SysMetricsTrackerLocator) = 
       new ActorPathMagnet {
     type Path = String

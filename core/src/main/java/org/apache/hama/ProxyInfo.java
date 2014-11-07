@@ -20,6 +20,8 @@ package org.apache.hama;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -34,10 +36,7 @@ import org.apache.hadoop.io.Writable;
  * - Host
  * - Port
  * - ActorPath
- * This class will provide Builder, MasterBuilder and GroomBuilder, for 
- * constructing the proxy information.
- * 
- * TODO: 1. group with ActorLocator
+ * This class provides Builder classes for constructing target proxy.
  */
 public final class ProxyInfo extends SystemInfo implements Writable {
 
@@ -48,6 +47,8 @@ public final class ProxyInfo extends SystemInfo implements Writable {
 
   public final static class MasterBuilder extends Builder {
     
+    // TODO: move actorName to method parameter.
+    //       build SystemInfo if path is not provided.
     public MasterBuilder(final String actorName, final HamaConfiguration conf) {
       super.protocol = Protocol.Remote;
       if(null == actorName)
@@ -58,10 +59,15 @@ public final class ProxyInfo extends SystemInfo implements Writable {
         throw new IllegalArgumentException("HamaConfiguration is missing!"); 
       super.conf = conf;
 
-      actorSystemName = conf.get("bsp.master.actor-system.name", 
+      super.actorSystemName = conf.get("master.actor-system.name", 
                                  "MasterSystem");
-      host = conf.get("bsp.master.address", "127.0.0.1");
-      port = conf.getInt("bsp.master.port", 40000);
+      try {
+        super.host = conf.get("master.host", 
+                              InetAddress.getLocalHost().getHostName());
+      } catch(UnknownHostException uhe) {
+        throw new RuntimeException("Unknown master host!", uhe); 
+      }
+      super.port = conf.getInt("master.port", 40000);
       LOG.debug("Master proxy "+actorName+" is at "+host+":"+port+" with path "+
                 actorPathBuilder.toString());
     } 
@@ -70,6 +76,8 @@ public final class ProxyInfo extends SystemInfo implements Writable {
 
   public final static class GroomBuilder extends Builder {
 
+    // TODO: move actorName to method parameter.
+    //       build SystemInfo if path is not provided.
     public GroomBuilder(final String actorName, final HamaConfiguration conf) {
       super.protocol = Protocol.Remote;
       if(null == actorName || actorName.isEmpty())
@@ -80,10 +88,15 @@ public final class ProxyInfo extends SystemInfo implements Writable {
         throw new NullPointerException("HamaConfiguration not found.");
       super.conf = conf;
 
-      actorSystemName = conf.get("bsp.groom.actor-system.name", 
+      super.actorSystemName = conf.get("groom.actor-system.name", 
                                  "GroomSystem");
-      host = conf.get("bsp.groom.address", "127.0.0.1");
-      port = conf.getInt("bsp.groom.port", 50000);
+      try {
+        super.host = conf.get("groom.host", 
+                              InetAddress.getLocalHost().getHostName());
+      } catch(UnknownHostException uhe) {
+        throw new RuntimeException("Unknown groom host!", uhe); 
+      }
+      super.port = conf.getInt("groom.port", 50000);
       LOG.debug("Groom proxy "+actorName+" is at "+host+":"+port+" with path "+ 
                 actorPathBuilder.toString());
     }
@@ -223,7 +236,10 @@ public final class ProxyInfo extends SystemInfo implements Writable {
     if(null == actorPath) 
       throw new IllegalArgumentException("Actor path not provided.");
 
-    this.actorPath = new Text(actorPath);
+    if(actorPath.isEmpty()) 
+      this.actorPath = new Text(this.actorName.toString());
+    else 
+      this.actorPath = new Text(actorPath);
   }
 
   public String getActorName() {
@@ -246,6 +262,10 @@ public final class ProxyInfo extends SystemInfo implements Writable {
     }
   }
 
+  /**
+   * Path to actor, started after `/user'.
+   * @return String path of actor.
+   */
   public String getActorPath() {
     return this.actorPath.toString();
   }

@@ -69,33 +69,3 @@ class BSPMaster(setting: Setting) extends MembershipDirector { //ServiceStateMac
   override def receive = membership orElse unknown
   
 }
-
-/*
-class MasterRegistrator(setting: Setting) extends Curator {
-
-  initializeCurator(setting.hama)
-  protected val pattern = """(\w+)_(\w+)@(\w+):(\d+)""".r
-
-  def register() {
-    val sys = setting.info.getActorSystemName
-    val host = setting.info.getHost
-    val port = setting.info.getPort
-    val path = "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host, 
-                                        port)
-    create(path, CreateMode.EPHEMERAL) 
-  }
-
-  def masters(): Array[SystemInfo] = list("/masters").map { child => {
-    LOG.debug("Master znode found is {}", child)
-    val ary = pattern.findAllMatchIn(child).map { m =>
-      val name = m.group(1)
-      val sys = m.group(2)
-      val host = m.group(3)
-      val port = m.group(4).toInt
-      new SystemInfo(sys, host, port)
-    }.toArray
-    ary(0)
-  }}.toArray
-
-}
-*/

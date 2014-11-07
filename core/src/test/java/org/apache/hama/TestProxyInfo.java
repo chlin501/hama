@@ -26,8 +26,26 @@ public class TestProxyInfo extends TestCase {
 
   final Log LOG = LogFactory.getLog(TestProxyInfo.class);
 
+  final String localhost = getHost();
+
+  public String getHost() {
+    String host = null;
+    try {
+      host = java.net.InetAddress.getLocalHost().getHostName();
+    } catch (java.net.UnknownHostException uhe) {
+      throw new RuntimeException("Unkown localhost!", uhe);
+    }
+    return host;
+  }
+
+  ProxyInfo createDefaultMaster(final HamaConfiguration conf) throws Exception {
+    final ProxyInfo info = new ProxyInfo.MasterBuilder("bspmaster", conf).
+                                         build();
+    return info;
+  }
+
   ProxyInfo createMasterProxy(final HamaConfiguration conf) throws Exception {
-    final ProxyInfo info = new ProxyInfo.MasterBuilder("testActor", conf).
+    final ProxyInfo info = new ProxyInfo.MasterBuilder("bspmaster", conf).
                                          createActorPath().
                                          appendRootPath("bspmaster").
                                          appendChildPath("monitor").
@@ -46,6 +64,30 @@ public class TestProxyInfo extends TestCase {
     return info;
   }  
 
+  public void testDefaultMasterPath() throws Exception {
+    final HamaConfiguration conf = new HamaConfiguration();
+    final ProxyInfo info = createDefaultMaster(conf);
+    assertNotNull("Default master shouldn't be null!", info);
+
+    final String actorSystemName = info.getActorSystemName();
+    LOG.info("Master actor system name found is "+actorSystemName);
+    assertEquals("Default master actor system name found is "+actorSystemName, 
+                 actorSystemName, "MasterSystem");
+
+    final String host = info.getHost();
+    LOG.info("Master host value found is "+host);
+    assertEquals("Default master host value found is "+host, host, localhost);
+
+    final int port = info.getPort();
+    LOG.info("Master port value found is "+port);
+    assertEquals("Default master port value found is "+port, port, 40000);
+
+    final String actorFullPath = info.getPath();
+    LOG.info("Master actor full path found is "+actorFullPath);
+    assertEquals("Full actor path at master is "+actorFullPath, actorFullPath, 
+                 "akka.tcp://MasterSystem@"+localhost+":40000/user/bspmaster");
+  }
+
   public void testMasterBuilder() throws Exception {
     final HamaConfiguration conf = new HamaConfiguration();
     final ProxyInfo info = createMasterProxy(conf);
@@ -58,7 +100,7 @@ public class TestProxyInfo extends TestCase {
 
     final String host = info.getHost();
     LOG.info("Master host value is "+host);
-    assertEquals("Master host value should be "+host, host, "127.0.0.1");
+    assertEquals("Master host value should be "+host, host, localhost);
 
     final int port = info.getPort();
     LOG.info("Master port value is "+port);
@@ -67,7 +109,7 @@ public class TestProxyInfo extends TestCase {
     final String actorFullPath = info.getPath();
     LOG.info("Master actor full path is "+actorFullPath);
     assertEquals("Full actor path at master is "+actorFullPath, actorFullPath, 
-                 "akka.tcp://MasterSystem@127.0.0.1:40000/user/bspmaster/" +
+                 "akka.tcp://MasterSystem@"+localhost+":40000/user/bspmaster/" +
                  "monitor/testActor");
   }
 
@@ -83,7 +125,7 @@ public class TestProxyInfo extends TestCase {
 
     final String host = info.getHost();
     LOG.info("Groom host value is "+host);
-    assertEquals("Groom host value should be "+host, host, "127.0.0.1");
+    assertEquals("Groom host value should be "+host, host, localhost);
 
     final int port = info.getPort();
     LOG.info("Groom port value is "+port);
@@ -92,7 +134,7 @@ public class TestProxyInfo extends TestCase {
     final String actorFullPath = info.getPath();
     LOG.info("Groom actor full path is "+actorFullPath);
     assertEquals("Full actor path at Groom is "+actorFullPath, actorFullPath, 
-                 "akka.tcp://GroomSystem@127.0.0.1:50000/user/groomServer/" +
+                 "akka.tcp://GroomSystem@"+localhost+":50000/user/groomServer/"+
                  "monitor/testActor1");
   }
 

@@ -20,9 +20,12 @@ package org.apache.hama.groom
 import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.cluster.Member
-import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
+import org.apache.hama.RemoteService
+import org.apache.hama.Registrator
 import org.apache.hama.conf.Setting
+import org.apache.hama.util.ActorLocator
+import org.apache.hama.util.MasterLocator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
@@ -30,18 +33,28 @@ object GroomServer {
 
   def main(args: Array[String]) {
     val groom = Setting.groom
-    // TODO: lookup master and pass that info to groom server
     val sys = ActorSystem(groom.info.getActorSystemName, groom.config)
-    sys.actorOf(Props(classOf[GroomServer], groom), groom.name)
+    sys.actorOf(Props(classOf[GroomServer], groom, Registrator(groom)), 
+                      groom.name)
   }
 }
 
-final class GroomServer(setting: Setting) extends LocalService with MembershipParticipant { // ServiceStateMachine {
+final class GroomServer(setting: Setting, registrator: Registrator) 
+      extends LocalService with RemoteService with ActorLocator 
+      with MembershipParticipant { 
 
   // TODO: create system info 
   //       pass sys info to task manager
   //       move task manager register to groom server (let groom register)
   //   
+
+  def select() {
+    val masters = registrator.masters
+    require(1 == masters.length, "There are more than 1 masters existed!")
+    val master = masters(0)
+    LOG.info("Proxy to be lookup is {}", master)
+    lookup(master.getActorName, locate(MasterLocator(master)))
+  }
 
   override def initializeServices {
     // lookup zk and retrieve master sys info

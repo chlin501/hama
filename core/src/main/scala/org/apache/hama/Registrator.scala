@@ -41,14 +41,14 @@ class Registrator(setting: Setting) extends Curator {
     create(path, CreateMode.EPHEMERAL)
   }
 
-  def masters(): Array[SystemInfo] = list("/masters").map { child => {
+  def masters(): Array[ProxyInfo] = list("/masters").map { child => {
     LOG.debug("Master znode found is {}", child)
     val ary = pattern.findAllMatchIn(child).map { m =>
       val name = m.group(1)
       val sys = m.group(2)
       val host = m.group(3)
       val port = m.group(4).toInt
-      new SystemInfo(sys, host, port)
+      new ProxyInfo.MasterBuilder(name, setting.hama).build
     }.toArray
     ary(0)
   }}.toArray
