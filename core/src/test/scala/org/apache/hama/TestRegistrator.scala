@@ -15,9 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master
+package org.apache.hama
 
-import org.apache.hama.TestEnv
 import org.apache.hama.conf.Setting
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
@@ -25,7 +24,7 @@ import org.scalatest.junit.JUnitRunner
 
 
 @RunWith(classOf[JUnitRunner])
-class TestMasterRegistrator extends TestEnv("TestMasterRegistrator") 
+class TestRegistrator extends TestEnv("TestRegistrator") 
                             with LocalZooKeeper {
 
   override protected def beforeAll = launchZk
@@ -36,7 +35,7 @@ class TestMasterRegistrator extends TestEnv("TestMasterRegistrator")
   }
 
   it("test master registration methods") {
-    val reg = new MasterRegistrator(Setting.master)
+    val reg = Registrator(Setting.master)
     assert(reg.masters().isEmpty)
     reg.register
 

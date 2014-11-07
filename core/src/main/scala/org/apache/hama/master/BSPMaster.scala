@@ -21,20 +21,10 @@ import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Address
 import akka.actor.Props
-/*
-import akka.cluster.Cluster
-import akka.cluster.ClusterEvent.InitialStateAsEvents 
-import akka.cluster.ClusterEvent.MemberUp
-import akka.cluster.ClusterEvent.UnreachableMember
-import akka.cluster.ClusterEvent.MemberRemoved
-import akka.cluster.ClusterEvent.MemberEvent
-*/
 import org.apache.hama.LocalService
+import org.apache.hama.Registrator
 import org.apache.hama.SystemInfo
 import org.apache.hama.conf.Setting
-//import org.apache.hama.ServiceStateMachine
-import org.apache.hama.util.Curator
-import org.apache.zookeeper.CreateMode
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.collection.immutable.IndexedSeq
@@ -44,7 +34,7 @@ object BSPMaster {
 
   def main(args: Array[String]) {
     val master = Setting.master
-    val registrator = new MasterRegistrator(master)
+    val registrator = Registrator(master)
     registrator.register
     val sys = ActorSystem(master.info.getActorSystemName, master.config)
     sys.actorOf(Props(classOf[BSPMaster], master), master.name)
@@ -80,6 +70,7 @@ class BSPMaster(setting: Setting) extends MembershipDirector { //ServiceStateMac
   
 }
 
+/*
 class MasterRegistrator(setting: Setting) extends Curator {
 
   initializeCurator(setting.hama)
@@ -107,3 +98,4 @@ class MasterRegistrator(setting: Setting) extends Curator {
   }}.toArray
 
 }
+*/
