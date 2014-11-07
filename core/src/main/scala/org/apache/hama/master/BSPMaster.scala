@@ -34,10 +34,9 @@ object BSPMaster {
 
   def main(args: Array[String]) {
     val master = Setting.master
-    val registrator = Registrator(master)
-    registrator.register
     val sys = ActorSystem(master.info.getActorSystemName, master.config)
-    sys.actorOf(Props(classOf[BSPMaster], master), master.name)
+    sys.actorOf(Props(classOf[BSPMaster], master, Registrator(master)), 
+                master.name)
   }
  
 }
@@ -45,11 +44,13 @@ object BSPMaster {
 // TODO: member management trait for harness groom registration, leave, etc.
 //       BSPMaster extends member management trait
 //       refactor FSM (perhaps remove it)
-class BSPMaster(setting: Setting) extends MembershipDirector { //ServiceStateMachine {
+class BSPMaster(setting: Setting, registrator: Registrator) 
+      extends MembershipDirector { 
 
   import BSPMaster._
 
   override def initializeServices {
+    registrator.register
     join(seedNodes)
     subscribe(self)
     val receptionist = getOrCreate("receptionist", classOf[Receptionist], 
