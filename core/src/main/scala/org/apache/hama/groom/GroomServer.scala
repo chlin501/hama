@@ -17,38 +17,46 @@
  */
 package org.apache.hama.groom
 
-import akka.actor.OneForOneStrategy
-import akka.actor.SupervisorStrategy.Escalate
-import akka.actor.SupervisorStrategy.Restart
-import akka.actor.SupervisorStrategy.Stop
+import akka.actor.ActorSystem
+import akka.actor.Props
+import akka.cluster.Member
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.ServiceStateMachine
+import org.apache.hama.LocalService
+import org.apache.hama.conf.Setting
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-final class GroomServer(conf: HamaConfiguration) extends ServiceStateMachine {
+object GroomServer {
 
-/*
-  //TODO: define restart etc. exception level.
-  override val supervisorStrategy =
-    OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
-      case _: NullPointerException     => Restart
-      case _: IllegalArgumentException => Restart
-      case _: Exception                => Restart
-    }
-*/
+  def main(args: Array[String]) {
+    val groom = Setting.groom
+    // TODO: lookup master and pass that info to groom server
+    val sys = ActorSystem(groom.info.getActorSystemName, groom.config)
+    sys.actorOf(Props(classOf[GroomServer], groom), groom.name)
+  }
+}
+
+final class GroomServer(setting: Setting) extends LocalService with MembershipParticipant { // ServiceStateMachine {
 
   // TODO: create system info 
   //       pass sys info to task manager
   //       move task manager register to groom server (let groom register)
   //   
 
-  //override def configuration: HamaConfiguration = conf
-
   override def initializeServices {
-    val monitor = getOrCreate("monitor", classOf[Reporter], conf) 
-    getOrCreate("taskManager", classOf[TaskManager], conf, monitor) 
+    // lookup zk and retrieve master sys info
+    //join(Vector(master sys info))
+    //subscribe(self)
+    val monitor = getOrCreate("monitor", classOf[Reporter], setting.hama) 
+    getOrCreate("taskManager", classOf[TaskManager], setting.hama, monitor) 
   }
 
-  override def receive = serviceStateListenerManagement orElse super.receive orElse unknown
+  override def stopServices = unsubscribe(self)
+
+  override def register(member: Member) {
+    // TODO: lookup master 
+    //       register member data e.g. master ! GroomRegistration
+  }
+
+  override def receive = membership orElse unknown
 }
