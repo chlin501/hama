@@ -150,7 +150,7 @@ public final class ProxyInfo extends SystemInfo implements Writable {
     }
 
     public ProxyInfo build() {
-      return new ProxyInfo(builder.protocol, builder.actorName, 
+      return new ProxyInfo(builder.protocol.toString(), builder.actorName, 
                            builder.actorSystemName, builder.host, 
                            builder.port, toString());
     }
@@ -215,12 +215,13 @@ public final class ProxyInfo extends SystemInfo implements Writable {
     }
    
     public ProxyInfo build() {
-      return new ProxyInfo(this.protocol, this.actorName, this.actorSystemName,
-                           this.host, this.port, actorPathBuilder.toString());
+      return new ProxyInfo(this.protocol.toString(), this.actorName, 
+                           this.actorSystemName, this.host, this.port, 
+                           actorPathBuilder.toString());
     } 
   }
   
-  public ProxyInfo(final Protocol protocol,
+  public ProxyInfo(final String protocol,
                    final String actorName,
                    final String actorSystemName, 
                    final String host,
@@ -278,7 +279,7 @@ public final class ProxyInfo extends SystemInfo implements Writable {
    *   akka://${actor-system-name}/user/${actor-path}
    * from String to ProxyInfo object.
    */
-  public static ProxyInfo fromString(final String address) {
+  public static ProxyInfo fromString(final String address) { //TODO: use regex?
     final String[] protoWithRest = address.split("://");
     if(2 != protoWithRest.length) 
       throw new RuntimeException("Invalid protocol format: "+address);
@@ -302,7 +303,7 @@ public final class ProxyInfo extends SystemInfo implements Writable {
       final String actorPath = portAndActorPath[1];
       final String[] actors = actorPath.split("/");
       final String actorName = actors[actors.length-1];
-      return new ProxyInfo(proto, 
+      return new ProxyInfo(proto.toString(), 
                            actorName,
                            actorSysName,
                            host,
@@ -316,7 +317,7 @@ public final class ProxyInfo extends SystemInfo implements Writable {
       final String actorPath = actorSysWithRest[1];
       final String[] actors = actorSysWithRest[1].split("/");
       final String actorName = actors[actors.length-1];
-      return new ProxyInfo(proto, 
+      return new ProxyInfo(proto.toString(), 
                            actorName,
                            actorSysName,
                            Localhost,

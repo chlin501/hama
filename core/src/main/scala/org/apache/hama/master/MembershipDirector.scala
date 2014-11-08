@@ -28,7 +28,7 @@ import org.apache.hama.LocalService
 import org.apache.hama.SystemInfo
 import scala.collection.immutable.IndexedSeq
 
-trait MembershipDirector extends LocalService {
+trait MembershipDirector extends /*Membership with*/ LocalService {
   
   protected val cluster = Cluster(context.system)
 

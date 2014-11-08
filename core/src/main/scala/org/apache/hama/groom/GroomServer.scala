@@ -21,6 +21,7 @@ import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.cluster.Member
 import org.apache.hama.LocalService
+import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.Registrator
 import org.apache.hama.conf.Setting
@@ -48,12 +49,13 @@ final class GroomServer(setting: Setting, registrator: Registrator)
   //       move task manager register to groom server (let groom register)
   //   
 
-  def select() {
+  def select(): ProxyInfo = {
     val masters = registrator.masters
     require(1 == masters.length, "There are more than 1 masters existed!")
     val master = masters(0)
     LOG.info("Proxy to be lookup is {}", master)
     lookup(master.getActorName, locate(MasterLocator(master)))
+    master
   }
 
   override def initializeServices {
@@ -66,10 +68,5 @@ final class GroomServer(setting: Setting, registrator: Registrator)
 
   override def stopServices = unsubscribe(self)
 
-  override def register(member: Member) {
-    // TODO: lookup master 
-    //       register member data e.g. master ! GroomRegistration
-  }
-
-  override def receive = membership orElse unknown
+  override def receive = unknown
 }

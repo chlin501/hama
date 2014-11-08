@@ -38,6 +38,7 @@ trait Membership { this: Actor =>
  
   def unsubscribe(stakeholder: ActorRef) 
 
+/*
   def membership: Receive = {
     case MemberUp(member) => register(member)
     case MemberRemoved(member, prevStatus) => deregister(member, prevStatus)
@@ -49,5 +50,6 @@ trait Membership { this: Actor =>
   def deregister(member: Member, prevStatus: MemberStatus) { }
 
   def memberEvent(event: MemberEvent) { }
+*/
 
 }

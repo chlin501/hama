@@ -48,7 +48,7 @@ public class SystemInfo implements Writable {
    * For local lookup.
    */
   public SystemInfo(final String actorSystemName) {
-    this(Protocol.Local, actorSystemName, Localhost, LocalMode);
+    this(Protocol.Local.toString(), actorSystemName, Localhost, LocalMode);
   }
 
   /**
@@ -57,16 +57,16 @@ public class SystemInfo implements Writable {
   public SystemInfo(final String actorSystemName,
                     final String host,
                     final int port) {
-    this(Protocol.Remote, actorSystemName, host, port);
+    this(Protocol.Remote.toString(), actorSystemName, host, port);
   }
-
-  public SystemInfo(final Protocol protocol,
+ 
+  public SystemInfo(final String protocol,
                     final String actorSystemName,
                     final String host,
                     final int port) {
-    if(null == protocol)
+    if(null == protocol || protocol.isEmpty())
       throw new IllegalArgumentException("Protocol is missing!");
-    this.protocol = new Text(protocol.toString());
+    this.protocol = new Text(protocol);
 
     if(null == actorSystemName)
       throw new IllegalArgumentException("Actor system name not provided.");
@@ -78,7 +78,7 @@ public class SystemInfo implements Writable {
 
     this.host = new Text(host);
   
-    if(port > 65535) 
+    if(port > 65535) // port -1 might denote local
       throw new IllegalArgumentException("Invalid port value! port: "+port);
 
     this.port = new IntWritable(port);

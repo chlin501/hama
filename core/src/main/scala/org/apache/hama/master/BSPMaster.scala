@@ -67,6 +67,6 @@ class BSPMaster(setting: Setting, registrator: Registrator)
 
   def seedNodes(): IndexedSeq[SystemInfo] = Vector(setting.info)
 
-  override def receive = membership orElse unknown
+  override def receive = unknown
   
 }

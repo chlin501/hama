@@ -22,8 +22,8 @@ import akka.actor.ActorRef
 import akka.actor.Address
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.MemberUp
+import akka.cluster.ClusterEvent.MemberEvent
 import akka.cluster.Member
-import akka.cluster.MemberStatus
 import org.apache.hama.Membership
 import org.apache.hama.SystemInfo
 import scala.collection.immutable.IndexedSeq
@@ -43,8 +43,24 @@ trait MembershipParticipant extends Membership { this: Actor =>
   override def unsubscribe(stakeholder: ActorRef) = 
     cluster.unsubscribe(stakeholder)
 
-  override def register(member: Member) { }
+  protected def membership: Receive = {
+    case MemberUp(member) => whenMemberUp(member)
+    case event: MemberEvent => memberEvent(event)
+  }
 
-  override def deregister(member: Member, prevStatus: MemberStatus) { }
-  
+  protected def whenMemberUp(member: Member) = if(member.hasRole("master")) {
+    val addr = member.address
+    val host = addr.host.getOrElse(null)
+    if(null == host) 
+      throw new RuntimeException("Master's host value is empty!")
+    val port = addr.port.getOrElse(-2)
+    if(-2 == port)
+      throw new RuntimeException("Invalid master's port value!")
+    register(new SystemInfo(addr.protocol, addr.system, host, port))
+  }
+
+  protected def register(info: SystemInfo) { }
+
+  protected def memberEvent(event: MemberEvent) { }
+
 }
