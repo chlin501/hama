@@ -367,4 +367,8 @@ trait Curator extends Conversion with CommonLog {
       }
     }})
 
+  /**
+   * Close curator instance.
+   */
+  def closeCurator() = curatorFramework.map { (client) => client.close }
 }

@@ -67,5 +67,6 @@ class TestRegistrator extends TestEnv("TestRegistrator") with LocalZooKeeper {
       LOG.info("Port value, expeected 40000, is {}", port) 
       assert(40000 == port)
     }}
+    curator.closeCurator
   }
 }

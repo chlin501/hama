@@ -44,12 +44,16 @@ class MasterFinder(setting: Setting) extends Curator {
 
   def masters(): Array[ProxyInfo] = list("/masters").map { child => {
     LOG.debug("Master znode found is {}", child)
+    val conf = setting.hama
     val ary = pattern.findAllMatchIn(child).map { m =>
       val name = m.group(1)
       val sys = m.group(2)
+      conf.set("master.actor-system.name", sys)
       val host = m.group(3)
+      conf.set("master.host", host)
       val port = m.group(4).toInt
-      new ProxyInfo.MasterBuilder(name, setting.hama).build
+      conf.setInt("master.port", port)
+      new ProxyInfo.MasterBuilder(name, conf).build
     }.toArray
     ary(0)
   }}.toArray

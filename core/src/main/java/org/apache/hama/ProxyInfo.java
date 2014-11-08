@@ -57,17 +57,17 @@ public final class ProxyInfo extends SystemInfo implements Writable {
 
       if(null == conf) 
         throw new IllegalArgumentException("HamaConfiguration is missing!"); 
-      super.conf = conf;
+      super.conf = new HamaConfiguration(conf);
 
-      super.actorSystemName = conf.get("master.actor-system.name", 
+      super.actorSystemName = super.conf.get("master.actor-system.name", 
                                  "MasterSystem");
       try {
-        super.host = conf.get("master.host", 
-                              InetAddress.getLocalHost().getHostName());
+        super.host = super.conf.get("master.host", 
+                                    InetAddress.getLocalHost().getHostName());
       } catch(UnknownHostException uhe) {
         throw new RuntimeException("Unknown master host!", uhe); 
       }
-      super.port = conf.getInt("master.port", 40000);
+      super.port = super.conf.getInt("master.port", 40000);
       LOG.debug("Master proxy "+actorName+" is at "+host+":"+port+" with path "+
                 actorPathBuilder.toString());
     } 
@@ -86,17 +86,17 @@ public final class ProxyInfo extends SystemInfo implements Writable {
 
       if(null == this.conf) 
         throw new NullPointerException("HamaConfiguration not found.");
-      super.conf = conf;
+      super.conf = new HamaConfiguration(conf);
 
-      super.actorSystemName = conf.get("groom.actor-system.name", 
-                                 "GroomSystem");
+      super.actorSystemName = super.conf.get("groom.actor-system.name", 
+                                             "GroomSystem");
       try {
-        super.host = conf.get("groom.host", 
-                              InetAddress.getLocalHost().getHostName());
+        super.host = super.conf.get("groom.host", 
+                                    InetAddress.getLocalHost().getHostName());
       } catch(UnknownHostException uhe) {
         throw new RuntimeException("Unknown groom host!", uhe); 
       }
-      super.port = conf.getInt("groom.port", 50000);
+      super.port = super.conf.getInt("groom.port", 50000);
       LOG.debug("Groom proxy "+actorName+" is at "+host+":"+port+" with path "+ 
                 actorPathBuilder.toString());
     }
