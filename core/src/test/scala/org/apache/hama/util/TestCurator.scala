@@ -17,11 +17,22 @@
  */
 package org.apache.hama.util
 
+import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.Assertions._
 import org.scalatest.junit.JUnitRunner
+
+object MockCurator {
+
+  def apply(conf: HamaConfiguration): Curator = {
+    val curator = new MockCurator()
+    curator.initializeCurator(conf)
+    curator
+  }
+
+}
 
 class MockCurator extends Curator 
 
@@ -38,8 +49,7 @@ class TestCurator extends TestEnv("TestCurator") with LocalZooKeeper {
 
   it("test curator methods") {
     LOG.info("Test curator methods ...")
-    val curator = new MockCurator()
-    curator.initializeCurator(testConfiguration)
+    val curator = MockCurator(testConfiguration)
     val masterPath = "/bsp/masters/bspmaster/id"
     val masterId = curator.getOrElse(masterPath, "master")
     LOG.info("MasterId is {}", masterId)

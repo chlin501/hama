@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama
-
+/*
 import org.apache.hama.conf.Setting
 import org.apache.hama.util.Curator
 import org.apache.zookeeper.CreateMode
@@ -32,15 +32,6 @@ class Registrator(setting: Setting) extends Curator {
   initializeCurator(setting.hama)
   protected val pattern = """(\w+)_(\w+)@(\w+):(\d+)""".r
 
-  def register() {
-    val sys = setting.info.getActorSystemName
-    val host = setting.info.getHost
-    val port = setting.info.getPort
-    val path = "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host,
-                                        port)
-    create(path, CreateMode.EPHEMERAL)
-  }
-
   def masters(): Array[ProxyInfo] = list("/masters").map { child => {
     LOG.debug("Master znode found is {}", child)
     val ary = pattern.findAllMatchIn(child).map { m =>
@@ -53,6 +44,24 @@ class Registrator(setting: Setting) extends Curator {
     ary(0)
   }}.toArray
 
+  def register() {
+    val sys = setting.info.getActorSystemName
+    val host = setting.info.getHost
+    val port = setting.info.getPort
+    val path = "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host,
+                                        port)
+    create(path, CreateMode.EPHEMERAL)
+  }
+
+  def register() {
+    val sys = setting.info.getActorSystemName
+    val host = setting.info.getHost
+    val port = setting.info.getPort
+    val path = "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host,
+                                        port)
+    create(path, CreateMode.EPHEMERAL)
+  }
+
+
 }
-
-
+*/

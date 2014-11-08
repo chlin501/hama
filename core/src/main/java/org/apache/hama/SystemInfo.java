@@ -25,6 +25,7 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 
+// TODO: rename to Node?
 public class SystemInfo implements Writable {
 
   public static final String Localhost = "127.0.0.1";

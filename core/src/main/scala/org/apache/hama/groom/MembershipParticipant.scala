@@ -19,23 +19,34 @@ package org.apache.hama.groom
 
 import akka.actor.Actor
 import akka.actor.ActorRef
+import akka.actor.ActorSelection
 import akka.actor.Address
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.ClusterEvent.MemberEvent
 import akka.cluster.Member
 import org.apache.hama.Membership
+import org.apache.hama.ProxyInfo
 import org.apache.hama.SystemInfo
 import scala.collection.immutable.IndexedSeq
 
+final case object GroomRegistration
+
 trait MembershipParticipant extends Membership { this: Actor => 
 
-  override def join(nodes: IndexedSeq[SystemInfo]) = cluster.joinSeedNodes(
+  protected var master = select
+
+  override def join(nodes: IndexedSeq[SystemInfo]): Unit= cluster.joinSeedNodes(
     nodes.map { (info) => {
       Address(info.getProtocol.toString, info.getActorSystemName, info.getHost,
               info.getPort)
     }}
   )
+
+  /**
+   * Join master found in ZooKeeper.
+   */
+  protected def join(): Unit = join(IndexedSeq[SystemInfo](master))
 
   override def subscribe(stakeholder: ActorRef) =
     cluster.subscribe(stakeholder, classOf[MemberUp])
@@ -48,18 +59,21 @@ trait MembershipParticipant extends Membership { this: Actor =>
     case event: MemberEvent => memberEvent(event)
   }
 
-  protected def whenMemberUp(member: Member) = if(member.hasRole("master")) {
-    val addr = member.address
-    val host = addr.host.getOrElse(null)
-    if(null == host) 
-      throw new RuntimeException("Master's host value is empty!")
-    val port = addr.port.getOrElse(-2)
-    if(-2 == port)
-      throw new RuntimeException("Invalid master's port value!")
-    register(new SystemInfo(addr.protocol, addr.system, host, port))
+  protected def masterFinder(): MasterFinder
+
+  protected def select(): ProxyInfo = {
+    val masters = masterFinder.masters
+    require(1 == masters.length, "Master size is not 1!")
+    masters(0)
   }
 
-  protected def register(info: SystemInfo) { }
+  protected def whenMemberUp(member: Member) = if(member.hasRole("master")) {
+    register(master)
+  }
+
+  protected def register(info: ProxyInfo) { 
+    //ActorSelection(info.getPath) ! GroomRegistration
+  }
 
   protected def memberEvent(event: MemberEvent) { }
 

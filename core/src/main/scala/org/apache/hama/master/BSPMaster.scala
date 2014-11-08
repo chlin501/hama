@@ -22,13 +22,34 @@ import akka.actor.ActorSystem
 import akka.actor.Address
 import akka.actor.Props
 import org.apache.hama.LocalService
-import org.apache.hama.Registrator
 import org.apache.hama.SystemInfo
 import org.apache.hama.conf.Setting
+import org.apache.hama.util.Curator
+import org.apache.zookeeper.CreateMode
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.collection.immutable.IndexedSeq
 import scala.collection.immutable.Vector
+
+object Registrator {
+
+  def apply(setting: Setting): Registrator = new Registrator(setting)
+
+}
+
+class Registrator(setting: Setting) extends Curator {
+
+  initializeCurator(setting.hama)
+
+  def register() {
+    val sys = setting.info.getActorSystemName
+    val host = setting.info.getHost
+    val port = setting.info.getPort
+    val path = "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host,
+                                        port)
+    create(path, CreateMode.EPHEMERAL)
+  }
+}
 
 object BSPMaster {
 

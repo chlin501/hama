@@ -23,50 +23,67 @@ import akka.cluster.Member
 import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
-import org.apache.hama.Registrator
 import org.apache.hama.conf.Setting
 import org.apache.hama.util.ActorLocator
+import org.apache.hama.util.Curator
 import org.apache.hama.util.MasterLocator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
+
+object MasterFinder {
+
+  def apply(setting: Setting): MasterFinder = new MasterFinder(setting)
+
+}
+
+class MasterFinder(setting: Setting) extends Curator {
+
+  initializeCurator(setting.hama)
+
+  protected val pattern = """(\w+)_(\w+)@(\w+):(\d+)""".r
+
+  def masters(): Array[ProxyInfo] = list("/masters").map { child => {
+    LOG.debug("Master znode found is {}", child)
+    val ary = pattern.findAllMatchIn(child).map { m =>
+      val name = m.group(1)
+      val sys = m.group(2)
+      val host = m.group(3)
+      val port = m.group(4).toInt
+      new ProxyInfo.MasterBuilder(name, setting.hama).build
+    }.toArray
+    ary(0)
+  }}.toArray
+
+}
 
 object GroomServer {
 
   def main(args: Array[String]) {
     val groom = Setting.groom
     val sys = ActorSystem(groom.info.getActorSystemName, groom.config)
-    sys.actorOf(Props(classOf[GroomServer], groom, Registrator(groom)), 
+    sys.actorOf(Props(classOf[GroomServer], groom, MasterFinder(groom)), 
                       groom.name)
   }
 }
 
-final class GroomServer(setting: Setting, registrator: Registrator) 
+class GroomServer(setting: Setting, finder: MasterFinder) 
       extends LocalService with RemoteService with ActorLocator 
       with MembershipParticipant { 
 
   // TODO: create system info 
   //       pass sys info to task manager
   //       move task manager register to groom server (let groom register)
-  //   
-
-  def select(): ProxyInfo = {
-    val masters = registrator.masters
-    require(1 == masters.length, "There are more than 1 masters existed!")
-    val master = masters(0)
-    LOG.info("Proxy to be lookup is {}", master)
-    lookup(master.getActorName, locate(MasterLocator(master)))
-    master
-  }
 
   override def initializeServices {
-    // lookup zk and retrieve master sys info
-    //join(Vector(master sys info))
-    //subscribe(self)
+    join
+    subscribe(self)
     val monitor = getOrCreate("monitor", classOf[Reporter], setting.hama) 
     getOrCreate("taskManager", classOf[TaskManager], setting.hama, monitor) 
   }
 
   override def stopServices = unsubscribe(self)
 
-  override def receive = unknown
+  override def masterFinder(): MasterFinder = finder 
+
+  override def receive = membership orElse unknown
 }
