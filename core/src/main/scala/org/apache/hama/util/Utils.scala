@@ -18,8 +18,13 @@
 package org.apache.hama.util
 
 import akka.actor.ActorRef
+import akka.actor.ActorPath
+import akka.actor.Address
+import akka.actor.ChildActorPath
+import akka.actor.RootActorPath
 import akka.pattern.ask
 import akka.util.Timeout
+import org.apache.hama.ProxyInfo
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration.DurationInt
@@ -36,6 +41,19 @@ object Utils {
     implicit val timeout = Timeout(defaultTimeout) //10 seconds 
     val future = ask(caller, message).mapTo[R] 
     Await.result(future, duration)
+  }
+
+  def actorPath(info: ProxyInfo): ActorPath = {
+    val protocol = info.getProtocol.toString
+    val sys = info.getActorSystemName
+    val host = info.getHost
+    val port = info.getPort
+    val actorPath = info.getActorPath
+    var fullPath: ActorPath = RootActorPath(Address(protocol, sys, host, port))
+    actorPath.split("/").foreach( node => 
+      fullPath = new ChildActorPath(fullPath, node)
+    )
+    fullPath
   }
 
 }

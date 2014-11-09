@@ -19,15 +19,14 @@ package org.apache.hama.groom
 
 import akka.actor.Actor
 import akka.actor.ActorRef
-import akka.actor.ActorSelection
 import akka.actor.Address
-import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.ClusterEvent.MemberEvent
 import akka.cluster.Member
 import org.apache.hama.Membership
 import org.apache.hama.ProxyInfo
 import org.apache.hama.SystemInfo
+import org.apache.hama.util.Utils._
 import scala.collection.immutable.IndexedSeq
 
 final case object GroomRegistration
@@ -72,7 +71,7 @@ trait MembershipParticipant extends Membership { this: Actor =>
   }
 
   protected def register(info: ProxyInfo) { 
-    //ActorSelection(info.getPath) ! GroomRegistration
+    context.actorSelection(actorPath(info)) ! GroomRegistration
   }
 
   protected def memberEvent(event: MemberEvent) { }

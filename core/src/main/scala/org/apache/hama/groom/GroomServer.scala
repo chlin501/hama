@@ -74,8 +74,7 @@ class GroomServer(setting: Setting, finder: MasterFinder)
       extends LocalService with RemoteService with ActorLocator 
       with MembershipParticipant { 
 
-  // TODO: create system info 
-  //       pass sys info to task manager
+  // TODO: pass sys info to task manager
   //       move task manager register to groom server (let groom register)
 
   override def initializeServices {
