@@ -70,9 +70,8 @@ trait MembershipParticipant extends Membership { this: Actor =>
     register(master)
   }
 
-  protected def register(info: ProxyInfo) { 
+  protected def register(info: ProxyInfo) = 
     context.actorSelection(actorPath(info)) ! GroomRegistration
-  }
 
   protected def memberEvent(event: MemberEvent) { }
 

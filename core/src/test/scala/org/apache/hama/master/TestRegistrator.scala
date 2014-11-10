@@ -28,6 +28,10 @@ import org.scalatest.junit.JUnitRunner
 @RunWith(classOf[JUnitRunner])
 class TestRegistrator extends TestEnv("TestRegistrator") with LocalZooKeeper {
 
+  val masterName = "bspMaster"
+  val masterSys = "BSPMasterSystem"
+  val masterHost = "host1034"
+  val masterPort: Int = 10428
   override protected def beforeAll = launchZk
 
   override protected def afterAll = {
@@ -37,6 +41,11 @@ class TestRegistrator extends TestEnv("TestRegistrator") with LocalZooKeeper {
 
   it("test master registration methods") {
     val setting = Setting.master
+    val conf = setting.hama
+    conf.set("master.name", masterName)
+    conf.set("master.actor-system.name", masterSys)
+    conf.set("master.host", masterHost)
+    conf.setInt("master.port", masterPort)
     val reg = Registrator(setting)
     reg.register
 
@@ -53,19 +62,22 @@ class TestRegistrator extends TestEnv("TestRegistrator") with LocalZooKeeper {
         val port = matched.group(4).toInt
         new ProxyInfo.MasterBuilder(name, setting.hama).build
       }.toArray
+      val name = proxy(0).getActorName
       val sys = proxy(0).getActorSystemName
       val host = proxy(0).getHost
       val port = proxy(0).getPort
     
-      LOG.info("Actor system name, expected MasterSystem, is {}", sys) 
-      assert("MasterSystem".equals(sys))
+      LOG.info("Master actor name, expected {}, is {}", masterName, name) 
+      assert(masterName.equals(name))
 
-      val defaultHost = java.net.InetAddress.getLocalHost.getHostName
-      LOG.info("Host value, expected {}, is {}", defaultHost, host) 
-      assert(defaultHost.equals(host))
+      LOG.info("Actor system name, expected {}, is {}", masterSys, sys) 
+      assert(masterSys.equals(sys))
 
-      LOG.info("Port value, expeected 40000, is {}", port) 
-      assert(40000 == port)
+      LOG.info("Host value, expected {}, is {}", masterSys, host) 
+      assert(masterHost.equals(host))
+
+      LOG.info("Port value, expected {}, is {}", masterPort, port) 
+      assert(masterPort == port)
     }}
     curator.closeCurator
   }

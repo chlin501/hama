@@ -24,9 +24,7 @@ import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.conf.Setting
-import org.apache.hama.util.ActorLocator
 import org.apache.hama.util.Curator
-import org.apache.hama.util.MasterLocator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
@@ -47,6 +45,7 @@ class MasterFinder(setting: Setting) extends Curator {
     val conf = setting.hama
     val ary = pattern.findAllMatchIn(child).map { m =>
       val name = m.group(1)
+      conf.set("master.name", name)
       val sys = m.group(2)
       conf.set("master.actor-system.name", sys)
       val host = m.group(3)
@@ -71,11 +70,9 @@ object GroomServer {
 }
 
 class GroomServer(setting: Setting, finder: MasterFinder) 
-      extends LocalService with RemoteService with ActorLocator 
-      with MembershipParticipant { 
+      extends LocalService with RemoteService with MembershipParticipant { 
 
   // TODO: pass sys info to task manager
-  //       move task manager register to groom server (let groom register)
 
   override def initializeServices {
     join
