@@ -66,7 +66,7 @@ object BSPMaster {
 //       BSPMaster extends member management trait
 //       refactor FSM (perhaps remove it)
 class BSPMaster(setting: Setting, registrator: Registrator) 
-      extends MembershipDirector { 
+      extends LocalService with MembershipDirector { 
 
   import BSPMaster._
 

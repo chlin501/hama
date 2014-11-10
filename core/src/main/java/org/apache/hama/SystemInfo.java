@@ -122,7 +122,6 @@ public class SystemInfo implements Writable {
     if (o == this) return true;
     if (null == o) return false;
     if (getClass() != o.getClass()) return false;
-
     final SystemInfo s = (SystemInfo) o;
     if (!s.protocol.toString().equals(protocol.toString())) return false;
     if (!s.actorSystemName.toString().equals(actorSystemName.toString())) 

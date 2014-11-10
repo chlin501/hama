@@ -17,6 +17,7 @@
  */
 package org.apache.hama.master
 
+import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Address
 import akka.cluster.Cluster
@@ -24,42 +25,45 @@ import akka.cluster.ClusterEvent.InitialStateAsEvents
 import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.ClusterEvent.MemberRemoved
 import akka.cluster.ClusterEvent.MemberEvent
-import org.apache.hama.LocalService
+import org.apache.hama.groom.GroomRegistration
+import org.apache.hama.Membership
 import org.apache.hama.SystemInfo
+import org.apache.hama.util.Utils._
 import scala.collection.immutable.IndexedSeq
 
-trait MembershipDirector extends /*Membership with*/ LocalService {
-  
-  protected val cluster = Cluster(context.system)
+trait MembershipDirector extends Membership { this: Actor =>
 
   protected var grooms = Set.empty[ActorRef]
 
-  protected def join(nodes: IndexedSeq[SystemInfo]) = cluster.joinSeedNodes(
+  override def join(nodes: IndexedSeq[SystemInfo]) = cluster.joinSeedNodes(
     nodes.map { (info) => {
       Address(info.getProtocol.toString, info.getActorSystemName, info.getHost,
               info.getPort)
     }}
   )
 
-  protected def subscribe(stakeholder: ActorRef) =
+  override def subscribe(stakeholder: ActorRef) =
     cluster.subscribe(stakeholder, initialStateMode = InitialStateAsEvents,
                       classOf[MemberEvent])
  
-  protected def unsubscribe(stakeholder: ActorRef) = 
+  override def unsubscribe(stakeholder: ActorRef) = 
     cluster.unsubscribe(stakeholder)
 
   def membership: Receive = {
-    //case GroomRegistration => 
-    // TODO: register to var grooms
-    //       e.g. register(sender)
-    case MemberUp(member) => LOG.debug("Member is Up: {}", member.address)
-    case MemberRemoved(member, previousStatus) => {
-      LOG.debug("Member is Removed: {} after {}", member.address, 
-                previousStatus)
-      // TODO: remove from cache function
-      //       e.g. remove(member.address) from var grooms
-    }
-    case event: MemberEvent => LOG.debug("Rest membership event {}", event)
+    case GroomRegistration => enroll(sender)
+    case MemberRemoved(member, prevStatus) => disenroll(from(member.address))
+    case event: MemberEvent => memberEvent(event)
   }
+
+  protected def enroll(participant: ActorRef) = grooms ++= Set(participant)
+
+  protected def disenroll(info: SystemInfo) = grooms.find( groom => {
+    info.equals(from(groom.path.address))
+  }) match {
+    case Some(found) => grooms -= found
+    case None => 
+  } 
+
+  protected def memberEvent(event: MemberEvent) { }
 
 }

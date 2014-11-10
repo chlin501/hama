@@ -25,6 +25,7 @@ import akka.actor.RootActorPath
 import akka.pattern.ask
 import akka.util.Timeout
 import org.apache.hama.ProxyInfo
+import org.apache.hama.SystemInfo
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration.DurationInt
@@ -54,6 +55,14 @@ object Utils {
       fullPath = new ChildActorPath(fullPath, node)
     )
     fullPath
+  }
+
+  def from(addr: Address): SystemInfo = {
+    val host = addr.host.getOrElse(null)
+    if(null == host) throw new RuntimeException("Remote host is not provided!")
+    val port = addr.port.getOrElse(-2)
+    if(-2 == port) throw new RuntimeException("Remote port is not provided!")
+    new SystemInfo(addr.protocol, addr.system, host, port)
   }
 
 }

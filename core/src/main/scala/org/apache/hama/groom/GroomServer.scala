@@ -70,7 +70,7 @@ object GroomServer {
 }
 
 class GroomServer(setting: Setting, finder: MasterFinder) 
-      extends LocalService with RemoteService with MembershipParticipant { 
+      extends LocalService with MembershipParticipant { 
 
   // TODO: pass sys info to task manager
 

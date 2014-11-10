@@ -155,4 +155,5 @@ public class TestProxyInfo extends TestCase {
     assertEquals("Local actor name should be peerMessenger", 
                  "peerMessenger", localProxy.getActorName());
   }
+
 }
