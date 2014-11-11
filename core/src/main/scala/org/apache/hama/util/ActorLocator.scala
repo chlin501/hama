@@ -22,7 +22,7 @@ import org.apache.hama.master.monitor.SysMetricsTracker
 import org.apache.hama.master.monitor.GroomTasksTracker
 import org.apache.hama.master.monitor.JobTasksTracker
 import org.apache.hama.master.Scheduler
-import org.apache.hama.master.GroomManager
+//import org.apache.hama.master.GroomManager
 import org.apache.hama.ProxyInfo
 
 /**
@@ -62,7 +62,7 @@ final case class SysMetricsTrackerLocator(conf: HamaConfiguration)
 final case class GroomTasksTrackerLocator(conf: HamaConfiguration)
 final case class JobTasksTrackerLocator(conf: HamaConfiguration)
 final case class SchedulerLocator(conf: HamaConfiguration)
-final case class GroomManagerLocator(conf: HamaConfiguration)
+//final case class GroomManagerLocator(conf: HamaConfiguration)
 final case class ExecutorLocator(conf: HamaConfiguration)
 
 object ActorPathMagnet {
@@ -130,6 +130,7 @@ object ActorPathMagnet {
     }
   }
   
+/*
   implicit def locateGm(locator: GroomManagerLocator) = 
       new ActorPathMagnet {
     type Path = String
@@ -143,6 +144,7 @@ object ActorPathMagnet {
 
     }
   }
+*/
 
   implicit def locateExecutor(locator: ExecutorLocator) = 
       new ActorPathMagnet {

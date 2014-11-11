@@ -22,6 +22,10 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.SystemInfo
+import org.apache.hama.master.BSPMaster
+import org.apache.hama.master.Master
+import org.apache.hama.groom.Groom
+import org.apache.hama.groom.GroomServer
 
 object Setting {
 
@@ -73,6 +77,8 @@ trait Setting {
 
   def name(): String 
 
+  def main(): Class[_] 
+
   def sys(): String 
 
   def host(): String
@@ -98,11 +104,14 @@ class MasterSetting(conf: HamaConfiguration) extends Setting {
 
   override def name(): String = conf.get("master.name", "bspmaster")
 
+  override def main(): Class[_] = conf.getClass("master.main", 
+                                                classOf[BSPMaster])
+
   override def sys(): String = 
     conf.get("master.actor-system.name", "MasterSystem")
 
   override def host(): String = conf.get("master.host", 
-                                InetAddress.getLocalHost.getHostName)
+                                         InetAddress.getLocalHost.getHostName)
 
   override def port(): Int = conf.getInt("master.port", 40000)
 
@@ -122,11 +131,14 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
 
   override def name(): String = conf.get("groom.name", "groom")
 
+  override def main(): Class[_] = conf.getClass("groom.main", 
+                                                classOf[GroomServer])
+
   override def sys(): String = 
     conf.get("groom.actor-system.name", "GroomSystem")
 
   override def host(): String = conf.get("groom.host", 
-                                InetAddress.getLocalHost.getHostName)
+                                         InetAddress.getLocalHost.getHostName)
 
   override def port(): Int = conf.getInt("groom.port", 50000)
 

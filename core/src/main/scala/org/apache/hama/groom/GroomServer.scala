@@ -30,15 +30,17 @@ import scala.concurrent.duration.FiniteDuration
 
 object MasterFinder {
 
+  val pattern = """(\w+)_(\w+)@(\w+):(\d+)""".r
+
   def apply(setting: Setting): MasterFinder = new MasterFinder(setting)
 
 }
 
 class MasterFinder(setting: Setting) extends Curator {
 
-  initializeCurator(setting.hama)
+  import MasterFinder._
 
-  protected val pattern = """(\w+)_(\w+)@(\w+):(\d+)""".r
+  initializeCurator(setting.hama)
 
   def masters(): Array[ProxyInfo] = list("/masters").map { child => {
     LOG.debug("Master znode found is {}", child)
@@ -64,13 +66,15 @@ object GroomServer {
   def main(args: Array[String]) {
     val groom = Setting.groom
     val sys = ActorSystem(groom.info.getActorSystemName, groom.config)
-    sys.actorOf(Props(classOf[GroomServer], groom, MasterFinder(groom)), 
+    sys.actorOf(Props(groom.main, groom, MasterFinder(groom)), 
                       groom.name)
   }
 }
 
+trait Groom 
+
 class GroomServer(setting: Setting, finder: MasterFinder) 
-      extends LocalService with MembershipParticipant { 
+      extends Groom with LocalService with MembershipParticipant { 
 
   // TODO: pass sys info to task manager
 

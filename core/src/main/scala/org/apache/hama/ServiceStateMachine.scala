@@ -23,49 +23,13 @@ import akka.actor.Cancellable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
-sealed trait StateMessage
-case class SubscribeState(state: ServiceState, ref: ActorRef) 
-     extends StateMessage
-case class UnsubscribeState(state: ServiceState, ref: ActorRef) 
-     extends StateMessage
-
 sealed trait HamaServices
 private case class Cache(services: Set[ActorRef]) extends HamaServices
 
-sealed trait StateChecker
-private case object WhichState extends StateChecker
-
 /**
- * This trait defines generic states a system will use.
+ * This trait defines generic states to be used.
  */
-trait ServiceStateMachine extends FSM[ServiceState, HamaServices] 
-                          with LocalService {
-
-  // TODO: remove listener broadcast related methods variables.
-
-  /**
-   * Mapping ServiceState to a set of Actor to be notified.
-   */
-  private var stateListeners = Map.empty[ServiceState, Set[ActorRef]] 
-  var stateChecker: Cancellable = _
-  var isNotifiedInNormal = false 
-  var isNotifiedInStopped = false
-
-  /**
-   * Periodically check if <ServiceState>.equals(stateName).
-   * If ture, act based upon that state e.g. notify clients.
-   */
-  private def check(stateChecker: StateChecker,
-                    delay: FiniteDuration = 3.seconds): Cancellable = {
-    import context.dispatcher
-    context.system.scheduler.schedule(0.seconds, delay, self, 
-                                      stateChecker)
-  }
-
-  override def preStart { 
-    super.preStart
-    stateChecker = check(WhichState)
-  }
+trait ServiceStateMachine extends FSM[ServiceState, HamaServices] {
 
   startWith(StartUp, Cache(Set.empty[ActorRef]))
 
@@ -83,8 +47,6 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
    */
   when(Normal) {
     case Event(Next, s @ Cache(subServices)) => {
-      //broadcast(Normal)
-      //notify(Normal)(Ready(name)) 
       goto(CleanUp) using s
     }
   }
@@ -96,84 +58,6 @@ trait ServiceStateMachine extends FSM[ServiceState, HamaServices]
     case Event(Next, s @ Cache(subServices)) => {
       goto(Stopped) using s
     }
-  }
-
-  /**
-   * Capture unhandled events.
-   * StateChecker type is a special event that used to check if current state 
-   * is matched. 
-   * For instance, if current state, i.e. stateName, is Normal, then notify 
-   * listeners with Ready message so that clients can react after services are 
-   * ready.
-   */
-  whenUnhandled {
-    case Event(WhichState, s @ Cache(subServices)) => stateName match {
-      case Normal => {
-        if(!isNotifiedInNormal) {
-          broadcast(Normal)
-          notify(Normal)(Ready(name)) 
-          isNotifiedInNormal = true
-        }
-        stay using s // FSM State
-      }
-      case Stopped => {
-        if(!isNotifiedInStopped) { 
-          stateChecker.cancel
-          notify(Stopped)(Halt(name))
-          isNotifiedInStopped = true
-        }
-        stay using s // FSM State
-      }
-      case state@_ => stay using s // FSM State
-    }
-    case Event(e, s) => {
-      LOG.warning("CurrentState {}, unknown event {}, services {}.", 
-                  stateName, e, s)
-      stay using s
-    }
-  }
-
-  /**
-   * Broadcast to sub services.
-   * @param state denotes which state the service is in now.
-   */
-  protected def broadcast(state: ServiceState) {
-    state match {
-      case StartUp => 
-      case Normal => services.foreach(service => service ! MediatorIsUp)
-      case CleanUp =>
-      case Stopped =>
-      case s@_ => LOG.warning("Can't broadcast because unknown state {}", s)
-    }
-  }
-
-  protected def serviceStateListenerManagement: Receive = {
-    case SubscribeState(state, ref) => stateListeners.get(state) match {
-      case Some(foundRefs) => stateListeners = stateListeners.mapValues { 
-          refs => refs + ref 
-      }
-      case None => stateListeners ++= Map(state -> Set(ref))
-    }
-    case UnsubscribeState(state, ref) => stateListeners.get(state) match {
-      case Some(foundRefs) => stateListeners = stateListeners.mapValues { 
-        refs => refs - ref 
-      }
-      case None => 
-        LOG.warning("Actor not matched to unsubscribe with state {}.", state) 
-    }
-  }
-
-  /**
-   * Notify listeners when a specific state is triggered.
-   */
-  protected def notify(state: ServiceState)(message: Any): Unit = {
-    LOG.debug("state: {}, message, {}, stateListeners {}", 
-              state, message, stateListeners.mkString(", "))
-    stateListeners.filter(p => state.equals(p._1)).values.flatten.
-                   foreach( ref => {
-      LOG.debug("Send msg to ref {}!", ref)
-      ref ! message
-    })
   }
 
   initialize()

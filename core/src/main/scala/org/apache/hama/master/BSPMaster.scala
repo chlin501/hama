@@ -56,17 +56,19 @@ object BSPMaster {
   def main(args: Array[String]) {
     val master = Setting.master
     val sys = ActorSystem(master.info.getActorSystemName, master.config)
-    sys.actorOf(Props(classOf[BSPMaster], master, Registrator(master)), 
+    sys.actorOf(Props(master.main, master, Registrator(master)), 
                 master.name)
   }
  
 }
 
+trait Master
+
 // TODO: member management trait for harness groom registration, leave, etc.
 //       BSPMaster extends member management trait
 //       refactor FSM (perhaps remove it)
 class BSPMaster(setting: Setting, registrator: Registrator) 
-      extends LocalService with MembershipDirector { 
+      extends Master with LocalService with MembershipDirector { 
 
   import BSPMaster._
 
@@ -88,6 +90,6 @@ class BSPMaster(setting: Setting, registrator: Registrator)
 
   def seedNodes(): IndexedSeq[SystemInfo] = Vector(setting.info)
 
-  override def receive = unknown
+  override def receive = membership orElse unknown
   
 }

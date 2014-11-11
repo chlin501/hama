@@ -39,7 +39,10 @@ class MockCurator extends Curator
 @RunWith(classOf[JUnitRunner])
 class TestCurator extends TestEnv("TestCurator") with LocalZooKeeper {
 
-  override protected def beforeAll = launchZk
+  override protected def beforeAll = {
+    super.beforeAll
+    launchZk
+  }
 
   override protected def afterAll = {
     closeZk

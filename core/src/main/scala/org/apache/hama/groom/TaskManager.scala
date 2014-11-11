@@ -33,12 +33,14 @@ import org.apache.hama.master.Directive._
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.Report
 import org.apache.hama.util.ActorLocator
-import org.apache.hama.util.GroomManagerLocator
+//import org.apache.hama.util.GroomManagerLocator
 import org.apache.hama.util.SchedulerLocator
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
+// TODO: create Spec class (extends writable) with slot, max task, etc. info
+//       once started up, pass spec to reporter, which reports to monitor.
 class TaskManager(conf: HamaConfiguration, reporter: ActorRef) 
       extends LocalService with RemoteService with ActorLocator {
 
@@ -77,8 +79,6 @@ class TaskManager(conf: HamaConfiguration, reporter: ActorRef)
 
   protected def getSchedulerPath: String = locate(SchedulerLocator(conf))
 
-  //override def configuration: HamaConfiguration = conf
-
   /**
    * Initialize slots with default slots value to 3, which comes from maxTasks,
    * or "bsp.tasks.maximum".
@@ -94,7 +94,7 @@ class TaskManager(conf: HamaConfiguration, reporter: ActorRef)
   override def initializeServices {
     initializeSlots(getMaxTasks)
     lookup("sched", locate(SchedulerLocator(conf)))
-    lookup("groomManager", locate(GroomManagerLocator(conf)))
+    //lookup("groomManager", locate(GroomManagerLocator(conf)))
   }
 
   def hasTaskInQueue: Boolean = !directiveQueue.isEmpty
@@ -131,8 +131,7 @@ class TaskManager(conf: HamaConfiguration, reporter: ActorRef)
 
   override def offline(target: ActorRef) {
     // TODO: if only groomManager actor fails, simply re-"lookup" will fail.
-    //lookup("groomManager", groomManagerPath)
-    lookup("groomManager", locate(GroomManagerLocator(conf)))
+    //lookup("groomManager", locate(GroomManagerLocator(conf)))
   }
 
   /**
