@@ -65,7 +65,7 @@ class MultiNodesSetting(conf: HamaConfiguration) extends Setting {
 
   def name(): String = conf.get("tester.name", "test")
 
-  def main(): Class[_] = classOf[Tester]
+  def main(): Class[Actor] = classOf[Tester].asInstanceOf[Class[Actor]]
 
   def sys(): String = conf.get("test.actor-system.name", 
                                "TestSystem")
@@ -84,7 +84,7 @@ class MultiNodesEnv(actorSystem: ActorSystem)
 
   import MultiNodesEnv._
 
-  val probe = TestProbe()
+  protected var systems = Set.empty[ActorSystem]
 
   /**
    * Instantiate test environment with name only.
@@ -100,49 +100,70 @@ class MultiNodesEnv(actorSystem: ActorSystem)
   def this(name: String, conf: HamaConfiguration) = 
     this(ActorSystem(name, MultiNodesEnv.setting(conf).config))
 
-  override protected def afterAll = {
-    system.shutdown
+  override protected def afterAll = system.shutdown
+
+  protected def masterSetting[A <: Actor](name: String, 
+                                          main: Class[A], 
+                                          port: Int): Setting = {
+    val master = Setting.master
+    LOG.info("Configure master with: name {}, main class {}, port {}", 
+             name, main, port)
+    master.hama.set("master.name", name)
+    master.hama.set("master.main", main.getName)
+    master.hama.setInt("master.port", port)
+    master
   }
-  
+
+  protected def groomSetting[A <: Actor](name: String, 
+                                         main: Class[A], 
+                                         port: Int): Setting = {
+    val groom = Setting.groom
+    LOG.info("Configure groom with: name {}, main class {}, port {}", 
+             name, main, port)
+    groom.hama.set("groom.name", name)
+    groom.hama.set("groom.main", main.getName)
+    groom.hama.setInt("groom.port", port)
+    groom
+  }
+
   /**
-   * Create testActor with variable arguments.
-   * @param name of the testActor.
-   * @param clazz denotes the actual actor class implementation.
-   * @param args contains the rest of arguments.
-   * @return ActorRef of the target testActor. 
-  protected def createWithArgs(name: String, clazz: Class[_], args: Any*): 
-    ActorRef = system.actorOf(Props(clazz, args:_*), name)
-  
-   * Check if a message received is as expected.
-   * @param message to be exaimed.
-  protected def expect(message: Any) = probe.expectMsg(message)
-
-   * Expect message by waiting 10 seconds.
-   * @param msg to be exaimed.
-  protected def expect10(msg: Any) = expect(10.seconds, msg)
-
-   * Expect message by waiting up to max seconds
-   * @param max duration waiting mesage to be verified.
-   * @param msg to be exaimed.
-  protected def expect(max: FiniteDuration, message: Any) = 
-    probe.expectMsg(max, message)
-
-   * Check if messages is one of provided messages.
-   * @param messages that may be returned.
-  protected def expectAnyOf(messages: Any*) = probe.expectMsgAnyOf(messages:_*)
+   * Start an ActorSystem.
+   * @param actorSysName is the name of actor system.
+   * @param setting contains config required by the actor system.
    */
+  protected def start(actorSysName: String, setting: Setting): ActorSystem = 
+    systems.find( sys => sys.name.equals(actorSysName) ) match {
+      case Some(found) => found
+      case None => {
+        val actorSystem = ActorSystem(actorSysName, setting.config)
+        systems ++= Set(actorSystem)
+        actorSystem
+      }
+    }
 
+  /**
+   * Create either BSPMaster or GroomServer actor.
+   */
+  protected def actorOf[A <: Actor](actorSysName: String, 
+                                    setting: Setting, args: Any*): ActorRef = 
+    actorOf[Actor](actorSysName, setting.main, setting.name, args:_*)
+
+  /**
+   * Create actor with ccoresponded actor system.
+   */
+  protected def actorOf[A <: Actor](actorSysName: String, main: Class[A], 
+                                    name: String, args: Any*): ActorRef = 
+    systems.find( sys => sys.name.equals(actorSysName)) match {
+      case Some(found) => system.actorOf(Props(main, args:_*), name)
+      case None => throw new RuntimeException("No matched ActorSystem name "+
+                                              actorSysName+"!")
+    }
+  
   /**
    * Thread sleep {@link FiniteDuration} of time.
    * @param duration with default to 3 seconds.
    */
   protected def sleep(duration: FiniteDuration = 3.seconds) = 
     Thread.sleep(duration.toMillis)
-
-  /**
-   * Test actor reference.
-   * @return ActorRef of {@link TestProbe#ref}
-  protected def tester: ActorRef = probe.ref
-   */
 
 }

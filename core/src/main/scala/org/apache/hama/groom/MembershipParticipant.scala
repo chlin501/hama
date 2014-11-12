@@ -31,7 +31,7 @@ import scala.collection.immutable.IndexedSeq
 
 final case object GroomRegistration
 
-trait MembershipParticipant extends Membership { this: Actor => 
+trait MembershipParticipant extends Membership with org.apache.hama.logging.ActorLog { this: Actor => 
 
   protected var master = select
 
@@ -62,7 +62,8 @@ trait MembershipParticipant extends Membership { this: Actor =>
 
   protected def select(): ProxyInfo = {
     val masters = masterFinder.masters
-    require(1 == masters.length, "Master size is not 1!")
+    if(1 != masters.size) 
+      throw new RuntimeException("Master size is not 1, but "+masters.size+"!")
     masters(0)
   }
 

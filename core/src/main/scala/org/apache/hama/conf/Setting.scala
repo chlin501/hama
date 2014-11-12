@@ -17,6 +17,7 @@
  */
 package org.apache.hama.conf
 
+import akka.actor.Actor
 import java.net.InetAddress
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -57,9 +58,8 @@ trait Setting {
         }
       }
       remote.netty.tcp {
-          hostname = "$host"
-          port = $port
-        }
+        hostname = "$host"
+        port = $port
       }
       cluster { 
         roles = [$role]
@@ -78,7 +78,7 @@ trait Setting {
 
   def name(): String 
 
-  def main(): Class[_] 
+  def main(): Class[Actor] 
 
   def sys(): String 
 
@@ -86,7 +86,8 @@ trait Setting {
 
   def port(): Int 
 
-  protected def toClass(name: String): Try[Class[_]] = Try(Class.forName(name))
+  protected def toClass[A <: Actor](name: String): Try[Class[A]] = 
+    Try(Class.forName(name).asInstanceOf[Class[A]])
 
 }
 
@@ -107,11 +108,11 @@ class MasterSetting(conf: HamaConfiguration) extends Setting {
 
   override def name(): String = conf.get("master.name", "bspmaster")
 
-  override def main(): Class[_] = {
+  override def main(): Class[Actor] = {
     val name = conf.get("master.main", classOf[BSPMaster].getName)
-    toClass(name) match {
-      case Success(clazz) => clazz
-      case Failure(cause) => classOf[BSPMaster]
+    toClass[BSPMaster](name) match {
+      case Success(clazz) => clazz.asInstanceOf[Class[Actor]]
+      case Failure(cause) => classOf[BSPMaster].asInstanceOf[Class[Actor]] 
     }
   }
 
@@ -139,11 +140,11 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
 
   override def name(): String = conf.get("groom.name", "groom")
 
-  override def main(): Class[_] = {
+  override def main(): Class[Actor] = {
     val name = conf.get("groom.main", classOf[GroomServer].getName)
-    toClass(name) match {
-      case Success(clazz) => clazz
-      case Failure(cause) => classOf[GroomServer]
+    toClass[GroomServer](name) match {
+      case Success(clazz) => clazz.asInstanceOf[Class[Actor]] 
+      case Failure(cause) => classOf[GroomServer].asInstanceOf[Class[Actor]] 
     }
   }
 

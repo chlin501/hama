@@ -28,18 +28,17 @@ import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 
-class MockBSPMaster(setting: Setting, tester: ActorRef) 
+class MockBSPMaster(setting: Setting) 
       extends BSPMaster(setting, Registrator(setting)) { 
 
   override def enroll(participant: ActorRef) {
-    LOG.info("Groom {} joins now ...", participant.path.name)
+    LOG.info("xxxxxxxxxxxxxxx Groom {} joins now ...", participant.path.name)
     super.enroll(participant)
-    tester ! participant.path.name
   }
 
 }
 
-class MockGroomServer(setting: Setting, tester: ActorRef) 
+class MockGroomServer(setting: Setting) 
       extends GroomServer(setting, MasterFinder(setting)) {
 }
 
@@ -57,41 +56,18 @@ class TestMasterGroom extends MultiNodesEnv("TestMasterGroom")
     super.afterAll
   }
   
-/* TODO: move to multi nodes env
-  def masterSetting(name: String, main: Class[_], port: Int): Setting = {
-    val master = Setting.master
-    LOG.info("Configure master with: name {}, main class {}, port {}", 
-             name, main, port)
-    master.hama.set("master.name", name)
-    master.hama.set("master.main", main.getName)
-    master.hama.setInt("master.port", port)
-    master
-  }
-
-  def groomSetting(name: String, main: Class[_], port: Int): Setting = {
-    val groom = Setting.groom
-    LOG.info("Configure groom with: name {}, main class {}, port {}", 
-             name, main, port)
-    groom.hama.set("groom.name", name)
-    groom.hama.set("groom.main", main.getName)
-    groom.hama.setInt("groom.port", port)
-    groom
-  }
-*/
-
   it("test master groom communication.") {
-/*  TODO: multi nodes env provides start mater grooms actor system functions.
     val m = masterSetting("master1", classOf[MockBSPMaster], 40001)
     val g1 = groomSetting("groom1", classOf[MockGroomServer], 50001)
     val g2 = groomSetting("groom2", classOf[MockGroomServer], 50002)
 
-    val master = start("master1", classOf[MockBSPMaster], m)
-    val groom1 = start("groom1", classOf[MockGroomServer], g1, tester)
-    val groom2 = start("groom2", classOf[MockGroomServer], g2, tester)
-    
-    expectAnyOf("groom1", "groom2")
-    expectAnyOf("groom1", "groom2")
-*/
+    val master = start("master1", m)
+    actorOf("master1", m, m)
+    val groom1 = start("groom1", g1)
+    actorOf("groom1", g1, g1)
+    val groom2 = start("groom2", g2)
+    actorOf("groom2", g2, g2)
 
+    Thread.sleep(5*1000)
   }
 }

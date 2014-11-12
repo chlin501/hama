@@ -36,7 +36,7 @@ public class SystemInfo implements Writable {
   protected Text host = new Text();
   protected IntWritable port = new IntWritable();
 
-  static enum Protocol { 
+  public static enum Protocol { 
     Local("akka"), Remote("akka.tcp");
     final String p;
     Protocol(final String v) {
