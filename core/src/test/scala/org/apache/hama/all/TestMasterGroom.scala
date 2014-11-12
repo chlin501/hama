@@ -15,13 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.cluster
+package org.apache.hama.all
 
-import org.apache.hama.TestEnv
-import org.apache.hama.master.Master
+import akka.actor.ActorRef
+import org.apache.hama.MultiNodesEnv
 import org.apache.hama.master.BSPMaster
 import org.apache.hama.master.Registrator
-import org.apache.hama.groom.Groom
 import org.apache.hama.groom.GroomServer
 import org.apache.hama.groom.MasterFinder
 import org.apache.hama.conf.Setting
@@ -29,17 +28,24 @@ import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 
-class MockBSPMaster(setting: Setting) 
+class MockBSPMaster(setting: Setting, tester: ActorRef) 
       extends BSPMaster(setting, Registrator(setting)) { 
+
+  override def enroll(participant: ActorRef) {
+    LOG.info("Groom {} joins now ...", participant.path.name)
+    super.enroll(participant)
+    tester ! participant.path.name
+  }
 
 }
 
-class MockGroomServer(setting: Setting) 
+class MockGroomServer(setting: Setting, tester: ActorRef) 
       extends GroomServer(setting, MasterFinder(setting)) {
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestMasterGroom extends TestEnv("TestMasterGroom") with LocalZooKeeper {
+class TestMasterGroom extends MultiNodesEnv("TestMasterGroom") 
+                              with LocalZooKeeper {
 
   override def beforeAll {
     super.beforeAll
@@ -51,12 +57,13 @@ class TestMasterGroom extends TestEnv("TestMasterGroom") with LocalZooKeeper {
     super.afterAll
   }
   
+/* TODO: move to multi nodes env
   def masterSetting(name: String, main: Class[_], port: Int): Setting = {
     val master = Setting.master
     LOG.info("Configure master with: name {}, main class {}, port {}", 
              name, main, port)
     master.hama.set("master.name", name)
-    master.hama.setClass("master.main", classOf[Master], main)
+    master.hama.set("master.main", main.getName)
     master.hama.setInt("master.port", port)
     master
   }
@@ -66,19 +73,25 @@ class TestMasterGroom extends TestEnv("TestMasterGroom") with LocalZooKeeper {
     LOG.info("Configure groom with: name {}, main class {}, port {}", 
              name, main, port)
     groom.hama.set("groom.name", name)
-    groom.hama.setClass("groom.main", classOf[Groom], main)
+    groom.hama.set("groom.main", main.getName)
     groom.hama.setInt("groom.port", port)
     groom
   }
+*/
 
   it("test master groom communication.") {
+/*  TODO: multi nodes env provides start mater grooms actor system functions.
     val m = masterSetting("master1", classOf[MockBSPMaster], 40001)
     val g1 = groomSetting("groom1", classOf[MockGroomServer], 50001)
     val g2 = groomSetting("groom2", classOf[MockGroomServer], 50002)
 
-    val master = createWithArgs("master1", classOf[MockBSPMaster], m)
-    val groom1 = createWithArgs("groom1", classOf[MockGroomServer], g1)
-    val groom2 = createWithArgs("groom2", classOf[MockGroomServer], g2)
+    val master = start("master1", classOf[MockBSPMaster], m)
+    val groom1 = start("groom1", classOf[MockGroomServer], g1, tester)
+    val groom2 = start("groom2", classOf[MockGroomServer], g2, tester)
+    
+    expectAnyOf("groom1", "groom2")
+    expectAnyOf("groom1", "groom2")
+*/
 
   }
 }

@@ -23,9 +23,10 @@ import com.typesafe.config.ConfigFactory
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.SystemInfo
 import org.apache.hama.master.BSPMaster
-import org.apache.hama.master.Master
-import org.apache.hama.groom.Groom
 import org.apache.hama.groom.GroomServer
+import scala.util.Try
+import scala.util.Success
+import scala.util.Failure
 
 object Setting {
 
@@ -85,6 +86,8 @@ trait Setting {
 
   def port(): Int 
 
+  protected def toClass(name: String): Try[Class[_]] = Try(Class.forName(name))
+
 }
 
 class MasterSetting(conf: HamaConfiguration) extends Setting {
@@ -104,8 +107,13 @@ class MasterSetting(conf: HamaConfiguration) extends Setting {
 
   override def name(): String = conf.get("master.name", "bspmaster")
 
-  override def main(): Class[_] = conf.getClass("master.main", 
-                                                classOf[BSPMaster])
+  override def main(): Class[_] = {
+    val name = conf.get("master.main", classOf[BSPMaster].getName)
+    toClass(name) match {
+      case Success(clazz) => clazz
+      case Failure(cause) => classOf[BSPMaster]
+    }
+  }
 
   override def sys(): String = 
     conf.get("master.actor-system.name", "MasterSystem")
@@ -131,8 +139,13 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
 
   override def name(): String = conf.get("groom.name", "groom")
 
-  override def main(): Class[_] = conf.getClass("groom.main", 
-                                                classOf[GroomServer])
+  override def main(): Class[_] = {
+    val name = conf.get("groom.main", classOf[GroomServer].getName)
+    toClass(name) match {
+      case Success(clazz) => clazz
+      case Failure(cause) => classOf[GroomServer]
+    }
+  }
 
   override def sys(): String = 
     conf.get("groom.actor-system.name", "GroomSystem")

@@ -62,13 +62,11 @@ object BSPMaster {
  
 }
 
-trait Master
-
 // TODO: member management trait for harness groom registration, leave, etc.
 //       BSPMaster extends member management trait
 //       refactor FSM (perhaps remove it)
 class BSPMaster(setting: Setting, registrator: Registrator) 
-      extends Master with LocalService with MembershipDirector { 
+      extends LocalService with MembershipDirector { 
 
   import BSPMaster._
 

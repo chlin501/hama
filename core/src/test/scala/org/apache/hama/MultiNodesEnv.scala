@@ -17,15 +17,17 @@
  */
 package org.apache.hama
 
-import akka.actor.ActorSystem
+import akka.actor.Actor
 import akka.actor.ActorRef
+import akka.actor.ActorSystem
 import akka.actor.Props
+import akka.testkit.TestActor
 import akka.testkit.TestKit
 import akka.testkit.TestProbe
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import java.io.File
-import org.apache.commons.io.FileUtils
+import java.net.InetAddress
+import org.apache.hama.conf.Setting
 import org.apache.hama.logging.CommonLog
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.FunSpecLike
@@ -33,142 +35,102 @@ import org.scalatest.ShouldMatchers
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-object TestEnv {
+object MultiNodesEnv {
 
-  /**
-   * Used to parse config string to {@link Config}.
-   * @param str is config content.
-   * @return Config object.
-   */
   def parseString(str: String): Config = ConfigFactory.parseString(str)
+
+  def setting(): Setting = new MultiNodesSetting(new HamaConfiguration)
+
+  def setting(conf: HamaConfiguration): Setting = new MultiNodesSetting(conf)
 }
 
-class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem) 
-                                           with FunSpecLike 
-                                           with ShouldMatchers 
-                                           with BeforeAndAfterAll 
-                                           with CommonLog {
+class Tester extends Actor { // TODO: with assert functions for verification
+
+  override def receive = {
+    case msg@_ => println("unknown message: "+msg)
+  }
+}
+
+class MultiNodesSetting(conf: HamaConfiguration) extends Setting {
+
+  def hama(): HamaConfiguration = conf
+
+  override def config(): Config = ConfigFactory.parseString(" test { " + 
+    akka(host, port, "test") + " }").getConfig("test")
+
+  def info(system: String, host: String, port: Int): SystemInfo = 
+    new SystemInfo(system, host, port)
+
+  def info(): SystemInfo = info(sys, host, port)
+
+  def name(): String = conf.get("tester.name", "test")
+
+  def main(): Class[_] = classOf[Tester]
+
+  def sys(): String = conf.get("test.actor-system.name", 
+                               "TestSystem")
+
+  def host(): String = conf.get("test.host", 
+                                InetAddress.getLocalHost.getHostName)
+
+  def port(): Int = conf.getInt("test.port", 10000)
+}
+
+class MultiNodesEnv(actorSystem: ActorSystem) 
+      extends TestKit(actorSystem) with FunSpecLike 
+                                   with ShouldMatchers 
+                                   with BeforeAndAfterAll 
+                                   with CommonLog {
+
+  import MultiNodesEnv._
 
   val probe = TestProbe()
-  val conf = new HamaConfiguration()
-  val testRootPath = "/tmp/hama"
 
   /**
    * Instantiate test environment with name only.
    * @param name is the actor system name.
    */
-  def this(name: String) = this(ActorSystem(name))
+  def this(name: String) = this(ActorSystem(name, MultiNodesEnv.setting.config))
 
   /**
    * Instantiate test environment with name and {@link Config} object.
    * @param name of the actor system.
    * @param config object.
    */
-  def this(name: String, config: Config) = this(ActorSystem(name, config))
-
-  /**
-   * This creates a folder for testing.
-   * All files within this folder 
-   * @return File points to the test root path "/tmp/hama".
-   */
-  def testRoot: File = {
-    val tmpRoot = new File(testRootPath)
-    if(!tmpRoot.exists) tmpRoot.mkdirs
-    tmpRoot
-  }
-
-  /**
-   * Delete test root path if the path exists.
-   */
-  def deleteTestRoot {
-    testRoot.exists match {
-      case true => {
-        LOG.info("Delete test root path: "+testRoot.getCanonicalPath)
-        FileUtils.deleteDirectory(testRoot)
-      }
-      case false =>
-    }
-  }
+  def this(name: String, conf: HamaConfiguration) = 
+    this(ActorSystem(name, MultiNodesEnv.setting(conf).config))
 
   override protected def afterAll = {
-    deleteTestRoot
     system.shutdown
   }
-
-  /**
-   * Test configuration.
-   * @return HamaConfiguration contains particular setting for this
-   */
-  protected def testConfiguration: HamaConfiguration = conf
-
-  /**
-   * Create an test actor reference embedded with configuration and Probe.ref.
-   * @param name of the test actor to be created.
-   * @param clazz denotes the class object of the test actor.
-   * @return ActorRef corresponds to class object passed in.
-   */
-  protected def createWithTester(name: String, clazz: Class[_]): ActorRef = 
-    system.actorOf(Props(clazz, testConfiguration, tester), name)
-
+  
   /**
    * Create testActor with variable arguments.
    * @param name of the testActor.
    * @param clazz denotes the actual actor class implementation.
    * @param args contains the rest of arguments.
    * @return ActorRef of the target testActor. 
-   */
   protected def createWithArgs(name: String, clazz: Class[_], args: Any*): 
     ActorRef = system.actorOf(Props(clazz, args:_*), name)
-
-/*
-  protected def createWithArgs(name: String, clazz: Class[_], 
-                               dispatcher: String, args: Any*): ActorRef = 
-    system.actorOf(Props(clazz, args:_*).withDispatcher(dispatcher), name)
-*/
   
-  /**
-   * Create testActor without any arguments supplied.
-   * @param name of the testActor.
-   * @param clazz denotes the actual actor class implementation.
-   * @return ActorRef of the target testActor. 
-   */  
-  protected def createWithoutArgs(name: String, clazz: Class[_]): ActorRef =
-    system.actorOf(Props(clazz), name)
-
-  /**
-   * Create testActor with testConfiguration.
-   * @param name of the testActor.
-   * @param clazz denotes the actual actor class implementation.
-   * @return ActorRef of the target testActor. 
-   */
-  protected def create(name: String, clazz: Class[_]): ActorRef = 
-    system.actorOf(Props(clazz, testConfiguration), name)
-
-  /**
    * Check if a message received is as expected.
    * @param message to be exaimed.
-   */
   protected def expect(message: Any) = probe.expectMsg(message)
 
-  /**
    * Expect message by waiting 10 seconds.
    * @param msg to be exaimed.
-   */
   protected def expect10(msg: Any) = expect(10.seconds, msg)
 
-  /**
    * Expect message by waiting up to max seconds
    * @param max duration waiting mesage to be verified.
    * @param msg to be exaimed.
-   */
   protected def expect(max: FiniteDuration, message: Any) = 
     probe.expectMsg(max, message)
 
-  /**
    * Check if messages is one of provided messages.
    * @param messages that may be returned.
-   */
   protected def expectAnyOf(messages: Any*) = probe.expectMsgAnyOf(messages:_*)
+   */
 
   /**
    * Thread sleep {@link FiniteDuration} of time.
@@ -180,7 +142,7 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
   /**
    * Test actor reference.
    * @return ActorRef of {@link TestProbe#ref}
-   */
   protected def tester: ActorRef = probe.ref
+   */
 
 }
