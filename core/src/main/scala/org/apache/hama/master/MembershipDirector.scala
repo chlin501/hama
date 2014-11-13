@@ -55,8 +55,7 @@ trait MembershipDirector extends Membership { this: Agent =>
     case event: MemberEvent => memberEvent(event)
   }
 
-  protected def enroll(participant: ActorRef) = 
-    grooms ++= Set(participant)
+  protected def enroll(participant: ActorRef) = grooms ++= Set(participant)
 
   protected def disenroll(info: SystemInfo) = grooms.find( groom => {
     info.equals(from(groom.path.address))

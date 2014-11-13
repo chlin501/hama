@@ -28,6 +28,8 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import java.net.InetAddress
 import org.apache.hama.conf.Setting
+import org.apache.hama.master.BSPMaster
+import org.apache.hama.groom.GroomServer
 import org.apache.hama.logging.CommonLog
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.FunSpecLike
@@ -84,7 +86,11 @@ class MultiNodesEnv(actorSystem: ActorSystem)
 
   import MultiNodesEnv._
 
-  protected var systems = Set.empty[ActorSystem]
+  val hostValue = InetAddress.getLocalHost.getHostName
+
+  protected var master: Option[ActorSystem] = None
+ 
+  protected var grooms = Map.empty[String, ActorSystem]
 
   /**
    * Instantiate test environment with name only.
@@ -102,61 +108,90 @@ class MultiNodesEnv(actorSystem: ActorSystem)
 
   override protected def afterAll = system.shutdown
 
-  protected def masterSetting[A <: Actor](name: String, 
-                                          main: Class[A], 
-                                          port: Int): Setting = {
+  protected def masterSetting[A <: Actor](name: String = "bspmaster", 
+                                          actorSystemName: String = "BSPSystem",
+                                          main: Class[A] = classOf[BSPMaster], 
+                                          host: String = hostValue,
+                                          port: Int = 40000): Setting = {
     val master = Setting.master
     LOG.info("Configure master with: name {}, main class {}, port {}", 
              name, main, port)
     master.hama.set("master.name", name)
+    master.hama.set("master.actor-system.name", actorSystemName)
     master.hama.set("master.main", main.getName)
+    master.hama.set("master.host", host)
     master.hama.setInt("master.port", port)
     master
   }
 
-  protected def groomSetting[A <: Actor](name: String, 
-                                         main: Class[A], 
-                                         port: Int): Setting = {
+  protected def groomSetting[A <: Actor](name: String = "groomserver", 
+                                         actorSystemName: String = "BSPSystem",
+                                         main: Class[A] = classOf[GroomServer], 
+                                         host: String = hostValue,
+                                         port: Int = 50000): Setting = {
     val groom = Setting.groom
     LOG.info("Configure groom with: name {}, main class {}, port {}", 
              name, main, port)
     groom.hama.set("groom.name", name)
+    groom.hama.set("groom.actor-system.name", actorSystemName)
     groom.hama.set("groom.main", main.getName)
+    groom.hama.set("groom.host", host)
     groom.hama.setInt("groom.port", port)
     groom
   }
 
   /**
    * Start an ActorSystem.
-   * @param actorSysName is the name of actor system.
+   * @param actorSystemName is the name of actor system.
    * @param setting contains config required by the actor system.
    */
-  protected def start(actorSysName: String, setting: Setting): ActorSystem = 
-    systems.find( sys => sys.name.equals(actorSysName) ) match {
-      case Some(found) => found
-      case None => {
-        val actorSystem = ActorSystem(actorSysName, setting.config)
-        systems ++= Set(actorSystem)
-        actorSystem
-      }
-    }
+  protected def startMaster(setting: Setting): ActorSystem = master match { 
+    case Some(found) => found
+    case None => {
+      val m = ActorSystem(setting.sys, setting.config)
+      master = Option(m)
+      m
+    }  
+  }
+ 
+  protected def startGroom(setting: Setting): ActorSystem = {
+    val actorSystem = ActorSystem(setting.sys, setting.config)
+    grooms ++= Map(setting.name -> actorSystem)
+    actorSystem
+  }
+
+  protected def startGrooms(settings: Setting*) = settings.foreach( setting =>
+    startGroom(setting)
+  )
 
   /**
    * Create either BSPMaster or GroomServer actor.
    */
-  protected def actorOf[A <: Actor](actorSysName: String, 
-                                    setting: Setting, args: Any*): ActorRef = 
-    actorOf[Actor](actorSysName, setting.main, setting.name, args:_*)
+  protected def masterActorOf[A <: Actor](setting: Setting, 
+                                          args: Any*): ActorRef = 
+    masterActorOf[Actor](setting.main, setting.name, args: _*)
 
   /**
    * Create actor with ccoresponded actor system.
    */
-  protected def actorOf[A <: Actor](actorSysName: String, main: Class[A], 
-                                    name: String, args: Any*): ActorRef = 
-    systems.find( sys => sys.name.equals(actorSysName)) match {
-      case Some(found) => system.actorOf(Props(main, args:_*), name)
-      case None => throw new RuntimeException("No matched ActorSystem name "+
-                                              actorSysName+"!")
+  protected def masterActorOf[A <: Actor](main: Class[A], 
+                                          name: String, 
+                                          args: Any*): ActorRef = master match {
+    case Some(found) => found.actorOf(Props(main, args: _*), name)
+    case None => throw new RuntimeException("Master is not yet started!")
+  }
+
+  protected def groomActorOf[A <: Actor](setting: Setting, 
+                                         args: Any*): ActorRef = 
+    groomActorOf(setting.main, setting.name, args: _*)
+
+  protected def groomActorOf[A <: Actor](main: Class[A], 
+                                         name: String,
+                                         args: Any*): ActorRef = 
+    grooms.get(name) match {
+      case Some(found) => found.actorOf(Props(main, args:_*), name)
+      case None => throw new RuntimeException("Can't create startup actor for "+
+                                              "no matched name "+ name+"!")
     }
   
   /**

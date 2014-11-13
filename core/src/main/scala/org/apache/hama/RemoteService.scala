@@ -120,7 +120,7 @@ trait RemoteService extends Service {
   protected def afterLinked(target: String, proxy: ActorRef) {}
 
   override protected def remoteReply(target: String, remote: ActorRef) {
-    LOG.info("Proxy {} is ready: {}", target, remote)
+    LOG.debug("Proxy {} is ready: {}", target, remote)
     context.watch(remote) // TODO: watch proxy instead?
     val proxy = link(target, remote)//remote.path.name
     afterLinked(remote) // TODO: need to switch using proxy ReliableProxy

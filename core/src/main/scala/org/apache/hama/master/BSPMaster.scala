@@ -47,6 +47,7 @@ class Registrator(setting: Setting) extends Curator {
     val port = setting.info.getPort
     val path = "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host,
                                         port)
+    LOG.debug("Master znode will be registered at {}", path)
     create(path, CreateMode.EPHEMERAL)
   }
 }

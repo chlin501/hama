@@ -96,16 +96,16 @@ protected[logging] class ActorLogging(logger: akka.event.LoggingAdapter)
       extends LoggingAdapter {
 
   override def info(msg: String, args: Any*) = 
-    logger.info(format(msg, args:_*))
+    logger.info(format(msg, args:_*)+"\n")
 
   override def debug(msg: String, args: Any*) = 
-    logger.debug(format(msg, args:_*))
+    logger.debug(format(msg, args:_*)+"\n")
 
   override def warning(msg: String, args: Any*) = 
-    logger.warning(format(msg, args:_*))
+    logger.warning(format(msg, args:_*)+"\n")
 
   override def error(msg: String, args: Any*) = 
-    logger.error(format(msg, args:_*))
+    logger.error(format(msg, args:_*)+"\n")
  
 }
 

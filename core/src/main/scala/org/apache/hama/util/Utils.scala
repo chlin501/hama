@@ -53,7 +53,9 @@ object Utils {
     val host = info.getHost
     val port = info.getPort
     val actorPath = info.getActorPath
-    var fullPath: ActorPath = RootActorPath(Address(protocol, sys, host, port))
+    var fullPath: ActorPath = 
+      new ChildActorPath(RootActorPath(Address(protocol, sys, host, port)), 
+                         "user")
     actorPath.split("/").foreach( node => 
       fullPath = new ChildActorPath(fullPath, node)
     )

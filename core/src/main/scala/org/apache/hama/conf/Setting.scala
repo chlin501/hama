@@ -76,10 +76,16 @@ trait Setting {
 
   def info(): SystemInfo
 
+  /**
+   * This is generally the name of start up point for the actor system. 
+   */
   def name(): String 
 
   def main(): Class[Actor] 
 
+  /**
+   * All nodes in the same cluster should use the same actor system name.
+   */
   def sys(): String 
 
   def host(): String
@@ -116,8 +122,7 @@ class MasterSetting(conf: HamaConfiguration) extends Setting {
     }
   }
 
-  override def sys(): String = 
-    conf.get("master.actor-system.name", "MasterSystem")
+  override def sys(): String = conf.get("master.actor-system.name", "BSPSystem")
 
   override def host(): String = conf.get("master.host", 
                                          InetAddress.getLocalHost.getHostName)
@@ -148,8 +153,7 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
     }
   }
 
-  override def sys(): String = 
-    conf.get("groom.actor-system.name", "GroomSystem")
+  override def sys(): String = conf.get("groom.actor-system.name", "BSPSystem")
 
   override def host(): String = conf.get("groom.host", 
                                          InetAddress.getLocalHost.getHostName)

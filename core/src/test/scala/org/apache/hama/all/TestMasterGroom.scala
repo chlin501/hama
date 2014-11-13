@@ -34,7 +34,7 @@ class MockBSPMaster(setting: Setting)
       extends BSPMaster(setting, Registrator(setting)) { 
 
   override def enroll(participant: ActorRef) {
-    LOG.info("xxxxxxxxxxxxxxxxxxxxxxxxx Groom {} joins now ...", participant.path.name)
+    LOG.info("Groom {} joins now ...", participant.path.name)
     super.enroll(participant)
   }
 
@@ -59,16 +59,24 @@ class TestMasterGroom extends MultiNodesEnv("TestMasterGroom")
   }
   
   it("test master groom communication.") {
-    val m = masterSetting("master1", classOf[MockBSPMaster], 40001)
-    val g1 = groomSetting("groom1", classOf[MockGroomServer], 50001)
-    val g2 = groomSetting("groom2", classOf[MockGroomServer], 50002)
+    val m = masterSetting(name = "master1", 
+                          actorSystemName = "BSPCluster", 
+                          main = classOf[MockBSPMaster], 
+                          port = 40001)
+    val g1 = groomSetting(name = "groom1", 
+                          actorSystemName = "BSPCluster", 
+                          main = classOf[MockGroomServer], 
+                          port = 50001)
+    val g2 = groomSetting(name = "groom2", 
+                          actorSystemName = "BSPCluster", 
+                          main = classOf[MockGroomServer], 
+                          port = 50002)
 
-    val master = start("master1", m)
-    actorOf("master1", m, m)
-    val groom1 = start("groom1", g1)
-    actorOf("groom1", g1, g1)
-    val groom2 = start("groom2", g2)
-    actorOf("groom2", g2, g2)
+    startMaster(m)
+    masterActorOf(m, m)
+
+    startGrooms(g1)
+    groomActorOf(g1, g1)
 
     sleep(30.seconds)
   }

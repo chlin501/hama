@@ -45,9 +45,7 @@ trait Agent extends Actor with ActorLog {
   final def name(): String = self.path.name
 
   protected def unknown: Receive = {
-    case msg@_ => {
-      LOG.warning("Unknown message {} for {}.", msg, name)
-    }
+    case msg@_ => LOG.warning("Unknown message {} for {}.", msg, name)
   }
  
   /**
@@ -66,7 +64,7 @@ trait Agent extends Actor with ActorLog {
     case ActorIdentity(target, Some(actor)) => {
       remoteReply(target.toString, actor)
     }
-    case ActorIdentity(target, None) => LOG.warning("{} is not yet available!",
+    case ActorIdentity(target, None) => LOG.debug("{} is not yet available!",
                                                     target)
   }
 
@@ -79,8 +77,6 @@ trait Agent extends Actor with ActorLog {
    */
   protected def spawn[A <: Actor](childName: String, actorClass: Class[A],
                                   args: Any*): ActorRef = {
-    LOG.debug("Spawn child {} actor with name {} with args {}", 
-              actorClass, childName, args.mkString(", "))
     LOG.debug("Spawn child {} actor with name {}", actorClass, childName)
     context.actorOf(Props(actorClass, args:_*), childName)
   }
