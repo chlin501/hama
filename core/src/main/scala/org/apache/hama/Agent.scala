@@ -20,11 +20,23 @@ package org.apache.hama
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.ActorIdentity
+import akka.actor.Cancellable
 import akka.actor.Props
 import org.apache.hama.logging.ActorLog
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
+import scala.util.Try
+import scala.util.Success
+import scala.util.Failure
+
+sealed trait InternalMessages
+protected final case class Retry[R](name: String, count: Int, f:() => R) 
+      extends InternalMessages
 
 // TODO: rename?
 trait Agent extends Actor with ActorLog {
+
+  protected var retryCancellables = Map.empty[String, Cancellable]
 
   /**
    * The name for this actor. 
@@ -44,13 +56,6 @@ trait Agent extends Actor with ActorLog {
    * @param actor is the instance of ActoRef pointed to a <b>remote</b> actor.
    */
   protected def remoteReply(target: String, actor: ActorRef) { }
-  
-  /**
-   * Local actor reply to actorSelection.  
-   * @param target denotes the name of the actor reference.
-   * @param actor is the instance of ActoRef pointed to a local actor.
-  protected def localReply(target: String, actor: ActorRef) { }
-   */
 
   /**
    * Another actor reply the query of actorSelection, either local or remote.
@@ -60,7 +65,6 @@ trait Agent extends Actor with ActorLog {
   protected def actorReply: Receive = {
     case ActorIdentity(target, Some(actor)) => {
       remoteReply(target.toString, actor)
-      //localReply(target, actor)
     }
     case ActorIdentity(target, None) => LOG.warning("{} is not yet available!",
                                                     target)
@@ -75,9 +79,46 @@ trait Agent extends Actor with ActorLog {
    */
   protected def spawn[A <: Actor](childName: String, actorClass: Class[A],
                                   args: Any*): ActorRef = {
-    //LOG.debug("Spawn child {} actor with name {} with args {}", 
-              //actorClass, childName, args.mkString(", "))
+    LOG.debug("Spawn child {} actor with name {} with args {}", 
+              actorClass, childName, args.mkString(", "))
     LOG.debug("Spawn child {} actor with name {}", actorClass, childName)
     context.actorOf(Props(actorClass, args:_*), childName)
   }
+
+  protected def retry(name: String, count: Int, f: () => Any, 
+                         delay: FiniteDuration = 3.seconds) {
+    import context.dispatcher
+    val cancellable = context.system.scheduler.scheduleOnce(delay, 
+      self, Retry(name, count, f))
+    retryCancellables ++= Map(name -> cancellable)
+  }
+
+  protected def retryCompleted(name: String, result: Any) { }
+
+  protected def retryFailed(name: String, cause: Throwable) { }
+
+  protected def retryResult: Receive = {
+    case Retry(name, count, f) => Try(f()) match {
+      case Success(ret) => {
+        cancelRetry(name) 
+        retryCompleted(name, ret)
+      }
+      case _ if count > 1 => retry(name, (count-1), f)
+      case Failure(cause) => {
+        cancelRetry(name) 
+        retryFailed(name, cause)
+      }
+    }
+  }
+
+  protected def cancelRetry(name: String) = retryCancellables.get(name) match {
+    case Some(found) => { 
+      found.cancel
+      retryCancellables -= name 
+    }
+    case None => LOG.error("Name {} not found when cancelling retry.", name)
+  }
+
+  protected def shutdown() = context.system.shutdown
+
 }

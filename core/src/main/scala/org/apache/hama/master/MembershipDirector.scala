@@ -17,7 +17,6 @@
  */
 package org.apache.hama.master
 
-import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Address
 import akka.cluster.Cluster
@@ -25,13 +24,14 @@ import akka.cluster.ClusterEvent.InitialStateAsEvents
 import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.ClusterEvent.MemberRemoved
 import akka.cluster.ClusterEvent.MemberEvent
-import org.apache.hama.groom.GroomRegistration
+import org.apache.hama.Agent
 import org.apache.hama.Membership
 import org.apache.hama.SystemInfo
+import org.apache.hama.groom.GroomRegistration
 import org.apache.hama.util.Utils._
 import scala.collection.immutable.IndexedSeq
 
-trait MembershipDirector extends Membership { this: Actor =>
+trait MembershipDirector extends Membership { this: Agent =>
 
   protected var grooms = Set.empty[ActorRef]
 
@@ -55,7 +55,8 @@ trait MembershipDirector extends Membership { this: Actor =>
     case event: MemberEvent => memberEvent(event)
   }
 
-  protected def enroll(participant: ActorRef) = grooms ++= Set(participant)
+  protected def enroll(participant: ActorRef) = 
+    grooms ++= Set(participant)
 
   protected def disenroll(info: SystemInfo) = grooms.find( groom => {
     info.equals(from(groom.path.address))

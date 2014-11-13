@@ -77,8 +77,7 @@ class GroomServer(setting: Setting, finder: MasterFinder)
   // TODO: pass sys info to task manager
 
   override def initializeServices {
-    join
-    subscribe(self)
+    retry("lookupMaster", 10, lookupMaster)
     val monitor = getOrCreate("monitor", classOf[Reporter], setting.hama) 
     getOrCreate("taskManager", classOf[TaskManager], setting.hama, monitor) 
   }
@@ -87,5 +86,5 @@ class GroomServer(setting: Setting, finder: MasterFinder)
 
   override def masterFinder(): MasterFinder = finder 
 
-  override def receive = membership orElse unknown
+  override def receive = retryResult orElse membership orElse unknown
 }

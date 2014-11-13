@@ -17,12 +17,13 @@
  */
 package org.apache.hama.groom
 
-import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Address
 import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.ClusterEvent.MemberEvent
+import akka.cluster.ClusterEvent.CurrentClusterState
 import akka.cluster.Member
+import org.apache.hama.Agent
 import org.apache.hama.Membership
 import org.apache.hama.ProxyInfo
 import org.apache.hama.SystemInfo
@@ -31,9 +32,23 @@ import scala.collection.immutable.IndexedSeq
 
 final case object GroomRegistration
 
-trait MembershipParticipant extends Membership with org.apache.hama.logging.ActorLog { this: Actor => 
+object MasterLookupException {
 
-  protected var master = select
+  def apply(message: String): MasterLookupException = 
+    new MasterLookupException(message)
+
+  def apply(message: String, cause: Throwable): MasterLookupException = {
+    val e = new MasterLookupException(message)
+    e.initCause(cause)
+    e
+  }
+}
+
+class MasterLookupException(message: String) extends RuntimeException(message) 
+
+trait MembershipParticipant extends Membership { this: Agent => 
+
+  protected var master: Option[ProxyInfo] = None
 
   override def join(nodes: IndexedSeq[SystemInfo]): Unit= cluster.joinSeedNodes(
     nodes.map { (info) => {
@@ -41,11 +56,6 @@ trait MembershipParticipant extends Membership with org.apache.hama.logging.Acto
               info.getPort)
     }}
   )
-
-  /**
-   * Join master found in ZooKeeper.
-   */
-  protected def join(): Unit = join(IndexedSeq[SystemInfo](master))
 
   override def subscribe(stakeholder: ActorRef) =
     cluster.subscribe(stakeholder, classOf[MemberUp])
@@ -56,24 +66,45 @@ trait MembershipParticipant extends Membership with org.apache.hama.logging.Acto
   protected def membership: Receive = {
     case MemberUp(member) => whenMemberUp(member)
     case event: MemberEvent => memberEvent(event)
+    case CurrentClusterState(members, unreachable, seenBy, leader, 
+                             roleLeaderMap) => 
   }
 
-  protected def masterFinder(): MasterFinder
+  protected def masterFinder(): MasterFinder // TODO: option?
 
-  protected def select(): ProxyInfo = {
+  protected def lookupMaster(): ProxyInfo = {
     val masters = masterFinder.masters
-    if(1 != masters.size) 
-      throw new RuntimeException("Master size is not 1, but "+masters.size+"!")
+    if(1 != masters.size) {
+      throw new MasterLookupException("Not valid master size "+masters.size+"!")
+    }  
     masters(0)
   }
 
   protected def whenMemberUp(member: Member) = if(member.hasRole("master")) {
-    register(master)
+    master.map { (m) => register(m) }
   }
 
   protected def register(info: ProxyInfo) = 
     context.actorSelection(actorPath(info)) ! GroomRegistration
 
   protected def memberEvent(event: MemberEvent) { }
+
+  override protected def retryCompleted(name: String, ret: Any) = name match {
+    case "lookupMaster" => {
+      val m = ret.asInstanceOf[ProxyInfo]
+      master = Option(m)
+      join(IndexedSeq[SystemInfo](m))
+      subscribe(self)
+    }
+    case _ => { 
+      LOG.error("Unexpected result {} after lookup!", ret) 
+      shutdown 
+    }
+  }
+
+  override protected def retryFailed(name: String, cause: Throwable) = { 
+    LOG.error("Shutdown system due to error {} when trying {}", cause, name) 
+    shutdown 
+  }
 
 }

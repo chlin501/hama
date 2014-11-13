@@ -32,6 +32,9 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.Future
 import scala.reflect.ClassTag
+import scala.util.Try
+import scala.util.Success
+import scala.util.Failure
 
 object Utils {
 

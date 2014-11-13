@@ -27,12 +27,14 @@ import org.apache.hama.conf.Setting
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 
 class MockBSPMaster(setting: Setting) 
       extends BSPMaster(setting, Registrator(setting)) { 
 
   override def enroll(participant: ActorRef) {
-    LOG.info("xxxxxxxxxxxxxxx Groom {} joins now ...", participant.path.name)
+    LOG.info("xxxxxxxxxxxxxxxxxxxxxxxxx Groom {} joins now ...", participant.path.name)
     super.enroll(participant)
   }
 
@@ -68,6 +70,6 @@ class TestMasterGroom extends MultiNodesEnv("TestMasterGroom")
     val groom2 = start("groom2", g2)
     actorOf("groom2", g2, g2)
 
-    Thread.sleep(5*1000)
+    sleep(30.seconds)
   }
 }

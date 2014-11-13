@@ -77,10 +77,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     val receptionist = getOrCreate("receptionist", classOf[Receptionist], 
                                    setting.hama) 
     getOrCreate("monitor", classOf[Monitor], setting.hama) 
-    val sched = getOrCreate("sched", classOf[Scheduler], setting.hama, 
-                            receptionist) 
-    getOrCreate("groomManager", classOf[Scheduler], setting.hama, 
-                receptionist, sched) 
+    getOrCreate("sched", classOf[Scheduler], setting.hama, receptionist) 
     // TODO: change master state
   }
 
