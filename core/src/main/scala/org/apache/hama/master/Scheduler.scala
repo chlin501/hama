@@ -27,7 +27,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
-import org.apache.hama.master.monitor.AskGroomServerStat
+import org.apache.hama.monitor.master.AskGroomServerStat
 import org.apache.hama.RemoteService
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
@@ -147,7 +147,7 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
       //LOG.debug("Check if groomTaskManagers cache contains {}", groomName)
       val (taskManagerActor, maxTasksAllowed) = (null, 0)
         //groomTaskManagers.getOrElse(groomName, (null, 0)) 
-      if(null != taskManagerActor) {
+      if(null != taskManagerActor) { // TODO: warning for the above line!!!
         LOG.debug("GroomServer's taskManager {} found!", groomName)
         val currentTaskScheduled = job.getTaskCountFor(groomName)
         if(maxTasksAllowed < currentTaskScheduled)

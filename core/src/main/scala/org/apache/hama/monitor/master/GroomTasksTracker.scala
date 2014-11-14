@@ -15,29 +15,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master.monitor
+package org.apache.hama.monitor.master
 
+import akka.actor.ActorRef
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
 import org.apache.hama.groom.GroomServerStat
+import org.apache.hama.monitor.Tracker
 
-final class GroomTasksTracker(conf: HamaConfiguration) extends LocalService {
+/**
+ * Ask {@link GroomTasksTracker} for corresponded GroomServerStat(s).
+ * @param groomServers is the target to which tasks will be scheduled.
+ * @param from denotes who sends this request.
+ */
+final case class AskGroomServerStat(groomServers: Array[String],
+                                    from: ActorRef)
+
+final class GroomTasksTracker(conf: HamaConfiguration) extends Tracker {
  
-  var groomTasksStat = Set.empty[GroomServerStat]
-
-  //override def configuration: HamaConfiguration = conf
+  private var groomTasksStat = Set.empty[GroomServerStat]
 
   /**
    * Receive {@link GroomServerStat} report from {@link GroomReporter}.
    */
-  def renewGroomServerStat: Receive = {
+  private def renewGroomServerStat: Receive = {
     case stat: GroomServerStat => groomTasksStat ++= Set(stat)
   }
   
   /**
    * Find corresponded {@link GroomServerStat}. 
    */
-  def askGroomServerStat: Receive = {
+  private def askGroomServerStat: Receive = {
     case AskGroomServerStat(grooms, from) => {
       var stats = Set.empty[GroomServerStat]  
       grooms.foreach( groom => {
@@ -47,10 +54,8 @@ final class GroomTasksTracker(conf: HamaConfiguration) extends LocalService {
                                         groom)
         }
       })
-      if(!stats.isEmpty) 
-        from ! stats 
-      else 
-        LOG.warning("{} No GroomServerStat found!", grooms.mkString(", "))
+      if(!stats.isEmpty) from ! stats 
+      else LOG.warning("{} No GroomServerStat found!", grooms.mkString(", "))
     }
   }
 

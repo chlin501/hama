@@ -18,11 +18,10 @@
 package org.apache.hama.util
 
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.master.monitor.SysMetricsTracker
-import org.apache.hama.master.monitor.GroomTasksTracker
-import org.apache.hama.master.monitor.JobTasksTracker
+import org.apache.hama.monitor.master.SysMetricsTracker
+import org.apache.hama.monitor.master.GroomTasksTracker
+import org.apache.hama.monitor.master.JobTasksTracker
 import org.apache.hama.master.Scheduler
-//import org.apache.hama.master.GroomManager
 import org.apache.hama.ProxyInfo
 
 /**
@@ -62,7 +61,6 @@ final case class SysMetricsTrackerLocator(conf: HamaConfiguration)
 final case class GroomTasksTrackerLocator(conf: HamaConfiguration)
 final case class JobTasksTrackerLocator(conf: HamaConfiguration)
 final case class SchedulerLocator(conf: HamaConfiguration)
-//final case class GroomManagerLocator(conf: HamaConfiguration)
 final case class ExecutorLocator(conf: HamaConfiguration)
 
 object ActorPathMagnet {
@@ -81,9 +79,9 @@ object ActorPathMagnet {
     def apply(): Path = {
       new ProxyInfo.MasterBuilder("sysMetricsTracker", locator.conf).
                     createActorPath.
-                    appendRootPath("bspmaster").
+                    appendRootPath("bspmaster"). // TODO: from setting
                     appendChildPath("monitor").
-                    appendChildPath("sysMetricsTracker").
+                    appendChildPath("SysMetricsTracker").
                     build.
                     getPath
     }
@@ -95,9 +93,9 @@ object ActorPathMagnet {
     def apply(): Path = {
       new ProxyInfo.MasterBuilder("groomTasksTracker", locator.conf).
                     createActorPath.
-                    appendRootPath("bspmaster").
+                    appendRootPath("bspmaster"). // TODO: from setting
                     appendChildPath("monitor").
-                    appendChildPath("groomTasksTracker").
+                    appendChildPath("GroomTasksTracker").
                     build.
                     getPath
     }
@@ -109,9 +107,9 @@ object ActorPathMagnet {
     def apply(): Path = {
       new ProxyInfo.MasterBuilder("jobTasksTracker", locator.conf).
                     createActorPath.
-                    appendRootPath("bspmaster").
+                    appendRootPath("bspmaster"). // TODO: from setting
                     appendChildPath("monitor").
-                    appendChildPath("jobTasksTracker").
+                    appendChildPath("JobTasksTracker").
                     build.
                     getPath
     }
@@ -129,22 +127,6 @@ object ActorPathMagnet {
                     getPath
     }
   }
-  
-/*
-  implicit def locateGm(locator: GroomManagerLocator) = 
-      new ActorPathMagnet {
-    type Path = String
-    def apply(): Path = {
-      new ProxyInfo.MasterBuilder("groomManager", locator.conf).
-                    createActorPath.
-                    appendRootPath("bspmaster").
-                    appendChildPath("groomManager").
-                    build.
-                    getPath
-
-    }
-  }
-*/
 
   implicit def locateExecutor(locator: ExecutorLocator) = 
       new ActorPathMagnet {

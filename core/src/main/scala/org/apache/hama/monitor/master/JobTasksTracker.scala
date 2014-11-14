@@ -15,20 +15,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master.monitor
+package org.apache.hama.monitor.master
 
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.monitor.Tracker
 
-final class JobTasksTracker(conf: HamaConfiguration) extends LocalService {
+final class JobTasksTracker(conf: HamaConfiguration) extends Tracker {
 
-  var tasksStat = Map.empty[BSPJobID, Set[Task]]
+  private var tasksStat = Map.empty[BSPJobID, Set[Task]]
 
-  //override def configuration: HamaConfiguration = conf
-
-  def reportTask: Receive = {
+  private def reportTask: Receive = {
     case newTask: Task => {  // report
       val bspJobId = newTask.getId.getJobID
       LOG.info("Report task with BSPJobID {}.", bspJobId)

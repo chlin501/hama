@@ -62,6 +62,9 @@ object Utils {
     fullPath
   }
 
+  /**
+   * Convert from address to system info.
+   */ 
   def from(addr: Address): SystemInfo = {
     val host = addr.host.getOrElse(null)
     if(null == host) throw new RuntimeException("Remote host is not provided!")

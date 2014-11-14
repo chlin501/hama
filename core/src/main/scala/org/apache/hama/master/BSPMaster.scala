@@ -63,9 +63,7 @@ object BSPMaster {
  
 }
 
-// TODO: member management trait for harness groom registration, leave, etc.
-//       BSPMaster extends member management trait
-//       refactor FSM (perhaps remove it)
+// TODO: refactor FSM (perhaps remove it)
 class BSPMaster(setting: Setting, registrator: Registrator) 
       extends LocalService with MembershipDirector { 
 
@@ -77,7 +75,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     subscribe(self)
     val receptionist = getOrCreate("receptionist", classOf[Receptionist], 
                                    setting.hama) 
-    getOrCreate("monitor", classOf[Monitor], setting.hama) 
+    getOrCreate("monitor", classOf[Monitor], setting) 
     getOrCreate("sched", classOf[Scheduler], setting.hama, receptionist) 
     // TODO: change master state
   }

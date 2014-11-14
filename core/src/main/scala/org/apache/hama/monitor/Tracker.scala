@@ -15,27 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master.monitor
+package org.apache.hama.monitor
 
-import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
-import org.apache.hama.monitor.metrics.MetricsRecord
+import org.apache.hama.Agent
 
-class SysMetricsTracker(conf: HamaConfiguration) extends LocalService {
+trait Tracker extends Agent 
 
-  type GroomName = String
-
-  private var sysMetricsStat = Set.empty[MetricsRecord]
-
-  //override def configuration: HamaConfiguration = conf
- 
-  def metricsRecord: Receive = {
-    case stat: MetricsRecord => {
-      sysMetricsStat ++= Set(stat)
-      LOG.debug("{} reports stat {}. Now there are {} records.", 
-                stat.getServerName, stat, sysMetricsStat.size)
-    }
-  }
-
-  override def receive = metricsRecord orElse unknown
-}

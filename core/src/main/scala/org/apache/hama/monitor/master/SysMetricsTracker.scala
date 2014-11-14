@@ -15,14 +15,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.master.monitor
+package org.apache.hama.monitor.master
 
-import akka.actor.ActorRef
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.monitor.Tracker
+import org.apache.hama.monitor.metrics.MetricsRecord
 
-/**
- * Ask {@link GroomTasksTracker} for corresponded GroomServerStat(s).
- * @param groomServers is the target to which tasks will be scheduled.
- * @param from denotes who sends this request.
- */
-final case class AskGroomServerStat(groomServers: Array[String], 
-                                    from: ActorRef)
+final class SysMetricsTracker(conf: HamaConfiguration) extends Tracker {
+
+  type GroomName = String
+
+  private var sysMetricsStat = Set.empty[MetricsRecord]
+ 
+  private def metricsRecord: Receive = {
+    case stat: MetricsRecord => {
+      sysMetricsStat ++= Set(stat)
+      LOG.debug("{} reports stat {}. Now there are {} records.", 
+                stat.getServerName, stat, sysMetricsStat.size)
+    }
+  }
+
+  override def receive = metricsRecord orElse unknown
+}
