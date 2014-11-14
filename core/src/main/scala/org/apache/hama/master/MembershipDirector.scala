@@ -31,7 +31,9 @@ import org.apache.hama.groom.GroomRegistration
 import org.apache.hama.util.Utils._
 import scala.collection.immutable.IndexedSeq
 
-trait MembershipDirector extends Membership { this: Agent =>
+trait MembershipDirector extends Membership with Agent { 
+
+  protected val cluster = Cluster(context.system)
 
   protected var grooms = Set.empty[ActorRef]
 
@@ -55,12 +57,18 @@ trait MembershipDirector extends Membership { this: Agent =>
     case event: MemberEvent => memberEvent(event)
   }
 
-  protected def enroll(participant: ActorRef) = grooms ++= Set(participant)
+  protected def enroll(participant: ActorRef) = {
+    LOG.info("{} enrolls to Master!", participant.path.name)
+    grooms ++= Set(participant)
+  }
 
   protected def disenroll(info: SystemInfo) = grooms.find( groom => {
     info.equals(from(groom.path.address))
   }) match {
-    case Some(found) => grooms -= found
+    case Some(found) => {
+      LOG.info("{} disenrolls out of Master!", found.path.name)
+      grooms -= found
+    }
     case None => 
   } 
 

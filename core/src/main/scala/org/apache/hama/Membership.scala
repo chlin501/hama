@@ -17,9 +17,7 @@
  */
 package org.apache.hama
 
-import akka.actor.Actor
 import akka.actor.ActorRef
-import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.InitialStateAsEvents 
 import akka.cluster.ClusterEvent.MemberEvent
 import akka.cluster.ClusterEvent.MemberRemoved
@@ -28,9 +26,7 @@ import akka.cluster.Member
 import akka.cluster.MemberStatus
 import scala.collection.immutable.IndexedSeq
 
-trait Membership { this: Actor =>
-  
-  protected val cluster = Cluster(context.system)
+trait Membership { 
 
   def join(nodes: IndexedSeq[SystemInfo])
 

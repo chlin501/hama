@@ -75,8 +75,10 @@ class MockMessageExecutive[M <: Writable](conf: HamaConfiguration,
     lookup(name, replaced)
   }
 
+/*
   override def proxyOf(target: String, ref: ActorRef,
                        retryAfter: FiniteDuration = 100.millis): ActorRef = ref 
+*/
 
   override def putToLocal(bundle: BSPMessageBundle[M]) {
     val beforeSize = localQueue.size

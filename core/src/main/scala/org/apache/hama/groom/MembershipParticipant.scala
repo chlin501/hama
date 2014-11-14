@@ -19,11 +19,12 @@ package org.apache.hama.groom
 
 import akka.actor.ActorRef
 import akka.actor.Address
+import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.ClusterEvent.MemberEvent
 import akka.cluster.ClusterEvent.CurrentClusterState
 import akka.cluster.Member
-import org.apache.hama.Agent
+import org.apache.hama.RemoteService
 import org.apache.hama.Membership
 import org.apache.hama.ProxyInfo
 import org.apache.hama.SystemInfo
@@ -46,8 +47,10 @@ object MasterLookupException {
 
 class MasterLookupException(message: String) extends RuntimeException(message) 
 
-trait MembershipParticipant extends Membership { this: Agent => 
+trait MembershipParticipant extends Membership with RemoteService { 
 
+  protected val cluster = Cluster(context.system)
+  
   protected var master: Option[ProxyInfo] = None
 
   override def join(nodes: IndexedSeq[SystemInfo]): Unit= cluster.joinSeedNodes(
@@ -84,8 +87,12 @@ trait MembershipParticipant extends Membership { this: Agent =>
     master.map { (m) => register(m) }
   }
 
-  protected def register(info: ProxyInfo) = 
-    context.actorSelection(actorPath(info)) ! GroomRegistration
+  protected def register(target: ProxyInfo) = 
+    findProxyBy(target.getActorName) match { 
+      case Some(proxy) => proxy ! GroomRegistration
+      case None => LOG.warning("Master not found with {}!", target.getActorName)
+      //context.actorSelection(actorPath(target)) ! GroomRegistration
+    }
 
   protected def memberEvent(event: MemberEvent) { }
 
@@ -93,14 +100,22 @@ trait MembershipParticipant extends Membership { this: Agent =>
     case "lookupMaster" => {
       val m = ret.asInstanceOf[ProxyInfo]
       master = Option(m)
-      join(IndexedSeq[SystemInfo](m))
-      subscribe(self)
+      lookup(m.getActorName, m.getPath)
     }
     case _ => { 
       LOG.error("Unexpected result {} after lookup!", ret) 
       shutdown 
     }
   }
+
+  override def afterLinked(target: String, proxy: ActorRef) = 
+    master.map { m => target.equals(m.getActorName) match {
+      case true => {
+        join(IndexedSeq[SystemInfo](m)) 
+        subscribe(self)
+      }
+      case false =>
+    }}
 
   override protected def retryFailed(name: String, cause: Throwable) = { 
     LOG.error("Shutdown system due to error {} when trying {}", cause, name) 

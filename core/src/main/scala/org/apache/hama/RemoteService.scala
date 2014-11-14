@@ -89,20 +89,24 @@ trait RemoteService extends Service {
    */
   protected def link(target: String, ref: ActorRef): ActorRef = {
     LOG.debug("Link to remote target: {} ref: {}.", target, ref)
-    val proxy = proxyOf(target, ref)
-    proxies ++= Set(proxy)
+    //val proxy = proxyOf(target, ref) // TODO: use reliable proxy 
+    //proxies ++= Set(proxy)
+    proxies ++= Set(ref)
     proxiesLookup.get(target) match {
       case Some(cancellable) => cancellable.cancel
       case None => LOG.warning("Can't cancel for proxy {} not found!", target)
     }
     LOG.debug("Done linking to remote service {}.", target)
-    proxy
+    //proxy
+    ref // TODO: use reliable proxy 
   }
 
+  /**
   protected def proxyOf(target: String, remote: ActorRef,
                         retryAfter: FiniteDuration = 100.millis): ActorRef = 
     context.system.actorOf(Props(classOf[ReliableProxy], remote, retryAfter),
                            target)
+   */
   
 
   /**
@@ -126,6 +130,9 @@ trait RemoteService extends Service {
     afterLinked(remote) // TODO: need to switch using proxy ReliableProxy
     afterLinked(target, remote)
   }
+
+  protected def findProxyBy(key: String): Option[ActorRef] = 
+    proxies.find( proxy => proxy.path.name.equals(key)) 
 
   /**
    * Timeout reply when looking up a specific remote proxy.
