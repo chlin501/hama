@@ -21,10 +21,17 @@ import org.apache.hama.Agent
 
 trait Plugin extends Agent
 
+/**
+ * Track specific stats from grooms.
+ */
 trait Tracker extends Plugin 
 
+/**
+ * Collect specific groom stats.
+ */
 trait Collector extends Plugin 
 
+// TODO: add quartz scheduler?
 trait Ganglion {
 
   protected def load(classes: String): Seq[Class[Plugin]] =
