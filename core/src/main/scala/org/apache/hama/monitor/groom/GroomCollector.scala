@@ -47,7 +47,7 @@ final class GroomCollector(conf: HamaConfiguration) extends LocalService
 
   override def afterLinked(proxy: ActorRef) = tracker = proxy
 
-   * Receive message from TaskConductor reporting GroomServerStat to 
+   * Receive message from TaskCounsellor reporting GroomServerStat to 
    * {@link GroomTaskTracker}.
   def report: Receive = {
     case stat: GroomServerStat => { 

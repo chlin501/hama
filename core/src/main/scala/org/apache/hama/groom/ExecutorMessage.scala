@@ -24,7 +24,7 @@ sealed trait ExecutorMessage
 private[groom] final case class Fork(slotSeq: Int) extends ExecutorMessage
 
 /**
- * {@link TaskConductor} notifies {@link Executor} to stop
+ * {@link TaskCounsellor} notifies {@link Executor} to stop
  * {@link Container}.
  */
 private[groom] final case object StopProcess extends ExecutorMessage

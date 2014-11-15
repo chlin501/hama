@@ -58,7 +58,7 @@ import scala.concurrent.duration.DurationInt
  * @param listeningTo denotes the host/ interfaces the remote actor modules 
  *                    listens to.
  * @param port is the port value used by the remote actor module.
- * @param seq tells this process is the N-th forked by {@link TaskConductor}.
+ * @param seq tells this process is the N-th forked by {@link TaskCounsellor}.
  * @param config contains related setting for activating remote actor module.
  */
 final case class Args(actorSystemName: String, listeningTo: String, port: Int, 

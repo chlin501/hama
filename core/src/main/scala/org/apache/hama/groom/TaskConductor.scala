@@ -18,7 +18,7 @@
 package org.apache.hama.groom
 
 import akka.actor.ActorRef
-import akka.actor.AddressFromURIString
+//import akka.actor.AddressFromURIString
 import akka.actor.Cancellable
 import akka.actor.Deploy
 import akka.actor.Props
@@ -41,7 +41,7 @@ import scala.concurrent.duration.FiniteDuration
 
 // TODO: create Spec class (extends writable) with slot, max task, etc. info
 //       once started up, pass spec to reporter, which reports to monitor.
-class TaskConductor(setting: Setting, groom: ActorRef, reporter: ActorRef) 
+class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef) 
       extends LocalService with RemoteService with ActorLocator {
 
   val groomServerHost = setting.hama.get("bsp.groom.address", "127.0.0.1")

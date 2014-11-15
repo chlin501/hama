@@ -36,7 +36,7 @@ import scala.concurrent.duration.FiniteDuration
 
 class Aggregator(setting: Setting, groom: ActorRef, reporter: ActorRef, 
                  tester: ActorRef) 
-      extends TaskConductor(setting, groom, reporter) {
+      extends TaskCounsellor(setting, groom, reporter) {
 
   var command: Int = _
 
@@ -142,11 +142,11 @@ class TestExecutor extends TestEnv("TestExecutor",
     val setting = Setting.groom
     config(setting.hama)
 
-    val taskConductorName = 
-      setting.hama.get("bsp.groom.taskconductor.name", "taskConductor")
+    val taskCounsellorName = 
+      setting.hama.get("groom.taskcounsellor.name", "taskCounsellor")
 
     val reporter = createWithArgs("reporter", classOf[Reporter], setting)
-    val aggregator = createWithArgs(taskConductorName, classOf[Aggregator],
+    val aggregator = createWithArgs(taskCounsellorName, classOf[Aggregator],
                                     setting, groom, reporter, tester) 
   
     /* jobid, taskId, taskAttemptId */

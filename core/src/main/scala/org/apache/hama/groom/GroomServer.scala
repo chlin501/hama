@@ -74,10 +74,11 @@ object GroomServer {
 class GroomServer(setting: Setting, finder: MasterFinder) 
       extends LocalService with RemoteService with MembershipParticipant { 
 
+  // TODO: get actor name from setting
   override def initializeServices {
     retry("lookupMaster", 10, lookupMaster)
     val reporter = getOrCreate("reporter", classOf[Reporter], setting, self) 
-    getOrCreate("taskConductor", classOf[TaskConductor], setting, self, 
+    getOrCreate("taskCounsellor", classOf[TaskCounsellor], setting, self, 
                 reporter)
   }
 
