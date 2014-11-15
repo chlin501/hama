@@ -27,12 +27,12 @@ import org.apache.hama.monitor.master.GroomTasksTracker
 import org.apache.hama.monitor.master.JobTasksTracker
 import org.apache.hama.monitor.master.SysMetricsTracker
 
-sealed trait MonitorMessages
-final case object ListTrackers extends MonitorMessages
+sealed trait FederatorMessages
+final case object ListTrackers extends FederatorMessages
 final case class TrackersAvailable(services: Seq[String]) 
-      extends MonitorMessages
+      extends FederatorMessages
 
-object Monitor {
+object Federator {
 
    def defaultTrackers(): Seq[String] = Seq(classOf[GroomTasksTracker].getName, 
      classOf[JobTasksTracker].getName, classOf[SysMetricsTracker].getName)
@@ -40,9 +40,9 @@ object Monitor {
 }
 
 
-class Monitor(setting: Setting) extends LocalService {
+class Federator(setting: Setting) extends LocalService {
 
-  import Monitor._
+  import Federator._
 
   override def initializeServices {
     val defaultClasses = setting.hama.get("monitor.default.classes", 

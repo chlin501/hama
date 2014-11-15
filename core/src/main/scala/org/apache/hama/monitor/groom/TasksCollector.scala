@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom.monitor
+package org.apache.hama.monitor.groom
 
 import akka.actor.ActorRef
 import org.apache.hama.bsp.BSPJobID
@@ -27,15 +27,15 @@ import org.apache.hama.util.ActorLocator
 import org.apache.hama.util.JobTasksTrackerLocator
 
 /**
- * Report tasks status to JobTasksReporter.
+ * Collector tasks status to JobTasksTracker.
  */
-final class TasksReporter(conf: HamaConfiguration) extends LocalService 
+// TODO: pass in reporter ref.
+final class TasksCollector(conf: HamaConfiguration) extends LocalService 
                                                    with RemoteService 
                                                    with ActorLocator {
 
+/*
   var tracker: ActorRef = _
-
-  //override def configuration: HamaConfiguration = conf
 
   override def initializeServices {
     lookup("jobTasksTracker", locate(JobTasksTrackerLocator(conf)))
@@ -47,5 +47,6 @@ final class TasksReporter(conf: HamaConfiguration) extends LocalService
     case newTask: Task => tracker ! newTask
   }
 
-  override def receive = aNewTask orElse actorReply orElse timeout orElse unknown
+*/
+  override def receive = /*aNewTask orElse actorReply orElse timeout orElse*/ unknown
 }

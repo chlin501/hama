@@ -26,7 +26,8 @@ import org.apache.hama.monitor.master.SysMetricsTracker
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 
-class MockMonitor(setting: Setting, tester: ActorRef) extends Monitor(setting) {
+class MockFederator(setting: Setting, tester: ActorRef) 
+      extends Federator(setting) {
 
   override def replyTrackers(from: ActorRef) = {
     val trackers = currentTrackers() 
@@ -37,13 +38,13 @@ class MockMonitor(setting: Setting, tester: ActorRef) extends Monitor(setting) {
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestMonitor extends TestEnv("TestMonitor") {
+class TestFederator extends TestEnv("TestFederator") {
 
-  import Monitor._
+  import Federator._
 
   it("test monitor functions.") {
     val master = Setting.master
-    val monitor = createWithArgs("monitor", classOf[MockMonitor], master, 
+    val monitor = createWithArgs("monitor", classOf[MockFederator], master, 
                                  tester)
     monitor ! ListTrackers        
  

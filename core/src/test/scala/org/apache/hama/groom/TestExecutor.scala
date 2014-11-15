@@ -27,14 +27,16 @@ import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
+import org.apache.hama.conf.Setting
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-class Aggregator(conf: HamaConfiguration, reporter: ActorRef, tester: ActorRef) 
-      extends TaskManager(conf, reporter) {
+class Aggregator(setting: Setting, groom: ActorRef, reporter: ActorRef, 
+                 tester: ActorRef) 
+      extends TaskConductor(setting, groom, reporter) {
 
   var command: Int = _
 
@@ -81,8 +83,9 @@ class Aggregator(conf: HamaConfiguration, reporter: ActorRef, tester: ActorRef)
   override def receive = super.receive
 } 
 
-object Setting {
-  def toConfig: Config = { // TODO:
+// TODO: change inherit from conf.Setting  
+object SettingX {
+  def toConfig: Config = { 
     ConfigFactory.parseString("""
       testExecutor {
         akka {
@@ -112,31 +115,39 @@ object Setting {
 
 @RunWith(classOf[JUnitRunner])
 class TestExecutor extends TestEnv("TestExecutor", 
-                                   Setting.toConfig.getConfig("testExecutor"))
+                                   SettingX.toConfig.getConfig("testExecutor"))
                    with JobUtil {
+
+  val groom: ActorRef = null
 
   override protected def beforeAll = {
     super.beforeAll
-    testConfiguration.setBoolean("bsp.tasks.log.console", true)
-    testConfiguration.set("bsp.working.dir", testRoot.getCanonicalPath)
-    testConfiguration.set("bsp.groom.actor-system.name", "TestExecutor")
-    testConfiguration.setClass("bsp.child.class", classOf[MockContainer],
-                               classOf[Container])
+
   }
 
   def createDirective(action: Directive.Action, task: Task): Directive = 
     new Directive(action, task, "testMaster")
 
+  def config(conf: HamaConfiguration) {
+    conf.setBoolean("bsp.tasks.log.console", true)
+    conf.set("bsp.working.dir", testRoot.getCanonicalPath)
+    conf.set("groom.actor-system.name", "TestExecutor")
+    conf.setClass("bsp.child.class", classOf[MockContainer],
+                               classOf[Container])
+  }
+
   it("test forking processes") {
     LOG.info("Test forking processes...")
 
-    val taskManagerName = 
-      testConfiguration.get("bsp.groom.taskmanager.name", "taskManager")
+    val setting = Setting.groom
+    config(setting.hama)
 
-    val reporter = createWithArgs("reporter", classOf[Reporter], 
-                                 testConfiguration)
-    val aggregator = createWithArgs(taskManagerName, classOf[Aggregator],
-                                    testConfiguration, reporter, tester) 
+    val taskConductorName = 
+      setting.hama.get("bsp.groom.taskconductor.name", "taskConductor")
+
+    val reporter = createWithArgs("reporter", classOf[Reporter], setting)
+    val aggregator = createWithArgs(taskConductorName, classOf[Aggregator],
+                                    setting, groom, reporter, tester) 
   
     /* jobid, taskId, taskAttemptId */
     val task1 = createTask("test", 1, 7, 2) 

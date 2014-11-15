@@ -56,6 +56,6 @@ private[groom] final case class Slot(
 ) extends GroomMessage
 
 /**
- * Client notifies {@link TaskManager} to stop {@link Executor}.
+ * Client notifies {@link TaskConductor} to stop {@link Executor}.
  */
 private[groom] final case class StopExecutor(slotSeq: Int) extends GroomMessage

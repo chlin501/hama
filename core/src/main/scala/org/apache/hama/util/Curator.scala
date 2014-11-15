@@ -73,7 +73,8 @@ trait Curator extends Conversion with CommonLog {
 
   import Curator._
 
-  protected var curatorFramework: Option[CuratorFramework] = None
+  // TODO: create instance from factory method. and singleton.
+  protected var curatorFramework: Option[CuratorFramework] = None 
 
   /**
    * Initialize curator instance.

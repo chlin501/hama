@@ -35,7 +35,7 @@ import scala.concurrent.duration.FiniteDuration
 
 class MockTaskMgr(conf: HamaConfiguration, reporter: ActorRef, 
                   mockSched: ActorRef, name: String, constraint: Int) 
-      extends TaskManager(conf, reporter) {
+      extends TaskConductor(conf, reporter) {
 
    * Disable remote lookup sched.
    * Replace sched with mock sched.
@@ -45,7 +45,7 @@ class MockTaskMgr(conf: HamaConfiguration, reporter: ActorRef,
     request(self, TaskRequest) 
   }
 
-  /* override TaskManager's lookup mechanism. */
+  /* override TaskConductor's lookup mechanism. */
   override def afterLinked(proxy: ActorRef) { }
 
   override def getGroomServerName: String = name
@@ -62,7 +62,7 @@ class MockScheduler(conf: HamaConfiguration, tester: ActorRef,
   override def dispatch(from: ActorRef, action: Action, task: Task) {
     LOG.debug("Task will be dispatched to {} via actor {}", 
              task.getAssignedTarget, from.path.name)
-    groomTaskManagers.find(p =>   
+    groomTaskConductors.find(p =>   
       p._1.equals(task.getAssignedTarget)
     ) match {
       case Some(found) => {
@@ -71,7 +71,7 @@ class MockScheduler(conf: HamaConfiguration, tester: ActorRef,
         tester ! task.getAssignedTarget
       }
       case None => 
-        throw new RuntimeException("TaskManager "+task.getAssignedTarget+
+        throw new RuntimeException("TaskConductor "+task.getAssignedTarget+
                                    " not found!")
     }
   }
@@ -83,14 +83,14 @@ class MockScheduler(conf: HamaConfiguration, tester: ActorRef,
       val reporter = 
          context.actorOf(Props(classOf[org.apache.hama.groom.Reporter],
                                configuration))
-      val taskManager = context.actorOf(Props(classOf[MockTaskMgr], 
+      val taskConductor = context.actorOf(Props(classOf[MockTaskMgr], 
                                               conf, 
                                               reporter,
                                               self,
                                               groomServerName,
                                               maxTasks), 
                                         groomServerName)
-      groomTaskManagers ++= Map(groomServerName -> (taskManager, maxTasks))
+      groomTaskConductors ++= Map(groomServerName -> (taskConductor, maxTasks))
     }
   } 
   

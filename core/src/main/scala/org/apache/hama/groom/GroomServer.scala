@@ -74,12 +74,11 @@ object GroomServer {
 class GroomServer(setting: Setting, finder: MasterFinder) 
       extends LocalService with RemoteService with MembershipParticipant { 
 
-  // TODO: pass sys info to task manager
-
   override def initializeServices {
     retry("lookupMaster", 10, lookupMaster)
-    val monitor = getOrCreate("monitor", classOf[Reporter], setting.hama) 
-    getOrCreate("taskManager", classOf[TaskManager], setting.hama, monitor) 
+    val reporter = getOrCreate("reporter", classOf[Reporter], setting, self) 
+    getOrCreate("taskConductor", classOf[TaskConductor], setting, self, 
+                reporter)
   }
 
   override def stopServices = unsubscribe(self)

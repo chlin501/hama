@@ -105,7 +105,7 @@ class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
  * An actor forks a child process for executing tasks.
  * @param conf cntains necessary setting for launching the child process.
  */
-class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef) 
+class Executor(conf: HamaConfiguration, taskConductorListener: ActorRef) 
       extends Agent {
  
   val pathSeparator = System.getProperty("path.separator")
@@ -114,7 +114,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   val hamaHome = System.getProperty("hama.home.dir")
   val javacp: String  = System.getProperty("java.class.path")
   val logPath: String = System.getProperty("hama.log.dir")
-  val taskManagerName = conf.get("bsp.groom.taskmanager.name", "taskManager") 
+  val taskConductorName = conf.get("bsp.groom.taskconductor.name", "taskConductor") 
   val operation = Operation.get(conf)
   var commandQueue = Queue[Command]()
   protected var container: ActorRef =_ // TODO: Option
@@ -268,7 +268,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
 
   def launchAck: Receive = {
     case action: LaunchAck => 
-      taskManagerListener ! new LaunchAck(action.slotSeq, action.taskAttemptId) 
+      taskConductorListener ! new LaunchAck(action.slotSeq, action.taskAttemptId) 
   }
 
   /** 
@@ -282,7 +282,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
 
   def resumeAck: Receive = {
     case action: ResumeAck => 
-      taskManagerListener ! new ResumeAck(action.slotSeq, action.taskAttemptId)
+      taskConductorListener ! new ResumeAck(action.slotSeq, action.taskAttemptId)
   }
 
   /**
@@ -297,7 +297,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
 
   def killAck: Receive = {
     case action: KillAck => 
-      taskManagerListener ! new KillAck(action.slotSeq, action.taskAttemptId)
+      taskConductorListener ! new KillAck(action.slotSeq, action.taskAttemptId)
   }
 
   /**
@@ -329,7 +329,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
         container ! cmd.msg
         commandQueue = rest  
       }
-      afterContainerReady(taskManagerListener)
+      afterContainerReady(taskConductorListener)
     }
   }
 
@@ -339,7 +339,7 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
    * @return Receive is partial function.
    */
   def containerStopped: Receive = {
-    case ContainerStopped => taskManagerListener ! ContainerStopped
+    case ContainerStopped => taskConductorListener ! ContainerStopped
   }
 
   /**
@@ -379,19 +379,19 @@ class Executor(conf: HamaConfiguration, taskManagerListener: ActorRef)
   }
 
   /**
-   * Reply to {@link TaskManager} that slot is occupied!
+   * Reply to {@link TaskConductor} that slot is occupied!
    * @return Receive is partial function.
    */
   protected def occupied: Receive = {
     case result: Occupied => {
       LOG.warning("Slot {} is occupied by {}.", result.getSlotSeq, 
                   result.getTaskAttemptId.toString)
-      taskManagerListener ! result
+      taskConductorListener ! result
     }
   }
 
   protected def report: Receive = {
-    case r: Report => taskManagerListener ! r
+    case r: Report => taskConductorListener ! r
   }
 
   def receive = launchAck orElse occupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownContainer orElse report orElse unknown

@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom.monitor
+package org.apache.hama.monitor.groom
 
 import akka.actor.ActorRef
 import org.apache.hama.bsp.BSPJobID
@@ -33,12 +33,12 @@ import org.apache.hama.util.GroomTasksTrackerLocator
  * - slots occupied by which job relation.
  * - slot master relation. (future)
  */
-final class GroomReporter(conf: HamaConfiguration) extends LocalService 
+// TODO: pass in reporter ref 
+final class GroomCollector(conf: HamaConfiguration) extends LocalService 
                                                    with RemoteService 
                                                    with ActorLocator {
+/* 
   var tracker: ActorRef = _
-
-  //override def configuration: HamaConfiguration = conf
 
   override def initializeServices {
     lookup("groomTasksTracker", 
@@ -47,16 +47,16 @@ final class GroomReporter(conf: HamaConfiguration) extends LocalService
 
   override def afterLinked(proxy: ActorRef) = tracker = proxy
 
-  /**
-   * Receive message from TaskManager reporting GroomServerStat to 
+   * Receive message from TaskConductor reporting GroomServerStat to 
    * {@link GroomTaskTracker}.
-   */
   def report: Receive = {
     case stat: GroomServerStat => { 
       LOG.info("Report {} stat to {}", stat.getName, tracker.path.name)
       tracker ! stat
     }
   }
+   */
 
-  override def receive = report orElse actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = /*report orElse actorReply orElse timeout orElse superviseeIsTerminated orElse */ unknown
 }
+

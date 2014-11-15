@@ -138,7 +138,7 @@ object ActorPathMagnet {
        new ProxyInfo.GroomBuilder(executorName, locator.conf). 
                      createActorPath.
                      appendRootPath(groomName).
-                     appendChildPath("taskManager").
+                     appendChildPath("taskConductor").
                      appendChildPath(executorName).
                      build.
                      getPath

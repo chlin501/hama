@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom.monitor
+package org.apache.hama.monitor.groom
 
 import akka.actor.ActorRef
 import akka.actor.Cancellable
@@ -42,9 +42,10 @@ import scala.util.control.Breaks
 
 
 /**
- * Report sys metrics information.
+ * Collector sys metrics information.
  */
-final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService 
+// TODO: pass in reporter ref.
+final class SysMetricsCollector(conf: HamaConfiguration) extends LocalService 
                                                         with RemoteService 
                                                         with ActorLocator {
   private var tracker: ActorRef = _
@@ -62,8 +63,7 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
     ManagementFactory.getThreadMXBean
   private val M: Long = 1024*1024
 
-  //override def configuration: HamaConfiguration = conf
-
+/*
   override def initializeServices {
     lookup("sysMetricsTracker", 
            locate(SysMetricsTrackerLocator(conf)))
@@ -77,6 +77,7 @@ final class SysMetricsReporter(conf: HamaConfiguration) extends LocalService
       context.system.scheduler.schedule(0.seconds, 5.seconds, tracker, 
                                         sampling)
   }
+*/
 
   def sampling(): MetricsRecord = {
     val record: MetricsRecord = 

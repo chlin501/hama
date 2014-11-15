@@ -17,29 +17,28 @@
  */
 package org.apache.hama.groom
 
-import org.apache.hama.HamaConfiguration
+import akka.actor.ActorRef
 import org.apache.hama.LocalService
-import org.apache.hama.groom.monitor.TasksReporter
-import org.apache.hama.groom.monitor.GroomReporter
-import org.apache.hama.groom.monitor.SysMetricsReporter
+import org.apache.hama.conf.Setting
+import org.apache.hama.monitor.groom.TasksCollector
+import org.apache.hama.monitor.groom.GroomCollector
+import org.apache.hama.monitor.groom.SysMetricsCollector
 import org.apache.hama.monitor.Report
 import org.apache.hama.util.Curator
 
-class Reporter(conf: HamaConfiguration) extends LocalService with Curator {
-
-  //override def configuration: HamaConfiguration = conf
+class Reporter(setting: Setting, groom: ActorRef) 
+      extends LocalService with Curator {
 
   override def initializeServices {
-    getOrCreate("tasksReporter", classOf[TasksReporter], conf)
-    getOrCreate("groomReporter", classOf[GroomReporter], conf)
-    getOrCreate("sysMetricsReporter", classOf[SysMetricsReporter], conf)
-    initializeCurator(conf)
+    initializeCurator(setting.hama)
+    getOrCreate("tasksCollector", classOf[TasksCollector], setting.hama)
+    getOrCreate("groomCollector", classOf[GroomCollector], setting.hama)
+    getOrCreate("sysMetricsCollector", classOf[SysMetricsCollector], setting.hama)
   }
 
   def report: Receive = {
     case r: Report =>  // TODO: write to zk
   }
-
 
   def receive = report orElse unknown
 

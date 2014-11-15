@@ -15,16 +15,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.groom
+package org.apache.hama.monitor
 
-import org.apache.hama.HamaConfiguration
+import org.apache.hama.Agent
+import scala.reflect.runtime.universe
 
-sealed trait ExecutorMessage
+trait Plugin
 
-private[groom] final case class Fork(slotSeq: Int) extends ExecutorMessage
+trait Ganglion {
 
-/**
- * {@link TaskConductor} notifies {@link Executor} to stop
- * {@link Container}.
- */
-private[groom] final case object StopProcess extends ExecutorMessage
+  def load() {
+    val mirror = universe.runtimeMirror(getClass.getClassLoader)
+  }
+
+}
+

@@ -50,7 +50,7 @@ class MockContainer(conf: HamaConfiguration) extends Container(conf)
       val port = mock.conf.getInt("bsp.groom.actor-system.port", 50000)
       val host = mock.conf.get("bsp.groom.actor-system.host", "127.0.0.1")
       val seq = mock.conf.getInt("bsp.child.slot.seq", 1)
-      val addr = ("akka.tcp://%1$s@%2$s:%3$d/user/taskManager/" +
+      val addr = ("akka.tcp://%1$s@%2$s:%3$d/user/taskConductor/" +
                   "groomServer_executor_%4$s").format(actorSystemName, 
                                                       host, 
                                                       port,

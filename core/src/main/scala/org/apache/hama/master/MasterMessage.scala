@@ -34,13 +34,13 @@ private[master] final case object GetMasterId extends MasterMessage
 
 /**
  * This is used to notify Scheduler that a GroomServer's registered.
- * Scheduler can simply use {@link #taskManager} to dispatch tasks.
+ * Scheduler can simply use {@link #taskConductor} to dispatch tasks.
  * @param groomServerName is the GroomServer name .
- * @param taskManager refers to GroomServer's TaskManager.
+ * @param taskConductor refers to GroomServer's TaskConductor.
  * @param maxTasks denote the capacity the GroomServer has upon registration.
  */
 private[master] final case class GroomEnrollment(
-  groomServerName: String, taskManager: ActorRef, maxTasks: Int
+  groomServerName: String, taskConductor: ActorRef, maxTasks: Int
 ) extends MasterMessage
 
 /**

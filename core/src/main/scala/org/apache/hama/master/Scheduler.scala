@@ -53,7 +53,7 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
       extends LocalService with RemoteService {
 
   type GroomServerName = String
-  type TaskManagerRef = ActorRef
+  type TaskConductorRef = ActorRef
   type MaxTasksAllowed = Int
   type TaskAssignQueue = Queue[Job]
   type ProcessingQueue = Queue[Job]
@@ -75,13 +75,6 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
 
   /* Store jobs that finishes its computation. */
   // protected var finishedQueue = Queue[Job]() 
-
-  /** 
-   * This map holds GroomServer name as key to its TaskManager Reference and
-   * maxTasks value. 
-  protected var groomTaskManagers = 
-    Map.empty[GroomServerName, (TaskManagerRef, MaxTasksAllowed)]
-   */
 
   var taskAssignQueueChecker: Cancellable = _
 
@@ -144,24 +137,23 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
     val groomServers = job.getTargets  
     var from = Queue[Job](); var to = Queue[Job]()
     groomServers.foreach( groomName => {
-      //LOG.debug("Check if groomTaskManagers cache contains {}", groomName)
-      val (taskManagerActor, maxTasksAllowed) = (null, 0)
-        //groomTaskManagers.getOrElse(groomName, (null, 0)) 
-      if(null != taskManagerActor) { // TODO: warning for the above line!!!
-        LOG.debug("GroomServer's taskManager {} found!", groomName)
+      val (taskConductorActor, maxTasksAllowed) = (null, 0)
+        //groomTaskConductors.getOrElse(groomName, (null, 0)) 
+      if(null != taskConductorActor) { // TODO: warning for the above line!!!
+        LOG.debug("GroomServer's taskConductor {} found!", groomName)
         val currentTaskScheduled = job.getTaskCountFor(groomName)
         if(maxTasksAllowed < currentTaskScheduled)
           throw new IllegalStateException("Current tasks "+currentTaskScheduled+
                                           " for "+groomName+" exceeds "+
                                           maxTasksAllowed)
         if((currentTaskScheduled+1) <= maxTasksAllowed)  
-          to = bookThenDispatch(job, taskManagerActor, groomName, dispatch)
+          to = bookThenDispatch(job, taskConductorActor, groomName, dispatch)
         else throw new RuntimeException("Can't assign task because currently "+
                                         currentTaskScheduled+" tasks scheduled"+
                                         " to groom server "+groomName+", "+
                                         "which allows "+maxTasksAllowed+
                                         " tasks to run.")
-      } else LOG.warning("Can't find taskManager for {}", groomName)
+      } else LOG.warning("Can't find taskConductor for {}", groomName)
     })
     if(!to.isEmpty) from = rest else from = from.enqueue(job)
     LOG.debug("In schedule function, from queue: {} to queue: {}", from, to)
@@ -173,13 +165,13 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
    * the task to that {@link GroomServer}.
    * Also if all tasks are assigned, cleanup the task assign queue.
    * @param job contains tasks to be scheduled.
-   * @param targetActor is the remote GroomServer's {@link TaskManager}.
+   * @param targetActor is the remote GroomServer's {@link TaskConductor}.
    * @param targetGroomServer to which the task will be scheduled.
    * @param d is the dispatch function.
    */
-  def bookThenDispatch(job: Job, targetActor: TaskManagerRef,  
+  def bookThenDispatch(job: Job, targetActor: TaskConductorRef,  
                        targetGroomServer: String, 
-                       d: (TaskManagerRef, Action, Task) => Unit): 
+                       d: (TaskConductorRef, Action, Task) => Unit): 
       ProcessingQueue = {
     var to = Queue[Job]()
     unassignedTask(job) match {
@@ -202,7 +194,7 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
    * @param action denotes what action will be performed upon the task.
    * @param task is the task to be executed.
    */
-  protected def dispatch(from: TaskManagerRef, action: Action, task: Task) {
+  protected def dispatch(from: TaskConductorRef, action: Action, task: Task) {
     from ! new Directive(action, task,  
                          conf.get("master.name", "bspmaster"))  
   }
@@ -216,17 +208,7 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
   }
 
   /**
-   * From GroomManager to notify a groom server's task manager is ready for
-   * receiving tasks.
-  def enrollment: Receive = {
-    case GroomEnrollment(groomServerName, taskManager, maxTasks) => {
-      groomTaskManagers ++= Map(groomServerName -> (taskManager, maxTasks)) 
-    }
-  }
-   */
-
-  /**
-   * GroomServer's TaskManager requests for assigning a task.
+   * GroomServer's TaskConductor requests for assigning a task.
    * @return Receive partiail function.
    */
   def requestTask: Receive = {
@@ -241,11 +223,11 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
    * Assign function follows after schedule one, it means th rest unassigned
    * tasks are all for passive.
    * @param groomServerStat is the most recent stat of a GroomServer.
-   * @param taskManager refers to the remote GroomServer TaskManager instance.
+   * @param taskConductor refers to the remote GroomServer TaskConductor instance.
    */
-  def passiveAssign(stat: GroomServerStat, taskManager: ActorRef) {
+  def passiveAssign(stat: GroomServerStat, taskConductor: ActorRef) {
       val (from, to) = 
-        assign(stat, taskAssignQueue, taskManager, dispatch) 
+        assign(stat, taskAssignQueue, taskConductor, dispatch) 
       this.taskAssignQueue = from
       if(!to.isEmpty) 
         this.processingQueue = processingQueue.enqueue(to.dequeue._1)
@@ -259,7 +241,7 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
    * dispatch function, which normally uses actor ! message.
    */
   def assign(stat: GroomServerStat, fromQueue: TaskAssignQueue, 
-             taskManager: ActorRef, d: (ActorRef, Action, Task) => Unit): 
+             taskConductor: ActorRef, d: (ActorRef, Action, Task) => Unit): 
       (TaskAssignQueue, ProcessingQueue) = {
     if(!fromQueue.isEmpty) {
       val (job, rest) = fromQueue.dequeue 
@@ -271,7 +253,7 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
                                         " for "+stat.getName+" exceeds "+
                                         stat.getMaxTasks+" allowed.")
       if((currentTaskAssigned+1) <= stat.getMaxTasks) 
-        to = bookThenDispatch(job, taskManager, stat.getName, d) 
+        to = bookThenDispatch(job, taskConductor, stat.getName, d) 
       else 
         LOG.warning("Drop GroomServer {} task request for only {} slots are "+
                     "available and are full.", 

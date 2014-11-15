@@ -28,12 +28,12 @@ import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
+import org.apache.hama.conf.Setting
 import org.apache.hama.master._
 import org.apache.hama.master.Directive._
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.Report
 import org.apache.hama.util.ActorLocator
-//import org.apache.hama.util.GroomManagerLocator
 import org.apache.hama.util.SchedulerLocator
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
@@ -41,14 +41,14 @@ import scala.concurrent.duration.FiniteDuration
 
 // TODO: create Spec class (extends writable) with slot, max task, etc. info
 //       once started up, pass spec to reporter, which reports to monitor.
-class TaskManager(conf: HamaConfiguration, reporter: ActorRef) 
+class TaskConductor(setting: Setting, groom: ActorRef, reporter: ActorRef) 
       extends LocalService with RemoteService with ActorLocator {
 
-  val groomServerHost = conf.get("bsp.groom.address", "127.0.0.1")
-  val groomServerPort = conf.getInt("bsp.groom.port", 50000)
+  val groomServerHost = setting.hama.get("bsp.groom.address", "127.0.0.1")
+  val groomServerPort = setting.hama.getInt("bsp.groom.port", 50000)
   val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
-  val maxTasks = conf.getInt("bsp.tasks.maximum", 3) 
-  val bspmaster = conf.get("master.name", "bspmaster")
+  val maxTasks = setting.hama.getInt("bsp.tasks.maximum", 3) 
+  val bspmaster = setting.hama.get("master.name", "bspmaster")
 
   // TODO: refactor
   var sched: ActorRef = _
@@ -77,7 +77,7 @@ class TaskManager(conf: HamaConfiguration, reporter: ActorRef)
   protected def getGroomServerPort(): Int = groomServerPort
   protected def getMaxTasks(): Int = maxTasks
 
-  protected def getSchedulerPath: String = locate(SchedulerLocator(conf))
+  protected def getSchedulerPath: String = locate(SchedulerLocator(setting.hama))
 
   /**
    * Initialize slots with default slots value to 3, which comes from maxTasks,
@@ -93,8 +93,7 @@ class TaskManager(conf: HamaConfiguration, reporter: ActorRef)
 
   override def initializeServices {
     initializeSlots(getMaxTasks)
-    lookup("sched", locate(SchedulerLocator(conf)))
-    //lookup("groomManager", locate(GroomManagerLocator(conf)))
+    lookup("sched", locate(SchedulerLocator(setting.hama)))
   }
 
   def hasTaskInQueue: Boolean = !directiveQueue.isEmpty
@@ -127,11 +126,6 @@ class TaskManager(conf: HamaConfiguration, reporter: ActorRef)
       } 
       case _ => LOG.warning("Linking to an unknown proxy {}", proxy.path.name)
     }
-  }
-
-  override def offline(target: ActorRef) {
-    // TODO: if only groomManager actor fails, simply re-"lookup" will fail.
-    //lookup("groomManager", locate(GroomManagerLocator(conf)))
   }
 
   /**
@@ -216,11 +210,11 @@ class TaskManager(conf: HamaConfiguration, reporter: ActorRef)
     pickUp match {
       case Some(slot) => { 
         LOG.debug("Initialize executor for slot seq {}.", slot.seq)
-        val executorName = conf.get("bsp.groom.name", "groomServer") +
+        val executorName = setting.hama.get("bsp.groom.name", "groomServer") +
                            "_executor_" + slot.seq 
         // TODO: move to spawn()
         val executor = context.actorOf(Props(classOf[Executor], 
-                                             conf,
+                                             setting.hama,
                                              self),
                                        executorName)
         executor ! Fork(slot.seq) 
