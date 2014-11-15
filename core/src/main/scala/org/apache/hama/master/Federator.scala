@@ -22,7 +22,8 @@ import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.conf.Setting
-import org.apache.hama.monitor.Tracker
+import org.apache.hama.monitor.Ganglion
+import org.apache.hama.monitor.Plugin
 import org.apache.hama.monitor.master.GroomTasksTracker
 import org.apache.hama.monitor.master.JobTasksTracker
 import org.apache.hama.monitor.master.SysMetricsTracker
@@ -40,46 +41,27 @@ object Federator {
 }
 
 
-class Federator(setting: Setting) extends LocalService {
+class Federator(setting: Setting) extends Ganglion with LocalService {
 
   import Federator._
 
   override def initializeServices {
     val defaultClasses = setting.hama.get("monitor.default.classes", 
                                           defaultTrackers.mkString(","))
-    load(defaultClasses).foreach( option => option.map { tracker => {
-       LOG.debug("Default trakcer to be instantiated: {}", tracker)
-       getOrCreate(tracker.getName, tracker, 
-                   new HamaConfiguration(setting.hama)) 
-    }})
+    load(defaultClasses).foreach( plugin => { 
+       LOG.debug("Default trakcer to be instantiated: {}", plugin)
+       getOrCreate(plugin.getName, plugin, new HamaConfiguration(setting.hama)) 
+    })
     LOG.debug("Finish loading default trackers ...")
 
     val classes = setting.hama.get("monitor.classes")
     val nonDefault = load(classes)
-    nonDefault.foreach( option => option.map { tracker => {
-       LOG.debug("Non default trakcer to be instantiated: {}", tracker)
-       getOrCreate(tracker.getName, tracker, 
-                   new HamaConfiguration(setting.hama)) 
-    }})
+    nonDefault.foreach( plugin => {
+       LOG.debug("Non default trakcer to be instantiated: {}", plugin)
+       getOrCreate(plugin.getName, plugin, new HamaConfiguration(setting.hama)) 
+    })
     LOG.debug("Finish loading {} non default trackers ...", nonDefault.size)
   }
-
-  protected def load(classes: String): Seq[Option[Class[Tracker]]] = 
-    if(null == classes || classes.isEmpty) Seq()
-    else {
-      val classNames = classes.split(",")
-      classNames.map { className => {
-        LOG.debug("ClassName to be loaded is {}", className)
-        val clazz = Class.forName(className.trim)
-        classOf[Tracker].isAssignableFrom(clazz) match {
-          case true => clazz match {
-            case tracker: Class[Tracker] => Some(tracker)
-            case _ => None
-          }
-          case false => None
-        }
-      }}.toSeq
-    }
 
   protected def listTrackers: Receive = {
     case ListTrackers => replyTrackers(sender) 

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.monitor;
-
+/*
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -95,3 +95,4 @@ public class TestFederator extends TestCase {
   }
 
 }
+*/

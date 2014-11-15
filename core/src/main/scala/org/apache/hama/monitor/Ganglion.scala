@@ -18,15 +18,27 @@
 package org.apache.hama.monitor
 
 import org.apache.hama.Agent
-import scala.reflect.runtime.universe
 
-trait Plugin
+trait Plugin extends Agent
+
+trait Tracker extends Plugin 
+
+trait Collector extends Plugin 
 
 trait Ganglion {
 
-  def load() {
-    val mirror = universe.runtimeMirror(getClass.getClassLoader)
-  }
+  protected def load(classes: String): Seq[Class[Plugin]] =
+    if(null == classes || classes.isEmpty) Seq()
+    else {
+      val classNames = classes.split(",")
+      classNames.map { className => {
+        val clazz = Class.forName(className.trim)
+        classOf[Plugin] isAssignableFrom clazz match {
+          case true => Option(clazz.asInstanceOf[Class[Plugin]])
+          case false => None
+        }
+      }}.toSeq.filter { e => !None.equals(e) }.map { e => e.getOrElse(null) }
+    }
 
 }
 
