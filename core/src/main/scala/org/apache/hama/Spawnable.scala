@@ -23,7 +23,7 @@ import akka.actor.Props
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
-trait Spawnable { this: Actor => 
+trait Spawnable { this: Agent => 
 
   /**
    * Spawn a child.

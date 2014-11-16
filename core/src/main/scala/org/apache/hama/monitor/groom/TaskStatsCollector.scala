@@ -18,6 +18,7 @@
 package org.apache.hama.monitor.groom
 
 import akka.actor.ActorRef
+import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
@@ -26,14 +27,17 @@ import org.apache.hama.monitor.Collector
 /**
  * Collector tasks status to JobTasksTracker.
  */
-final class TaskStatsCollector(conf: HamaConfiguration, reporter: ActorRef) 
-      extends Collector {
+final class TaskStatsCollector extends Collector {
+
+  override def initialize() { }
+
+  override def collect(): Writable = null.asInstanceOf[Writable]
 
 /*
   def aNewTask: Receive = {
     case newTask: Task => reporter ! newTask
   }
 
-*/
   override def receive = unknown
+*/
 }

@@ -17,7 +17,6 @@
  */
 package org.apache.hama
 
-import akka.actor.Actor
 import akka.actor.Cancellable
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -29,7 +28,7 @@ sealed trait RetryMessages
 final case class Retry[R](name: String, count: Int, f:() => R) 
       extends RetryMessages
 
-trait Retryable { this: Actor => 
+trait Retryable { this: Agent => 
 
   protected var retryCancellables = Map.empty[String, Cancellable]
 

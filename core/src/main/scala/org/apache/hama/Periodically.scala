@@ -17,7 +17,6 @@
  */
 package org.apache.hama
 
-import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Cancellable
 import scala.concurrent.duration.FiniteDuration
@@ -26,7 +25,7 @@ import scala.concurrent.duration.DurationInt
 sealed trait Tick
 final case object Ticker extends Tick
 
-trait Periodically { this: Actor => 
+trait Periodically { this: Agent => 
 
   protected def tick(target: ActorRef, message: Tick, 
                      initial: FiniteDuration = 0.seconds,

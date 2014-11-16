@@ -18,9 +18,9 @@
 package org.apache.hama.monitor.groom
 
 import akka.actor.ActorRef
+import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.HamaConfiguration
 import org.apache.hama.monitor.Collector
 import org.apache.hama.groom.GroomServerStat // TODO: rename
 
@@ -30,8 +30,12 @@ import org.apache.hama.groom.GroomServerStat // TODO: rename
  * - slots occupied by which job relation.
  * - slot master relation. (future)
  */
-final class GroomStatsCollector(conf: HamaConfiguration, reporter: ActorRef) 
-      extends Collector {
+final class GroomStatsCollector extends Collector {
+
+  override def initialize() { }
+
+  override def collect(): Writable = null.asInstanceOf[Writable]
+
   /**
    * Receive message from TaskCounsellor reporting GroomServerStat to 
    * {@link GroomTaskTracker}.
@@ -41,8 +45,8 @@ final class GroomStatsCollector(conf: HamaConfiguration, reporter: ActorRef)
       reporter ! stat
     }
   }
-   */
 
   override def receive = unknown
+   */
 }
 

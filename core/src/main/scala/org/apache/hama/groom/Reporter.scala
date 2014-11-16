@@ -22,6 +22,8 @@ import org.apache.hama.LocalService
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Ganglion
+import org.apache.hama.monitor.Plugin
+import org.apache.hama.monitor.WrappedCollector
 import org.apache.hama.monitor.groom.TaskStatsCollector
 import org.apache.hama.monitor.groom.GroomStatsCollector
 import org.apache.hama.monitor.groom.JvmStatsCollector
@@ -43,19 +45,17 @@ class Reporter(setting: Setting, groom: ActorRef)
   override def initializeServices {
     val defaultClasses = setting.hama.get("reporter.default.plugin.classes",
                                           defaultReporters.mkString(","))
-    load(defaultClasses).foreach( plugin => {
+    load(setting.hama, defaultClasses).foreach( plugin => {
        LOG.debug("Default reporter to be instantiated: {}", plugin)
-       getOrCreate(plugin.getName, plugin, new HamaConfiguration(setting.hama),
-                   self)
+       getOrCreate(plugin.name, classOf[WrappedCollector], self, plugin)
     })
     LOG.debug("Finish loading default reporters ...")
 
     val classes = setting.hama.get("reporter.plugin.classes")
-    val nonDefault = load(classes)
+    val nonDefault = load(setting.hama, classes)
     nonDefault.foreach( plugin => {
        LOG.debug("Non default trakcer to be instantiated: {}", plugin)
-       getOrCreate(plugin.getName, plugin, new HamaConfiguration(setting.hama),
-                   self)
+       getOrCreate(plugin.name, classOf[WrappedCollector], self, plugin)
     })
     LOG.debug("Finish loading {} non default reporters ...", nonDefault.size)
 

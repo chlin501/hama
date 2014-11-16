@@ -22,7 +22,7 @@ import org.apache.hama.TestEnv
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.master.GroomTasksTracker
 import org.apache.hama.monitor.master.JobTasksTracker
-import org.apache.hama.monitor.master.SysMetricsTracker
+import org.apache.hama.monitor.master.JvmStatsTracker
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 

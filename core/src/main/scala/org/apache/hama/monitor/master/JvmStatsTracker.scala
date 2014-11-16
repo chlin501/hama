@@ -21,8 +21,11 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.monitor.Tracker
 import org.apache.hama.monitor.metrics.MetricsRecord
 
-final class SysMetricsTracker(conf: HamaConfiguration) extends Tracker {
+final class JvmStatsTracker extends Tracker {
 
+  override def initialize() { }
+
+/*
   type GroomName = String
 
   private var sysMetricsStat = Set.empty[MetricsRecord]
@@ -36,4 +39,5 @@ final class SysMetricsTracker(conf: HamaConfiguration) extends Tracker {
   }
 
   override def receive = metricsRecord orElse unknown
+*/
 }

@@ -18,7 +18,7 @@
 package org.apache.hama.util
 
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.monitor.master.SysMetricsTracker
+import org.apache.hama.monitor.master.JvmStatsTracker
 import org.apache.hama.monitor.master.GroomTasksTracker
 import org.apache.hama.monitor.master.JobTasksTracker
 import org.apache.hama.master.Scheduler
@@ -57,7 +57,7 @@ trait ActorLocator {
 
 final case class MasterLocator(info: ProxyInfo)
 // TODO: remove? 
-final case class SysMetricsTrackerLocator(conf: HamaConfiguration)
+final case class JvmStatsTrackerLocator(conf: HamaConfiguration)
 final case class GroomTasksTrackerLocator(conf: HamaConfiguration)
 final case class JobTasksTrackerLocator(conf: HamaConfiguration)
 final case class SchedulerLocator(conf: HamaConfiguration)
@@ -73,7 +73,7 @@ object ActorPathMagnet {
   }
 
   // TODO: need refactor for retrieving path 
-  implicit def locateSmr(locator: SysMetricsTrackerLocator) = 
+  implicit def locateSmr(locator: JvmStatsTrackerLocator) = 
       new ActorPathMagnet {
     type Path = String
     def apply(): Path = {
@@ -81,7 +81,7 @@ object ActorPathMagnet {
                     createActorPath.
                     appendRootPath("bspmaster"). // TODO: from setting
                     appendChildPath("monitor").
-                    appendChildPath("SysMetricsTracker").
+                    appendChildPath("JvmStatsTracker").
                     build.
                     getPath
     }

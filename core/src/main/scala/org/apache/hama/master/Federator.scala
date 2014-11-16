@@ -24,9 +24,10 @@ import org.apache.hama.LocalService
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Ganglion
 import org.apache.hama.monitor.Plugin
+import org.apache.hama.monitor.WrappedTracker
 import org.apache.hama.monitor.master.GroomTasksTracker
 import org.apache.hama.monitor.master.JobTasksTracker
-import org.apache.hama.monitor.master.SysMetricsTracker
+import org.apache.hama.monitor.master.JvmStatsTracker
 
 sealed trait FederatorMessages
 final case object ListTrackers extends FederatorMessages
@@ -36,7 +37,7 @@ final case class TrackersAvailable(services: Seq[String])
 object Federator {
 
    val defaultTrackers = Seq(classOf[GroomTasksTracker].getName, 
-     classOf[JobTasksTracker].getName, classOf[SysMetricsTracker].getName)
+     classOf[JobTasksTracker].getName, classOf[JvmStatsTracker].getName)
 
 }
 
@@ -47,17 +48,17 @@ class Federator(setting: Setting) extends Ganglion with LocalService {
   override def initializeServices {
     val defaultClasses = setting.hama.get("federator.default.plugin.classes", 
                                           defaultTrackers.mkString(","))
-    load(defaultClasses).foreach( plugin => { 
+    load(setting.hama, defaultClasses).foreach( plugin => { 
        LOG.debug("Default trakcer to be instantiated: {}", plugin)
-       getOrCreate(plugin.getName, plugin, new HamaConfiguration(setting.hama)) 
+       getOrCreate(plugin.name, classOf[WrappedTracker], self, plugin) 
     })
     LOG.debug("Finish loading default trackers ...")
 
     val classes = setting.hama.get("federator.plugin.classes")
-    val nonDefault = load(classes)
+    val nonDefault = load(setting.hama, classes)
     nonDefault.foreach( plugin => {
        LOG.debug("Non default trakcer to be instantiated: {}", plugin)
-       getOrCreate(plugin.getName, plugin, new HamaConfiguration(setting.hama)) 
+       getOrCreate(plugin.name, classOf[WrappedTracker], self, plugin) 
     })
     LOG.debug("Finish loading {} non default trackers ...", nonDefault.size)
   }

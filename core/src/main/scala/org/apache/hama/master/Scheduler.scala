@@ -27,7 +27,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
-import org.apache.hama.monitor.master.AskGroomServerStat
+//import org.apache.hama.monitor.master.AskGroomServerStat
 import org.apache.hama.RemoteService
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt

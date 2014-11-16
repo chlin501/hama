@@ -26,24 +26,23 @@ import org.apache.hama.monitor.Tracker
  * Ask {@link GroomTasksTracker} for corresponded GroomServerStat(s).
  * @param groomServers is the target to which tasks will be scheduled.
  * @param from denotes who sends this request.
- */
 final case class AskGroomServerStat(groomServers: Array[String],
                                     from: ActorRef)
+ */
 
-final class GroomTasksTracker(conf: HamaConfiguration) extends Tracker {
+final class GroomTasksTracker extends Tracker {
+
+  override def initialize() { }
  
+/*
   private var groomTasksStat = Set.empty[GroomServerStat]
 
-  /**
    * Receive {@link GroomServerStat} report from {@link GroomReporter}.
-   */
   private def renewGroomServerStat: Receive = {
     case stat: GroomServerStat => groomTasksStat ++= Set(stat)
   }
   
-  /**
    * Find corresponded {@link GroomServerStat}. 
-   */
   private def askGroomServerStat: Receive = {
     case AskGroomServerStat(grooms, from) => {
       var stats = Set.empty[GroomServerStat]  
@@ -60,4 +59,5 @@ final class GroomTasksTracker(conf: HamaConfiguration) extends Tracker {
   }
 
   override def receive = renewGroomServerStat orElse askGroomServerStat orElse unknown
+*/
 }

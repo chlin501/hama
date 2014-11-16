@@ -18,50 +18,97 @@
 package org.apache.hama.monitor
 
 import akka.actor.Actor
+import akka.actor.ActorRef
+import org.apache.hadoop.io.Writable
 import org.apache.hama.Agent
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.Periodically
+import org.apache.hama.Tick
+import org.apache.hama.logging.CommonLog
 
-/*
-protected calss CollectorWrapper(conf: HamaConfiguration, 
-                                 collector: Collector) extends Actor {
+sealed trait CollectorMessages
+// from : plugin name
+final case class Stats(from: String, data: Writable) extends CollectorMessages // extends writable
 
-  def initialize()
+class WrappedCollector(reporter: ActorRef, collector: Collector) 
+      extends Agent with Periodically {
 
-  // schedule to periodically call collect function.
+  override def preStart() = collector.initialize
+
+  override def ticker(tick: Tick) = {
+    val stats = collector.collect()
+    // TODO: send to reporter which in turn sends to groom then master and tracker
+    //reporter ! Stats(collector.name, stats) 
+  }
+
+  override def receive = tickMessage orElse unknown
 
 }
 
-protected class TrackerWrapper(conf: HamaConfiguration, tracker: Tracker) 
-*/
+class WrappedTracker(federator: ActorRef, tracker: Tracker) extends Agent {
 
-trait Plugin extends Agent 
+  override def preStart() = tracker.initialize
+  
+  // TODO: see Tracker TODO
+
+  override def receive = unknown
+
+}
+
+trait Plugin extends CommonLog { 
+
+  protected var conf: HamaConfiguration = new HamaConfiguration
+
+  def name(): String = getClass.getName
+
+  def initialize 
+
+  def configuration(): HamaConfiguration = conf
+
+  def setConfiguration(conf: HamaConfiguration) = this.conf = conf
+
+}
 
 /**
- * Track specific stats from grooms.
+ * Track specific stats from grooms and react if necessary.
  */
-trait Tracker extends Plugin 
+trait Tracker extends Plugin {
+
+  // TODO: list current master service
+  //       ability to receive message from groom (master on behalf of groom)
+  //       react function
+
+  // def whenReceived(msg: Writable) {
+    // need ability to know services available and send to target  
+     //trigger to notify target(where target is mater service actor ref name)
+  //}
+
+}
 
 /**
  * Collect specific groom stats.
  */
-trait Collector extends Plugin /* {
+trait Collector extends Plugin {
 
-  def initialize 
+  def collect(): Writable 
 
-  def collect(msg: Any): Any
-
-} */
+} 
 
 // TODO: add quartz scheduler in the future
 trait Ganglion {
 
-  protected def load(classes: String): Seq[Class[Plugin]] =
+  protected def load(conf: HamaConfiguration, classes: String): Seq[Plugin] =
     if(null == classes || classes.isEmpty) Seq()
     else {
       val classNames = classes.split(",")
       classNames.map { className => {
         val clazz = Class.forName(className.trim)
         classOf[Plugin] isAssignableFrom clazz match {
-          case true => Option(clazz.asInstanceOf[Class[Plugin]])
+          case true => {
+            val instance = clazz.asInstanceOf[Class[Plugin]].newInstance
+            instance.setConfiguration(conf)
+            Option(instance)
+          }
           case false => None
         }
       }}.toSeq.filter { e => !None.equals(e) }.map { e => e.getOrElse(null) }

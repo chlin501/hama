@@ -22,8 +22,11 @@ import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.monitor.Tracker
 
-final class JobTasksTracker(conf: HamaConfiguration) extends Tracker {
+final class JobTasksTracker extends Tracker {
 
+  override def initialize() { }
+
+/*
   private var tasksStat = Map.empty[BSPJobID, Set[Task]]
 
   private def reportTask: Receive = {
@@ -39,5 +42,6 @@ final class JobTasksTracker(conf: HamaConfiguration) extends Tracker {
   }
 
   override def receive = reportTask orElse unknown
+*/
 
 }

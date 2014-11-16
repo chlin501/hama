@@ -18,23 +18,16 @@
 package org.apache.hama.groom
 
 import akka.actor.ActorRef
-//import akka.actor.AddressFromURIString
-//import akka.actor.Cancellable
-import akka.actor.Deploy
-import akka.actor.Props
-import akka.remote.RemoteScope
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
-import org.apache.hama.RemoteService
+import org.apache.hama.Service
+import org.apache.hama.Agent
+import org.apache.hama.Spawnable
 import org.apache.hama.conf.Setting
 import org.apache.hama.master._
 import org.apache.hama.master.Directive._
 import org.apache.hama.master.Directive.Action._
-import org.apache.hama.monitor.Report
-import org.apache.hama.util.ActorLocator
-import org.apache.hama.util.SchedulerLocator
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -42,8 +35,9 @@ import scala.concurrent.duration.FiniteDuration
 // TODO: create Spec class (extends writable) with slot, max task, etc. info
 //       once started up, pass spec to reporter, which reports to monitor.
 class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef) 
-      extends LocalService with RemoteService with ActorLocator {
+      extends Service with Spawnable {
 
+  // TODO: refactor naming stuff!
   val groomServerHost = setting.hama.get("bsp.groom.address", "127.0.0.1")
   val groomServerPort = setting.hama.getInt("bsp.groom.port", 50000)
   val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
@@ -51,9 +45,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   val bspmaster = setting.hama.get("master.name", "bspmaster")
 
   // TODO: refactor
-  var sched: ActorRef = _
-  //var cancellable: Cancellable = _
-  var groomManager: ActorRef = _
+  //var sched: ActorRef = _
 
   /**
    * The max size of slots can't exceed configured maxTasks.
@@ -71,13 +63,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected var pendingQueue = Queue[Directive]()
 
-  /* can be overriden in test. */
+  /* can be overriden in test. */ // TODO: refactor naming stuff!!!
   protected def getGroomServerName(): String = groomServerName
   protected def getGroomServerHost(): String = groomServerHost
   protected def getGroomServerPort(): Int = groomServerPort
   protected def getMaxTasks(): Int = maxTasks
-
-  protected def getSchedulerPath: String = locate(SchedulerLocator(setting.hama))
 
   /**
    * Initialize slots with default slots value to 3, which comes from maxTasks,
@@ -91,10 +81,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     LOG.debug("{} GroomServer slots are initialied.", constraint)
   }
 
-  override def initializeServices {
-    initializeSlots(getMaxTasks)
-    //lookup("sched", locate(SchedulerLocator(setting.hama)))
-  }
+  override def initializeServices = initializeSlots(getMaxTasks)
 
   def hasTaskInQueue: Boolean = !directiveQueue.isEmpty
 
@@ -114,20 +101,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     hasFreeSlot
   }
 
-  override def afterLinked(proxy: ActorRef) = {
-    proxy.path.name match {
-      case "sched" => {
-        sched = proxy  
-        //cancellable = request(self, TaskRequest)
-      } 
-      case "groomManager" => { // register
-        groomManager = proxy
-        groomManager ! currentGroomServerStat
-      } 
-      case _ => LOG.warning("Linking to an unknown proxy {}", proxy.path.name)
-    }
-  }
-
   /**
    * Check if slots are available and any unprocessed directive in queue. When
    * slots are free but any directives exist, process directive first. 
@@ -135,12 +108,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   def taskRequest: Receive = {
     case TaskRequest => {
-      LOG.debug("In TaskRequest, sched: {}, hasTaskInQueue: {}, "+
-                "hasFreeSlots: {}", sched, hasTaskInQueue, hasFreeSlots)
+      //LOG.debug("In TaskRequest, sched: {}, hasTaskInQueue: {}, "+
+                //"hasFreeSlots: {}", sched, hasTaskInQueue, hasFreeSlots)
       if(hasFreeSlots) { 
         if(!hasTaskInQueue) { 
-          LOG.debug("Request {} for assigning new tasks ...", getSchedulerPath)
-          sched ! RequestTask(currentGroomServerStat)
+          //LOG.debug("Request {} for assigning new tasks ...", getSchedulerPath)
+          //sched ! RequestTask(currentGroomServerStat) TODO: groom on behalf of sending request to master. instead of lookup and send directly.
         } 
       } 
     }
@@ -212,11 +185,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
         LOG.debug("Initialize executor for slot seq {}.", slot.seq)
         val executorName = setting.hama.get("bsp.groom.name", "groomServer") +
                            "_executor_" + slot.seq 
-        // TODO: move to spawn()
-        val executor = context.actorOf(Props(classOf[Executor], 
-                                             setting.hama,
-                                             self),
-                                       executorName)
+        val executor = spawn(executorName, classOf[Executor], setting.hama, 
+                             self)
         executor ! Fork(slot.seq) 
         val newSlot = Slot(slot.seq, None, master, Some(executor))
         slots -= slot
@@ -497,10 +467,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   def postContainerStopped(executor: ActorRef) {}
 
-  def report: Receive = {
-    case r: Report => reporter ! r
-  }
-
-  override def receive = launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse taskRequest orElse receiveDirective orElse actorReply orElse timeout orElse superviseeIsTerminated orElse report orElse unknown
+  override def receive = launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse taskRequest orElse receiveDirective orElse unknown
 
 }

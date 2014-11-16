@@ -27,6 +27,7 @@ import java.lang.management.ThreadMXBean
 import java.lang.Thread.State._
 import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.LongWritable
+import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.monitor.Collector
 import org.apache.hama.monitor.metrics.Metric
@@ -37,8 +38,7 @@ import scala.util.control.Breaks
 /**
  * Collector jvm metrics information.
  */
-final class JvmStatsCollector(conf: HamaConfiguration, reporter: ActorRef) 
-      extends Collector {
+final class JvmStatsCollector extends Collector {
 
   private val memoryMXBean: MemoryMXBean = 
     ManagementFactory.getMemoryMXBean
@@ -47,6 +47,10 @@ final class JvmStatsCollector(conf: HamaConfiguration, reporter: ActorRef)
   private val threadMXBean: ThreadMXBean = 
     ManagementFactory.getThreadMXBean
   private val M: Long = 1024*1024
+
+  override def initialize() { }
+
+  override def collect(): Writable = sampling
 
   def sampling(): MetricsRecord = {
     val record: MetricsRecord = 
@@ -57,7 +61,7 @@ final class JvmStatsCollector(conf: HamaConfiguration, reporter: ActorRef)
     record
   }
 
-  override def receive = unknown
+//  override def receive = unknown
 
   private def memory(record: MetricsRecord ) {
     val memNonHeap: MemoryUsage = memoryMXBean.getNonHeapMemoryUsage
