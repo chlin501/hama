@@ -21,11 +21,8 @@ import akka.actor.ActorRef
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
-import org.apache.hama.RemoteService
-import org.apache.hama.groom.GroomServerStat
-import org.apache.hama.util.ActorLocator
-import org.apache.hama.util.GroomTasksTrackerLocator
+import org.apache.hama.monitor.Collector
+import org.apache.hama.groom.GroomServerStat // TODO: rename
 
 /**
  * Report GroomServer information.
@@ -33,30 +30,19 @@ import org.apache.hama.util.GroomTasksTrackerLocator
  * - slots occupied by which job relation.
  * - slot master relation. (future)
  */
-// TODO: pass in reporter ref 
-final class GroomCollector(conf: HamaConfiguration) extends LocalService 
-                                                   with RemoteService 
-                                                   with ActorLocator {
-/* 
-  var tracker: ActorRef = _
-
-  override def initializeServices {
-    lookup("groomTasksTracker", 
-           locate(GroomTasksTrackerLocator(conf)))
-  }
-
-  override def afterLinked(proxy: ActorRef) = tracker = proxy
-
+final class GroomStatsCollector(conf: HamaConfiguration, reporter: ActorRef) 
+      extends Collector {
+  /**
    * Receive message from TaskCounsellor reporting GroomServerStat to 
    * {@link GroomTaskTracker}.
   def report: Receive = {
     case stat: GroomServerStat => { 
-      LOG.info("Report {} stat to {}", stat.getName, tracker.path.name)
-      tracker ! stat
+      LOG.info("Report {} stat to {}", stat.getName, reporter.path.name)
+      reporter ! stat
     }
   }
    */
 
-  override def receive = /*report orElse actorReply orElse timeout orElse superviseeIsTerminated orElse */ unknown
+  override def receive = unknown
 }
 

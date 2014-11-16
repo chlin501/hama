@@ -21,32 +21,19 @@ import akka.actor.ActorRef
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
-import org.apache.hama.RemoteService
-import org.apache.hama.util.ActorLocator
-import org.apache.hama.util.JobTasksTrackerLocator
+import org.apache.hama.monitor.Collector
 
 /**
  * Collector tasks status to JobTasksTracker.
  */
-// TODO: pass in reporter ref.
-final class TasksCollector(conf: HamaConfiguration) extends LocalService 
-                                                   with RemoteService 
-                                                   with ActorLocator {
+final class TaskStatsCollector(conf: HamaConfiguration, reporter: ActorRef) 
+      extends Collector {
 
 /*
-  var tracker: ActorRef = _
-
-  override def initializeServices {
-    lookup("jobTasksTracker", locate(JobTasksTrackerLocator(conf)))
-  }
-
-  override def afterLinked(proxy: ActorRef) = tracker = proxy
-
   def aNewTask: Receive = {
-    case newTask: Task => tracker ! newTask
+    case newTask: Task => reporter ! newTask
   }
 
 */
-  override def receive = /*aNewTask orElse actorReply orElse timeout orElse*/ unknown
+  override def receive = unknown
 }

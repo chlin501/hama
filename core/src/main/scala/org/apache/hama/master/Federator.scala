@@ -35,18 +35,17 @@ final case class TrackersAvailable(services: Seq[String])
 
 object Federator {
 
-   def defaultTrackers(): Seq[String] = Seq(classOf[GroomTasksTracker].getName, 
+   val defaultTrackers = Seq(classOf[GroomTasksTracker].getName, 
      classOf[JobTasksTracker].getName, classOf[SysMetricsTracker].getName)
 
 }
-
 
 class Federator(setting: Setting) extends Ganglion with LocalService {
 
   import Federator._
 
   override def initializeServices {
-    val defaultClasses = setting.hama.get("monitor.default.classes", 
+    val defaultClasses = setting.hama.get("federator.default.plugin.classes", 
                                           defaultTrackers.mkString(","))
     load(defaultClasses).foreach( plugin => { 
        LOG.debug("Default trakcer to be instantiated: {}", plugin)
@@ -54,7 +53,7 @@ class Federator(setting: Setting) extends Ganglion with LocalService {
     })
     LOG.debug("Finish loading default trackers ...")
 
-    val classes = setting.hama.get("monitor.classes")
+    val classes = setting.hama.get("federator.plugin.classes")
     val nonDefault = load(classes)
     nonDefault.foreach( plugin => {
        LOG.debug("Non default trakcer to be instantiated: {}", plugin)

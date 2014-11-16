@@ -18,7 +18,6 @@
 package org.apache.hama.monitor.groom
 
 import akka.actor.ActorRef
-import akka.actor.Cancellable
 import java.lang.management.GarbageCollectorMXBean
 import java.lang.management.ManagementFactory
 import java.lang.management.MemoryMXBean
@@ -29,31 +28,17 @@ import java.lang.Thread.State._
 import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.LongWritable
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
+import org.apache.hama.monitor.Collector
 import org.apache.hama.monitor.metrics.Metric
 import org.apache.hama.monitor.metrics.MetricsRecord
 import org.apache.hama.monitor.metrics.Metrics._
-import org.apache.hama.RemoteService
-import org.apache.hama.util.ActorLocator
-import org.apache.hama.util.SysMetricsTrackerLocator
-import scala.concurrent.duration.DurationInt
-import scala.concurrent.duration.FiniteDuration
 import scala.util.control.Breaks
 
-
 /**
- * Collector sys metrics information.
+ * Collector jvm metrics information.
  */
-// TODO: pass in reporter ref.
-final class SysMetricsCollector(conf: HamaConfiguration) extends LocalService 
-                                                        with RemoteService 
-                                                        with ActorLocator {
-  private var tracker: ActorRef = _
-  private var cancellable: Cancellable = _
-
-  val groomServerHost = conf.get("bsp.groom.address", "127.0.0.1")
-  val groomServerPort = conf.getInt("bsp.groom.port", 50000)
-  val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
+final class JvmStatsCollector(conf: HamaConfiguration, reporter: ActorRef) 
+      extends Collector {
 
   private val memoryMXBean: MemoryMXBean = 
     ManagementFactory.getMemoryMXBean
@@ -63,32 +48,16 @@ final class SysMetricsCollector(conf: HamaConfiguration) extends LocalService
     ManagementFactory.getThreadMXBean
   private val M: Long = 1024*1024
 
-/*
-  override def initializeServices {
-    lookup("sysMetricsTracker", 
-           locate(SysMetricsTrackerLocator(conf)))
-  }
-
-  override def afterLinked(proxy: ActorRef) = {
-    tracker = proxy
-    LOG.debug("Sending metrics stat to {}", tracker)
-    import context.dispatcher // cancel when actor stopped
-    cancellable = 
-      context.system.scheduler.schedule(0.seconds, 5.seconds, tracker, 
-                                        sampling)
-  }
-*/
-
   def sampling(): MetricsRecord = {
     val record: MetricsRecord = 
-      new MetricsRecord(groomServerName, "jvm", "Jvm metrics stats.")
+      new MetricsRecord("<groom-name-read-from-conf>", "jvm", "Jvm metrics stats.")
     memory(record)
     gc(record)
     threads(record)
     record
   }
 
-  override def receive = actorReply orElse timeout orElse superviseeIsTerminated orElse unknown
+  override def receive = unknown
 
   private def memory(record: MetricsRecord ) {
     val memNonHeap: MemoryUsage = memoryMXBean.getNonHeapMemoryUsage

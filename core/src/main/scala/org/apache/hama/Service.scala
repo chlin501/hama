@@ -28,13 +28,7 @@ trait Service extends Agent {
   /**
    * Logic for intantiating necessary prerequisite operations.
    */
-  protected def initializeServices = {}
-
-  /**
-   * A configuration file specific to Hama system.
-// TODO: move to config related trait?
-  protected def configuration: HamaConfiguration 
-   */
+  protected def initializeServices = { }
 
   /**
    * Initialize necessary subservices.

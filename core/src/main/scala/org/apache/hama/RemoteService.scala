@@ -123,7 +123,12 @@ trait RemoteService extends Service {
    */
   protected def afterLinked(target: String, proxy: ActorRef) {}
 
-  override protected def remoteReply(target: String, remote: ActorRef) {
+  /**
+   * Remote actor reply to actor selection.
+   * @param target denotes the name of the <b>remote</b> actor reference.
+   * @param actor is the instance of ActoRef pointed to a <b>remote</b> actor.
+   */
+  protected def remoteReply(target: String, remote: ActorRef) {
     LOG.debug("Proxy {} is ready: {}", target, remote)
     context.watch(remote) // TODO: watch proxy instead?
     val proxy = link(target, remote)//remote.path.name
@@ -147,5 +152,19 @@ trait RemoteService extends Service {
       }
     }
   }
+
+  /**
+   * Another actor reply the query of actorSelection, either local or remote.
+   * @param target is the value of Identify when performing actorSelection.
+   * @param actor is the instance of ActoRef.
+   */
+  protected def actorReply: Receive = {
+    case ActorIdentity(target, Some(actor)) => {
+      remoteReply(target.toString, actor)
+    }
+    case ActorIdentity(target, None) => LOG.debug("{} is not yet available!",
+                                                    target)
+  }
+
 
 }

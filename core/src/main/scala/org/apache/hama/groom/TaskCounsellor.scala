@@ -19,7 +19,7 @@ package org.apache.hama.groom
 
 import akka.actor.ActorRef
 //import akka.actor.AddressFromURIString
-import akka.actor.Cancellable
+//import akka.actor.Cancellable
 import akka.actor.Deploy
 import akka.actor.Props
 import akka.remote.RemoteScope
@@ -52,7 +52,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   // TODO: refactor
   var sched: ActorRef = _
-  var cancellable: Cancellable = _
+  //var cancellable: Cancellable = _
   var groomManager: ActorRef = _
 
   /**
@@ -93,7 +93,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   override def initializeServices {
     initializeSlots(getMaxTasks)
-    lookup("sched", locate(SchedulerLocator(setting.hama)))
+    //lookup("sched", locate(SchedulerLocator(setting.hama)))
   }
 
   def hasTaskInQueue: Boolean = !directiveQueue.isEmpty
@@ -118,7 +118,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     proxy.path.name match {
       case "sched" => {
         sched = proxy  
-        cancellable = request(self, TaskRequest)
+        //cancellable = request(self, TaskRequest)
       } 
       case "groomManager" => { // register
         groomManager = proxy

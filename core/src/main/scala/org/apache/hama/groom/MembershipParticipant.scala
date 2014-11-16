@@ -91,7 +91,6 @@ trait MembershipParticipant extends Membership with RemoteService {
     findProxyBy(target.getActorName) match { 
       case Some(proxy) => proxy ! GroomRegistration
       case None => LOG.warning("Master not found with {}!", target.getActorName)
-      //context.actorSelection(actorPath(target)) ! GroomRegistration
     }
 
   protected def memberEvent(event: MemberEvent) { }

@@ -15,42 +15,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.monitor;
+package org.apache.hama
 
-import java.io.IOException;
-import java.io.DataInput;
-import java.io.DataOutput;
+import akka.actor.Actor
+import akka.actor.ActorRef
+import akka.actor.Cancellable
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.DurationInt
 
-import org.apache.hadoop.io.Writable;
-import org.apache.hama.bsp.v2.Task;
+sealed trait Tick
+final case object Ticker extends Tick
 
-public class Report implements Writable { // TODO: remove?
+trait Periodically { this: Actor => 
 
-  protected Task task;
-
-  Report() {}// writable
-    
-  public Report(final Task task) {
-    this.task = task;
+  protected def tick(target: ActorRef, message: Tick, 
+                     initial: FiniteDuration = 0.seconds,
+                     delay: FiniteDuration = 3.seconds): Cancellable = {
+    import context.dispatcher
+    context.system.scheduler.schedule(initial, delay, target, message)
   }
 
-  public Task getTask() {
-    return this.task; 
-  }
+  protected def ticker(message: Tick)
 
-  @Override 
-  public String toString() {
-    return "Report("+getTask()+")";
+  protected def tickMessage: Receive = {
+    case t: Tick => ticker(t)
   }
-
-  @Override 
-  public void write(DataOutput out) throws IOException {
-    task.write(out);
-  }
-
-  @Override 
-  public void readFields(DataInput in) throws IOException {
-    this.task = new Task();
-    task.readFields(in);
-  }
+ 
 }

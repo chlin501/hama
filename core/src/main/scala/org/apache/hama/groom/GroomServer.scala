@@ -71,6 +71,7 @@ object GroomServer {
   }
 }
 
+// TODO: act mediator role to forward message to master.
 class GroomServer(setting: Setting, finder: MasterFinder) 
       extends LocalService with RemoteService with MembershipParticipant { 
 

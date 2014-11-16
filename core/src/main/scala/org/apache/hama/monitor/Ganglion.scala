@@ -17,9 +17,23 @@
  */
 package org.apache.hama.monitor
 
+import akka.actor.Actor
 import org.apache.hama.Agent
 
-trait Plugin extends Agent
+/*
+protected calss CollectorWrapper(conf: HamaConfiguration, 
+                                 collector: Collector) extends Actor {
+
+  def initialize()
+
+  // schedule to periodically call collect function.
+
+}
+
+protected class TrackerWrapper(conf: HamaConfiguration, tracker: Tracker) 
+*/
+
+trait Plugin extends Agent 
 
 /**
  * Track specific stats from grooms.
@@ -29,9 +43,15 @@ trait Tracker extends Plugin
 /**
  * Collect specific groom stats.
  */
-trait Collector extends Plugin 
+trait Collector extends Plugin /* {
 
-// TODO: add quartz scheduler?
+  def initialize 
+
+  def collect(msg: Any): Any
+
+} */
+
+// TODO: add quartz scheduler in the future
 trait Ganglion {
 
   protected def load(classes: String): Seq[Class[Plugin]] =
