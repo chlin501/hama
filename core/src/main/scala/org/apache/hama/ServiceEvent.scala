@@ -18,21 +18,11 @@
 package org.apache.hama
 
 /**
- * Load a particular service with name and its actor reference to services 
- * cache.
- * This happens when the service in the StartUp state.
-final case object Load
+ * ServiceStateMachine calls for transition to next state.
  */
-
-/**
- * Unload a service, denoted by name, out of services cache.
- * This happens when the service in the CleanUp state.
-final case object Unload
- */
-
-final case object Next
+final case object Next 
 
 /**
  * Shutdown the entire server.
- */
 final case object Shutdown
+*/

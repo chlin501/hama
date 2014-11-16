@@ -29,6 +29,7 @@ import scala.concurrent.duration.DurationInt
 /**
  * A service that provides remote methods such as proxy lookup.
  */
+// TODO: rename to Lookupable
 trait RemoteService extends Service {
 
   /**

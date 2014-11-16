@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama
-
+/*
 import akka.actor.Actor
 import akka.actor.ActorRef
 
@@ -51,4 +51,4 @@ trait ServiceEventListener { self: Actor =>
     })
   }
 }
-
+*/
