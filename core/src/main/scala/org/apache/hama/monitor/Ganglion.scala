@@ -31,6 +31,10 @@ import org.apache.hama.Tick
 import org.apache.hama.logging.CommonLog
 
 sealed trait CollectorMessages
+final case object ListService extends CollectorMessages
+final case class ServicesAvailable(services: Array[String]) 
+      extends CollectorMessages
+final case class GetMetrics(service: String/*, command: Any*/) extends CollectorMessages
 
 object Stats {
 
@@ -47,8 +51,8 @@ object Stats {
  * @param d is the destination to which this stats will be sent.
  * @param v is the stats collected.
  */
-final class Stats(d: String, v: Writable) 
-      extends Writable with CollectorMessages {
+final class Stats(d: String, v: Writable) extends Writable 
+                                          with CollectorMessages {
 
   var tracker: Text = new Text(d)
   var value: Writable = v 
@@ -72,14 +76,23 @@ final class Stats(d: String, v: Writable)
 class WrappedCollector(reporter: ActorRef, collector: Collector) 
       extends Agent with Periodically {
 
-  override def preStart() = collector.initialize
-
-  override def ticker(tick: Tick) = {
-    val data = collector.collect()
-    reporter ! Stats(collector.dest, data) 
+  override def preStart() = {
+    collector.wrapper = Option(self)
+    collector.initialize
   }
 
-  override def receive = tickMessage orElse unknown
+  override def ticker(tick: Tick) = collector.collect() match {
+    case null =>
+    case data@_ => reporter ! Stats(collector.dest, data) 
+  }
+
+  def services: Receive = {
+    case ListService => reporter ! ListService
+    case ServicesAvailable(services) => collector.servicesFound(services)
+    case GetMetrics(service) => reporter ! GetMetrics(service)
+  }
+
+  override def receive = services orElse tickMessage orElse unknown
 
 }
 
@@ -128,6 +141,25 @@ trait Tracker extends Plugin {
  */
 trait Collector extends Plugin {
 
+// TODO: find services available
+//       obtain metrics or service execut provided collector func and return metrics (safety)
+
+  protected[monitor] var wrapper: Option[ActorRef] = None
+
+  def listServices() = wrapper match { 
+    case Some(found) => found ! ListService
+    case None => throw new RuntimeException("WrappedCollector not found!")
+  }
+
+  def servicesFound(services: Array[String]) { }
+
+  /**
+   * Obtain metrics exported by a specific service.
+   */
+  def getMetrics(service: String) = wrapper match {
+    case Some(found) => found ! GetMetrics(service) 
+    case None => throw new RuntimeException("WrappedCollector not found!")
+  }
 
   /**
    * Destination, or tracker name, where stats will be send to. 

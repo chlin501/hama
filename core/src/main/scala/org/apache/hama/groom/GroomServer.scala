@@ -25,6 +25,9 @@ import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Stats
+import org.apache.hama.monitor.ListService
+import org.apache.hama.monitor.ServicesAvailable
+import org.apache.hama.monitor.GetMetrics
 import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -93,6 +96,11 @@ class GroomServer(setting: Setting, finder: MasterFinder)
   def report: Receive = {
     case stats: Stats => master.map { m =>
       findProxyBy(m.getActorName).map { (proxy) => proxy forward stats }
+    }
+    case ListService => 
+      sender ! ServicesAvailable(services.map { service => service.path.name }.toArray)
+    case GetMetrics(serviceName) => findServiceBy(serviceName).map { service => 
+      service forward GetMetrics(serviceName)
     }
   }
 

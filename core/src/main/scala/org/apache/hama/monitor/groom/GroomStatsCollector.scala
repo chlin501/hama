@@ -23,7 +23,6 @@ import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.monitor.Collector
 import org.apache.hama.monitor.master.GroomsTracker
-//import org.apache.hama.groom.GroomServerStat 
 
 /**
  * Report GroomServer information to GroomsTracker.

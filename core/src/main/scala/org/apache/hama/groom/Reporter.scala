@@ -23,6 +23,8 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Ganglion
 import org.apache.hama.monitor.Stats
+import org.apache.hama.monitor.ListService
+import org.apache.hama.monitor.GetMetrics
 import org.apache.hama.monitor.WrappedCollector
 import org.apache.hama.monitor.groom.TaskStatsCollector
 import org.apache.hama.monitor.groom.GroomStatsCollector
@@ -62,6 +64,8 @@ class Reporter(setting: Setting, groom: ActorRef)
 
   def report: Receive = {
     case stats: Stats => groom forward stats 
+    case ListService => groom forward ListService
+    case command: GetMetrics => groom forward command
   }
 
   def receive = report orElse unknown

@@ -467,6 +467,14 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   def postContainerStopped(executor: ActorRef) {}
 
-  override def receive = launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse taskRequest orElse receiveDirective orElse unknown
+/*
+  def report: Receive = {
+    case GetGroomSpec =>  // from GroomStatsCollector
+    }
+    case GetTaskStats => //from TaskStatsCollector
+  }
+*/
+
+  override def receive = /*report orElse*/ launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse taskRequest orElse receiveDirective orElse unknown
 
 }
