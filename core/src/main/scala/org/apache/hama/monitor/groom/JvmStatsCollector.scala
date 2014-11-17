@@ -30,6 +30,7 @@ import org.apache.hadoop.io.LongWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.monitor.Collector
+import org.apache.hama.monitor.master.JvmStatsTracker
 import org.apache.hama.monitor.metrics.Metric
 import org.apache.hama.monitor.metrics.MetricsRecord
 import org.apache.hama.monitor.metrics.Metrics._
@@ -50,6 +51,8 @@ final class JvmStatsCollector extends Collector {
 
   override def initialize() { }
 
+  override def dest(): String = classOf[JvmStatsTracker].getName
+
   override def collect(): Writable = sampling
 
   def sampling(): MetricsRecord = {
@@ -60,8 +63,6 @@ final class JvmStatsCollector extends Collector {
     threads(record)
     record
   }
-
-//  override def receive = unknown
 
   private def memory(record: MetricsRecord ) {
     val memNonHeap: MemoryUsage = memoryMXBean.getNonHeapMemoryUsage

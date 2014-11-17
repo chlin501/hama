@@ -139,7 +139,7 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
     groomServers.foreach( groomName => {
       val (taskCounsellorActor, maxTasksAllowed) = (null, 0)
         //groomTaskCounsellors.getOrElse(groomName, (null, 0)) 
-      if(null != taskCounsellorActor) { // TODO: warning for the above line!!!
+      if(null != taskCounsellorActor) { // TODO: taskcounsellorActor == null 
         LOG.debug("GroomServer's taskCounsellor {} found!", groomName)
         val currentTaskScheduled = job.getTaskCountFor(groomName)
         if(maxTasksAllowed < currentTaskScheduled)

@@ -23,14 +23,14 @@ import org.apache.hama.groom.GroomServerStat
 import org.apache.hama.monitor.Tracker
 
 /**
- * Ask {@link GroomTasksTracker} for corresponded GroomServerStat(s).
+ * Ask {@link GroomsTracker} for corresponded GroomServerStat(s).
  * @param groomServers is the target to which tasks will be scheduled.
  * @param from denotes who sends this request.
 final case class AskGroomServerStat(groomServers: Array[String],
                                     from: ActorRef)
  */
 
-final class GroomTasksTracker extends Tracker {
+final class GroomsTracker extends Tracker {
 
   override def initialize() { }
  

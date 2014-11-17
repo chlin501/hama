@@ -22,10 +22,11 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.monitor.Collector
-import org.apache.hama.groom.GroomServerStat // TODO: rename
+import org.apache.hama.monitor.master.GroomsTracker
+//import org.apache.hama.groom.GroomServerStat 
 
 /**
- * Report GroomServer information.
+ * Report GroomServer information to GroomsTracker.
  * - free/ occupied task slots
  * - slots occupied by which job relation.
  * - slot master relation. (future)
@@ -33,6 +34,8 @@ import org.apache.hama.groom.GroomServerStat // TODO: rename
 final class GroomStatsCollector extends Collector {
 
   override def initialize() { }
+
+  override def dest(): String = classOf[GroomsTracker].getName
 
   override def collect(): Writable = null.asInstanceOf[Writable]
 

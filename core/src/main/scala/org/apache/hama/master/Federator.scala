@@ -25,7 +25,7 @@ import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Ganglion
 import org.apache.hama.monitor.Plugin
 import org.apache.hama.monitor.WrappedTracker
-import org.apache.hama.monitor.master.GroomTasksTracker
+import org.apache.hama.monitor.master.GroomsTracker
 import org.apache.hama.monitor.master.JobTasksTracker
 import org.apache.hama.monitor.master.JvmStatsTracker
 
@@ -36,7 +36,7 @@ final case class TrackersAvailable(services: Seq[String])
 
 object Federator {
 
-   val defaultTrackers = Seq(classOf[GroomTasksTracker].getName, 
+   val defaultTrackers = Seq(classOf[GroomsTracker].getName, 
      classOf[JobTasksTracker].getName, classOf[JvmStatsTracker].getName)
 
 }

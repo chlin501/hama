@@ -23,13 +23,16 @@ import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.monitor.Collector
+import org.apache.hama.monitor.master.JobTasksTracker
 
 /**
- * Collector tasks status to JobTasksTracker.
+ * Collector tasks stats and send to JobTasksTracker.
  */
 final class TaskStatsCollector extends Collector {
 
   override def initialize() { }
+
+  override def dest(): String = classOf[JobTasksTracker].getName
 
   override def collect(): Writable = null.asInstanceOf[Writable]
 

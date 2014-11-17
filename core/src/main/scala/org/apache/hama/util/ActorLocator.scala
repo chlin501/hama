@@ -19,7 +19,7 @@ package org.apache.hama.util
 
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.monitor.master.JvmStatsTracker
-import org.apache.hama.monitor.master.GroomTasksTracker
+import org.apache.hama.monitor.master.GroomsTracker
 import org.apache.hama.monitor.master.JobTasksTracker
 import org.apache.hama.master.Scheduler
 import org.apache.hama.ProxyInfo
@@ -58,7 +58,7 @@ trait ActorLocator {
 final case class MasterLocator(info: ProxyInfo)
 // TODO: remove? 
 final case class JvmStatsTrackerLocator(conf: HamaConfiguration)
-final case class GroomTasksTrackerLocator(conf: HamaConfiguration)
+final case class GroomsTrackerLocator(conf: HamaConfiguration)
 final case class JobTasksTrackerLocator(conf: HamaConfiguration)
 final case class SchedulerLocator(conf: HamaConfiguration)
 final case class ExecutorLocator(conf: HamaConfiguration)
@@ -87,7 +87,7 @@ object ActorPathMagnet {
     }
   }
 
-  implicit def locateGtt(locator: GroomTasksTrackerLocator) = 
+  implicit def locateGtt(locator: GroomsTrackerLocator) = 
       new ActorPathMagnet {
     type Path = String
     def apply(): Path = {
@@ -95,7 +95,7 @@ object ActorPathMagnet {
                     createActorPath.
                     appendRootPath("bspmaster"). // TODO: from setting
                     appendChildPath("monitor").
-                    appendChildPath("GroomTasksTracker").
+                    appendChildPath("GroomsTracker").
                     build.
                     getPath
     }

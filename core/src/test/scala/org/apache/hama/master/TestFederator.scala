@@ -20,7 +20,7 @@ package org.apache.hama.master
 import akka.actor.ActorRef
 import org.apache.hama.TestEnv
 import org.apache.hama.conf.Setting
-import org.apache.hama.monitor.master.GroomTasksTracker
+import org.apache.hama.monitor.master.GroomsTracker
 import org.apache.hama.monitor.master.JobTasksTracker
 import org.apache.hama.monitor.master.JvmStatsTracker
 import org.junit.runner.RunWith

@@ -19,6 +19,10 @@ package org.apache.hama.monitor
 
 import akka.actor.Actor
 import akka.actor.ActorRef
+import java.io.DataInput
+import java.io.DataOutput
+import org.apache.hadoop.io.Text
+import org.apache.hadoop.io.ObjectWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
@@ -27,8 +31,38 @@ import org.apache.hama.Tick
 import org.apache.hama.logging.CommonLog
 
 sealed trait CollectorMessages
-// from : plugin name
-final case class Stats(from: String, data: Writable) extends CollectorMessages // extends writable
+
+object Stats {
+
+  def apply(dest: String, data: Writable): Stats = {
+    if(null == dest || dest.isEmpty) 
+      throw new IllegalArgumentException("Destination (tracker) is missing!")
+    new Stats(dest, data)
+  }
+
+}
+
+final class Stats(d: String, v: Writable) 
+      extends Writable with CollectorMessages {
+
+  var tracker: Text = new Text(d)
+  var value: Writable = v 
+
+  def dest(): String = tracker.toString
+  def data(): Writable = value
+
+  override def readFields(in: DataInput) {
+    tracker = new Text(Text.readString(in))
+    value = ObjectWritable.readObject(in, new HamaConfiguration).
+                           asInstanceOf[Writable]
+  }
+
+  override def write(out: DataOutput) {
+    tracker.write(out)
+    value.write(out)
+  }
+
+}
 
 class WrappedCollector(reporter: ActorRef, collector: Collector) 
       extends Agent with Periodically {
@@ -90,6 +124,15 @@ trait Tracker extends Plugin {
  */
 trait Collector extends Plugin {
 
+
+  /**
+   * Destination, or tracker name, where stats will be send to. 
+   */
+  def dest(): String
+
+  /**
+   * Collect stats function.
+   */
   def collect(): Writable 
 
 } 

@@ -33,7 +33,8 @@ trait Agent extends Actor with ActorLog with Spawnable with Retryable {
   final def name(): String = self.path.name
 
   protected def unknown: Receive = {
-    case msg@_ => LOG.warning("Unknown message {} for {}.", msg, name)
+    case msg@_ => LOG.warning("Unknown message {} for {} from {}.", 
+                              msg, name, sender.path.name)
   }
 
   protected def shutdown() = context.system.shutdown
