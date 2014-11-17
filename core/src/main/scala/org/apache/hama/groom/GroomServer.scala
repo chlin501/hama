@@ -24,6 +24,7 @@ import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.conf.Setting
+import org.apache.hama.monitor.Stats
 import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -71,11 +72,13 @@ object GroomServer {
   }
 }
 
-// TODO: act mediator role to forward message to master.
+// TODO: list services available
+//       service may have metrics exportable (e.g. trait Exportable#getMetrics)
+//       provide a method allowing collector (plugin) obtain related data for report
 class GroomServer(setting: Setting, finder: MasterFinder) 
       extends LocalService with RemoteService with MembershipParticipant { 
 
-  // TODO: get actor name from setting
+  // TODO: get actor name e.g. reporter from setting
   override def initializeServices {
     retry("lookupMaster", 10, lookupMaster)
     val reporter = getOrCreate("reporter", classOf[Reporter], setting, self) 
@@ -87,5 +90,11 @@ class GroomServer(setting: Setting, finder: MasterFinder)
 
   override def masterFinder(): MasterFinder = finder 
 
-  override def receive = actorReply orElse retryResult orElse membership orElse unknown
+  def report: Receive = {
+    case stats: Stats => master.map { m =>
+      findProxyBy(m.getActorName).map { (proxy) => proxy forward stats }
+    }
+  }
+
+  override def receive = report orElse actorReply orElse retryResult orElse membership orElse unknown
 }

@@ -42,6 +42,11 @@ object Stats {
 
 }
 
+/**
+ * Statistics data to be reported.
+ * @param d is the destination to which this stats will be sent.
+ * @param v is the stats collected.
+ */
 final class Stats(d: String, v: Writable) 
       extends Writable with CollectorMessages {
 
@@ -70,9 +75,8 @@ class WrappedCollector(reporter: ActorRef, collector: Collector)
   override def preStart() = collector.initialize
 
   override def ticker(tick: Tick) = {
-    val stats = collector.collect()
-    // TODO: send to reporter which in turn sends to groom then master and tracker
-    //reporter ! Stats(collector.name, stats) 
+    val data = collector.collect()
+    reporter ! Stats(collector.dest, data) 
   }
 
   override def receive = tickMessage orElse unknown
@@ -120,7 +124,7 @@ trait Tracker extends Plugin {
 }
 
 /**
- * Collect specific groom stats.
+ * Collect specific groom stats data.
  */
 trait Collector extends Plugin {
 

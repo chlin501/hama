@@ -51,6 +51,9 @@ trait LocalService extends Service {
       }
     }
 
+  protected def findServiceBy(serviceName: String): Option[ActorRef] = 
+    services.find( service => service.path.name.equals(serviceName))
+
   /**
    * Unload a particular service created by this one.
    * @param serviceName to be unloaded.

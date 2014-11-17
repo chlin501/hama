@@ -24,6 +24,7 @@ import akka.actor.Props
 import org.apache.hama.LocalService
 import org.apache.hama.SystemInfo
 import org.apache.hama.conf.Setting
+import org.apache.hama.monitor.Stats
 import org.apache.hama.util.Curator
 import org.apache.zookeeper.CreateMode
 import scala.concurrent.duration.DurationInt
@@ -84,6 +85,12 @@ class BSPMaster(setting: Setting, registrator: Registrator)
 
   def seedNodes(): IndexedSeq[SystemInfo] = Vector(setting.info)
 
-  override def receive = membership orElse unknown
+  def forwardStats: Receive = {
+    case stats: Stats => findServiceBy("fedeator").map { service => 
+      service forward stats
+    }
+  }
+
+  override def receive = forwardStats orElse membership orElse unknown
   
 }

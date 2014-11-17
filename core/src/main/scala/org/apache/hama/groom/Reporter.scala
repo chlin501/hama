@@ -22,7 +22,7 @@ import org.apache.hama.LocalService
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Ganglion
-import org.apache.hama.monitor.Plugin
+import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedCollector
 import org.apache.hama.monitor.groom.TaskStatsCollector
 import org.apache.hama.monitor.groom.GroomStatsCollector
@@ -36,7 +36,7 @@ object Reporter {
 
 }
 
-// TODO: receive stat message, dest to tracker, from collector and send to groom server.
+// TODO: list collectors available
 class Reporter(setting: Setting, groom: ActorRef) 
       extends Ganglion with LocalService with Curator {
 
@@ -58,16 +58,12 @@ class Reporter(setting: Setting, groom: ActorRef)
        getOrCreate(plugin.name, classOf[WrappedCollector], self, plugin)
     })
     LOG.debug("Finish loading {} non default reporters ...", nonDefault.size)
-
-/*
-    initializeCurator(setting.hama)
-    getOrCreate("tasksCollector", classOf[TasksCollector], setting.hama, self)
-    getOrCreate("groomCollector", classOf[GroomCollector], setting.hama, self)
-    getOrCreate("sysMetricsCollector", classOf[SysMetricsCollector], 
-                setting.hama, self)
-*/
   }
 
-  def receive = unknown
+  def report: Receive = {
+    case stats: Stats => groom forward stats 
+  }
+
+  def receive = report orElse unknown
 
 }

@@ -23,7 +23,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Ganglion
-import org.apache.hama.monitor.Plugin
+import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedTracker
 import org.apache.hama.monitor.master.GroomsTracker
 import org.apache.hama.monitor.master.JobTasksTracker
@@ -74,6 +74,12 @@ class Federator(setting: Setting) extends Ganglion with LocalService {
     service.path.name 
   }.toSeq
 
-  override def receive = listTrackers orElse unknown
+  protected def dispatchStats: Receive = {
+    case stats: Stats => findServiceBy(stats.dest).map { service => 
+       service forward stats
+    }
+  }
+
+  override def receive = dispatchStats orElse listTrackers orElse unknown
 
 }
