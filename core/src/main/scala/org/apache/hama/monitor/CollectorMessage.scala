@@ -81,16 +81,31 @@ final class Stats(d: String, v: Writable) extends Writable
 object GroomStats {
 
   def apply(host: String, port: Int, maxTasks: Int): GroomStats = {
-    val spec = new GroomStats
-    spec.h = host
-    spec.p = port
-    spec.mt = maxTasks
-    spec
+    val stats = new GroomStats
+    stats.h = host
+    stats.p = port
+    stats.mt = maxTasks
+    stats.q = defaultQueue
+    stats.s = defaultSlots
+    stats
   }
 
+  def defaultQueue(): ArrayWritable = {
+    val w = new ArrayWritable(classOf[Text])
+    w.set(Array[Text]().asInstanceOf[Array[Writable]])
+    w
+  }
+
+  def defaultSlots(): ArrayWritable = {
+    val w = new ArrayWritable(classOf[Text])
+    w.set(Array[Text]().asInstanceOf[Array[Writable]])
+    w
+  }
 }
 
 final class GroomStats extends Writable with CollectorMessages {
+
+  import GroomStats._
 
   /* host */
   protected[monitor] var h: String = InetAddress.getLocalHost.getHostName
@@ -101,8 +116,11 @@ final class GroomStats extends Writable with CollectorMessages {
   /* max tasks */
   protected[monitor] var mt: Int = 3
 
+  /* queue */
+  protected[monitor] var q = defaultQueue
+
   /* slots */
-  protected[monitor] var s = new ArrayWritable(classOf[Text])
+  protected[monitor] var s = defaultSlots
   
   def host(): String = h 
 
@@ -110,6 +128,8 @@ final class GroomStats extends Writable with CollectorMessages {
   
   def maxTasks(): Int = mt
  
+  def queue(): Array[String] = q.toStrings
+
   def slots(): Array[String] = s.toStrings
 
   @throws(classOf[IOException])
@@ -117,6 +137,7 @@ final class GroomStats extends Writable with CollectorMessages {
     Text.writeString(out, host)
     out.writeInt(port)
     out.writeInt(maxTasks)
+    q.write(out)
     s.write(out)
   }
 
@@ -125,8 +146,10 @@ final class GroomStats extends Writable with CollectorMessages {
     h = Text.readString(in)
     p = in.readInt
     mt = in.readInt
-    s = new ArrayWritable(classOf[Text])
-    val grooms = new Array[Text](mt)
+    q = defaultQueue
+    q.readFields(in)
+    s = defaultSlots
+    val grooms = new Array[Text](mt) // slots has max tasks constraint
     for(pos <- 0 until grooms.length) {
       grooms(pos) = new Text(nullString)
     }
