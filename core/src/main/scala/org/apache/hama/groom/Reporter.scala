@@ -39,10 +39,12 @@ object Reporter {
 }
 
 // TODO: list collectors available
+//       periodically load probe from reporter.probe.classes?
 class Reporter(setting: Setting, groom: ActorRef) 
       extends Ganglion with LocalService with Curator {
 
   import Reporter._
+
 
   override def initializeServices {
     val defaultClasses = setting.hama.get("reporter.default.probe.classes",
@@ -62,9 +64,15 @@ class Reporter(setting: Setting, groom: ActorRef)
     LOG.debug("Finish loading {} non default reporters ...", nonDefault.size)
   }
 
+  /**
+   * Report functions 
+   * - forward Stats to master.
+   * - list groom services available.
+   * - request a particular service for metrics.
+   */
   def report: Receive = {
-    case stats: Stats => groom forward stats 
-    case ListService => groom forward ListService
+    case stats: Stats => groom forward stats  
+    case ListService => groom forward ListService 
     case request: GetMetrics => groom forward request
   }
 

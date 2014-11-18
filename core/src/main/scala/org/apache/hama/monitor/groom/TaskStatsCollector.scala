@@ -30,17 +30,17 @@ import org.apache.hama.monitor.master.JobTasksTracker
  */
 final class TaskStatsCollector extends Collector {
 
-  override def initialize() { }
+  import Collector._
+
+  override def initialize() = start() 
 
   override def dest(): String = classOf[JobTasksTracker].getName
 
-  override def collect(): Writable = null.asInstanceOf[Writable]
+  override def request() = report(EmptyStats) // TODO: change to stats retrieved
 
 /*
   def aNewTask: Receive = {
     case newTask: Task => reporter ! newTask
   }
-
-  override def receive = unknown
 */
 }

@@ -26,8 +26,10 @@ import org.apache.hama.Periodically
 import org.apache.hama.Tick
 import org.apache.hama.Ticker
 import org.apache.hama.logging.CommonLog
+import scala.concurrent.duration.DurationLong
+import scala.concurrent.duration.FiniteDuration
 
-final case object StartTick
+final case class StartTick(ms: Long)
 final case object CancelTick
 
 final class WrappedCollector(reporter: ActorRef, collector: Collector) 
@@ -42,20 +44,20 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
     collector.initialize
   }
 
-  override def ticked(tick: Tick) = collector.collect() match {
-    case EmptyStats =>
-    case data@_ => reporter ! Stats(collector.dest, data) 
-  }
+  override def ticked(tick: Tick) = collector.request()
 
-  def services: Receive = {
-    case StartTick => cancellable = Option(tick(self, Ticker)) // TODO: allow customized delay, etc.
+  def actions: Receive = {
+    case StartTick(ms) => 
+      cancellable = Option(tick(self, Ticker, delay = ms.millis)) 
     case CancelTick => cancellable.map { c => c.cancel } 
     case ListService => reporter ! ListService
     case ServicesAvailable(services) => collector.servicesFound(services)
     case GetMetrics(service, command) => reporter ! GetMetrics(service, command)
+    case stats: GroomStats => collector.statsFound(stats)
+    case stats: Stats => reporter ! stats
   }
 
-  override def receive = services orElse tickMessage orElse unknown
+  override def receive = actions orElse tickMessage orElse unknown
 
 }
 
@@ -73,13 +75,32 @@ trait Probe extends CommonLog {
 
   protected var conf: HamaConfiguration = new HamaConfiguration
 
+  /**
+   * The name of this probe.
+   * @return String denotes the probe name.
+   */
   def name(): String = getClass.getName
 
+  /**
+   * Initialize related functions before reporting.
+   */
   def initialize 
 
+  /**
+   * Common configuration of the groom server.
+   * @return HamaConfiguration is the groom common configuration.
+   */
   def configuration(): HamaConfiguration = conf
 
+  /**
+   * Common configuration of the groom server. 
+   * @param conf is common configuration updating one held by this probe
+   *             during instantiation. 
+   */
   def setConfiguration(conf: HamaConfiguration) = this.conf = conf
+
+  // TODO: close the probe?
+  // def close() 
 
 }
 
@@ -110,18 +131,21 @@ object Collector {
  */
 trait Collector extends Probe {
 
-// TODO: find services available
-//       obtain metrics or service execut provided collector func and return metrics (safety)
-
   import Collector._
 
   protected[monitor] var wrapper: Option[ActorRef] = None
 
-  protected[monitor] def start() = wrapper match {  
-    case Some(found) => found ! StartTick 
+  /**
+   * Start periodically collect stats data.
+   */
+  protected[monitor] def start(delay: Long = 3000) = wrapper match {  
+    case Some(found) => found ! StartTick(delay)
     case None => throw new RuntimeException("WrappedCollector not found!")
   }
 
+  /**
+   * Cancel periodically collect stats data.
+   */
   protected[monitor] def cancel() = wrapper match { 
     case Some(found) => found ! CancelTick
     case None => throw new RuntimeException("WrappedCollector not found!")
@@ -134,14 +158,21 @@ trait Collector extends Probe {
 
   protected[monitor] def servicesFound(services: Array[String]) { }
 
+  protected[monitor] def statsFound(stats: Writable) { }
+
   /**
    * Obtain metrics exported by a specific service.
    */
-  protected[monitor] def getMetrics(service: String, command: Any) = 
+  protected[monitor] def retrieve(service: String, command: Any) = 
     wrapper match {
       case Some(found) => found ! GetMetrics(service, command) 
       case None => throw new RuntimeException("WrappedCollector not found!")
     }
+
+  protected[monitor] def report(value: Writable) = wrapper match {
+    case Some(found) => found ! Stats(dest, value)
+    case None => throw new RuntimeException("WrappedCollector not found!")
+  }
 
   /**
    * Destination, or tracker name, where stats will be send to. 
@@ -149,9 +180,10 @@ trait Collector extends Probe {
   protected[monitor] def dest(): String
 
   /**
-   * Collect stats function.
+   * Periodically perform some execution.
    */
-  protected[monitor] def collect(): Writable 
+  protected[monitor] def request()
+
 
 } 
 

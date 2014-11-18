@@ -49,13 +49,13 @@ final class JvmStatsCollector extends Collector {
     ManagementFactory.getThreadMXBean
   private val M: Long = 1024*1024
 
-  override def initialize() { }
+  override def initialize() { start() }
 
   override def dest(): String = classOf[JvmStatsTracker].getName
 
-  override def collect(): Writable = sampling
+  override def request() = report(sampling)
 
-  def sampling(): MetricsRecord = {
+  def sampling(): MetricsRecord = { 
     val record: MetricsRecord = 
       new MetricsRecord("<groom-name-read-from-conf>", "jvm", "Jvm metrics stats.")
     memory(record)

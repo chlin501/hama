@@ -27,6 +27,12 @@ import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.master.GroomsTracker
 
+object GroomStatsCollector {
+
+  val targetService = classOf[TaskCounsellor].getName
+  
+}
+
 /**
  * Report GroomServer information to GroomsTracker.
  * - free/ occupied task slots
@@ -34,34 +40,23 @@ import org.apache.hama.monitor.master.GroomsTracker
  */
 final class GroomStatsCollector extends Collector {
 
-  protected[this] var stats: Option[GroomStats] = None
+  import Collector._
+
+  import GroomStatsCollector._
 
   override def initialize() = listServices
 
   override def servicesFound(services: Array[String]) = 
-    services.find(service => 
-      service.equalsIgnoreCase(classOf[TaskCounsellor].getName)
-    ) match {
-      case Some(found) => getMetrics(found, GetGroomStats)
-      case None => 
+    services.find( service => service.equalsIgnoreCase(targetService)) match {
+      case Some(found) => start() 
+      case None => LOG.warning("Service {} not available!", targetService)
     }
+
+  override def request() = retrieve(targetService, GetGroomStats)
+
+  override def statsFound(s: Writable) = report(s)
 
   override def dest(): String = classOf[GroomsTracker].getName
 
-  override def collect(): Writable = null.asInstanceOf[Writable]
-
-
-  /**
-   * Receive message from TaskCounsellor reporting GroomServerStat to 
-   * {@link GroomTaskTracker}.
-  def report: Receive = {
-    case stat: GroomServerStat => { 
-      LOG.info("Report {} stat to {}", stat.getName, reporter.path.name)
-      reporter ! stat
-    }
-  }
-
-  override def receive = unknown
-   */
 }
 
