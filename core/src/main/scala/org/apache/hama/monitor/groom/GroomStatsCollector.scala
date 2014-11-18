@@ -27,8 +27,7 @@ import org.apache.hama.monitor.master.GroomsTracker
 /**
  * Report GroomServer information to GroomsTracker.
  * - free/ occupied task slots
- * - slots occupied by which job relation.
- * - slot master relation. (future)
+ * - slots occupation to job relation.
  */
 final class GroomStatsCollector extends Collector {
 

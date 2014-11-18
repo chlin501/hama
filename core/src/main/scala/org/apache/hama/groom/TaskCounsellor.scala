@@ -25,6 +25,8 @@ import org.apache.hama.Service
 import org.apache.hama.Agent
 import org.apache.hama.Spawnable
 import org.apache.hama.conf.Setting
+import org.apache.hama.monitor.GetGroomStats
+import org.apache.hama.monitor.GetTaskStats
 import org.apache.hama.master._
 import org.apache.hama.master.Directive._
 import org.apache.hama.master.Directive.Action._
@@ -467,14 +469,19 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   def postContainerStopped(executor: ActorRef) {}
 
-/*
   def report: Receive = {
-    case GetGroomSpec =>  // from GroomStatsCollector
+    case GetGroomStats => { // from GroomStatsCollector
+      // create stats
+      // sender ! GroomStats(...)
     }
-    case GetTaskStats => //from TaskStatsCollector
+    case GetTaskStats => { // from TaskStatsCollector
+      // current task snapshot
+      // sender ! TaskStats(task)
+    }
+    case rest@_ => LOG.warning("Unknown metrics request for reporting from {}",
+                               sender.path.name)
   }
-*/
 
-  override def receive = /*report orElse*/ launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse taskRequest orElse receiveDirective orElse unknown
+  override def receive = report orElse launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse taskRequest orElse receiveDirective orElse unknown
 
 }

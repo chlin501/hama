@@ -17,61 +17,13 @@
  */
 package org.apache.hama.monitor
 
-import akka.actor.Actor
 import akka.actor.ActorRef
-import java.io.DataInput
-import java.io.DataOutput
-import org.apache.hadoop.io.Text
-import org.apache.hadoop.io.ObjectWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Periodically
 import org.apache.hama.Tick
 import org.apache.hama.logging.CommonLog
-
-sealed trait CollectorMessages
-final case object ListService extends CollectorMessages
-final case class ServicesAvailable(services: Array[String]) 
-      extends CollectorMessages
-final case class GetMetrics(service: String/*, command: Any*/) extends CollectorMessages
-
-object Stats {
-
-  def apply(dest: String, data: Writable): Stats = {
-    if(null == dest || dest.isEmpty) 
-      throw new IllegalArgumentException("Destination (tracker) is missing!")
-    new Stats(dest, data)
-  }
-
-}
-
-/**
- * Statistics data to be reported.
- * @param d is the destination to which this stats will be sent.
- * @param v is the stats collected.
- */
-final class Stats(d: String, v: Writable) extends Writable 
-                                          with CollectorMessages {
-
-  var tracker: Text = new Text(d)
-  var value: Writable = v 
-
-  def dest(): String = tracker.toString
-  def data(): Writable = value
-
-  override def readFields(in: DataInput) {
-    tracker = new Text(Text.readString(in))
-    value = ObjectWritable.readObject(in, new HamaConfiguration).
-                           asInstanceOf[Writable]
-  }
-
-  override def write(out: DataOutput) {
-    tracker.write(out)
-    value.write(out)
-  }
-
-}
 
 class WrappedCollector(reporter: ActorRef, collector: Collector) 
       extends Agent with Periodically {
@@ -89,7 +41,7 @@ class WrappedCollector(reporter: ActorRef, collector: Collector)
   def services: Receive = {
     case ListService => reporter ! ListService
     case ServicesAvailable(services) => collector.servicesFound(services)
-    case GetMetrics(service) => reporter ! GetMetrics(service)
+    case GetMetrics(service, command) => reporter ! GetMetrics(service, command)
   }
 
   override def receive = services orElse tickMessage orElse unknown
@@ -156,8 +108,8 @@ trait Collector extends Plugin {
   /**
    * Obtain metrics exported by a specific service.
    */
-  def getMetrics(service: String) = wrapper match {
-    case Some(found) => found ! GetMetrics(service) 
+  def getMetrics(service: String, command: Any) = wrapper match {
+    case Some(found) => found ! GetMetrics(service, command) 
     case None => throw new RuntimeException("WrappedCollector not found!")
   }
 

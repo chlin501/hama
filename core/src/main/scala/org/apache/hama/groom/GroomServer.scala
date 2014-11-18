@@ -97,10 +97,10 @@ class GroomServer(setting: Setting, finder: MasterFinder)
     case stats: Stats => master.map { m =>
       findProxyBy(m.getActorName).map { (proxy) => proxy forward stats }
     }
-    case ListService => 
-      sender ! ServicesAvailable(services.map { service => service.path.name }.toArray)
-    case GetMetrics(serviceName) => findServiceBy(serviceName).map { service => 
-      service forward GetMetrics(serviceName)
+    case ListService => sender ! ServicesAvailable(services.map { service => 
+      service.path.name }.toArray)
+    case GetMetrics(serviceName, command) => findServiceBy(serviceName).map { 
+      service => service forward command
     }
   }
 

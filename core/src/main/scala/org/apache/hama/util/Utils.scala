@@ -24,6 +24,7 @@ import akka.actor.ChildActorPath
 import akka.actor.RootActorPath
 import akka.pattern.ask
 import akka.util.Timeout
+import org.apache.hadoop.io.NullWritable
 import org.apache.hama.ProxyInfo
 import org.apache.hama.SystemInfo
 import scala.concurrent.Await
@@ -72,6 +73,10 @@ object Utils {
     if(-2 == port) throw new RuntimeException("Remote port is not provided!")
     new SystemInfo(addr.protocol, addr.system, host, port)
   }
+
+  def nullString(): String = NullWritable.get.toString
+
+  def isNullString(compared: String): Boolean = nullString.equals(compared)
 
 }
 

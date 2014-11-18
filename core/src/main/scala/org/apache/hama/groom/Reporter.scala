@@ -65,7 +65,7 @@ class Reporter(setting: Setting, groom: ActorRef)
   def report: Receive = {
     case stats: Stats => groom forward stats 
     case ListService => groom forward ListService
-    case command: GetMetrics => groom forward command
+    case request: GetMetrics => groom forward request
   }
 
   def receive = report orElse unknown
