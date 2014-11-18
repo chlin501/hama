@@ -34,7 +34,7 @@ import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-// TODO: create Spec class (extends writable) with slot, max task, etc. info
+// TODO: create stats class (extends writable) with slot, max task, etc. info
 //       once started up, pass spec to reporter, which reports to monitor.
 class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef) 
       extends Service with Spawnable {
@@ -134,8 +134,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @return GroomServerStat contains the latest tasks statistics.
 TODO: refactor the way in obtaining groom information.
   def currentGroomStats(): GroomStats = {
-    val stat = GroomStats(getGroomServerHost, 
-                                   getGroomServerPort, getMaxTasks)
+    val stat = GroomStats(host, port, maxTasks, queue, slots)
+
     directiveQueue.foreach( directive => {
       directive match {
         case null => {
@@ -472,10 +472,10 @@ TODO: refactor the way in obtaining groom information.
 
   def postContainerStopped(executor: ActorRef) {}
 
-  def report: Receive = {
-    case GetGroomStats => { // from GroomStatsCollector
+  def report: Receive = { // TODO: move to Exportable
+    case GetGroomStats => { 
       // create stats
-      // sender ! GroomStats(currentGroomStats)
+      // sender ! currentGroomStats
     }
     case GetTaskStats => { // from TaskStatsCollector
       // current task snapshot

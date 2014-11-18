@@ -31,6 +31,16 @@ import scala.util.Failure
 
 object Setting {
 
+  def change(systemName: String, nodes: Setting*) = nodes.foreach ( node => 
+    node.isInstanceOf[MasterSetting] match {
+      case true => node.hama.set("master.actor-system.name", systemName) 
+      case false => node.isInstanceOf[GroomSetting] match {
+        case true => node.hama.set("groom.actor-system.name", systemName)
+        case false => throw new RuntimeException("Unsupported setting "+node)
+      }
+    }
+  )
+
   def master(): Setting = master(new HamaConfiguration)
 
   def master(conf: HamaConfiguration): Setting = new MasterSetting(conf)
