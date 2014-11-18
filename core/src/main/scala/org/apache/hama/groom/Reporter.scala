@@ -45,19 +45,19 @@ class Reporter(setting: Setting, groom: ActorRef)
   import Reporter._
 
   override def initializeServices {
-    val defaultClasses = setting.hama.get("reporter.default.plugin.classes",
+    val defaultClasses = setting.hama.get("reporter.default.probe.classes",
                                           defaultReporters.mkString(","))
-    load(setting.hama, defaultClasses).foreach( plugin => {
-       LOG.debug("Default reporter to be instantiated: {}", plugin)
-       getOrCreate(plugin.name, classOf[WrappedCollector], self, plugin)
+    load(setting.hama, defaultClasses).foreach( probe => {
+       LOG.debug("Default reporter to be instantiated: {}", probe.name)
+       getOrCreate(probe.name, classOf[WrappedCollector], self, probe)
     })
     LOG.debug("Finish loading default reporters ...")
 
-    val classes = setting.hama.get("reporter.plugin.classes")
+    val classes = setting.hama.get("reporter.probe.classes")
     val nonDefault = load(setting.hama, classes)
-    nonDefault.foreach( plugin => {
-       LOG.debug("Non default trakcer to be instantiated: {}", plugin)
-       getOrCreate(plugin.name, classOf[WrappedCollector], self, plugin)
+    nonDefault.foreach( probe => {
+       LOG.debug("Non default trakcer to be instantiated: {}", probe.name)
+       getOrCreate(probe.name, classOf[WrappedCollector], self, probe)
     })
     LOG.debug("Finish loading {} non default reporters ...", nonDefault.size)
   }

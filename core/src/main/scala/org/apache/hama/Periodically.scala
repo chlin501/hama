@@ -34,10 +34,10 @@ trait Periodically { this: Agent =>
     context.system.scheduler.schedule(initial, delay, target, message)
   }
 
-  protected def ticker(message: Tick)
+  protected def ticked(message: Tick) { }
 
   protected def tickMessage: Receive = {
-    case t: Tick => ticker(t)
+    case t: Tick => ticked(t)
   }
  
 }

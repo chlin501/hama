@@ -21,7 +21,10 @@ import akka.actor.ActorRef
 import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.groom.TaskCounsellor
 import org.apache.hama.monitor.Collector
+import org.apache.hama.monitor.GetGroomStats
+import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.master.GroomsTracker
 
 /**
@@ -31,11 +34,22 @@ import org.apache.hama.monitor.master.GroomsTracker
  */
 final class GroomStatsCollector extends Collector {
 
-  override def initialize() { }
+  protected[this] var stats: Option[GroomStats] = None
+
+  override def initialize() = listServices
+
+  override def servicesFound(services: Array[String]) = 
+    services.find(service => 
+      service.equalsIgnoreCase(classOf[TaskCounsellor].getName)
+    ) match {
+      case Some(found) => getMetrics(found, GetGroomStats)
+      case None => 
+    }
 
   override def dest(): String = classOf[GroomsTracker].getName
 
   override def collect(): Writable = null.asInstanceOf[Writable]
+
 
   /**
    * Receive message from TaskCounsellor reporting GroomServerStat to 

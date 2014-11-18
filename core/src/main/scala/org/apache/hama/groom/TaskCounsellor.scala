@@ -39,12 +39,14 @@ import scala.concurrent.duration.FiniteDuration
 class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef) 
       extends Service with Spawnable {
 
-  // TODO: refactor naming stuff!
+  // TODO: refactor naming stuff! 
+  // val (groom) info = setting.... 
+  // val master = proxyInfo ...
   val groomServerHost = setting.hama.get("bsp.groom.address", "127.0.0.1")
   val groomServerPort = setting.hama.getInt("bsp.groom.port", 50000)
   val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
   val maxTasks = setting.hama.getInt("bsp.tasks.maximum", 3) 
-  val bspmaster = setting.hama.get("master.name", "bspmaster")
+  val bspmaster = setting.hama.get("master.name", "bspmaster")  
 
   // TODO: refactor
   //var sched: ActorRef = _
@@ -115,7 +117,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       if(hasFreeSlots) { 
         if(!hasTaskInQueue) { 
           //LOG.debug("Request {} for assigning new tasks ...", getSchedulerPath)
-          //sched ! RequestTask(currentGroomServerStat) TODO: groom on behalf of sending request to master. instead of lookup and send directly.
+          //sched ! RequestTask(currentGroomServerStat) TODO: groom server on behalf of sending request to master. instead of lookup and send directly.
         } 
       } 
     }
@@ -127,12 +129,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   }
    */
 
-  /**
+  /** 
    * Collect tasks information for report.
    * @return GroomServerStat contains the latest tasks statistics.
-   */
-  def currentGroomServerStat(): GroomServerStat = {
-    val stat = new GroomServerStat(getGroomServerName, getGroomServerHost, 
+TODO: refactor the way in obtaining groom information.
+  def currentGroomStats(): GroomStats = {
+    val stat = GroomStats(getGroomServerHost, 
                                    getGroomServerPort, getMaxTasks)
     directiveQueue.foreach( directive => {
       directive match {
@@ -156,6 +158,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }) 
     stat
   } 
+   */
 
   /**
    * Find if there is corresponded task running on a slot.
@@ -472,11 +475,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   def report: Receive = {
     case GetGroomStats => { // from GroomStatsCollector
       // create stats
-      // sender ! GroomStats(...)
+      // sender ! GroomStats(currentGroomStats)
     }
     case GetTaskStats => { // from TaskStatsCollector
       // current task snapshot
-      // sender ! TaskStats(task)
+      // sender ! TaskStats(task) 
     }
     case rest@_ => LOG.warning("Unknown metrics request for reporting from {}",
                                sender.path.name)

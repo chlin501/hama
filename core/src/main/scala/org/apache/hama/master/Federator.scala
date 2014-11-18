@@ -46,19 +46,19 @@ class Federator(setting: Setting) extends Ganglion with LocalService {
   import Federator._
 
   override def initializeServices {
-    val defaultClasses = setting.hama.get("federator.default.plugin.classes", 
+    val defaultClasses = setting.hama.get("federator.default.probe.classes", 
                                           defaultTrackers.mkString(","))
-    load(setting.hama, defaultClasses).foreach( plugin => { 
-       LOG.debug("Default trakcer to be instantiated: {}", plugin)
-       getOrCreate(plugin.name, classOf[WrappedTracker], self, plugin) 
+    load(setting.hama, defaultClasses).foreach( probe => { 
+       LOG.debug("Default trakcer to be instantiated: {}", probe.name)
+       getOrCreate(probe.name, classOf[WrappedTracker], self, probe) 
     })
     LOG.debug("Finish loading default trackers ...")
 
-    val classes = setting.hama.get("federator.plugin.classes")
+    val classes = setting.hama.get("federator.probe.classes")
     val nonDefault = load(setting.hama, classes)
-    nonDefault.foreach( plugin => {
-       LOG.debug("Non default trakcer to be instantiated: {}", plugin)
-       getOrCreate(plugin.name, classOf[WrappedTracker], self, plugin) 
+    nonDefault.foreach( probe => {
+       LOG.debug("Non default trakcer to be instantiated: {}", probe.name)
+       getOrCreate(probe.name, classOf[WrappedTracker], self, probe) 
     })
     LOG.debug("Finish loading {} non default trackers ...", nonDefault.size)
   }

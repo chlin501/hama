@@ -18,27 +18,38 @@
 package org.apache.hama.monitor
 
 import akka.actor.ActorRef
+import akka.actor.Cancellable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Periodically
 import org.apache.hama.Tick
+import org.apache.hama.Ticker
 import org.apache.hama.logging.CommonLog
 
-class WrappedCollector(reporter: ActorRef, collector: Collector) 
+final case object StartTick
+final case object CancelTick
+
+final class WrappedCollector(reporter: ActorRef, collector: Collector) 
       extends Agent with Periodically {
+
+  import Collector._
+
+  private var cancellable: Option[Cancellable] = None
 
   override def preStart() = {
     collector.wrapper = Option(self)
     collector.initialize
   }
 
-  override def ticker(tick: Tick) = collector.collect() match {
-    case null =>
+  override def ticked(tick: Tick) = collector.collect() match {
+    case EmptyStats =>
     case data@_ => reporter ! Stats(collector.dest, data) 
   }
 
   def services: Receive = {
+    case StartTick => cancellable = Option(tick(self, Ticker)) // TODO: allow customized delay, etc.
+    case CancelTick => cancellable.map { c => c.cancel } 
     case ListService => reporter ! ListService
     case ServicesAvailable(services) => collector.servicesFound(services)
     case GetMetrics(service, command) => reporter ! GetMetrics(service, command)
@@ -58,7 +69,7 @@ class WrappedTracker(federator: ActorRef, tracker: Tracker) extends Agent {
 
 }
 
-trait Plugin extends CommonLog { 
+trait Probe extends CommonLog { 
 
   protected var conf: HamaConfiguration = new HamaConfiguration
 
@@ -75,7 +86,7 @@ trait Plugin extends CommonLog {
 /**
  * Track specific stats from grooms and react if necessary.
  */
-trait Tracker extends Plugin {
+trait Tracker extends Probe {
 
   // TODO: list current master service
   //       ability to receive message from groom (master on behalf of groom)
@@ -88,55 +99,74 @@ trait Tracker extends Plugin {
 
 }
 
+object Collector {
+
+  val EmptyStats = null.asInstanceOf[Writable]
+
+}
+
 /**
  * Collect specific groom stats data.
  */
-trait Collector extends Plugin {
+trait Collector extends Probe {
 
 // TODO: find services available
 //       obtain metrics or service execut provided collector func and return metrics (safety)
 
+  import Collector._
+
   protected[monitor] var wrapper: Option[ActorRef] = None
 
-  def listServices() = wrapper match { 
+  protected[monitor] def start() = wrapper match {  
+    case Some(found) => found ! StartTick 
+    case None => throw new RuntimeException("WrappedCollector not found!")
+  }
+
+  protected[monitor] def cancel() = wrapper match { 
+    case Some(found) => found ! CancelTick
+    case None => throw new RuntimeException("WrappedCollector not found!")
+  }
+
+  protected[monitor] def listServices() = wrapper match { 
     case Some(found) => found ! ListService
     case None => throw new RuntimeException("WrappedCollector not found!")
   }
 
-  def servicesFound(services: Array[String]) { }
+  protected[monitor] def servicesFound(services: Array[String]) { }
 
   /**
    * Obtain metrics exported by a specific service.
    */
-  def getMetrics(service: String, command: Any) = wrapper match {
-    case Some(found) => found ! GetMetrics(service, command) 
-    case None => throw new RuntimeException("WrappedCollector not found!")
-  }
+  protected[monitor] def getMetrics(service: String, command: Any) = 
+    wrapper match {
+      case Some(found) => found ! GetMetrics(service, command) 
+      case None => throw new RuntimeException("WrappedCollector not found!")
+    }
 
   /**
    * Destination, or tracker name, where stats will be send to. 
    */
-  def dest(): String
+  protected[monitor] def dest(): String
 
   /**
    * Collect stats function.
    */
-  def collect(): Writable 
+  protected[monitor] def collect(): Writable 
 
 } 
 
 // TODO: add quartz scheduler in the future
 trait Ganglion {
 
-  protected def load(conf: HamaConfiguration, classes: String): Seq[Plugin] =
+  protected def load(conf: HamaConfiguration, classes: String): Seq[Probe] =
     if(null == classes || classes.isEmpty) Seq()
     else {
       val classNames = classes.split(",")
       classNames.map { className => {
         val clazz = Class.forName(className.trim)
-        classOf[Plugin] isAssignableFrom clazz match {
+        classOf[Probe] isAssignableFrom clazz match {
           case true => {
-            val instance = clazz.asInstanceOf[Class[Plugin]].newInstance
+            val instance = clazz.asInstanceOf[Class[Probe]].newInstance
             instance.setConfiguration(conf)
             Option(instance)
           }

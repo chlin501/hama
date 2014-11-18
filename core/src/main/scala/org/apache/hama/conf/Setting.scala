@@ -72,8 +72,6 @@ trait Setting {
 
   def config(): Config
 
-  def info(system: String, host: String, port: Int): SystemInfo
-
   def info(): SystemInfo
 
   /**
@@ -105,12 +103,10 @@ class MasterSetting(conf: HamaConfiguration) extends Setting {
   override def config(): Config = ConfigFactory.parseString(" master { " + 
     akka(host, port, "master") + " }").getConfig("master")
 
-  override def info(system: String, host: String, port: Int): SystemInfo = 
+  protected def info(system: String, host: String, port: Int): SystemInfo = 
     new SystemInfo(system, host, port)
 
-  override def info(): SystemInfo = {
-    info(sys, host, port)
-  }
+  override def info(): SystemInfo = info(sys, host, port)
 
   override def name(): String = conf.get("master.name", "bspmaster")
 
@@ -138,7 +134,7 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
   override def config(): Config = ConfigFactory.parseString(" groom { " + 
     akka(host, port, "groom") + " }").getConfig("groom")
 
-  override def info(system: String, host: String, port: Int): SystemInfo = 
+  protected def info(system: String, host: String, port: Int): SystemInfo = 
     new SystemInfo(system, host, port)
 
   override def info(): SystemInfo = info(sys, host, port)

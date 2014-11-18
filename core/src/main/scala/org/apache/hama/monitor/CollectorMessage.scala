@@ -80,26 +80,52 @@ final class Stats(d: String, v: Writable) extends Writable
 
 object GroomStats {
 
+  def apply(host: String, port: Int, maxTasks: Int,
+            queue: Array[String], slots: Array[String]): GroomStats = {
+    val stats = new GroomStats
+    stats.h = host
+    stats.p = port
+    stats.mt = maxTasks
+    stats.q = toWritable(queue)
+    stats.s = toWritable(slots) 
+    stats
+  }
+
   def apply(host: String, port: Int, maxTasks: Int): GroomStats = {
     val stats = new GroomStats
     stats.h = host
     stats.p = port
     stats.mt = maxTasks
     stats.q = defaultQueue
-    stats.s = defaultSlots
+    stats.s = defaultSlots(maxTasks)
     stats
   }
 
-  def defaultQueue(): ArrayWritable = {
+  final def toWritable(strings: Array[String]): ArrayWritable = {
+    val w = new ArrayWritable(classOf[Text])
+    w.set(strings.map { e => e.asInstanceOf[Text] })
+    w
+  }
+
+  final def defaultQueue(): ArrayWritable = {
     val w = new ArrayWritable(classOf[Text])
     w.set(Array[Text]().asInstanceOf[Array[Writable]])
     w
   }
 
-  def defaultSlots(): ArrayWritable = {
+  final def defaultSlots(maxTasks: Int): ArrayWritable = {
     val w = new ArrayWritable(classOf[Text])
-    w.set(Array[Text]().asInstanceOf[Array[Writable]])
+    val max = mkSlotsString(maxTasks) 
+    w.set(max.asInstanceOf[Array[Writable]])
     w
+  }
+
+  final def mkSlotsString(maxTasks: Int): Array[Text] = {
+    val max = new Array[Text](maxTasks) 
+    for(pos <- 0 until max.length) {
+      max(pos) = new Text(nullString)
+    }
+    max
   }
 }
 
@@ -120,7 +146,7 @@ final class GroomStats extends Writable with CollectorMessages {
   protected[monitor] var q = defaultQueue
 
   /* slots */
-  protected[monitor] var s = defaultSlots
+  protected[monitor] var s = defaultSlots(mt)
   
   def host(): String = h 
 
@@ -148,12 +174,7 @@ final class GroomStats extends Writable with CollectorMessages {
     mt = in.readInt
     q = defaultQueue
     q.readFields(in)
-    s = defaultSlots
-    val grooms = new Array[Text](mt) // slots has max tasks constraint
-    for(pos <- 0 until grooms.length) {
-      grooms(pos) = new Text(nullString)
-    }
-    s.set(grooms.asInstanceOf[Array[Writable]])
+    s = defaultSlots(mt)
     s.readFields(in)
   }
 }
