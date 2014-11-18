@@ -170,7 +170,10 @@ trait Collector extends Probe {
     }
 
   protected[monitor] def report(value: Writable) = wrapper match {
-    case Some(found) => found ! Stats(dest, value)
+    case Some(found) => dest match {
+     case null | "" =>
+     case _ => found ! Stats(dest, value)
+    }
     case None => throw new RuntimeException("WrappedCollector not found!")
   }
 

@@ -132,7 +132,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   /** 
    * Collect tasks information for report.
    * @return GroomServerStat contains the latest tasks statistics.
-TODO: refactor the way in obtaining groom information.
+TODO: refactor the way in obtaining groom information e.g. host, port, etc from setting
   def currentGroomStats(): GroomStats = {
     val stat = GroomStats(host, port, maxTasks, queue, slots)
 

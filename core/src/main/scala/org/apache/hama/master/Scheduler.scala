@@ -49,6 +49,7 @@ final case object NextPlease
  *   so it's illegal/ wrong to schedule more than 2 tasks to groom1.
  *   only (max) 2 tasks are allowed to be scheduled groom1.
  */
+// TODO: need refactor
 class Scheduler(conf: HamaConfiguration, receptionist: ActorRef) 
       extends LocalService with RemoteService {
 

@@ -75,16 +75,14 @@ object GroomServer {
   }
 }
 
-// TODO: list services available
-//       service may have metrics exportable (e.g. trait Exportable#getMetrics)
-//       provide a method allowing collector (plugin) obtain related data for report
+// TODO: service may have metrics exportable (e.g. trait Exportable#getMetrics)
 class GroomServer(setting: Setting, finder: MasterFinder) 
       extends LocalService with RemoteService with MembershipParticipant { 
 
-  // TODO: get actor name e.g. reporter from setting
+  // TODO: getOrElse name and class e.g. reporter, taskCounsellor from setting
   override def initializeServices {
     retry("lookupMaster", 10, lookupMaster)
-    val reporter = getOrCreate("reporter", classOf[Reporter], setting, self) 
+    reporter = getOrCreate("reporter", classOf[Reporter], setting, self) 
     getOrCreate("taskCounsellor", classOf[TaskCounsellor], setting, self, 
                 reporter)
   }
