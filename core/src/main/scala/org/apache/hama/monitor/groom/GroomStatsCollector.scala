@@ -27,12 +27,6 @@ import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.master.GroomsTracker
 
-object GroomStatsCollector {
-
-  val targetService = classOf[TaskCounsellor].getName
-  
-}
-
 /**
  * Report GroomServer information to GroomsTracker.
  * - free/ occupied task slots
@@ -42,15 +36,16 @@ final class GroomStatsCollector extends Collector {
 
   import Collector._
 
-  import GroomStatsCollector._
+  val targetService = TaskCounsellor.simpleName(configuration)
 
   override def initialize() = listServices
 
-  override def servicesFound(services: Array[String]) = 
-    services.find( service => service.equalsIgnoreCase(targetService)) match {
-      case Some(found) => start() 
-      case None => LOG.warning("Service {} not available!", targetService)
-    }
+  override def servicesFound(services: Array[String]) = services.find( s => 
+    s.equalsIgnoreCase(targetService)
+  ) match {
+    case Some(found) => start() 
+    case None => LOG.warning("Service {} not available!", targetService)
+  }
 
   override def request() = retrieve(targetService, GetGroomStats)
 

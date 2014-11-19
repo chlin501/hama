@@ -36,6 +36,15 @@ import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
+object TaskCounsellor {
+
+  def simpleName(conf: HamaConfiguration): String = conf.get(
+    "groom.taskcounsellor.name",
+    classOf[TaskCounsellor].getSimpleName
+  )
+
+}
+
 // TODO: create stats class (extends writable) with slot, max task, etc. info
 //       once started up, pass spec to reporter, which reports to monitor.
 class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef) 
@@ -442,11 +451,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   def postContainerStopped(executor: ActorRef) {}
 
-  def report: Receive = { // TODO: move to Exportable
-    case GetGroomStats => { 
-      // create stats
-      // sender ! currentGroomStats
-    }
+  def report: Receive = { 
+    case GetGroomStats =>  sender ! currentGroomStats
     case GetTaskStats => { // from TaskStatsCollector
       // current task snapshot
       // sender ! TaskStats(task) 

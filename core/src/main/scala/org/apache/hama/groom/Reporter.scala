@@ -33,8 +33,13 @@ import org.apache.hama.util.Curator
 
 object Reporter {
 
-   val defaultReporters = Seq(classOf[TaskStatsCollector].getName,
-     classOf[GroomStatsCollector].getName, classOf[JvmStatsCollector].getName)
+  val defaultReporters = Seq(classOf[TaskStatsCollector].getName,
+    classOf[GroomStatsCollector].getName, classOf[JvmStatsCollector].getName)
+
+  def simpleName(conf: HamaConfiguration): String = conf.get(
+    "groom.reporter.name" ,
+    classOf[Reporter].getSimpleName
+  )
 
 }
 

@@ -20,6 +20,7 @@ package org.apache.hama.groom
 import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.cluster.Member
+import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
@@ -67,11 +68,16 @@ class MasterFinder(setting: Setting) extends Curator {
 
 object GroomServer {
 
+  def simpleName(conf: HamaConfiguration): String = conf.get(
+    "groom.name",
+    classOf[GroomServer].getSimpleName
+  )
+
   def main(args: Array[String]) {
     val groom = Setting.groom
     val sys = ActorSystem(groom.info.getActorSystemName, groom.config)
     sys.actorOf(Props(groom.main, groom, MasterFinder(groom)), 
-                      groom.name)
+                      simpleName(groom.hama))
   }
 }
 
@@ -79,12 +85,12 @@ object GroomServer {
 class GroomServer(setting: Setting, finder: MasterFinder) 
       extends LocalService with RemoteService with MembershipParticipant { 
 
-  // TODO: getOrElse name and class e.g. reporter, taskCounsellor from setting
   override def initializeServices {
     retry("lookupMaster", 10, lookupMaster)
-    val reporter = getOrCreate("reporter", classOf[Reporter], setting, self) 
-    getOrCreate("taskCounsellor", classOf[TaskCounsellor], setting, self, 
-                reporter)
+    val reporter = getOrCreate(Reporter.simpleName(setting.hama),
+                               classOf[Reporter], setting, self) 
+    getOrCreate(TaskCounsellor.simpleName(setting.hama), 
+                classOf[TaskCounsellor], setting, self, reporter)
   }
 
   override def stopServices = unsubscribe(self)
