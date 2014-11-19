@@ -21,6 +21,7 @@ import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Address
 import akka.actor.Props
+import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.SystemInfo
 import org.apache.hama.conf.Setting
@@ -55,11 +56,16 @@ class Registrator(setting: Setting) extends Curator {
 
 object BSPMaster {
 
+  def simpleName(conf: HamaConfiguration): String = conf.get(
+    "master.name",
+    classOf[BSPMaster].getSimpleName
+  )
+
   def main(args: Array[String]) {
     val master = Setting.master
     val sys = ActorSystem(master.info.getActorSystemName, master.config)
     sys.actorOf(Props(master.main, master, Registrator(master)), 
-                master.name)
+                simpleName(master.hama))
   }
  
 }
@@ -74,10 +80,12 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     registrator.register
     join(seedNodes)
     subscribe(self)
-    val receptionist = getOrCreate("receptionist", classOf[Receptionist], 
-                                   setting.hama) 
-    getOrCreate("federator", classOf[Federator], setting) 
-    getOrCreate("sched", classOf[Scheduler], setting.hama, receptionist) 
+    val conf = setting.hama
+    val receptionist = getOrCreate(Receptionist.simpleName(conf), 
+                                   classOf[Receptionist], conf) 
+    getOrCreate(Federator.simpleName(conf), classOf[Federator], setting) 
+    getOrCreate(Scheduler.simpleName(conf), classOf[Scheduler], 
+                conf, receptionist) 
     // TODO: change master state
   }
 

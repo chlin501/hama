@@ -32,6 +32,15 @@ import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
+object Receptionist {
+
+  def simpleName(conf: HamaConfiguration): String = conf.get(
+    "master.receptionist.name",
+    classOf[Receptionist].getSimpleName
+  )
+
+}
+
 /**
  * Receive job submission from clients and put the job to the wait queue.
  * @param conf contains specific setting for the system.
@@ -52,8 +61,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
 
   /* Operation against underlying storage. may need reload. */
   protected val operation = Operation.get(conf)
- 
-  //override def configuration: HamaConfiguration = conf
 
   /**
    * Calculate maxTasks of all GroomServers.
@@ -250,17 +257,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     }
   }
 
-  /**
-   * From GroomManager to notify a groom server's maxTasks.
-  def updateGroomStat: Receive = {
-    case GroomStat(groomServerName, maxTasks) => {
-      groomsStat ++= Map(groomServerName -> maxTasks)
-      maxTasksSum = sumOfMaxTasks
-      LOG.info("Sum up of all GroomServers maxTasks is {}", maxTasksSum)
-    }
-  }
-   */
-
-  override def receive = submitJob orElse takeFromWaitQueue /*orElse updateGroomStat*/ orElse unknown
+  override def receive = submitJob orElse takeFromWaitQueue orElse unknown
 
 }

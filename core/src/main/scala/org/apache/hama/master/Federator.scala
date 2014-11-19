@@ -36,8 +36,13 @@ final case class TrackersAvailable(services: Seq[String])
 
 object Federator {
 
-   val defaultTrackers = Seq(classOf[GroomsTracker].getName, 
-     classOf[JobTasksTracker].getName, classOf[JvmStatsTracker].getName)
+  val defaultTrackers = Seq(classOf[GroomsTracker].getName, 
+    classOf[JobTasksTracker].getName, classOf[JvmStatsTracker].getName)
+
+  def simpleName(conf: HamaConfiguration): String = conf.get(
+    "master.federator.name", 
+    classOf[Federator].getSimpleName
+  )
 
 }
 

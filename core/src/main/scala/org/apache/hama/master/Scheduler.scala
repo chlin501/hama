@@ -27,13 +27,21 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
-//import org.apache.hama.monitor.master.AskGroomServerStat
 import org.apache.hama.RemoteService
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
 final case object NextPlease
+
+object Scheduler {
+
+  def simpleName(conf: HamaConfiguration): String = conf.get(
+    "master.scheduler.name",
+    classOf[Scheduler].getSimpleName
+  )
+
+}
 
 /**
  * - Pull a job from {@link Receptionist#waitQueue} if taskAssignQueue is empty.
@@ -281,5 +289,5 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
     }
   }
 */
-  override def receive = requestTask orElse dispense orElse nextPlease /*orElse enrollment orElse actorReply*/ orElse timeout orElse unknown
+  override def receive = requestTask orElse dispense orElse nextPlease orElse timeout orElse unknown
 }
