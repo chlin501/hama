@@ -26,7 +26,10 @@ import org.apache.hadoop.io.ArrayWritable
 import org.apache.hadoop.io.ObjectWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.master.Directive
+import org.apache.hama.groom.Slot
 import org.apache.hama.util.Utils._
+import scala.collection.immutable.Queue
 
 sealed trait CollectorMessages
 final case object ListService extends CollectorMessages
@@ -100,6 +103,16 @@ object GroomStats {
     stats.s = defaultSlots(maxTasks)
     stats
   }
+
+  def list(ds: Queue[Directive]): Array[String] = ds.map { d => d match {
+    case null => nullString
+     case _ => d.task.getId.toString
+  }}.toArray
+
+  def list(slots: Set[Slot]): Array[String] = slots.map { s => s.task match {
+    case None => nullString
+    case Some(t) => t.getId.toString
+  }}.toArray
 
   final def toWritable(strings: Array[String]): ArrayWritable = {
     val w = new ArrayWritable(classOf[Text])

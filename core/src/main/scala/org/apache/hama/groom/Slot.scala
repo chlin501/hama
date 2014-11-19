@@ -18,30 +18,19 @@
 package org.apache.hama.groom
 
 import akka.actor.ActorRef
-import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Task
 
-sealed trait GroomMessage
-
 /**
- * Singnify Container actor is ready.
+ * A slot holds relation from its id sequence to a specific
+ * {@link org.apache.hama.bsp.v2.Task}.
+ * @param seq of this slot.
+ * @param task that runs on this slot.
+ * @param master to which this slot belongs.
+ * @param executor that executes the task for this slot.
  */
-private[groom] final case object ContainerReady extends GroomMessage
-
-/**
- * Singnify Container actor is stopped.
- */
-private[groom] final case object ContainerStopped extends GroomMessage
-
-private[groom] final case class PullForExecution(
-  slotSeq: Int
-) extends GroomMessage
-
-private[groom] final case class RemoveTask(
-  slotSeq: Int, taskAttemptId: TaskAttemptID
-) extends GroomMessage
-
-/**
- * Client notifies {@link TaskCounsellor} to stop {@link Executor}.
- */
-private[groom] final case class StopExecutor(slotSeq: Int) extends GroomMessage
+// TODO: change Task to taskAttemptId because Task would be obselete once
+//       task gets executed by superstep worker. task stats may change.
+final case class Slot(seq: Int, 
+                      task: Option[Task], 
+                      master: String, 
+                      executor: Option[ActorRef]) 

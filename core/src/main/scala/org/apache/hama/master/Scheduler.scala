@@ -49,7 +49,11 @@ final case object NextPlease
  *   so it's illegal/ wrong to schedule more than 2 tasks to groom1.
  *   only (max) 2 tasks are allowed to be scheduled groom1.
  */
-// TODO: need refactor
+// TODO: separate schedule functions from this concrete impl.
+//       e.g. class WrappedScheduler(setting: Setting, scheduler: Scheduler)
+//       trait scheduluer#assign // passive
+//       trait scheduluer#schedule // active
+//       execute job one at a time (simpler for recovery).
 class Scheduler(conf: HamaConfiguration, receptionist: ActorRef) 
       extends LocalService with RemoteService {
 
@@ -75,11 +79,10 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
   protected var processingQueue = Queue[Job]()
 
   /* Store jobs that finishes its computation. */
+  // TODO: move finished jobs to Federator's JobHistoryTracker, where storing job's metadata e.g. setting only?
   // protected var finishedQueue = Queue[Job]() 
 
   var taskAssignQueueChecker: Cancellable = _
-
-  //override def configuration: HamaConfiguration = conf
 
   def isTaskAssignQueueEmpty: Boolean = taskAssignQueue.isEmpty
 

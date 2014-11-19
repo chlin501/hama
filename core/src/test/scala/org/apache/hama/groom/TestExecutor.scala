@@ -45,8 +45,9 @@ class Aggregator(setting: Setting, groom: ActorRef, reporter: ActorRef,
   private def isZero: Boolean = (command == 0)
 
   override def initializeServices {
-    initializeSlots(getMaxTasks)
-    LOG.info("Done initializing {} with {} slots ...", self, getMaxTasks)
+    initializeSlots(setting.hama.getInt("bsp.tasks.maximum", 3))
+    LOG.info("Done initializing {} with {} slots ...", self, 
+             setting.hama.getInt("bsp.tasks.maximum", 3))
   }
 
   // LaunchAck(2,attempt_test_0001_000007_2)

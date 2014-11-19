@@ -27,6 +27,8 @@ import org.apache.hama.Spawnable
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GetTaskStats
+import org.apache.hama.monitor.GroomStats
+import org.apache.hama.monitor.GroomStats._
 import org.apache.hama.master._
 import org.apache.hama.master.Directive._
 import org.apache.hama.master.Directive.Action._
@@ -38,18 +40,6 @@ import scala.concurrent.duration.FiniteDuration
 //       once started up, pass spec to reporter, which reports to monitor.
 class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef) 
       extends Service with Spawnable {
-
-  // TODO: refactor naming stuff! 
-  // val (groom) info = setting.... 
-  // val master = proxyInfo ...
-  val groomServerHost = setting.hama.get("bsp.groom.address", "127.0.0.1")
-  val groomServerPort = setting.hama.getInt("bsp.groom.port", 50000)
-  val groomServerName = "groom_"+ groomServerHost +"_"+ groomServerPort
-  val maxTasks = setting.hama.getInt("bsp.tasks.maximum", 3) 
-  val bspmaster = setting.hama.get("master.name", "bspmaster")  
-
-  // TODO: refactor
-  //var sched: ActorRef = _
 
   /**
    * The max size of slots can't exceed configured maxTasks.
@@ -67,12 +57,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected var pendingQueue = Queue[Directive]()
 
-  /* can be overriden in test. */ // TODO: refactor naming stuff!!!
-  protected def getGroomServerName(): String = groomServerName
-  protected def getGroomServerHost(): String = groomServerHost
-  protected def getGroomServerPort(): Int = groomServerPort
-  protected def getMaxTasks(): Int = maxTasks
-
   /**
    * Initialize slots with default slots value to 3, which comes from maxTasks,
    * or "bsp.tasks.maximum".
@@ -80,21 +64,22 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected def initializeSlots(constraint: Int = 3) {
     for(seq <- 1 to constraint) {
-      slots ++= Set(Slot(seq, None, bspmaster, None))
+      slots ++= Set(Slot(seq, None, "", None))
     }
     LOG.debug("{} GroomServer slots are initialied.", constraint)
   }
 
-  override def initializeServices = initializeSlots(getMaxTasks)
+  override def initializeServices = initializeSlots(setting.hama.getInt(
+    "bsp.tasks.maximum", 3))
 
-  def hasTaskInQueue: Boolean = !directiveQueue.isEmpty
+  protected def hasTaskInQueue: Boolean = !directiveQueue.isEmpty
 
   /**
    * Check if there is slot available. 
    * @return Boolean denotes whether having free slots. Tree if free slots 
    *                 available, false otherwise.
    */
-  def hasFreeSlots(): Boolean = {
+  protected def hasFreeSlots(): Boolean = {
     var isOccupied = true
     var hasFreeSlot = false
     slots.takeWhile(slot => {
@@ -110,7 +95,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * slots are free but any directives exist, process directive first. 
    * @return Receive is partial function.
    */
-  def taskRequest: Receive = {
+  protected def taskRequest: Receive = {
     case TaskRequest => {
       //LOG.debug("In TaskRequest, sched: {}, hasTaskInQueue: {}, "+
                 //"hasFreeSlots: {}", sched, hasTaskInQueue, hasFreeSlots)
@@ -132,33 +117,18 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   /** 
    * Collect tasks information for report.
    * @return GroomServerStat contains the latest tasks statistics.
-TODO: refactor the way in obtaining groom information e.g. host, port, etc from setting
-  def currentGroomStats(): GroomStats = {
-    val stat = GroomStats(host, port, maxTasks, queue, slots)
-
-    directiveQueue.foreach( directive => {
-      directive match {
-        case null => {
-          LOG.warning("Directive shouldn't be null!")
-          stat.addToQueue("(null)")
-        }
-        case _ => stat.addToQueue(directive.task.getId.toString)
-      }
-    })
-
-    if(slots.size != stat.slotsLength)
-      throw new RuntimeException("Incorrect slots size: "+stat.slotsLength);
-    var pos = 0
-    slots.foreach( slot => {
-      slot.task match {
-        case None => stat.markWithNull(pos)
-        case Some(aTask) => stat.mark(pos, aTask.getId.toString)
-      }
-      pos += 1
-    }) 
-    stat
-  } 
    */
+  protected def currentGroomStats(): GroomStats = {
+    val host = setting.host
+    val port = setting.port
+    val maxTasks = setting.hama.getInt("bsp.tasks.maximum", 3) 
+    val queueIds = list(directiveQueue) 
+    val slotIds = list(slots) 
+    LOG.debug("Current groom stats: host {}, port {}, maxTasks {}, "+
+              "queue tasks ids {}, slots ids {}", host, port, maxTasks, 
+              queueIds, slotIds)
+    GroomStats(host, port, maxTasks, queueIds, slotIds)
+  } 
 
   /**
    * Find if there is corresponded task running on a slot.

@@ -82,7 +82,7 @@ class GroomServer(setting: Setting, finder: MasterFinder)
   // TODO: getOrElse name and class e.g. reporter, taskCounsellor from setting
   override def initializeServices {
     retry("lookupMaster", 10, lookupMaster)
-    reporter = getOrCreate("reporter", classOf[Reporter], setting, self) 
+    val reporter = getOrCreate("reporter", classOf[Reporter], setting, self) 
     getOrCreate("taskCounsellor", classOf[TaskCounsellor], setting, self, 
                 reporter)
   }
