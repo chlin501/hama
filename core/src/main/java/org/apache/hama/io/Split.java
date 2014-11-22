@@ -16,25 +16,21 @@
  * limitations under the License.
  */
 package org.apache.hama.io;
-
+/*
 import org.apache.hadoop.io.Writable;
 
-/**
  * An abstract class that contains split information about length and hosts, 
  * which tell what host has this split.
- */
+@Deprecated // TODO: remove. use FileSplit (input split) instead.
 public abstract class Split implements Writable {
 
-  /**
    * Denote the length of this split.
    * @return long is the size of this split.
-   */
   public abstract long length();
 
-  /**
    * Hosts where this split is stored.
    * @return String[] is a list of the hosts that hold this split object.
-   */
   public abstract String[] hosts();
-
+  
 }
+*/

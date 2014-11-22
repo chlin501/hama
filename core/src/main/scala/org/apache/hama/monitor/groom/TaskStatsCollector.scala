@@ -39,7 +39,6 @@ final class TaskStatsCollector extends Collector {
 
   override def initialize() = listServices
 
-
   override def servicesFound(services: Array[String]) = services.find( s => 
     s.equalsIgnoreCase(targetService)
   ) match {

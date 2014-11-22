@@ -31,7 +31,7 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
 import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
-import org.apache.hama.io.PartitionedSplit;
+//import org.apache.hama.io.PartitionedSplit;
 
 /**
  * A view to task information. 
@@ -40,6 +40,13 @@ import org.apache.hama.io.PartitionedSplit;
  * old one provided.
  * This class can also produce metrics stats for monitor.
  */
+// TODO: provide a new job client that communicate with master where the client
+//       makes splits without storing actual bytes data. 
+//       then pass file split, wrapped in task, to master then groom. 
+//       in groom, create something similar to trackred record reader where
+//       first, call getFsStatistics()
+//       second, call getInputBytes() twice for tracking
+//       see MapTask and Task
 public final class Task implements Writable { 
 
   final Log LOG = LogFactory.getLog(Task.class);
@@ -59,7 +66,7 @@ public final class Task implements Writable {
   private LongWritable finishTime = new LongWritable(0);
 
   /* The input data for this task. */
-  private PartitionedSplit split; 
+  //private PartitionedSplit split;  // TODO: use file split instead.
 
   // TODO: change current superstep type to long!
   private IntWritable currentSuperstep = new IntWritable(1);
@@ -161,7 +168,7 @@ public final class Task implements Writable {
     private HamaConfiguration conf = new HamaConfiguration();
     private long startTime;
     private long finishTime;
-    private PartitionedSplit split = null;
+    //private PartitionedSplit split = null;
     private int currentSuperstep;
     private Phase phase = Phase.SETUP;
     private State state = State.WAITING;
@@ -177,7 +184,7 @@ public final class Task implements Writable {
       this.conf = new HamaConfiguration(old.getConfiguration());
       this.startTime = old.getStartTime();
       this.finishTime = old.getFinishTime();
-      this.split = old.getSplit(); 
+      //this.split = old.getSplit(); 
       this.currentSuperstep = old.getCurrentSuperstep(); 
       this.phase = old.getPhase();
       this.state = old.getState();
@@ -216,11 +223,11 @@ public final class Task implements Writable {
      * - hosts.
      * - partition id.
      * - data length.
-     */
     public Builder setSplit(final PartitionedSplit split) {
       this.split = split;
       return this;
     }
+     */
 
     public Builder setCurrentSuperstep(final int currentSuperstep) {
       if(0 >= currentSuperstep)
@@ -267,7 +274,7 @@ public final class Task implements Writable {
                       conf,
                       startTime, 
                       finishTime, 
-                      split, 
+                      //split, 
                       currentSuperstep,
                       state, 
                       phase,
@@ -282,7 +289,7 @@ public final class Task implements Writable {
               final HamaConfiguration conf,
               final long startTime, 
               final long finishTime, 
-              final PartitionedSplit split, 
+              //final PartitionedSplit split, 
               final int currentSuperstep,
               final State state, 
               final Phase phase, 
@@ -296,10 +303,12 @@ public final class Task implements Writable {
       throw new IllegalArgumentException("HamaConfiguration is missing!");
     this.startTime = new LongWritable(startTime);
     this.finishTime = new LongWritable(finishTime);
+/*
     this.split = split;
     if(null == this.split)  
-      LOG.warn("Split for task "+this.id.toString()+" is null. This might "+
-               "indicate no input is required.");
+      LOG.warn("No split for task "+this.id.toString()+". Perhaps no input "+
+               "is required.");
+*/
     if(0 > currentSuperstep)
       throw new IllegalArgumentException("Invalid superstep "+currentSuperstep+
                                          " value!");
@@ -352,10 +361,10 @@ public final class Task implements Writable {
    * - partition id.
    * - file length.
    * @return 
-   */
   public PartitionedSplit getSplit() {
     return this.split;
   }
+   */
 
   public int getCurrentSuperstep() {
     return this.currentSuperstep.get();
@@ -466,12 +475,14 @@ public final class Task implements Writable {
     this.configuration.write(out);
     this.startTime.write(out);
     this.finishTime.write(out);
+/*
     if(null != this.split) {
       out.writeBoolean(true);
       this.split.write(out);
     } else {
       out.writeBoolean(false);
     }
+*/
     this.currentSuperstep.write(out);
     WritableUtils.writeEnum(out, state);
     WritableUtils.writeEnum(out, phase);
@@ -489,12 +500,14 @@ public final class Task implements Writable {
     this.startTime.readFields(in);
     this.finishTime = new LongWritable(0);
     this.finishTime.readFields(in);
+/*
     if(in.readBoolean()) {
       this.split = new PartitionedSplit();
       this.split.readFields(in);
     } else {
       this.split = null;
     } 
+*/
     this.currentSuperstep = new IntWritable(0);
     this.currentSuperstep.readFields(in);
     this.state = WritableUtils.readEnum(in, State.class);
@@ -537,6 +550,13 @@ public final class Task implements Writable {
                    isCompleted() + "," + 
                    marker.toString() + "," +
                    getTotalBSPTasks()+")";
+  }
+
+  /**
+   * Create a new task with the same content.
+   */
+  public Task newTask() {
+    return new Builder(this).build();
   }
 
 }

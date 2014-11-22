@@ -21,6 +21,7 @@ import java.io.IOException
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.bsp.Counters
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.bsp.FileSplit
 
 object IO {
 
@@ -70,7 +71,7 @@ trait IO[I, O] {
    * @param split is partial data to be consumed by the corresponded.
    * @param counters is used for statistics.
    */
-  def initialize(taskConf: HamaConfiguration, split: PartitionedSplit, 
+  def initialize(taskConf: HamaConfiguration, split: FileSplit, 
                  counters: Counters)
 
 }

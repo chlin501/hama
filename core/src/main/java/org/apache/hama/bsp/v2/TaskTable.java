@@ -28,7 +28,7 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.HamaConfiguration;
-import org.apache.hama.io.PartitionedSplit;
+//import org.apache.hama.io.PartitionedSplit;
 
 public final class TaskTable implements Writable {
 
@@ -48,9 +48,11 @@ public final class TaskTable implements Writable {
 
   TaskTable() {} // for Writable
 
+/*
   public TaskTable(final BSPJobID jobId, final HamaConfiguration conf) {
     this(jobId, conf, null); 
   }
+*/
 
   /**
    * Initialize a 2d task array with numBSPTasks rows, and a task in column.
@@ -66,8 +68,8 @@ public final class TaskTable implements Writable {
    */ 
   // TODO: perhaps use other data structure to record tasks for efficiency. 
   public TaskTable(final BSPJobID jobId, 
-                   final HamaConfiguration conf,
-                   final PartitionedSplit[] splits) {
+                   final HamaConfiguration conf/*,
+                   final PartitionedSplit[] splits*/) {
     this.jobId = jobId;
     if(null == this.jobId)
       throw new IllegalArgumentException("TaskTable's BSPJobID is missing!");
@@ -77,6 +79,7 @@ public final class TaskTable implements Writable {
       throw new IllegalArgumentException("HamaConfiguration for job id "+
                                          this.jobId.toString()+" is missing!");
 
+/*
     final PartitionedSplit[] rawSplits = splits;
     // we can't assert numBSPTasks value against splits length because
     // there may not have splits provided (meaning null == splits)!
@@ -85,13 +88,14 @@ public final class TaskTable implements Writable {
       this.configuration.setInt("bsp.peers.num", rawSplits.length);
       LOG.info("Adjusting numBSPTasks to "+rawSplits.length);
     }  
+*/
 
     // init tasks
     final int numBSPTasks = getNumBSPTasks();
     this.tasks = new ArrayWritable[numBSPTasks];
     for(int row = 0; row < numBSPTasks; row++) {
       this.tasks[row] = new ArrayWritable(Task.class);
-      final PartitionedSplit split = hasSplit(rawSplits)? rawSplits[row]:null;
+      //final PartitionedSplit split = hasSplit(rawSplits)? rawSplits[row]:null;
       set(row, new Task[] {
         new Task.Builder().setId(IDCreator.newTaskID()
                                           .withId(getJobId())
@@ -100,7 +104,7 @@ public final class TaskTable implements Writable {
                                           .withId(1) // TaskAttemptID's id
                                           .build()).
                           setConfiguration(conf).
-                          setSplit(split).
+                          //setSplit(split).
                           build()
       }); 
     }
@@ -112,10 +116,10 @@ public final class TaskTable implements Writable {
    * Check if there are splits.
    * @param rawSplits are data to be consumed as input.
    * @return boolean will either returns true if having splits; false otherwise.
-   */
   boolean hasSplit(final PartitionedSplit[] rawSplits) {
     return (null != rawSplits && 0 < rawSplits.length);
   }
+   */
 
   /* Row index is started from 0. */
   boolean isValidRow(final int row) {

@@ -139,6 +139,10 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     GroomStats(host, port, maxTasks, queueIds, slotIds)
   } 
 
+  //protected def currentTasks(): TaskStats = {
+    
+  //}
+
   /**
    * Find if there is corresponded task running on a slot.
    * @param task is the target task to be killed.
@@ -453,9 +457,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   def report: Receive = { 
     case GetGroomStats =>  sender ! currentGroomStats
-    case GetTaskStats => { // from TaskStatsCollector
-      // current task snapshot
-      // sender ! TaskStats(task) 
+    case GetTaskStats => { // sender ! TaskStats(tasks) 
     }
     case rest@_ => LOG.warning("Unknown metrics request for reporting from {}",
                                sender.path.name)

@@ -51,10 +51,13 @@ import scala.collection.JavaConversions._
  *                      save.
  * @param superstepCount indicates at which superstep this task right now is.
  */
+// TODO: task also needs to be saved so that after recovery, task related 
+//       setting can be recovered as well.
 class Checkpointer(commConf: HamaConfiguration, 
                    taskConf: HamaConfiguration, 
                    taskAttemptId: TaskAttemptID, 
                    superstepCount: Long, 
+                   // task: Task
                    messenger: ActorRef,
                    superstepWorker: ActorRef) 
       extends LocalService with Curator {

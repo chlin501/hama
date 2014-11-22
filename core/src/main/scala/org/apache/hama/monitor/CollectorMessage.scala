@@ -81,6 +81,36 @@ final class Stats(d: String, v: Writable) extends Writable
 
 }
 
+/*
+object TaskStats {
+
+  def apply(tasks: Array[Task]): TaskStats = { 
+    val stats = new TaskStats()
+    val w = new ArrayWritable(classOf[Task])  
+    w.set(tasks.asInstanceOf[Writable]) 
+    stats.t = w
+    stats
+  }
+
+}
+
+final class TaskStats extends Writable with CollectorMessages {
+
+  protected[monitor] var t: ArrayWritable = new ArrayWritable(classOf[])
+ 
+  def tasks(): Array[] = t.get().asInstanceOf[]
+
+  override def write(in: DataInput) {
+
+  }
+
+  override def readFields(out: DataOutput) { 
+
+  }
+
+}
+*/
+
 object GroomStats {
 
   def apply(host: String, port: Int, maxTasks: Int,

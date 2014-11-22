@@ -58,7 +58,7 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.apache.hama.Constants;
 import org.apache.hama.HamaConfiguration;
-import org.apache.hama.io.PartitionedSplit;
+//import org.apache.hama.io.PartitionedSplit;
 import org.apache.hama.ipc.HamaRPCProtocolVersion;
 import org.apache.hama.ipc.JobSubmissionProtocol;
 import org.apache.hama.ipc.RPC;
@@ -590,7 +590,6 @@ public class BSPJobClient extends Configured implements Tool {
    * Read split file into {@link PartitionedSplit}. It's possible that split
    * file is <b>null</b>.
    * @param in contains split information.
-   */
   public final static PartitionedSplit[] asPartitionedSplit(DataInput in) 
       throws IOException {
     final RawSplit[] splits = readSplitFile(in);
@@ -607,6 +606,7 @@ public class BSPJobClient extends Configured implements Tool {
     }
     return result;
   }
+   */
 
   /**
    * Read a splits file into a list of raw splits.

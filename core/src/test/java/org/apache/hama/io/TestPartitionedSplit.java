@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.io;
-
+/*
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
@@ -107,3 +107,4 @@ public class TestPartitionedSplit extends TestCase {
   }
   
 }
+*/

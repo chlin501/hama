@@ -26,7 +26,7 @@ import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.fs.Operation
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.io.PartitionedSplit
+//import org.apache.hama.io.PartitionedSplit
 import org.apache.hama.LocalService
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
@@ -109,7 +109,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     LOG.info("localJobFilePath is at {}", localJobFilePath)
     copyJobFile(jobId, jobFilePath, localJobFilePath)
     config.addResource(new Path(localJobFilePath)) // user provided config
-    val splits = createSplits(jobId, config)
+    //val splits = createSplits(jobId, config) TODO: use file split instead 
     LOG.info("Creating job with id {}!...", jobId)
     //adjustNumBSPTasks(jobId, config)
     if(!validateRequestedTargets(jobId, config)) {
@@ -117,7 +117,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     } else {
       Some(new Job.Builder().setId(jobId). 
                              setConf(config).
-                             withTaskTable(splits.getOrElse(null)). 
+                             //withTaskTable(splits.getOrElse(null)). 
                              build)
     }
   }
@@ -201,7 +201,6 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
    * @param config contains user supplied information.
    * @return Option[Array[PartitionedSplit]] are splits files; or None if
    *                                         no splits.
-   */
   def createSplits(jobId: BSPJobID, config: HamaConfiguration): 
       Option[Array[PartitionedSplit]] = {
 
@@ -225,6 +224,7 @@ class Receptionist(conf: HamaConfiguration) extends LocalService {
     LOG.debug("Split created for {} is {}", jobId, splitsCreated)
     splitsCreated
   }
+   */
 
   /**
    * Create required path and directories. 

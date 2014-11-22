@@ -65,7 +65,7 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
   protected var taskConf: HamaConfiguration = _
 
   // contains split information./
-  protected var split: PartitionedSplit = _
+  //protected var split: PartitionedSplit = _
   
   protected var counters: Counters = _
 
@@ -79,18 +79,18 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
    * - split
    * - counters
    */
-  def initialize(taskConf: HamaConfiguration, split: PartitionedSplit, 
+  def initialize(taskConf: HamaConfiguration, split: FileSplit, 
                  counters: Counters) {
     this.taskConf = taskConf
-    this.split = split
+    //this.split = split
     this.counters = counters
   }
 
   private def validate() {
     if(null == taskConfiguration())
       throw new RuntimeException("Task specific configuration not found!")
-    if(null == this.split) 
-      throw new RuntimeException("No split is specified!")
+    //if(null == this.split) 
+      //throw new RuntimeException("No split is specified!")
     if(null == this.counters) 
       throw new RuntimeException("Counter is missing!")
   }
@@ -141,6 +141,7 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
    */
   @throws(classOf[IOException])
   override def reader(): RecordReader[_,_] = {
+/*
     validate()
     var inputSplit: InputSplit = null
     try {
@@ -156,13 +157,8 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
     }
 
     var reader: RecordReader[_,_] = null
-    if (null != inputSplit) {
-      LOG.debug(split.getClass().getName()+" stores "+split.bytes().length+
-                " as FileSplit.")
-      var splitBuffer: DataInputStream = null
+    if (null != inputSplit) { // TODO: refactor to read from path and block location
       try {
-        val bin = new ByteArrayInputStream(split.bytes())
-        splitBuffer = new DataInputStream(bin)
         inputSplit.readFields(splitBuffer)
         if(null != reader) reader.close()
         reader = createRecordReader(inputSplit)
@@ -175,6 +171,8 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
         splitBuffer.close()
       }
     }
+*/
+    var reader: RecordReader[_,_] = null
     reader
   }
 
@@ -267,11 +265,14 @@ class DefaultIO extends IO[RecordReader[_, _], OutputCollector[_, _]]
    */
   @throws(classOf[IOException]) 
   override def writer(): OutputCollector[_, _] = {
+/*
     validate()
     val timestamp = System.currentTimeMillis()
     val dir = outputPath(timestamp, split.partitionId())
     val output = Operation.get(configuration()).makeQualified(dir)
     LOG.debug("Writer's output path "+output)
     outputCollector(output)
+*/
+    null.asInstanceOf[OutputCollector[_, _]]
   }
 }

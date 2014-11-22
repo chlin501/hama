@@ -260,8 +260,9 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     classNames.foreach( className => {
       instantiate(className, taskConf) match {
         case Success(superstep) => { 
+          // TODO: save task as well so after recovery sys knows where to restart 
           val actor = spawn("superstep-"+className, classOf[SuperstepWorker],
-                               superstep, self)
+                            /* task, */superstep, self)
           actor ! Setup(bspPeer) 
           supersteps ++= Map(className -> Spawned(superstep, actor))
         }
@@ -794,7 +795,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     report
   }
 
-  protected def report() = container ! new Report(new Task.Builder(task).build)
+  //protected def report() = container ! new Report(new Task.Builder(task).build)
+  protected def report() = container ! new Report(task.newTask)
 
   /**
    * Close all services after this actor is stopped.

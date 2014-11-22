@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.io;
-
+/*
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -24,30 +24,27 @@ import java.io.IOException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.ArrayWritable;
-import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hama.bsp.BSPJobClient.RawSplit;
 
 
-/**
  * A replacement for {@link BSPJobClient.RawSplit}.
- */
+@Deprecated // TODO: use FileSplit (InputSplit) instead
 public class PartitionedSplit extends Split {
 
   public static final Log LOG = LogFactory.getLog(PartitionedSplit.class);
  
   private Text splitClassName = new Text("");
+   * hosts doesn't contain port value and is from 
+   * FileSystem.getFileBlockLocations()'s BlockLocation.getHosts().
   private ArrayWritable hosts = new ArrayWritable(Text.class);
   private IntWritable partitionId = new IntWritable(1);
   private LongWritable splitLength = new LongWritable(0);
-  /* This represents the split binary data, generally be FileSplit. */
-  private BytesWritable fileSplitBytes = new BytesWritable();
 
   public PartitionedSplit() {} // for Writable
 
-  /**
    * Initialize PartitionedSplit with related information.
    * See {@link org.apache.hama.bsp.BSPJobClient.RawSplit}.
    * @param splitClass tells which {@link InputSplit} class it represents.
@@ -56,16 +53,8 @@ public class PartitionedSplit extends Split {
    * @param splitLength denotes the length of the file split. It's often to be
    *                    FileSplit.getLength(), meaning "the number of bytes in 
    *                    the file to process".
-   * @param bytes is the binary data representation of InputSplit, generally
-   *              be FileSplit.
-   * @param start indicates the start position of the InputSplit, generally be 
-   *              FileSplit.
-   * @param bytesLength denotes the length of the InputSplit as byte array.
-   */
   public PartitionedSplit(final Class<?> splitClass, final int partitionId, 
-                          final String[] hosts, final long splitLength, 
-                          final byte[] bytes, final int start, 
-                          int bytesLength) {
+                          final String[] hosts, final long splitLength) {
     if(null == splitClass)
       throw new IllegalArgumentException("Split class not provided.");
     this.splitClassName = new Text(splitClass.getName());
@@ -89,30 +78,22 @@ public class PartitionedSplit extends Split {
     this.hosts.set(texts);
     if(0 >= splitLength)
       throw new IllegalArgumentException("Invalid split length: "+splitLength);
+
     this.splitLength.set(splitLength);
     if(LOG.isDebugEnabled()) 
       LOG.debug("Split length value is "+this.splitLength.get());
 
-    if(null == bytes)
-      throw new IllegalArgumentException("InputSplit binary data not found!");
-    this.fileSplitBytes = new BytesWritable(bytes);
-    if(LOG.isDebugEnabled()) 
-      LOG.debug("FileSplit bytes length is "+bytes().length);
   }
 
-  /**
    * InputSplit class name, generally it's {@link FileSplit}.
    * See {@link BSPJobClient#writeSplits}.
    * @return String of the split class name.
-   */
   public String splitClassName() {
     return splitClassName.toString();
   }
 
-  /**
    * The id of partition for this split.
    * @return int value for the id.
-   */
   public int partitionId() {
     return partitionId.get();
   }
@@ -127,17 +108,12 @@ public class PartitionedSplit extends Split {
     return this.hosts.toStrings();
   }
 
-  public byte[] bytes() {
-    return this.fileSplitBytes.getBytes();
-  }
-
   @Override 
   public void write(DataOutput out) throws IOException {
     this.splitClassName.write(out);
     this.hosts.write(out);
     this.partitionId.write(out);
     this.splitLength.write(out);
-    this.fileSplitBytes.write(out);
   }
 
   @Override 
@@ -146,20 +122,17 @@ public class PartitionedSplit extends Split {
     this.hosts.readFields(in);
     this.partitionId.readFields(in);
     this.splitLength.readFields(in);
-    this.fileSplitBytes.readFields(in);
   }
 
-  /**
    * Merge {@link BSPJobClient.RawSplit} to this class without actual 
    * {@link ByteWritable} data.
    * N.B.: This function should be removed once BSPJobClient is not needed.
    * @param split is {@link BSPJobClient.RawSplit} data.
-   */
-  public void merge(RawSplit split) {
+  public void merge(RawSplit split) { 
     this.splitClassName = new Text(split.getClassName());
     this.hosts = new ArrayWritable(split.getLocations()); 
     this.partitionId = new IntWritable(split.getPartitionID());
     this.splitLength = new LongWritable(split.getDataLength());
-    this.fileSplitBytes = split.getBytes();
   }
 }
+*/

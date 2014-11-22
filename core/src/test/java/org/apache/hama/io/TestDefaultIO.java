@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.io;
-
+/*
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -184,4 +184,4 @@ public class TestDefaultIO extends TestCase {
   }
   
 }
-
+*/
