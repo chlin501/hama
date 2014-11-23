@@ -15,22 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.io;
-/*
-import org.apache.hadoop.io.Writable;
+package org.apache.hama.io
 
- * An abstract class that contains split information about length and hosts, 
- * which tell what host has this split.
-@Deprecated // TODO: remove. use FileSplit (input split) instead.
-public abstract class Split implements Writable {
+class TrackedRecordReader[R](raw: RecordReader[R]) extends RecordReader[R] {
 
-   * Denote the length of this split.
-   * @return long is the size of this split.
-  public abstract long length();
+  protected var beforePos: Long = -1
 
-   * Hosts where this split is stored.
-   * @return String[] is a list of the hosts that hold this split object.
-  public abstract String[] hosts();
-  
+  protected var afterPos: Long = -1
+
+  override def next(): R = null.asInstanceOf[R]
+
+  override def close() = raw.close
+
 }
-*/
