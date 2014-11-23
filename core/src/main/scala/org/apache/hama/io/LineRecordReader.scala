@@ -25,12 +25,15 @@ import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.LongWritable
 import org.apache.hadoop.io.Text
+import org.apache.hadoop.io.Writable
 import org.apache.hadoop.io.compress.CompressionCodec
 import org.apache.hadoop.io.compress.CompressionCodecFactory
 import org.apache.hama.HamaConfiguration
 
-sealed trait KeyValue[K, V]
-case class Pair[K, V](key: K, value: V) extends KeyValue[K, V]
+sealed trait KeyValue[+K <: Writable, +V <: Writable]
+case class Pair[K <: Writable, V <: Writable](key: K, value: V) 
+     extends KeyValue[K, V]
+case object EmptyPair extends KeyValue[Nothing, Nothing]
 
 class LineReader(in: InputStream, bufferSize: Int) 
       extends org.apache.hadoop.util.LineReader(in, bufferSize) {
@@ -112,23 +115,23 @@ class LineRecordReader(initStart: Long, initPos: Long, initEnd: Long,
   }.getOrElse(0)
 
   protected def loop(cond: => Boolean)(key: LongWritable)
-                    (f: => Int): Unit = if(cond) {
+                    (f: => Int): Boolean = if(cond) {
     key.set(pos) 
     val newSize = f
     if(0 != newSize) {
       pos += newSize
-      if(newSize > maxLineLength) {
-        loop(cond)(key)(f)
-      }
-    }
-  }
+      if(newSize > maxLineLength) loop(cond)(key)(f) else true
+    } else false
+  } else false
 
   /** Read a line. */
   override def next(): KeyValue[LongWritable, Text] = {
     val key: LongWritable = new LongWritable(0)
     val value: Text = new Text("")
-    loop(pos < end)(key)(readTo(value))
-    Pair[LongWritable, Text](key, value) 
+    loop(pos < end)(key)(readTo(value)) match {
+      case true => Pair[LongWritable, Text](key, value) 
+      case false => EmptyPair
+    }
   }
 
   override def close() = lineReader.map { (reader) => reader.close }
