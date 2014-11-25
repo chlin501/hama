@@ -28,7 +28,7 @@ import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.HamaConfiguration;
-//import org.apache.hama.io.PartitionedSplit;
+import org.apache.hama.io.PartitionedSplit;
 
 public final class TaskTable implements Writable {
 
@@ -40,19 +40,14 @@ public final class TaskTable implements Writable {
   /* This variable, derived from v2.Job, contains specific setting for a job. */
   private HamaConfiguration configuration = new HamaConfiguration();
 
-//conf.getInt("bsp.peers.num", 1), 
-//conf.getInt("bsp.tasks.max.attempts", 3), 
-
   /* An array of tasks, reprenting the task table. */
   private ArrayWritable[] tasks;
 
   TaskTable() {} // for Writable
 
-/*
   public TaskTable(final BSPJobID jobId, final HamaConfiguration conf) {
     this(jobId, conf, null); 
   }
-*/
 
   /**
    * Initialize a 2d task array with numBSPTasks rows, and a task in column.
@@ -68,8 +63,8 @@ public final class TaskTable implements Writable {
    */ 
   // TODO: perhaps use other data structure to record tasks for efficiency. 
   public TaskTable(final BSPJobID jobId, 
-                   final HamaConfiguration conf/*,
-                   final PartitionedSplit[] splits*/) {
+                   final HamaConfiguration conf,
+                   final PartitionedSplit[] splits) {
     this.jobId = jobId;
     if(null == this.jobId)
       throw new IllegalArgumentException("TaskTable's BSPJobID is missing!");
@@ -79,23 +74,18 @@ public final class TaskTable implements Writable {
       throw new IllegalArgumentException("HamaConfiguration for job id "+
                                          this.jobId.toString()+" is missing!");
 
-/*
     final PartitionedSplit[] rawSplits = splits;
-    // we can't assert numBSPTasks value against splits length because
-    // there may not have splits provided (meaning null == splits)!
-    // and each task is assigned with null split. 
     if(hasSplit(rawSplits)) {
       this.configuration.setInt("bsp.peers.num", rawSplits.length);
       LOG.info("Adjusting numBSPTasks to "+rawSplits.length);
     }  
-*/
 
     // init tasks
     final int numBSPTasks = getNumBSPTasks();
     this.tasks = new ArrayWritable[numBSPTasks];
     for(int row = 0; row < numBSPTasks; row++) {
       this.tasks[row] = new ArrayWritable(Task.class);
-      //final PartitionedSplit split = hasSplit(rawSplits)? rawSplits[row]:null;
+      final PartitionedSplit split = hasSplit(rawSplits)? rawSplits[row]:null;
       set(row, new Task[] {
         new Task.Builder().setId(IDCreator.newTaskID()
                                           .withId(getJobId())
@@ -104,7 +94,7 @@ public final class TaskTable implements Writable {
                                           .withId(1) // TaskAttemptID's id
                                           .build()).
                           setConfiguration(conf).
-                          //setSplit(split).
+                          setSplit(split).
                           build()
       }); 
     }
@@ -116,10 +106,10 @@ public final class TaskTable implements Writable {
    * Check if there are splits.
    * @param rawSplits are data to be consumed as input.
    * @return boolean will either returns true if having splits; false otherwise.
+   */
   boolean hasSplit(final PartitionedSplit[] rawSplits) {
     return (null != rawSplits && 0 < rawSplits.length);
   }
-   */
 
   /* Row index is started from 0. */
   boolean isValidRow(final int row) {
@@ -228,11 +218,10 @@ public final class TaskTable implements Writable {
 
   /**
    * Group tasks by target GroomServer's name.
-   * TODO: calculation is only done when a task assignment changes would 
-   *       increase performance.
    * @return Map contains GroomServer name as key, and GroomServer count as
    *             value.
    */
+  // TODO: refactor 
   public Map<String, Integer> group() {
     final Map<String, Integer> cache = new HashMap<String, Integer>();
     for(int row=0;row<rowLength(); row++) {
@@ -260,41 +249,10 @@ public final class TaskTable implements Writable {
     return taskAttemptArray[column];
   }
 
-  /** 
-   * Resize the column length for a particular row in this task table.
-   * Previous task array information such as should be retained/ copied.
-  public void resizeTo(final int rowAt, final int size) {
-    if(!isValidColumn(size)) return;
-    final Task[] taskAttemptArray = get(row); 
-    if(null == taskAttemptArray) return;
-    final Task[] newTaskAttemptArray = new Task[size];
-    for(int idx = 0; idx < size; idx++) {
-      if(taskAttemptArray.length > idx) {
-        newTaskAttemptArray[idx] = taskAttemptArray[idx];
-      }
-    }
-  }
-   */ 
-
-  /**
-   * The position of row and column is started from 0.
-   * if row exceeds numBSPTasks or column exceeds maxTaskAttempts, task will 
-   * not be assigned.
-  public void assign(final int row, final int column, final Task task) {
-    if(!isValidPosition(row, column)) return;
-    final Task[] taskAttemptArray = get(row);
-    if(null == taskAttemptArray) return;
-    taskAttemptArray[column] = task;
-  }
-
-  public void assign(final int row, final Task[] tasks) {
-    if(!isValidRow(row)) return;
-    this.set(row, tasks);
-  }
-   */
-
   /**
    * Add a (restarted) task to the end of a designated row.
+   * @param row of the task table. 
+   * @param task to be added.
    */
   public void add(final int row, final Task task) {
     if(!isValidRow(row)) return;
@@ -332,7 +290,8 @@ public final class TaskTable implements Writable {
    */
   public Task nextUnassignedTask() {
     for(int idx = 0; idx < rowLength(); idx++) {
-      final Task task = get(idx, 0);
+      final int lastTask = (columnLength(idx) - 1);
+      final Task task = get(idx, lastTask); 
       if(null == task) 
         throw new RuntimeException("The task at row: "+idx+" not found!");
       if(!task.isAssigned()) return task;

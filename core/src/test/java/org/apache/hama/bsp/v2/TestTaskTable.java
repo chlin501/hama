@@ -29,7 +29,6 @@ import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
 
-
 public class TestTaskTable extends TestCase {
 
   final Log LOG = LogFactory.getLog(TestTaskTable.class);
