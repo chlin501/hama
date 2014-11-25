@@ -30,8 +30,6 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Writable;
 import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
-//import org.apache.hama.monitor.metrics.MetricsRecord;
-//import org.apache.hama.monitor.metrics.Metric;
 import org.apache.hama.monitor.TaskStat;
 
 /**

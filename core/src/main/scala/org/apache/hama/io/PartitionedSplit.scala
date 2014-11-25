@@ -48,6 +48,7 @@ object PartitionedSplit {
   def from(fileSplit: FileSplit): PartitionedSplit = {
     val split = new PartitionedSplit()
     split.setPath(fileSplit.getPath.toString)
+    // file split name should look like file-<peerIndex>
     fileSplit.getPath.getName.split("[-]") match {
       case null => split.setPartitionId(-1)
       case ary@_=> split.setPartitionId(ary(1).toInt)
