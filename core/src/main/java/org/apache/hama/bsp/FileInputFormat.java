@@ -139,9 +139,11 @@ public abstract class FileInputFormat<K, V> implements InputFormat<K, V> {
 
       FileStatus[] matches = null;
       try {
+        if(LOG.isDebugEnabled())
+          LOG.debug("Path pattern: "+p+", Input filter: "+inputFilter);
         matches = fs.globStatus(p, inputFilter);
       } catch (Exception e) {
-        LOG.info(p + "\n" + e.toString());
+        LOG.error(p + "\n" + e.toString());
       }
 
       if (matches == null) {
@@ -306,6 +308,8 @@ public abstract class FileInputFormat<K, V> implements InputFormat<K, V> {
   }
 
   protected long computeSplitSize(long goalSize, long minSize, long blockSize) {
+    LOG.info("Block size: "+goalSize+", minSize: "+minSize+
+             ", maxSize: "+blockSize);
     if (goalSize > blockSize) {
       return Math.max(minSize, Math.max(goalSize, blockSize));
     } else {

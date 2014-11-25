@@ -59,9 +59,17 @@ class HDFSLocal extends Operation {
   }
 
   @throws(classOf[IOException])
-  override def create(path: Path): OutputStream = {
+  override def create(path: Path, overwrite: Boolean = true): OutputStream = {
     validate
-    localfs.create(path, true)
+    localfs.create(path, overwrite)
+  }
+
+  @throws(classOf[IOException])
+  override def create(path: Path, replication: Short, blockSize: Long,
+                      overwrite: Boolean): OutputStream = {
+    validate
+    val bufferSize = configuration.getInt("io.file.buffer.size", 4096)
+    localfs.create(path, overwrite, bufferSize, replication, blockSize)
   }
 
   @throws(classOf[IOException])

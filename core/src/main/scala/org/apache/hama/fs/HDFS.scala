@@ -61,9 +61,17 @@ class HDFS extends Operation {
   }
 
   @throws(classOf[IOException])
-  override def create(path: Path): OutputStream = {
+  override def create(path: Path, overwrite: Boolean = true): OutputStream = {
     validate
-    hdfs.create(path, true) 
+    hdfs.create(path, overwrite) 
+  }
+
+  @throws(classOf[IOException])
+  override def create(path: Path, replication: Short, blockSize: Long, 
+                      overwrite: Boolean): OutputStream = {
+    validate
+    val bufferSize = configuration.getInt("io.file.buffer.size", 4096)
+    hdfs.create(path, overwrite, bufferSize, replication, blockSize)
   }
 
   @throws(classOf[IOException])

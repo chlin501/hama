@@ -30,12 +30,38 @@ import org.apache.hadoop.io.compress.CompressionCodec
 import org.apache.hadoop.io.compress.CompressionCodecFactory
 import org.apache.hama.HamaConfiguration
 
-sealed trait KeyValue[+K <: Writable, +V <: Writable]
-case class Pair[K <: Writable, V <: Writable](key: K, value: V) 
-     extends KeyValue[K, V]
-case object EmptyPair extends KeyValue[Nothing, Nothing]
+sealed abstract class KeyValue[+K <: Writable, +V <: Writable] {
 
-class LineReader(in: InputStream, bufferSize: Int) 
+  def isEmpty: Boolean
+
+  def map[K1 <: Writable, V1 <: Writable](f: (K, V) => (K1, V1)): 
+    KeyValue[K1, V1] =  if(isEmpty) EmptyPair else {
+    val r = f(this.get._1, this.get._2)
+    Pair(r._1, r._2)
+  }
+
+  def get: (K, V)
+ 
+  def getOrElse[K1 >: K,  V1 >: V](default: => (K1, V1)): (K1, V1) = 
+    if(isEmpty) default else get
+
+}
+final case class Pair[K <: Writable, V <: Writable](key: K, value: V) 
+     extends KeyValue[K, V] {
+
+  override def isEmpty: Boolean = false
+
+  override def get = (key, value)
+}
+final case object EmptyPair extends KeyValue[Nothing, Nothing] {
+
+  override def isEmpty: Boolean = true
+
+  override def get = throw new NoSuchElementException("EmptyPair.get")
+
+}
+
+final class LineReader(in: InputStream, bufferSize: Int) 
       extends org.apache.hadoop.util.LineReader(in, bufferSize) {
 
   def this(in: InputStream) = this(in, (64 * 1024)) 

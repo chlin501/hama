@@ -27,6 +27,7 @@ import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.LongWritable
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
+import org.apache.hama.bsp.FileSplit
 
 object PartitionedSplit {
 
@@ -44,6 +45,19 @@ object PartitionedSplit {
     split
   }
 
+  def from(fileSplit: FileSplit): PartitionedSplit = {
+    val split = new PartitionedSplit()
+    split.setPath(fileSplit.getPath.toString)
+    fileSplit.getPath.getName.split("[-]") match {
+      case null => split.setPartitionId(-1)
+      case ary@_=> split.setPartitionId(ary(1).toInt)
+    }
+    split.setStart(fileSplit.getStart)
+    split.setLength(fileSplit.getLength)
+    split.setHosts(fileSplit.getLocations)
+    split
+  }
+
   final def defaultHosts(): ArrayWritable = {
     val w = new ArrayWritable(classOf[Text])
     w.set(Array[Text]().asInstanceOf[Array[Writable]])
@@ -55,7 +69,7 @@ class PartitionedSplit extends Writable {
 
   import PartitionedSplit._
  
-  protected var p = new Path("")
+  protected var p: Option[Path] = None
   protected var pId = new IntWritable(1)
   protected var splitStart = new LongWritable(0)
   protected var splitLength = new LongWritable(0)
@@ -63,7 +77,7 @@ class PartitionedSplit extends Writable {
 
   protected[io] def setPath(path: String) = path match {
     case null | "" => throw new RuntimeException("Path is not provied!")
-    case _ => p = new Path(path)
+    case _ => p = Option(new Path(path))
   }
 
   protected[io] def setPartitionId(partitionId: Int) = partitionId match {
@@ -87,13 +101,16 @@ class PartitionedSplit extends Writable {
   protected[io] def setHosts(hosts: Array[String]) = hosts match {
     case null => throw new RuntimeException("Hosts value is empty! ")
     case _ => h = {
+      val texthosts = hosts.map{ host => 
+        new Text(host) 
+      }.asInstanceOf[Array[Writable]]
       val w = new ArrayWritable(classOf[Text])
-      w.set(hosts.asInstanceOf[Array[Writable]])
+      w.set(texthosts)
       w
     }
   }
 
-  def path(): String = p.toString
+  def path(): String = p.map { _.toString }.getOrElse(null)
 
   def partitionId(): Int = pId.get
 
@@ -105,7 +122,7 @@ class PartitionedSplit extends Writable {
 
   @throws(classOf[IOException])
   override def write(out: DataOutput) {
-    Text.writeString(out, p.toString)
+    Text.writeString(out, path())
     pId.write(out)
     splitStart.write(out)
     splitLength.write(out)
@@ -114,7 +131,7 @@ class PartitionedSplit extends Writable {
 
   @throws(classOf[IOException])
   override def readFields(in: DataInput) {
-    p = new Path(Text.readString(in))
+    p = Option(new Path(Text.readString(in)))
     pId.readFields(in)
     splitStart.readFields(in)
     splitLength.readFields(in)

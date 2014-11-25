@@ -80,12 +80,26 @@ trait Operation {
   def mkdirs(path: Path): Boolean 
 
   /**
-   * Create data based on the {@link Path} for writing.
+   * Create data based on the {@link Path} given.
    * @param path to be created.
+   * @param overwrite the file at path; default to true.
    * @return OutputStream to which content will be written.
    */
   @throws(classOf[IOException])
-  def create(path: Path): OutputStream
+  def create(path: Path, overwrite: Boolean = true): OutputStream
+
+  /**
+   * Create data based on the {@link Path} given with replication and block 
+   * size suppplied.
+   * @param path to be created.
+   * @param replication vlaue to be used.
+   * @param blockSize to be created.
+   * @param overwrite the file at path; default to true.
+   * @return OutputStream to which content will be written.
+   */
+  @throws(classOf[IOException])
+  def create(path: Path, replication: Short, blockSize: Long, 
+             overwrite: Boolean): OutputStream 
 
   /**
    * Append data for writing based on {@link Path}.
