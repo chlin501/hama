@@ -141,12 +141,7 @@ public class TestJob extends TestCase {
     LOG.info("Restored user is "+forVerification.getUser());
     assertEquals("User should be the same.", 
                  forVerification.getUser(), "jeremy");
-
-    //LOG.info("Restored local job file is "+forVerification.getLocalJobFile());
-    //assertEquals("Local job file should be the same.", 
-                 //forVerification.getLocalJobFile(), 
-                 //"/path/to/job.xml");
-
+    
     LOG.info("Restored local jar file is "+forVerification.getLocalJarFile());
     assertEquals("Local jar file should be the same.", 
                  forVerification.getLocalJarFile(), 

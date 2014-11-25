@@ -48,8 +48,7 @@ public class TestTaskTable extends TestCase {
    */
   TaskTable createTaskTable(final BSPJobID jobId, 
                             final HamaConfiguration conf) throws Exception {
-    //final TaskTable table = new TaskTable(jobId, conf, null);
-    final TaskTable table = new TaskTable(jobId, conf);
+    final TaskTable table = new TaskTable(jobId, conf, null);
     // assert init
     for(int row = 0; row < numBSPTasks; row++) {
       final Task[] taskArray = table.get(row);
