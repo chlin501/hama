@@ -49,9 +49,12 @@ object PartitionedSplit {
     val split = new PartitionedSplit()
     split.setPath(fileSplit.getPath.toString)
     // file split name should look like file-<peerIndex>
-    fileSplit.getPath.getName.split("[-]") match {
-      case null => split.setPartitionId(-1)
-      case ary@_=> split.setPartitionId(ary(1).toInt)
+    val fileName = fileSplit.getPath.getName
+    fileName.split("[-]") match {
+      case null => 
+      case ary@_=> if(2 == ary.length) split.setPartitionId(ary(1).toInt)
+      else throw new RuntimeException("Invalid file name for partition id: "+ 
+                                      fileName)
     }
     split.setStart(fileSplit.getStart)
     split.setLength(fileSplit.getLength)
@@ -71,7 +74,7 @@ class PartitionedSplit extends Writable {
   import PartitionedSplit._
  
   protected var p: Option[Path] = None
-  protected var pId = new IntWritable(1)
+  protected var pId = new IntWritable(Int.MinValue)
   protected var splitStart = new LongWritable(0)
   protected var splitLength = new LongWritable(0)
   protected var h = defaultHosts()
@@ -102,11 +105,8 @@ class PartitionedSplit extends Writable {
   protected[io] def setHosts(hosts: Array[String]) = hosts match {
     case null => throw new RuntimeException("Hosts value is empty! ")
     case _ => h = {
-      val texthosts = hosts.map{ host => 
-        new Text(host) 
-      }.asInstanceOf[Array[Writable]]
       val w = new ArrayWritable(classOf[Text])
-      w.set(texthosts)
+      w.set(hosts.map{ host => new Text(host) }.asInstanceOf[Array[Writable]])
       w
     }
   }
@@ -114,6 +114,8 @@ class PartitionedSplit extends Writable {
   def path(): String = p.map { _.toString }.getOrElse(null)
 
   def partitionId(): Int = pId.get
+
+  def isDefaultPartitionId(): Boolean = (Int.MinValue == partitionId)
 
   def start(): Long = splitStart.get
 

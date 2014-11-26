@@ -18,11 +18,13 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
-import org.apache.hama.bsp.BSPJobID
+import java.io.DataInput
+import java.io.DataOutput
+import java.io.IOException
+import org.apache.hadoop.io.Text
+import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.v2.Job
-import org.apache.hama.groom.GroomServerStat
-
-
+import org.apache.hama.io.PartitionedSplit
 
 sealed trait MasterMessage
 
@@ -70,9 +72,8 @@ private[master] final case class RescheduleTasks(
   groomServerName: String
 ) extends MasterMessage
 
-private[master] final case class Submit(
-  jobId: BSPJobID, xml: String
-) extends MasterMessage
+final case class Submit(jobId: BSPJobID, jobFilePath: String) 
+      extends MasterMessage 
 
 /**
  * A message denotes to take a job from Receptionist's waitQueue.

@@ -82,7 +82,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     subscribe(self)
     val conf = setting.hama
     val receptionist = getOrCreate(Receptionist.simpleName(conf), 
-                                   classOf[Receptionist], conf) 
+                                   classOf[Receptionist], setting) 
     getOrCreate(Federator.simpleName(conf), classOf[Federator], setting) 
     getOrCreate(Scheduler.simpleName(conf), classOf[Scheduler], 
                 conf, receptionist) 

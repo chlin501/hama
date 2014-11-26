@@ -20,9 +20,11 @@ package org.apache.hama.master
 import akka.actor.ActorRef
 import akka.event.Logging
 import org.apache.hama.bsp.BSPJobID
-import org.apache.hama.groom._
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
+import org.apache.hama.groom._
+import org.apache.hama.conf.Setting
+import org.apache.hama.io.PartitionedSplit
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
@@ -33,17 +35,7 @@ private final case class GetJob(tester: ActorRef)
 private final case class JobContent(jobId: BSPJobID, 
                                     localJarFile: String)
 
-/*
-class MockMaster(setting: Setting) extends BSPMaster(setting) {
-
-  override def initializeServices {
-    getOrCreate("receptionist", classOf[MockReceptionist], configuration)
-  }
-  
-}
-*/
-
-class MockReceptionist(conf: HamaConfiguration) extends Receptionist(conf) {
+class MockReceptionist(setting: Setting) extends Receptionist(setting) {
 
   def getJob: Receive = {
     case GetJob(tester) => {
