@@ -253,3 +253,6 @@ final class GroomStats extends Writable with ProbeMessages {
       ) + q.toStrings.hashCode
     ) + s.toStrings.hashCode
 }
+
+final case class Inform(service: String, result: ProbeMessages) 
+      extends ProbeMessages

@@ -98,10 +98,14 @@ class WrappedTracker(federator: ActorRef, tracker: Tracker)
   }
   
   def askFor: Receive = {
-    case msg: ProbeMessages => sender ! tracker.askFor(msg)
+    case action: ProbeMessages => tracker.askFor(action, sender.path.name)
   }
 
-  override def receive = askFor orElse receiveStats orElse list orElse groomLeaves orElse unknown
+  def inform: Receive = {
+    case Inform(service, result) => federator ! Inform(service, result)
+  }
+
+  override def receive = inform orElse askFor orElse receiveStats orElse list orElse groomLeaves orElse unknown
 
 }
 
@@ -151,12 +155,14 @@ trait Probe extends CommonLog {
  * Track specific stats from grooms and react if necessary.
  */
 trait Tracker extends Probe {
+ 
+  protected[monitor] def inform(service: String, 
+                                result: ProbeMessages) = wrapper match {
+    case Some(found) => found ! Inform(service, result) 
+    case None => throw new RuntimeException("WrappedTracker not found!")
+  } 
 
-  // TODO: list current master service
-  // def notify() = ...local service... ?
-
-  protected[monitor] def askFor(msg: ProbeMessages): ProbeMessages =
-    EmptyProbeMessages
+  protected[monitor] def askFor(action: ProbeMessages, from: String) { }
 
   protected[monitor] def receive(data: Writable) { }
 

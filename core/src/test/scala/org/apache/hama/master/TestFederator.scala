@@ -27,7 +27,7 @@ import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 
 class MockFederator(setting: Setting, tester: ActorRef) 
-      extends Federator(setting) {
+      extends Federator(setting, null) { // TODO: change null to mock master
 
   override def replyTrackers(from: ActorRef) = {
     val trackers = currentTrackers() 
@@ -43,8 +43,8 @@ class TestFederator extends TestEnv("TestFederator") {
   import Federator._
 
   it("test monitor functions.") {
-    val master = Setting.master
-    val monitor = createWithArgs("monitor", classOf[MockFederator], master, 
+    val setting = Setting.master
+    val monitor = createWithArgs("monitor", classOf[MockFederator], setting, 
                                  tester)
     monitor ! ListTrackers        
  

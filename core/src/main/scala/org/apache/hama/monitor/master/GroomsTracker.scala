@@ -30,8 +30,9 @@ final class GroomsTracker extends Tracker {
 
   private var allStats = Set.empty[GroomStats]
 
-  /* total tasks allowed */
+  /* total tasks of all groom servers */
   private var totalMaxTasks: Int = 0
+  // TODO: other stats 
 
   override def receive(stats: Writable) = stats match {
     case stats: GroomStats => {
@@ -50,8 +51,8 @@ final class GroomsTracker extends Tracker {
       totalMaxTasks -= stats.maxTasks
     }
 
-  override def askFor(action: ProbeMessages): ProbeMessages = action match {
-    case GetMaxTasks => TotalMaxTasks(totalMaxTasks)
+  override def askFor(action: ProbeMessages, from: String) = action match {
+    case GetMaxTasks => inform(from, TotalMaxTasks(totalMaxTasks))
   }
 
 }

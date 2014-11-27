@@ -25,6 +25,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.SystemInfo
 import org.apache.hama.conf.Setting
+import org.apache.hama.monitor.Inform
 import org.apache.hama.monitor.Stats
 import org.apache.hama.util.Curator
 import org.apache.zookeeper.CreateMode
@@ -83,7 +84,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     val conf = setting.hama
     val receptionist = getOrCreate(Receptionist.simpleName(conf), 
                                    classOf[Receptionist], setting) 
-    getOrCreate(Federator.simpleName(conf), classOf[Federator], setting) 
+    getOrCreate(Federator.simpleName(conf), classOf[Federator], setting, self) 
     getOrCreate(Scheduler.simpleName(conf), classOf[Scheduler], 
                 conf, receptionist) 
     // TODO: change master state
@@ -93,13 +94,6 @@ class BSPMaster(setting: Setting, registrator: Registrator)
 
   def seedNodes(): IndexedSeq[SystemInfo] = Vector(setting.info)
 
-  def forwardStats: Receive = {
-    case stats: Stats => 
-      findServiceBy(Federator.simpleName(setting.hama)).map { service => 
-        service forward stats
-      }
-  }
-
   override def groomLeave(name: String, host: String, port: Int) = 
     inform(GroomLeave(name, host, port), Federator.simpleName(setting.hama), 
            Scheduler.simpleName(setting.hama))
@@ -108,6 +102,11 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     findServiceBy(name).map { service => service ! message }
   )
 
-  override def receive = forwardStats orElse membership orElse unknown
+  protected def dispatch: Receive = {
+    case Inform(service, result) => inform(result, service)
+    case stats: Stats => inform(stats, Federator.simpleName(setting.hama))
+  }
+
+  override def receive = dispatch orElse membership orElse unknown
   
 }

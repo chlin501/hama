@@ -23,6 +23,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Ganglion
+import org.apache.hama.monitor.Inform
 import org.apache.hama.monitor.ProbeMessages
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedTracker
@@ -54,7 +55,8 @@ object Federator {
 
 }
 
-class Federator(setting: Setting) extends Ganglion with LocalService {
+class Federator(setting: Setting, master: ActorRef) 
+      extends Ganglion with LocalService {
 
   import Federator._
 
@@ -98,6 +100,10 @@ class Federator(setting: Setting) extends Ganglion with LocalService {
     case event: GroomLeave => services.foreach( tracker => tracker ! event)
   } 
 
-  override def receive = groomLeaveEvent orElse dispatch orElse listTrackers orElse unknown
+  def inform: Receive = {
+    case Inform(service, result) => master ! Inform(service, result)
+  }
+
+  override def receive = inform orElse groomLeaveEvent orElse dispatch orElse listTrackers orElse unknown
 
 }
