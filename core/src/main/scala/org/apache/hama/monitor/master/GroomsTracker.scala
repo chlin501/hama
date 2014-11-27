@@ -17,23 +17,29 @@
  */
 package org.apache.hama.monitor.master
 
-import akka.actor.ActorRef
+import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.monitor.Tracker
+import org.apache.hama.monitor.ProbeMessages
 import org.apache.hama.monitor.GroomStats
+
+final case object GetMaxTasks extends ProbeMessages
+final case class TotalMaxTasks(allowed: Int) extends ProbeMessages
 
 final class GroomsTracker extends Tracker {
 
   private var allStats = Set.empty[GroomStats]
 
   /* total tasks allowed */
-  private var totalMaxTasks = 0
+  private var totalMaxTasks: Int = 0
 
-  override def initialize() { }
-
-  //def whenReceived(stats: Writable) {
-    
-  //}
+  override def receive(stats: Writable) = stats match {
+    case stats: GroomStats => {
+      allStats ++= Set(stats)
+      totalMaxTasks += stats.maxTasks
+    }
+    case other@_ => LOG.warning("Unknown stats data: {}", other)
+  }
 
   override def groomLeaves(name: String, host: String, port: Int) = 
     allStats.find( stats => 
@@ -43,5 +49,9 @@ final class GroomsTracker extends Tracker {
       allStats -= stats 
       totalMaxTasks -= stats.maxTasks
     }
+
+  override def askFor(action: ProbeMessages): ProbeMessages = action match {
+    case GetMaxTasks => TotalMaxTasks(totalMaxTasks)
+  }
 
 }

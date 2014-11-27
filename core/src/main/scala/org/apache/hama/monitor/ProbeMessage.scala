@@ -32,7 +32,8 @@ import org.apache.hama.groom.Slot
 import org.apache.hama.util.Utils._
 import scala.collection.immutable.Queue
 
-sealed trait ProbeMessages
+trait ProbeMessages
+final case object EmptyProbeMessages extends ProbeMessages
 final case object ListService extends ProbeMessages
 final case class ServicesAvailable(services: Array[String])
       extends ProbeMessages

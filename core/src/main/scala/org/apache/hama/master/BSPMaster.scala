@@ -101,9 +101,12 @@ class BSPMaster(setting: Setting, registrator: Registrator)
   }
 
   override def groomLeave(name: String, host: String, port: Int) = 
-    findServiceBy(Federator.simpleName(setting.hama)).map { (service) =>
-      service ! GroomLeave(name, host, port)
-    }
+    inform(GroomLeave(name, host, port), Federator.simpleName(setting.hama), 
+           Scheduler.simpleName(setting.hama))
+
+  protected def inform(message: Any, names: String*) = names.foreach( name => 
+    findServiceBy(name).map { service => service ! message }
+  )
 
   override def receive = forwardStats orElse membership orElse unknown
   

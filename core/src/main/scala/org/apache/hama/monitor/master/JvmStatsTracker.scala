@@ -23,8 +23,6 @@ import org.apache.hama.monitor.metrics.MetricsRecord
 
 final class JvmStatsTracker extends Tracker {
 
-  override def initialize() { }
-
 /*
   type GroomName = String
 

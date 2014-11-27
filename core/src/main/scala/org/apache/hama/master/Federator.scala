@@ -23,11 +23,15 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Ganglion
+import org.apache.hama.monitor.ProbeMessages
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedTracker
 import org.apache.hama.monitor.master.GroomsTracker
 import org.apache.hama.monitor.master.JobTasksTracker
 import org.apache.hama.monitor.master.JvmStatsTracker
+
+final case class AskFor(recepiant: String, action: ProbeMessages) 
+      extends ProbeMessages
 
 sealed trait FederatorMessages
 final case object ListTrackers extends FederatorMessages
@@ -82,7 +86,9 @@ class Federator(setting: Setting) extends Ganglion with LocalService {
     tracker.path.name 
   }.toSeq
 
-  protected def dispatchStats: Receive = {
+  protected def dispatch: Receive = {
+    case AskFor(recepiant: String, action: ProbeMessages) => 
+      findServiceBy(recepiant).map { tracker => tracker forward action }
     case stats: Stats => findServiceBy(stats.dest).map { tracker => 
        tracker forward stats
     }
@@ -92,6 +98,6 @@ class Federator(setting: Setting) extends Ganglion with LocalService {
     case event: GroomLeave => services.foreach( tracker => tracker ! event)
   } 
 
-  override def receive = groomLeaveEvent orElse dispatchStats orElse listTrackers orElse unknown
+  override def receive = groomLeaveEvent orElse dispatch orElse listTrackers orElse unknown
 
 }

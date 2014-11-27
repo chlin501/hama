@@ -24,8 +24,6 @@ import org.apache.hama.monitor.Tracker
 
 final class JobTasksTracker extends Tracker {
 
-  override def initialize() { }
-
 /*
   private var tasksStat = Map.empty[BSPJobID, Set[Task]]
 

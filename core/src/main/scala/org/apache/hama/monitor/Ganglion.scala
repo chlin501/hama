@@ -71,6 +71,7 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
     case CancelTick => cancellable.map { c => c.cancel } 
     case GetMetrics(service, command) => reporter ! GetMetrics(service, command)
     case stats: GroomStats => collector.statsFound(stats)
+    /* collector sends to wrapper */
     case stats: Stats => reporter ! stats
   }
 
@@ -78,7 +79,6 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
 
 }
 
-// TODO: see Tracker TODO
 class WrappedTracker(federator: ActorRef, tracker: Tracker) 
     extends WrappedProbe {
 
@@ -93,7 +93,15 @@ class WrappedTracker(federator: ActorRef, tracker: Tracker)
     case GroomLeave(name, host, port) => tracker.groomLeaves(name, host, port)
   }
 
-  override def receive = list orElse groomLeaves orElse unknown
+  def receiveStats: Receive = {
+    case s: Stats => tracker.receive(s)
+  }
+  
+  def askFor: Receive = {
+    case msg: ProbeMessages => sender ! tracker.askFor(msg)
+  }
+
+  override def receive = askFor orElse receiveStats orElse list orElse groomLeaves orElse unknown
 
 }
 
@@ -145,14 +153,12 @@ trait Probe extends CommonLog {
 trait Tracker extends Probe {
 
   // TODO: list current master service
-  //       ability to receive message from groom (master on behalf of groom)
-  //       react function
+  // def notify() = ...local service... ?
 
-  // def notify(who...)
-    // need ability to know services available and send to target  
-     //trigger to notify target(where target is mater service actor ref name)
+  protected[monitor] def askFor(msg: ProbeMessages): ProbeMessages =
+    EmptyProbeMessages
 
-  protected[monitor] def whenReceived(data: Writable) { }
+  protected[monitor] def receive(data: Writable) { }
 
   protected[monitor] def groomLeaves(name: String, host: String, port: Int) { }
 
