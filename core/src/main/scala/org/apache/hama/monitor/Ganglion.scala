@@ -71,7 +71,7 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
     case CancelTick => cancellable.map { c => c.cancel } 
     case GetMetrics(service, command) => reporter ! GetMetrics(service, command)
     case stats: GroomStats => collector.statsFound(stats)
-    /* collector sends to wrapper */
+    /** collector deleate for forwarding stats */
     case stats: Stats => reporter ! stats
   }
 
@@ -156,16 +156,36 @@ trait Probe extends CommonLog {
  */
 trait Tracker extends Probe {
  
+  /**
+   * Inform original service with result supplied.
+   * @param service is the target to be informed.
+   * @param result is any data sent to target service.
+   */
   protected[monitor] def inform(service: String, 
                                 result: ProbeMessages) = wrapper match {
     case Some(found) => found ! Inform(service, result) 
     case None => throw new RuntimeException("WrappedTracker not found!")
   } 
 
+  /**
+   * Ask tracker to perform an action.
+   * @param action that asks tracker to perform.
+   * @param from which service sends out this action.
+   */
   protected[monitor] def askFor(action: ProbeMessages, from: String) { }
 
+  /**
+   * Receive data, usually from colector.
+   * @param data such as stats sent to this tracker.
+   */
   protected[monitor] def receive(data: Writable) { }
 
+  /**
+   * An event notifies a groom leaves the system.
+   * @param name of the groom server.
+   * @param host of the groom server.
+   * @param port used by the groom server.
+   */
   protected[monitor] def groomLeaves(name: String, host: String, port: Int) { }
 
 }
@@ -234,6 +254,12 @@ trait Collector extends Probe {
 // TODO: add quartz scheduler in the future
 trait Ganglion {
 
+  /**
+   * Load probe instances found under monitor package.
+   * @param conf is common configuration, either for master or groom. 
+   * @param classes string of probe.
+   * @return a seq of probe instances.
+   */
   protected def load(conf: HamaConfiguration, classes: String): Seq[Probe] =
     if(null == classes || classes.isEmpty) Seq()
     else {
