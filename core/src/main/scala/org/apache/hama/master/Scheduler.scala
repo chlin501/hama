@@ -21,8 +21,8 @@ import akka.actor.ActorRef
 import akka.actor.Cancellable
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.groom.GroomServerStat
-import org.apache.hama.groom.RequestTask
+//import org.apache.hama.groom.GroomServerStat
+//import org.apache.hama.groom.RequestTask
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.master.Directive.Action
@@ -222,13 +222,13 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
   /**
    * GroomServer's TaskCounsellor requests for assigning a task.
    * @return Receive partiail function.
-   */
   def requestTask: Receive = {
     case RequestTask(stat) => {
       LOG.debug("GroomServer {} requests for assigning a task.", stat.getName)
       passiveAssign(stat, sender)
     }
   }
+   */
 
   /**
    * Assign a task to the requesting GroomServer's task manager.
@@ -236,7 +236,6 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
    * tasks are all for passive.
    * @param groomServerStat is the most recent stat of a GroomServer.
    * @param taskCounsellor refers to the remote GroomServer TaskCounsellor instance.
-   */
   def passiveAssign(stat: GroomServerStat, taskCounsellor: ActorRef) {
       val (from, to) = 
         assign(stat, taskAssignQueue, taskCounsellor, dispatch) 
@@ -247,11 +246,11 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
                "processingQueue has {} jobs", 
                taskAssignQueue.size, processingQueue.size)
   }
+   */
 
   /**
    * Assign a task to a particular GroomServer by delegating that task to 
    * dispatch function, which normally uses actor ! message.
-   */
   def assign(stat: GroomServerStat, fromQueue: TaskAssignQueue, 
              taskCounsellor: ActorRef, d: (ActorRef, Action, Task) => Unit): 
       (TaskAssignQueue, ProcessingQueue) = {
@@ -277,6 +276,7 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
       (fromQueue, Queue[Job]())
     }
   }
+   */
   
 /*
   * Rescheduling tasks when a GroomServer goes offline.
@@ -289,5 +289,5 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
     }
   }
 */
-  override def receive = requestTask orElse dispense orElse nextPlease orElse timeout orElse unknown
+  override def receive = /*requestTask orElse*/ dispense orElse nextPlease orElse timeout orElse unknown
 }

@@ -32,14 +32,14 @@ import org.apache.hama.groom.Slot
 import org.apache.hama.util.Utils._
 import scala.collection.immutable.Queue
 
-sealed trait CollectorMessages
-final case object ListService extends CollectorMessages
+sealed trait ProbeMessages
+final case object ListService extends ProbeMessages
 final case class ServicesAvailable(services: Array[String])
-      extends CollectorMessages
+      extends ProbeMessages
 final case class GetMetrics(service: String, command: Any)
-      extends CollectorMessages
-final case object GetGroomStats extends CollectorMessages
-final case object GetTaskStats extends CollectorMessages
+      extends ProbeMessages
+final case object GetGroomStats extends ProbeMessages
+final case object GetTaskStats extends ProbeMessages
 
 object Stats {
 
@@ -57,8 +57,7 @@ object Stats {
  * @param d is the destination to which this stats will be sent.
  * @param v is the stats collected.
  */
-final class Stats(d: String, v: Writable) extends Writable
-                                          with CollectorMessages {
+final class Stats(d: String, v: Writable) extends Writable with ProbeMessages {
 
   /* tracker name */
   protected[monitor] var tracker: Text = new Text(d)
@@ -95,7 +94,7 @@ object TaskStats {
 
 }
 
-final class TaskStats extends Writable with CollectorMessages {
+final class TaskStats extends Writable with ProbeMessages {
 
   protected[monitor] var t: ArrayWritable = new ArrayWritable(classOf[])
  
@@ -112,7 +111,7 @@ final class TaskStats extends Writable with CollectorMessages {
 }
 */
 
-object GroomStats {
+object GroomStats { // TODO: remove queue?
 
   def apply(name: String, host: String, port: Int, maxTasks: Int,
             queue: Array[String], slots: Array[String]): GroomStats = {
@@ -176,7 +175,7 @@ object GroomStats {
   }
 }
 
-final class GroomStats extends Writable with CollectorMessages {
+final class GroomStats extends Writable with ProbeMessages {
 
   import GroomStats._
 

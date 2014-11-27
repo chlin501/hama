@@ -33,8 +33,21 @@ import scala.concurrent.duration.FiniteDuration
 final case class StartTick(ms: Long)
 final case object CancelTick
 
+protected trait WrappedProbe extends Agent {
+
+  protected def listServices() { }
+
+  protected def servicesFound(services: Array[String]) { }
+
+  protected def list: Receive = {
+    case ListService => listServices()
+    case ServicesAvailable(services) => servicesFound(services) 
+  }
+
+}
+
 final class WrappedCollector(reporter: ActorRef, collector: Collector) 
-      extends Agent with Periodically {
+      extends WrappedProbe with Periodically {
 
   import Collector._
 
@@ -47,38 +60,55 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
 
   override def ticked(tick: Tick) = collector.request()
 
+  override def listServices() = reporter ! ListService
+
+  override def servicesFound(services: Array[String]) = 
+    collector.servicesFound(services)
+
   def actions: Receive = {
     case StartTick(ms) => 
       cancellable = Option(tick(self, Ticker, delay = ms.millis)) 
     case CancelTick => cancellable.map { c => c.cancel } 
-    case ListService => reporter ! ListService
-    case ServicesAvailable(services) => collector.servicesFound(services)
     case GetMetrics(service, command) => reporter ! GetMetrics(service, command)
     case stats: GroomStats => collector.statsFound(stats)
     case stats: Stats => reporter ! stats
   }
 
-  override def receive = actions orElse tickMessage orElse unknown
+  override def receive = list orElse actions orElse tickMessage orElse unknown
 
 }
 
-class WrappedTracker(federator: ActorRef, tracker: Tracker) extends Agent {
+// TODO: see Tracker TODO
+class WrappedTracker(federator: ActorRef, tracker: Tracker) 
+    extends WrappedProbe {
 
   override def preStart() = tracker.initialize
-  
-  // TODO: see Tracker TODO
 
-  def groomLeave: Receive = {
-    case GroomLeave(name, host, port) => tracker.groomLeave(name, host, port)
+  override def listServices() = federator ! ListService
+
+  override def servicesFound(services: Array[String]) = 
+    tracker.servicesFound(services)
+
+  def groomLeaves: Receive = {
+    case GroomLeave(name, host, port) => tracker.groomLeaves(name, host, port)
   }
 
-  override def receive = groomLeave orElse unknown
+  override def receive = list orElse groomLeaves orElse unknown
 
 }
 
 trait Probe extends CommonLog { 
 
   protected var conf: HamaConfiguration = new HamaConfiguration
+
+  protected[monitor] var wrapper: Option[ActorRef] = None
+
+  protected[monitor] def listServices() = wrapper match { 
+    case Some(found) => found ! ListService
+    case None => throw new RuntimeException("WrappedCollector not found!")
+  }
+
+  protected[monitor] def servicesFound(services: Array[String]) { }
 
   /**
    * The name of this probe.
@@ -87,9 +117,9 @@ trait Probe extends CommonLog {
   def name(): String = getClass.getName
 
   /**
-   * Initialize related functions before reporting.
+   * Initialize related functions before execution.
    */
-  def initialize 
+  def initialize() { }
 
   /**
    * Common configuration of the groom server.
@@ -104,7 +134,7 @@ trait Probe extends CommonLog {
    */
   def setConfiguration(conf: HamaConfiguration) = this.conf = conf
 
-  // TODO: close the probe?
+  // TODO: close this probe?
   // def close() 
 
 }
@@ -118,13 +148,13 @@ trait Tracker extends Probe {
   //       ability to receive message from groom (master on behalf of groom)
   //       react function
 
-  // def whenReceived(msg: Writable) {
+  // def notify(who...)
     // need ability to know services available and send to target  
      //trigger to notify target(where target is mater service actor ref name)
-  //}
 
-  protected[monitor] def groomLeave(name: String, host: String, port: Int) {
-  }
+  protected[monitor] def whenReceived(data: Writable) { }
+
+  protected[monitor] def groomLeaves(name: String, host: String, port: Int) { }
 
 }
 
@@ -141,8 +171,6 @@ trait Collector extends Probe {
 
   import Collector._
 
-  protected[monitor] var wrapper: Option[ActorRef] = None
-
   /**
    * Start periodically collect stats data.
    */
@@ -158,13 +186,6 @@ trait Collector extends Probe {
     case Some(found) => found ! CancelTick
     case None => throw new RuntimeException("WrappedCollector not found!")
   }
-
-  protected[monitor] def listServices() = wrapper match { 
-    case Some(found) => found ! ListService
-    case None => throw new RuntimeException("WrappedCollector not found!")
-  }
-
-  protected[monitor] def servicesFound(services: Array[String]) { }
 
   protected[monitor] def statsFound(stats: Writable) { }
 

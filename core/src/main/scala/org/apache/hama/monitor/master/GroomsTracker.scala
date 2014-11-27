@@ -19,62 +19,29 @@ package org.apache.hama.monitor.master
 
 import akka.actor.ActorRef
 import org.apache.hama.HamaConfiguration
-//import org.apache.hama.groom.GroomServerStat
 import org.apache.hama.monitor.Tracker
 import org.apache.hama.monitor.GroomStats
-
-/**
- * Ask {@link GroomsTracker} for corresponded GroomServerStat(s).
- * @param groomServers is the target to which tasks will be scheduled.
- * @param from denotes who sends this request.
-final case class AskGroomServerStat(groomServers: Array[String],
-                                    from: ActorRef)
- */
 
 final class GroomsTracker extends Tracker {
 
   private var allStats = Set.empty[GroomStats]
 
-  //private var // calculated stats e.g. total max tasks, etc. fields
+  /* total tasks allowed */
+  private var totalMaxTasks = 0
 
   override def initialize() { }
 
-/*
-  def groomStats: Receive = {
-    case stats: GroomStats => {
-      // TODO: sum up related data
-    }
-  }
-
-  //def groomLeave/ JoinEvent: Receive = {
-    //case GroomLeave(name, host, port)/ GroomJoin(name, host, port)
+  //def whenReceived(stats: Writable) {
+    
   //}
-*/
- 
-/*
-  private var groomTasksStat = Set.empty[GroomServerStat]
 
-   * Receive {@link GroomServerStat} report from {@link GroomReporter}.
-  private def renewGroomServerStat: Receive = {
-    case stat: GroomServerStat => groomTasksStat ++= Set(stat)
-  }
-  
-   * Find corresponded {@link GroomServerStat}. 
-  private def askGroomServerStat: Receive = {
-    case AskGroomServerStat(grooms, from) => {
-      var stats = Set.empty[GroomServerStat]  
-      grooms.foreach( groom => {
-        groomTasksStat.filter( stat => stat.getName.equals(groom)) match {
-          case filtered: Set[GroomServerStat] => stats ++= Set(filtered.head)
-          case unknown@_ => LOG.warning("No stat found for GroomServer {}", 
-                                        groom)
-        }
-      })
-      if(!stats.isEmpty) from ! stats 
-      else LOG.warning("{} No GroomServerStat found!", grooms.mkString(", "))
+  override def groomLeaves(name: String, host: String, port: Int) = 
+    allStats.find( stats => 
+      stats.name.equals(name) && stats.host.equals(host) && 
+      stats.port.equals(port)
+    ). map { stats => 
+      allStats -= stats 
+      totalMaxTasks -= stats.maxTasks
     }
-  }
 
-  override def receive = renewGroomServerStat orElse askGroomServerStat orElse unknown
-*/
 }

@@ -36,20 +36,28 @@ import org.apache.hama.monitor.metrics.MetricsRecord
 import org.apache.hama.monitor.metrics.Metrics._
 import scala.util.control.Breaks
 
+object JvmStatsCollector {
+
+  val gcBeans: java.util.List[GarbageCollectorMXBean] = 
+    ManagementFactory.getGarbageCollectorMXBeans
+
+  val memoryMXBean: MemoryMXBean = ManagementFactory.getMemoryMXBean
+
+  val threadMXBean: ThreadMXBean = ManagementFactory.getThreadMXBean
+
+  val M: Long = 1024*1024
+
+}
+
 /**
  * Collector jvm metrics information.
  */
 final class JvmStatsCollector extends Collector {
 
-  private val memoryMXBean: MemoryMXBean = 
-    ManagementFactory.getMemoryMXBean
-  private var gcBeans: java.util.List[GarbageCollectorMXBean] =
-    ManagementFactory.getGarbageCollectorMXBeans
-  private val threadMXBean: ThreadMXBean = 
-    ManagementFactory.getThreadMXBean
-  private val M: Long = 1024*1024
+  import JvmStatsCollector._
 
-  override def initialize() { start() }
+
+  override def initialize() = start() 
 
   override def dest(): String = classOf[JvmStatsTracker].getName
 
