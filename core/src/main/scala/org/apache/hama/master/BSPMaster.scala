@@ -94,10 +94,16 @@ class BSPMaster(setting: Setting, registrator: Registrator)
   def seedNodes(): IndexedSeq[SystemInfo] = Vector(setting.info)
 
   def forwardStats: Receive = {
-    case stats: Stats => findServiceBy("fedeator").map { service => 
-      service forward stats
-    }
+    case stats: Stats => 
+      findServiceBy(Federator.simpleName(setting.hama)).map { service => 
+        service forward stats
+      }
   }
+
+  override def groomLeave(name: String, host: String, port: Int) = 
+    findServiceBy(Federator.simpleName(setting.hama)).map { (service) =>
+      service ! GroomLeave(name, host, port)
+    }
 
   override def receive = forwardStats orElse membership orElse unknown
   

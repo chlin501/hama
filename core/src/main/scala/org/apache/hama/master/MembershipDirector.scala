@@ -31,6 +31,9 @@ import org.apache.hama.groom.GroomRegistration
 import org.apache.hama.util.Utils._
 import scala.collection.immutable.IndexedSeq
 
+final case class GroomJoin(name: String, host: String, port: Int)
+final case class GroomLeave(name: String, host: String, port: Int)
+
 trait MembershipDirector extends Membership with Agent { 
 
   protected val cluster = Cluster(context.system)
@@ -58,19 +61,31 @@ trait MembershipDirector extends Membership with Agent {
   }
 
   protected def enroll(participant: ActorRef) = {
-    LOG.info("{} enrolls to Master!", participant.path.name)
+    LOG.info("{} enrolls!", participant.path.name)
+    val groomName = participant.path.name
+    val groomHost = participant.path.address.host.getOrElse(null)
+    val groomPort = participant.path.address.port.getOrElse(-1)
+    groomJoin(groomName, groomHost, groomPort) 
     grooms ++= Set(participant)
   }
+
+  protected def groomJoin(name: String, host: String, port: Int) { }
 
   protected def disenroll(info: SystemInfo) = grooms.find( groom => {
     info.equals(from(groom.path.address))
   }) match {
     case Some(found) => {
-      LOG.info("{} disenrolls out of Master!", found.path.name)
+      LOG.info("{} leaves!", found.path.name)
+      val groomName = found.path.name
+      val groomHost = found.path.address.host.getOrElse(null)
+      val groomPort = found.path.address.port.getOrElse(-1)
+      groomLeave(groomName, groomHost, groomPort) 
       grooms -= found
     }
     case None => 
   } 
+
+  protected def groomLeave(name: String, host: String, port: Int) { }
 
   protected def memberEvent(event: MemberEvent) { }
 

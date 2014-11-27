@@ -128,15 +128,16 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @return GroomServerStat contains the latest tasks statistics.
    */
   protected def currentGroomStats(): GroomStats = {
+    val name = setting.name
     val host = setting.host
     val port = setting.port
     val maxTasks = setting.hama.getInt("bsp.tasks.maximum", 3) 
     val queueIds = list(directiveQueue) 
     val slotIds = list(slots) 
-    LOG.debug("Current groom stats: host {}, port {}, maxTasks {}, "+
-              "queue tasks ids {}, slots ids {}", host, port, maxTasks, 
+    LOG.debug("Current groom stats: name {}, host {}, port {}, maxTasks {}, "+
+              "queue tasks ids {}, slots ids {}", name, host, port, maxTasks, 
               queueIds, slotIds)
-    GroomStats(host, port, maxTasks, queueIds, slotIds)
+    GroomStats(name, host, port, maxTasks, queueIds, slotIds)
   } 
 
   //protected def currentTasks(): TaskStats = {

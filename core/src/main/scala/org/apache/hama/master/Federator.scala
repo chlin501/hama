@@ -31,6 +31,10 @@ import org.apache.hama.monitor.master.JvmStatsTracker
 
 sealed trait FederatorMessages
 final case object ListTrackers extends FederatorMessages
+/**
+ * This tells how many trackers are currently up.
+ * @param services are trackers loaded.
+ */
 final case class TrackersAvailable(services: Seq[String]) 
       extends FederatorMessages
 
@@ -51,8 +55,7 @@ class Federator(setting: Setting) extends Ganglion with LocalService {
   import Federator._
 
   override def initializeServices {
-    val defaultClasses = setting.hama.get("federator.default.probe.classes", 
-                                          defaultTrackers.mkString(","))
+    val defaultClasses = defaultTrackers.mkString(",")
     load(setting.hama, defaultClasses).foreach( probe => { 
        LOG.debug("Default trakcer to be instantiated: {}", probe.name)
        getOrCreate(probe.name, classOf[WrappedTracker], self, probe) 
@@ -75,16 +78,20 @@ class Federator(setting: Setting) extends Ganglion with LocalService {
   protected def replyTrackers(from: ActorRef) = 
     from ! TrackersAvailable(currentTrackers())
 
-  protected def currentTrackers(): Seq[String] = services.map { (service) => 
-    service.path.name 
+  protected def currentTrackers(): Seq[String] = services.map { (tracker) => 
+    tracker.path.name 
   }.toSeq
 
   protected def dispatchStats: Receive = {
-    case stats: Stats => findServiceBy(stats.dest).map { service => 
-       service forward stats
+    case stats: Stats => findServiceBy(stats.dest).map { tracker => 
+       tracker forward stats
     }
   }
 
-  override def receive = dispatchStats orElse listTrackers orElse unknown
+  def groomLeaveEvent: Receive = {
+    case event: GroomLeave => services.foreach( tracker => tracker ! event)
+  } 
+
+  override def receive = groomLeaveEvent orElse dispatchStats orElse listTrackers orElse unknown
 
 }

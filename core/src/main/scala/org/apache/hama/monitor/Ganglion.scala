@@ -25,6 +25,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.Periodically
 import org.apache.hama.Tick
 import org.apache.hama.Ticker
+import org.apache.hama.master.GroomLeave
 import org.apache.hama.logging.CommonLog
 import scala.concurrent.duration.DurationLong
 import scala.concurrent.duration.FiniteDuration
@@ -67,7 +68,11 @@ class WrappedTracker(federator: ActorRef, tracker: Tracker) extends Agent {
   
   // TODO: see Tracker TODO
 
-  override def receive = unknown
+  def groomLeave: Receive = {
+    case GroomLeave(name, host, port) => tracker.groomLeave(name, host, port)
+  }
+
+  override def receive = groomLeave orElse unknown
 
 }
 
@@ -117,6 +122,9 @@ trait Tracker extends Probe {
     // need ability to know services available and send to target  
      //trigger to notify target(where target is mater service actor ref name)
   //}
+
+  protected[monitor] def groomLeave(name: String, host: String, port: Int) {
+  }
 
 }
 

@@ -27,6 +27,7 @@ import org.apache.hadoop.io.ObjectWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.master.Directive
+import org.apache.hama.groom.GroomServer
 import org.apache.hama.groom.Slot
 import org.apache.hama.util.Utils._
 import scala.collection.immutable.Queue
@@ -113,9 +114,10 @@ final class TaskStats extends Writable with CollectorMessages {
 
 object GroomStats {
 
-  def apply(host: String, port: Int, maxTasks: Int,
+  def apply(name: String, host: String, port: Int, maxTasks: Int,
             queue: Array[String], slots: Array[String]): GroomStats = {
     val stats = new GroomStats
+    stats.n = name
     stats.h = host
     stats.p = port
     stats.mt = maxTasks
@@ -124,8 +126,10 @@ object GroomStats {
     stats
   }
 
-  def apply(host: String, port: Int, maxTasks: Int): GroomStats = {
+  def apply(name: String, host: String, port: Int, maxTasks: Int): 
+      GroomStats = {
     val stats = new GroomStats
+    stats.n = name
     stats.h = host
     stats.p = port
     stats.mt = maxTasks
@@ -176,6 +180,9 @@ final class GroomStats extends Writable with CollectorMessages {
 
   import GroomStats._
 
+  /* groom server's actor name */
+  protected[monitor] var n: String = classOf[GroomServer].getSimpleName
+
   /* host */
   protected[monitor] var h: String = InetAddress.getLocalHost.getHostName
 
@@ -191,6 +198,8 @@ final class GroomStats extends Writable with CollectorMessages {
   /* slots */
   protected[monitor] var s = defaultSlots(mt)
   
+  def name(): String = n 
+
   def host(): String = h 
 
   def port(): Int = p
@@ -203,6 +212,7 @@ final class GroomStats extends Writable with CollectorMessages {
 
   @throws(classOf[IOException])
   override def write(out: DataOutput) {
+    Text.writeString(out, name)
     Text.writeString(out, host)
     out.writeInt(port)
     out.writeInt(maxTasks)
@@ -212,6 +222,7 @@ final class GroomStats extends Writable with CollectorMessages {
 
   @throws(classOf[IOException])
   override def readFields(in: DataInput) {
+    n = Text.readString(in)
     h = Text.readString(in)
     p = in.readInt
     mt = in.readInt
@@ -220,5 +231,25 @@ final class GroomStats extends Writable with CollectorMessages {
     s = defaultSlots(mt)
     s.readFields(in)
   }
-}
 
+  override def equals(o: Any): Boolean = o match {
+    case that: GroomStats => that.isInstanceOf[GroomStats] &&
+      that.n.equals(n) && that.h.equals(h) && (that.p == p) && 
+      (that.mt == mt) && that.q.toStrings.equals(q.toStrings) &&
+      that.s.toStrings.equals(s.toStrings) 
+    case _ => false
+  }
+  
+  override def hashCode(): Int = 
+    41 * ( 
+      41 * ( 
+        41 * ( 
+          41 * (
+            41 * (
+              41 + n.toString.hashCode
+            ) + h.toString.hashCode
+          ) + p
+        ) + mt
+      ) + q.toStrings.hashCode
+    ) + s.toStrings.hashCode
+}

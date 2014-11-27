@@ -52,8 +52,7 @@ class Reporter(setting: Setting, groom: ActorRef)
 
 
   override def initializeServices {
-    val defaultClasses = setting.hama.get("reporter.default.probe.classes",
-                                          defaultReporters.mkString(","))
+    val defaultClasses = defaultReporters.mkString(",")
     load(setting.hama, defaultClasses).foreach( probe => {
        LOG.debug("Default reporter to be instantiated: {}", probe.name)
        getOrCreate(probe.name, classOf[WrappedCollector], self, probe)

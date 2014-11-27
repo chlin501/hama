@@ -19,8 +19,9 @@ package org.apache.hama.monitor.master
 
 import akka.actor.ActorRef
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.groom.GroomServerStat
+//import org.apache.hama.groom.GroomServerStat
 import org.apache.hama.monitor.Tracker
+import org.apache.hama.monitor.GroomStats
 
 /**
  * Ask {@link GroomsTracker} for corresponded GroomServerStat(s).
@@ -32,7 +33,23 @@ final case class AskGroomServerStat(groomServers: Array[String],
 
 final class GroomsTracker extends Tracker {
 
+  private var allStats = Set.empty[GroomStats]
+
+  //private var // calculated stats e.g. total max tasks, etc. fields
+
   override def initialize() { }
+
+/*
+  def groomStats: Receive = {
+    case stats: GroomStats => {
+      // TODO: sum up related data
+    }
+  }
+
+  //def groomLeave/ JoinEvent: Receive = {
+    //case GroomLeave(name, host, port)/ GroomJoin(name, host, port)
+  //}
+*/
  
 /*
   private var groomTasksStat = Set.empty[GroomServerStat]
