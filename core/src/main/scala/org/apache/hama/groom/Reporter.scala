@@ -29,11 +29,18 @@ import org.apache.hama.monitor.WrappedCollector
 import org.apache.hama.monitor.groom.TaskStatsCollector
 import org.apache.hama.monitor.groom.GroomStatsCollector
 import org.apache.hama.monitor.groom.JvmStatsCollector
-import org.apache.hama.util.Curator
+
+final case object ListCollector
+final case class CollectorsAvailable(names: Array[String]) {
+
+  override def toString(): String = 
+    "CollectorsAvailable(" +names.mkString(",")+ ")"
+
+}
 
 object Reporter {
 
-  val defaultReporters = Seq(classOf[TaskStatsCollector].getName,
+  val defaultCollectors = Seq(classOf[TaskStatsCollector].getName,
     classOf[GroomStatsCollector].getName, classOf[JvmStatsCollector].getName)
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
@@ -43,16 +50,14 @@ object Reporter {
 
 }
 
-// TODO: list collectors available
-//       periodically load probe from reporter.probe.classes?
-class Reporter(setting: Setting, groom: ActorRef) 
-      extends Ganglion with LocalService with Curator {
+// TODO: periodically reload probes from reporter.probe.classes?
+class Reporter(setting: Setting, groom: ActorRef) extends Ganglion 
+                                                     with LocalService {
 
   import Reporter._
 
-
   override def initializeServices {
-    val defaultClasses = defaultReporters.mkString(",")
+    val defaultClasses = defaultCollectors.mkString(",")
     load(setting.hama, defaultClasses).foreach( probe => {
        LOG.debug("Default reporter to be instantiated: {}", probe.name)
        getOrCreate(probe.name, classOf[WrappedCollector], self, probe)
@@ -68,16 +73,21 @@ class Reporter(setting: Setting, groom: ActorRef)
     LOG.debug("Finish loading {} non default reporters ...", nonDefault.size)
   }
 
+  protected def currentCollectors(): Array[String] = services.map { service =>
+    service.path.name
+  }.toArray
+
   /**
    * Report functions 
    * - forward Stats to master.
-   * - list groom services available.
-   * - request a particular service for metrics.
+   * - list groom server services available.
+   * - request metrics from a particular service.
    */
   def report: Receive = {
     case stats: Stats => groom forward stats  
     case ListService => groom forward ListService 
     case request: GetMetrics => groom forward request
+    case ListCollector => sender ! CollectorsAvailable(currentCollectors)
   }
 
   def receive = report orElse unknown

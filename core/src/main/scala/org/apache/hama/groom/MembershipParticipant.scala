@@ -49,7 +49,7 @@ class MasterLookupException(message: String) extends RuntimeException(message)
 
 trait MembershipParticipant extends Membership with RemoteService { 
 
-  protected val cluster = Cluster(context.system)
+  protected lazy val cluster = Cluster(context.system)
   
   protected var master: Option[ProxyInfo] = None
 

@@ -17,6 +17,7 @@
  */
 package org.apache.hama.groom
 
+import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
 import akka.cluster.Member
@@ -101,12 +102,15 @@ class GroomServer(setting: Setting, finder: MasterFinder)
     case stats: Stats => master.map { m =>
       findProxyBy(m.getActorName).map { (proxy) => proxy forward stats }
     }
-    case ListService => sender ! ServicesAvailable(services.map { service => 
-      service.path.name }.toArray)
+    case ListService => sender ! ServicesAvailable(currentServices)
     case GetMetrics(serviceName, command) => findServiceBy(serviceName).map { 
       service => service forward command
     }
   }
+
+  protected def currentServices(): Array[String] = services.map { service => 
+    service.path.name 
+  }.toArray
 
   override def receive = report orElse actorReply orElse retryResult orElse membership orElse unknown
 }

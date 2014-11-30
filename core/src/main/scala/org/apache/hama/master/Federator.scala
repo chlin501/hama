@@ -89,8 +89,14 @@ class Federator(setting: Setting, master: ActorRef)
   }.toSeq
 
   protected def dispatch: Receive = {
+    /**
+     * Ask tracker executing a specific action.
+     */
     case AskFor(recepiant: String, action: ProbeMessages) => 
       findServiceBy(recepiant).map { tracker => tracker forward action }
+    /**
+     * Stats comes from collector, destined to a particular tracker.
+     */
     case stats: Stats => findServiceBy(stats.dest).map { tracker => 
        tracker forward stats
     }

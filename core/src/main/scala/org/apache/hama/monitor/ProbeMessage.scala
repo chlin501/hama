@@ -150,7 +150,7 @@ object GroomStats { // TODO: remove queue?
 
   final def toWritable(strings: Array[String]): ArrayWritable = {
     val w = new ArrayWritable(classOf[Text])
-    w.set(strings.map { e => e.asInstanceOf[Text] })
+    w.set(strings.map { e => new Text(e) })
     w
   }
 
