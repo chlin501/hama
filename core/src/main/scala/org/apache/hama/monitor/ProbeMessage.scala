@@ -44,10 +44,13 @@ final case object GetTaskStats extends ProbeMessages
 
 object Stats {
 
-  def apply(dest: String, data: Writable): Stats = {
-    if(null == dest || dest.isEmpty)
+  def apply(dest: String, data: Writable): Stats = dest match {
+    case null | "" => 
       throw new IllegalArgumentException("Destination (tracker) is missing!")
-    new Stats(dest, data)
+    case _ => data match {
+      case null => throw new IllegalArgumentException("Stats data is missing!")
+      case _ => new Stats(dest, data)
+    }
   }
 
 }
@@ -58,7 +61,7 @@ object Stats {
  * @param d is the destination to which this stats will be sent.
  * @param v is the stats collected.
  */
-final class Stats(d: String, v: Writable) extends Writable with ProbeMessages {
+class Stats(d: String, v: Writable) extends Writable with ProbeMessages {
 
   /* tracker name */
   protected[monitor] var tracker: Text = new Text(d)
@@ -79,6 +82,8 @@ final class Stats(d: String, v: Writable) extends Writable with ProbeMessages {
     tracker.write(out)
     value.write(out)
   }
+
+  override def toString(): String = "Stats("+ dest +","+ data.toString +")"
 
 }
 

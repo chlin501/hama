@@ -99,14 +99,23 @@ class GroomServer(setting: Setting, finder: MasterFinder)
   override def masterFinder(): MasterFinder = finder 
 
   def report: Receive = {
-    case stats: Stats => master.map { m =>
-      findProxyBy(m.getActorName).map { (proxy) => proxy forward stats }
-    }
-    case ListService => sender ! ServicesAvailable(currentServices)
+    case stats: Stats => forwardStats(stats)
+    case ListService => listServices(sender)
     case GetMetrics(serviceName, command) => findServiceBy(serviceName).map { 
       service => service forward command
     }
   }
+
+  /**
+   * Forward stats data to master.
+   * @param stats data to be reported.
+   */
+  protected def forwardStats(stats: Stats): Unit = master.map { m =>
+    findProxyBy(m.getActorName).map { (proxy) => proxy forward stats }
+  }
+
+  protected def listServices(from: ActorRef) = 
+    from ! ServicesAvailable(currentServices)
 
   protected def currentServices(): Array[String] = services.map { service => 
     service.path.name 

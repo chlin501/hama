@@ -104,7 +104,8 @@ class BSPMaster(setting: Setting, registrator: Registrator)
 
   protected def dispatch: Receive = {
     case Inform(service, result) => inform(result, service)
-    case stats: Stats => inform(stats, Federator.simpleName(setting.hama))
+    case stats: Stats => 
+      inform(stats, Federator.simpleName(setting.hama))
   }
 
   override def receive = dispatch orElse membership orElse unknown

@@ -18,11 +18,17 @@
 package org.apache.hama.groom
 
 import akka.actor.ActorRef
+import org.apache.hadoop.io.Text
+import org.apache.hadoop.io.Writable
 import org.apache.hama.TestEnv
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.ListService
+import org.apache.hama.monitor.Stats
+import org.apache.hama.monitor.master.GroomsTracker
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
+
+final case class ForwardStats(stats: Stats)
 
 class MockReporter(setting: Setting, groom: ActorRef, tester: ActorRef) 
       extends Reporter(setting, groom) {
@@ -37,7 +43,10 @@ class MockReporter(setting: Setting, groom: ActorRef, tester: ActorRef)
 class MockGroom(setting: Setting, tester: ActorRef)
       extends GroomServer(setting: Setting, null.asInstanceOf[MasterFinder]) {
 
+  val GTracker = classOf[GroomsTracker].getName
+
   override protected lazy val cluster = null.asInstanceOf[akka.cluster.Cluster]
+
   override def initializeServices {
     val reporter = getOrCreate(Reporter.simpleName(setting.hama),
                                classOf[MockReporter], setting, self, tester) 
@@ -47,11 +56,15 @@ class MockGroom(setting: Setting, tester: ActorRef)
 
   override def stopServices { }
 
-  override def currentServices(): Array[String] = {
-    val available = super.currentServices
-    LOG.info("Current services {} available.", available.mkString(", "))
-    tester ! available.sorted.toSeq
-    available
+  override def listServices(from: ActorRef) = from.path.name match {
+    case "deadLetters" => {
+      val available = currentServices
+      LOG.info("Request from {} asking current services available: {}", 
+               from.path.name, available.mkString(", "))
+      tester ! available.sorted.toSeq
+    }
+    case _ => LOG.info("{} requests for listing current services.", 
+                       from.path.name)
   }
 
   def listCollector: Receive = {
@@ -61,18 +74,41 @@ class MockGroom(setting: Setting, tester: ActorRef)
       }
   }
 
-  override def receive = listCollector orElse super.receive
+  override def forwardStats(stats: Stats) = stats.dest match {
+    case GTracker => stats.data.toString match {
+      case "Test sampe!" => {
+        LOG.info("Stats delegated to GroomServer has dest {} data {}", 
+                 stats.dest, stats.data.toString)
+        tester ! stats.dest
+        tester ! stats.data.toString
+      }
+      case _ => LOG.info("Rest stats destined to GroomsTracker is {}", stats)
+    }
+    case _ => LOG.info("Stats destined to other trackers {}", stats)
+  }
+
+  def forwardStatsData: Receive = {
+    case ForwardStats(stats) => 
+      findServiceBy(Reporter.simpleName(setting.hama)).map { service =>
+        service ! stats
+      }
+  }
+
+  override def receive = forwardStatsData orElse listCollector orElse super.receive
   
 }
 
 @RunWith(classOf[JUnitRunner])
 class TestReporter extends TestEnv("TestReporter") {
 
+  val groomSetting = {
+    val setting = Setting.groom
+    setting.hama.set("groom.name", classOf[MockGroom].getSimpleName)
+    setting.hama.set("groom.main", classOf[MockGroom].getName)
+    setting
+  }
 
   it("test reporting stats functions.") {
-    val groomSetting = Setting.groom
-    groomSetting.hama.set("groom.name", classOf[MockGroom].getSimpleName)
-    groomSetting.hama.set("groom.main", classOf[MockGroom].getName)
     val expectedServices = Seq(Reporter.simpleName(groomSetting.hama),
                                TaskCounsellor.simpleName(groomSetting.hama)).
                            sorted
@@ -84,5 +120,13 @@ class TestReporter extends TestEnv("TestReporter") {
  
     groom ! ListCollector
     expect(Reporter.defaultCollectors.sorted.toSeq) 
+
+    val dest = classOf[GroomsTracker].getName
+    val data = new Text("Test sampe!").asInstanceOf[Writable]
+    val stats = Stats(dest, data)
+
+    groom ! ForwardStats(stats)
+    expect(dest)
+    expect(data.toString)
   }
 }
