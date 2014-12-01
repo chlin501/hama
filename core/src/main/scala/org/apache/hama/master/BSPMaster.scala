@@ -26,6 +26,8 @@ import org.apache.hama.LocalService
 import org.apache.hama.SystemInfo
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Inform
+import org.apache.hama.monitor.ListService
+import org.apache.hama.monitor.ServicesAvailable
 import org.apache.hama.monitor.Stats
 import org.apache.hama.util.Curator
 import org.apache.zookeeper.CreateMode
@@ -106,7 +108,15 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     case Inform(service, result) => inform(result, service)
     case stats: Stats => 
       inform(stats, Federator.simpleName(setting.hama))
+    case ListService => listServices(sender)
   }
+
+  protected def listServices(from: ActorRef) = 
+    from ! ServicesAvailable(currentServices)
+
+  protected def currentServices(): Array[String] = services.map { service => 
+    service.path.name 
+  }.toArray
 
   override def receive = dispatch orElse membership orElse unknown
   

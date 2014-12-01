@@ -79,7 +79,7 @@ class Reporter(setting: Setting, groom: ActorRef) extends Ganglion
 
   /**
    * Report functions 
-   * - forward Stats to master.
+   * - forward writable Stats to master.
    * - list groom server services available.
    * - request metrics from a particular service.
    */

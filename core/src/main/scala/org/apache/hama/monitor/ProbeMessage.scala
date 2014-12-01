@@ -57,7 +57,8 @@ object Stats {
 
 
 /**
- * Statistics data to be reported.
+ * Stats contains statistics data to be reported to a specific destination, 
+ * usually a Tracker.
  * @param d is the destination to which this stats will be sent.
  * @param v is the stats collected.
  */
@@ -197,7 +198,7 @@ final class GroomStats extends Writable with ProbeMessages {
   /* max tasks */
   protected[monitor] var mt: Int = 3
 
-  /* queue */
+  /* queue */ // TODO: remove
   protected[monitor] var q = defaultQueue
 
   /* slots */

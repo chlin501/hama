@@ -62,6 +62,10 @@ object Receptionist {
  * Receive job submission from clients and put the job to the wait queue.
  * @param setting contains groom related setting.
  */
+// TODO: validate job submitted, e.g.
+//       - reject if job's numBSPTasks > avail slots in grooms 
+//       - reserve slots for a job (or ask sched on behalf of receptionist)
+//       reject back to the client if invalid.
 class Receptionist(setting: Setting) extends LocalService {
 
   import Receptionist._

@@ -32,12 +32,14 @@ final case class ForwardStats(stats: Stats)
 
 class MockReporter(setting: Setting, groom: ActorRef, tester: ActorRef) 
       extends Reporter(setting, groom) {
+
   override def currentCollectors(): Array[String] = {
     val collectors = super.currentCollectors
     LOG.info("Collectors available: {}", collectors.mkString(", "))
     tester ! collectors.sorted.toSeq
     collectors
   }
+
 }
 
 class MockGroom(setting: Setting, tester: ActorRef)

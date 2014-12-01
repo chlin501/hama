@@ -20,34 +20,72 @@ package org.apache.hama.master
 import akka.actor.ActorRef
 import org.apache.hama.TestEnv
 import org.apache.hama.conf.Setting
-import org.apache.hama.monitor.master.GroomsTracker
-import org.apache.hama.monitor.master.JobTasksTracker
-import org.apache.hama.monitor.master.JvmStatsTracker
+import org.apache.hama.monitor.ListService
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 
-class MockFederator(setting: Setting, tester: ActorRef) 
-      extends Federator(setting, null) { // TODO: change null to mock master
+class MockFederator(setting: Setting, master: ActorRef, tester: ActorRef) 
+      extends Federator(setting, master) {
 
-  override def replyTrackers(from: ActorRef) = {
-    val trackers = currentTrackers() 
-    LOG.info("Current trackers available include {}", trackers.mkString(","))
-    tester ! TrackersAvailable(trackers)
+  override def currentTrackers(): Array[String] = {
+    val trackers = super.currentTrackers
+    tester ! trackers.sorted.toSeq
+    trackers
   }
+
+}
+
+class MockMaster(setting: Setting, tester: ActorRef)
+      extends BSPMaster(setting, null.asInstanceOf[Registrator]) {
+
+  override def initializeServices {
+    val conf = setting.hama
+    getOrCreate(Federator.simpleName(conf), classOf[MockFederator], setting, 
+                self, tester) 
+  }
+
+  def listTracker: Receive = {
+    case ListTracker => 
+      findServiceBy(Federator.simpleName(setting.hama)).map { tracker => 
+        tracker ! ListTracker
+      }
+  }
+
+  override def listServices(from: ActorRef) = from.path.name match {
+    case "deadLetters" => {
+      val available = currentServices
+      LOG.info("{} requests current master services available: {}", 
+               from.path.name, available.mkString(","))
+      tester ! available.sorted.toSeq
+    }
+    case _ => LOG.info("Others request for master services available {}", 
+                       from.path.name)
+  }
+
+  override def receive = listTracker orElse super.receive 
 
 }
 
 @RunWith(classOf[JUnitRunner])
 class TestFederator extends TestEnv("TestFederator") {
 
-  import Federator._
-
-  it("test monitor functions.") {
+  val masterSetting = {
     val setting = Setting.master
-    val monitor = createWithArgs("monitor", classOf[MockFederator], setting, 
-                                 tester)
-    monitor ! ListTrackers        
+    setting.hama.set("master.name", classOf[MockMaster].getSimpleName)
+    setting.hama.set("master.main", classOf[MockMaster].getName)
+    setting
+  }
+
+  it("test federator functions.") {
+    val expectedServices = Seq(Federator.simpleName(masterSetting.hama))
+    val master = createWithArgs(masterSetting.name, masterSetting.main, 
+                               masterSetting, tester)
+        
+    master ! ListService
+    expect(expectedServices)
  
-    expect(TrackersAvailable(defaultTrackers)) 
+    master ! ListTracker 
+    expect(Federator.defaultTrackers.sorted.toSeq)
+     
   }
 }

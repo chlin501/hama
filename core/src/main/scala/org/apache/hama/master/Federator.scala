@@ -24,6 +24,7 @@ import org.apache.hama.LocalService
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Ganglion
 import org.apache.hama.monitor.Inform
+import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.ProbeMessages
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedTracker
@@ -35,13 +36,18 @@ final case class AskFor(recepiant: String, action: ProbeMessages)
       extends ProbeMessages
 
 sealed trait FederatorMessages
-final case object ListTrackers extends FederatorMessages
+final case object ListTracker extends FederatorMessages
 /**
  * This tells how many trackers are currently up.
- * @param services are trackers loaded.
+ * @param trackers are trackers loaded.
  */
-final case class TrackersAvailable(services: Seq[String]) 
-      extends FederatorMessages
+final case class TrackersAvailable(trackers: Array[String]) 
+      extends FederatorMessages {
+ 
+  override def toString(): String = 
+    "TrackersAvailable("+trackers.mkString(",")+")"
+
+}
 
 object Federator {
 
@@ -55,6 +61,8 @@ object Federator {
 
 }
 
+// TODO: calculate tasks <-> groom slots bit map (grooms tracker)
+//       reserve slots for jobs (in receptionist), etc.
 class Federator(setting: Setting, master: ActorRef) 
       extends Ganglion with LocalService {
 
@@ -77,16 +85,16 @@ class Federator(setting: Setting, master: ActorRef)
     LOG.debug("Finish loading {} non default trackers ...", nonDefault.size)
   }
 
-  protected def listTrackers: Receive = {
-    case ListTrackers => replyTrackers(sender) 
+  protected def listTracker: Receive = {
+    case ListTracker => listTrackers(sender) 
   }
 
-  protected def replyTrackers(from: ActorRef) = 
-    from ! TrackersAvailable(currentTrackers())
+  protected def listTrackers(from: ActorRef) = 
+    from ! TrackersAvailable(currentTrackers)
 
-  protected def currentTrackers(): Seq[String] = services.map { (tracker) => 
+  protected def currentTrackers(): Array[String] = services.map { tracker => 
     tracker.path.name 
-  }.toSeq
+  }.toArray
 
   protected def dispatch: Receive = {
     /**
@@ -100,16 +108,17 @@ class Federator(setting: Setting, master: ActorRef)
     case stats: Stats => findServiceBy(stats.dest).map { tracker => 
        tracker forward stats
     }
+    case ListService => master forward ListService
   }
 
   def groomLeaveEvent: Receive = {
     case event: GroomLeave => services.foreach( tracker => tracker ! event)
   } 
 
-  def inform: Receive = {
+  def inform: Receive = { // TODO: rename to Eclaslate?
     case Inform(service, result) => master ! Inform(service, result)
   }
 
-  override def receive = inform orElse groomLeaveEvent orElse dispatch orElse listTrackers orElse unknown
+  override def receive = inform orElse groomLeaveEvent orElse dispatch orElse listTracker orElse unknown
 
 }

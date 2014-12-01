@@ -36,7 +36,7 @@ final case class GroomLeave(name: String, host: String, port: Int)
 
 trait MembershipDirector extends Membership with Agent { 
 
-  protected val cluster = Cluster(context.system)
+  protected lazy val cluster = Cluster(context.system)
 
   protected var grooms = Set.empty[ActorRef]
 
