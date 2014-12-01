@@ -22,25 +22,44 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.monitor.Tracker
 import org.apache.hama.monitor.ProbeMessages
 import org.apache.hama.monitor.GroomStats
+import org.apache.hama.util.Utils._
 
 final case object GetMaxTasks extends ProbeMessages
+final case class HasFreeSlot(groom: String) extends ProbeMessages
+final case class GroomHasSlots(groom: String, free: Int) extends ProbeMessages
+final case class NoSlotFor(groom: String) extends ProbeMessages
 final case class TotalMaxTasks(allowed: Int) extends ProbeMessages
 
 final class GroomsTracker extends Tracker {
 
   private var allStats = Set.empty[GroomStats]
+  private val NULL = nullString
 
   /* total tasks of all groom servers */
   private var totalMaxTasks: Int = 0
+  private var freeSlotsByGroom = Map.empty[String, Int]
   // TODO: other stats 
 
   override def receive(stats: Writable) = stats match {
     case stats: GroomStats => {
       allStats ++= Set(stats)
-      totalMaxTasks += stats.maxTasks
+      sumMaxTasks(stats)
+      sumFreeSlots(stats)
     }
     case other@_ => LOG.warning("Unknown stats data: {}", other)
   }
+
+  private def sumMaxTasks(stats: GroomStats) = totalMaxTasks += stats.maxTasks
+
+  private def sumFreeSlots(stats: GroomStats) =  
+    freeSlotsByGroom ++= Map(stats.name+"_"+stats.host+"_"+stats.port -> 
+                             freeSlots(stats))
+
+  private def freeSlots(stats: GroomStats): Int = 
+    stats.slots.map { slot => slot match {  
+      case NULL => 1 
+      case _ => 0 
+    }}.sum
 
   override def groomLeaves(name: String, host: String, port: Int) = 
     allStats.find( stats => 
@@ -48,11 +67,24 @@ final class GroomsTracker extends Tracker {
       stats.port.equals(port)
     ). map { stats => 
       allStats -= stats 
-      totalMaxTasks -= stats.maxTasks
+      subMaxTasks(stats)
+      subFreeSlots(stats)
     }
+
+  private def subMaxTasks(stats: GroomStats) = totalMaxTasks -= stats.maxTasks
+
+  private def subFreeSlots(stats: GroomStats) = 
+    freeSlotsByGroom -= stats.name+"_"+stats.host+"_"+stats.port
 
   override def askFor(action: ProbeMessages, from: String) = action match {
     case GetMaxTasks => inform(from, TotalMaxTasks(totalMaxTasks))
+    case HasFreeSlot(groom) => allStats.find( stats => 
+      groom.contains(stats.host) && groom.contains(stats.port)
+    ) match {
+      case Some(stats) => inform(from, GroomHasSlots(groom, freeSlots(stats)))
+      case None => inform(from, NoSlotFor(groom))
+    }
+    case _ =>  
   }
 
 }
