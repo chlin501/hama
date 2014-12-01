@@ -118,7 +118,7 @@ final class TaskStats extends Writable with ProbeMessages {
 }
 */
 
-object GroomStats { // TODO: remove queue?
+object GroomStats { // TODO: remove queue
 
   def apply(name: String, host: String, port: Int, maxTasks: Int,
             queue: Array[String], slots: Array[String]): GroomStats = {

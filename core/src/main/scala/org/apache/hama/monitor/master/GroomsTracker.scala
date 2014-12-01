@@ -25,9 +25,9 @@ import org.apache.hama.monitor.GroomStats
 import org.apache.hama.util.Utils._
 
 final case object GetMaxTasks extends ProbeMessages
-final case class HasFreeSlot(groom: String) extends ProbeMessages
-final case class GroomHasSlots(groom: String, free: Int) extends ProbeMessages
-final case class NoSlotFor(groom: String) extends ProbeMessages
+final case class GetGroomCapacity(host: String, port: Int) extends ProbeMessages
+final case class GroomCapacity(host: String, port: Int, freeSlots: Int) 
+      extends ProbeMessages
 final case class TotalMaxTasks(allowed: Int) extends ProbeMessages
 
 final class GroomsTracker extends Tracker {
@@ -37,8 +37,9 @@ final class GroomsTracker extends Tracker {
 
   /* total tasks of all groom servers */
   private var totalMaxTasks: Int = 0
-  private var freeSlotsByGroom = Map.empty[String, Int]
-  // TODO: other stats 
+  
+  /* free slots per groom */
+  private var freeSlotsByGroom = Map.empty[String, Int] // groom, free slots
 
   override def receive(stats: Writable) = stats match {
     case stats: GroomStats => {
@@ -52,8 +53,7 @@ final class GroomsTracker extends Tracker {
   private def sumMaxTasks(stats: GroomStats) = totalMaxTasks += stats.maxTasks
 
   private def sumFreeSlots(stats: GroomStats) =  
-    freeSlotsByGroom ++= Map(stats.name+"_"+stats.host+"_"+stats.port -> 
-                             freeSlots(stats))
+    freeSlotsByGroom ++= Map(key(stats) -> freeSlots(stats))
 
   private def freeSlots(stats: GroomStats): Int = 
     stats.slots.map { slot => slot match {  
@@ -73,18 +73,27 @@ final class GroomsTracker extends Tracker {
 
   private def subMaxTasks(stats: GroomStats) = totalMaxTasks -= stats.maxTasks
 
-  private def subFreeSlots(stats: GroomStats) = 
-    freeSlotsByGroom -= stats.name+"_"+stats.host+"_"+stats.port
+  private def subFreeSlots(stats: GroomStats) = freeSlotsByGroom -= key(stats)
+
+  private def key(stats: GroomStats): String = 
+    stats.name+"_"+stats.host+"_"+stats.port
 
   override def askFor(action: ProbeMessages, from: String) = action match {
+    /**
+     * Ask max task allowed of the entire groom servers.
+     */
     case GetMaxTasks => inform(from, TotalMaxTasks(totalMaxTasks))
-    case HasFreeSlot(groom) => allStats.find( stats => 
-      groom.contains(stats.host) && groom.contains(stats.port)
+    /**
+     * Check free slot capacity of a particular groom, based on host and port.  
+     */
+    case GetGroomCapacity(host, port) => allStats.find( stats => 
+      host.equals(stats.host) && (port == stats.port)
     ) match {
-      case Some(stats) => inform(from, GroomHasSlots(groom, freeSlots(stats)))
-      case None => inform(from, NoSlotFor(groom))
+      case Some(stats) => inform(from, GroomCapacity(host, port, 
+        freeSlotsByGroom.get(key(stats)).getOrElse(0)))
+      case None => inform(from, GroomCapacity(host, port, 0))
     }
-    case _ =>  
+    case _ => LOG.warning("Unknown action {} from {}!", action, from)
   }
 
 }
