@@ -48,6 +48,8 @@ final class TaskStatsCollector extends Collector {
 
   override def request() = retrieve(targetService, GetTaskStats)
 
+  override def statsFound(s: Writable) = report(s)
+
   override def dest(): String = classOf[JobTasksTracker].getName
 
 }

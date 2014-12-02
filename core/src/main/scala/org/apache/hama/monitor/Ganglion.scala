@@ -98,7 +98,7 @@ class WrappedTracker(federator: ActorRef, tracker: Tracker)
   }
   
   def askFor: Receive = {
-    case action: ProbeMessages => tracker.askFor(action, sender.path.name)
+    case action: Any => tracker.askFor(action, sender.path.name)
   }
 
   def inform: Receive = {
@@ -172,7 +172,7 @@ trait Tracker extends Probe {
    * @param action that asks tracker to perform.
    * @param from which service sends out this action.
    */
-  protected[monitor] def askFor(action: ProbeMessages, from: String) { }
+  protected[monitor] def askFor(action: Any, from: String) { }
 
   /**
    * Receive data, usually from colector.

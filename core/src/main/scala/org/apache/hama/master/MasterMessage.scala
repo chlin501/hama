@@ -56,9 +56,11 @@ private[master] final case class GroomStat(
 
 import org.apache.hama.bsp.BSPJobID
 
+/*
 private[master] final case class Invalid(
   jobId: BSPJobID, jobFilePath: String
 ) extends MasterMessage
+*/
 
 private[master] final case class JobSeq(id: Int) extends MasterMessage
 

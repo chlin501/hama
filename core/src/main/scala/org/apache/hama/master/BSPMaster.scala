@@ -84,9 +84,10 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     join(seedNodes)
     subscribe(self)
     val conf = setting.hama
+    val federator = getOrCreate(Federator.simpleName(conf), classOf[Federator],
+                                setting, self) 
     val receptionist = getOrCreate(Receptionist.simpleName(conf), 
-                                   classOf[Receptionist], setting) 
-    getOrCreate(Federator.simpleName(conf), classOf[Federator], setting, self) 
+                                   classOf[Receptionist], setting, federator) 
     getOrCreate(Scheduler.simpleName(conf), classOf[Scheduler], 
                 conf, receptionist) 
     // TODO: change master state

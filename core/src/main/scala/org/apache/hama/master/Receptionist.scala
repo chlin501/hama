@@ -20,8 +20,12 @@ package org.apache.hama.master
 import akka.actor.ActorRef
 import java.io.DataInputStream
 import java.io.DataInput
+import java.io.DataOutput
+import java.io.IOException
 import java.util.Arrays
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.io.Text
+import org.apache.hadoop.io.Writable
 import org.apache.hadoop.io.WritableUtils
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
@@ -32,12 +36,48 @@ import org.apache.hama.bsp.v2.Job
 import org.apache.hama.conf.Setting
 import org.apache.hama.fs.Operation
 import org.apache.hama.io.PartitionedSplit
+import org.apache.hama.monitor.master.GroomsTracker
+import org.apache.hama.monitor.master.GetMaxTasks
+import org.apache.hama.monitor.master.TotalMaxTasks
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
+
+sealed trait ReceptionistMessages
+
+final case class InValidation(jobId: BSPJobID, jobConf: HamaConfiguration,
+                              client: ActorRef)
+      extends ReceptionistMessages
+
+object Reject {
+
+  def apply(reason: String): Reject = {
+    val reject = new Reject
+    reject.r = reason
+    reject
+  }
+
+}
+
+final class Reject extends Writable with ReceptionistMessages {
+
+  private var r = ""
+
+  def reason(): String = r
+
+  @throws(classOf[IOException])
+  override def write(out: DataOutput) {
+    Text.writeString(out, r) 
+  }
+
+  @throws(classOf[IOException])
+  override def readFields(in: DataInput) {
+    r = Text.readString(in)
+  }
+}
 
 object Receptionist {
 
@@ -64,9 +104,8 @@ object Receptionist {
  */
 // TODO: validate job submitted, e.g.
 //       - reject if job's numBSPTasks > avail slots in grooms 
-//       - reserve slots for a job (or ask sched on behalf of receptionist)
-//       reject back to the client if invalid.
-class Receptionist(setting: Setting) extends LocalService {
+//       - reject to the client if invalid.
+class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
 
   import Receptionist._
 
@@ -75,10 +114,30 @@ class Receptionist(setting: Setting) extends LocalService {
   type MaxTasksPerGroom = Int
 
   /* Initialized job */
-  protected var waitQueue = Queue[Job]()
+  protected var waitQueue = Queue.empty[Job]
+
+  protected var validation = Queue.empty[InValidation] 
 
   /* Operation against underlying storage. may need reload. */
   protected val operation = Operation.get(setting.hama)
+
+  // TODO: refactor validation process e.g. Validate(J(id, conf, client), actions: Any*)
+  protected def maxTasksFound: Receive = {
+    case TotalMaxTasks(available) => {
+      val (first, rest) = validation.dequeue
+      val numBSPTasks = first.jobConf.getInt("bsp.peers.num", 1)
+      if(numBSPTasks > available) {
+        LOG.warning("Client {} requests tasks {} than allowed {}!", 
+                    first.client.path.name, numBSPTasks, available)
+        first.client ! Reject("Request "+numBSPTasks+" tasks more than "+
+                              available+" allowed!")
+      } else {
+        // TODO: initialize job 
+        //       put to wait queue
+      } 
+      validation = rest
+    }
+  }
 
   /**
    * BSPJobClient calls submitJob(jobId, jobFile), where jobFile submitted is
@@ -86,12 +145,13 @@ class Receptionist(setting: Setting) extends LocalService {
    *
    * This can be seen as entry point of entire procedure.
    */
-  def submitJob: Receive = {
+  protected def submitJob: Receive = {
     case Submit(jobId, jobFilePath) => {
       LOG.info("Received job {} submitted from the client {}", jobId, sender) 
-      val taskConf = getTaskConf(jobId, jobFilePath)
-      // TODO: check with federator regarding to max task allowed
-      // federator ! ValidateNumTasks(jobId, taskConf, sender)
+      val jobConf = newJobConf(jobId, jobFilePath)
+      federator ! AskFor(classOf[GroomsTracker].getName, GetMaxTasks)
+      validation = validation.enqueue(InValidation(jobId, jobConf, sender))
+
 /*
       initializeJob(jobId, jobFilePath) match {
         case Some(newJob) => {
@@ -107,22 +167,14 @@ class Receptionist(setting: Setting) extends LocalService {
 */
     }
   }
-
-  //def validationResult: Receive = {
-    //case NumTasksValidationResult(jobId, taskConf, from) => 
-    // initializeJob(jobId) match {
-    //   case Success(job) => waitQueue = waitQueue.enqueue(newJob)
-    //   case Failure(cause) => from ! InitializationFailure(cause)
-    // }
-  //}
   
-  def getTaskConf(jobId: BSPJobID, jobFilePath: String): HamaConfiguration = {
-    val taskConf = new HamaConfiguration() 
-    val localJobFilePath = createLocalPath(jobId, taskConf)
-    LOG.info("localJobFilePath is at {}", localJobFilePath)
+  def newJobConf(jobId: BSPJobID, jobFilePath: String): HamaConfiguration = {
+    val jobConf = new HamaConfiguration() 
+    val localJobFilePath = createLocalPath(jobId, jobConf)
+    LOG.info("Local job file path is at {}", localJobFilePath)
     copyJobFile(jobId)(jobFilePath)(localJobFilePath)
-    taskConf.addResource(new Path(localJobFilePath))
-    taskConf
+    jobConf.addResource(new Path(localJobFilePath))
+    jobConf
   }
 
   /**
@@ -132,17 +184,16 @@ class Receptionist(setting: Setting) extends LocalService {
    * @param Option[Job] returns some if a job is initialized successfully, 
    *                    otherwise none.
   def initializeJob(jobId: BSPJobID, jobFilePath: String,
-                    taskConf: HamaConfiguration): Try[Job] = 
+                    jobConf: HamaConfiguration): Try[Job] = 
     try {
-      val splits = findSplitsBy(jobId, taskConf)  
+      val splits = findSplitsBy(jobId, jobConf)  
       LOG.info("Start creating job with id {}! ...", jobId)
-      //adjustNumBSPTasks(jobId, taskConf) 
-// TODO: ask monitor
-//      if(!validateRequestedTargets(jobId, taskConf)) { 
+// TODO: ask federator
+//      if(!validateRequestedTargets(jobId, jobConf)) { 
 //        None // sender ! JobIntitalizationFailure(cause)
 //      } else {
 //        Some(new Job.Builder().setId(jobId). 
-//                               setConf(taskConf).
+//                               setConf(jobConf).
 //                               //withTaskTable(splits.getOrElse(null)). 
 //                               build)
 //      }
@@ -156,7 +207,7 @@ class Receptionist(setting: Setting) extends LocalService {
    * exceeds a single GroomServer's maxTasks allowed. 
    * @return Boolean denotes if user requested groom servers count > maxTasks;
    *                 true if request is invalid; otherwise false.
-// TODO: ask monitor
+// TODO: ask federator
   def validateRequestedTargets(jobId: BSPJobID, config: HamaConfiguration): 
       Boolean = {
     var valid = true
@@ -176,21 +227,6 @@ class Receptionist(setting: Setting) extends LocalService {
       }}
     }
     valid
-  }
-   */
-
-  /**
-   * Adjust the number of BSP tasks created by the user when the value is 
-   * larger than maxTasks available of the cluster.
-   * @param jobId identify the client for the job.
-   * @param config contains bsp configured by the user.
-  def adjustNumBSPTasks(jobId: BSPJobID, config: HamaConfiguration) {
-    val numOfBSPTasks = config.getInt("bsp.peers.num", 1)
-    if(numOfBSPTasks > maxTasksSum) {
-      LOG.warning("Sum of maxTasks {} < {} for job id {} ", maxTasksSum, 
-                  numOfBSPTasks, jobId.toString)
-      config.setInt("bsp.peers.num", maxTasksSum)
-    } 
   }
    */
 
@@ -228,14 +264,14 @@ class Receptionist(setting: Setting) extends LocalService {
    * Create splits according to job id and configuration provided. Split files
    * generated only contains related information without actual bytes content.
    * @param jobId denotes for which job the splits will be created.
-   * @param taskConf contains user supplied information.
+   * @param jobConf contains user supplied information.
    * @return Option[Array[PartitionedSplit]] are splits files; or None if
    *                                         no splits.
    */
   def findSplitsBy(jobId: BSPJobID, 
-                   taskConf: HamaConfiguration): Array[PartitionedSplit] = {
-    val path = jobSplitFilePath(taskConf).getOrElse(null) 
-    LOG.info("Re-create split file from {}", path)
+                   jobConf: HamaConfiguration): Array[PartitionedSplit] = {
+    val path = jobSplitFilePath(jobConf).getOrElse(null) 
+    LOG.info("Recreate split file from {}", path)
     val input = op(operation.getSystemDirectory).open(new Path(path))
     splitsFrom(new DataInputStream(input)) 
   }

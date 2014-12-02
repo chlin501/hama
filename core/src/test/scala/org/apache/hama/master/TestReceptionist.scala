@@ -35,7 +35,8 @@ private final case class GetJob(tester: ActorRef)
 private final case class JobContent(jobId: BSPJobID, 
                                     localJarFile: String)
 
-class MockReceptionist(setting: Setting) extends Receptionist(setting) {
+class MockReceptionist(setting: Setting) 
+      extends Receptionist(setting, null.asInstanceOf[ActorRef]) {
 
   def getJob: Receive = {
     case GetJob(tester) => {

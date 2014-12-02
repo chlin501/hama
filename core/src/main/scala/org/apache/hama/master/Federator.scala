@@ -32,8 +32,7 @@ import org.apache.hama.monitor.master.GroomsTracker
 import org.apache.hama.monitor.master.JobTasksTracker
 import org.apache.hama.monitor.master.JvmStatsTracker
 
-final case class AskFor(recepiant: String, action: ProbeMessages) 
-      extends ProbeMessages
+final case class AskFor(recepiant: String, action: Any) extends ProbeMessages
 
 sealed trait FederatorMessages
 final case object ListTracker extends FederatorMessages
@@ -100,7 +99,7 @@ class Federator(setting: Setting, master: ActorRef)
     /**
      * Ask tracker executing a specific action.
      */
-    case AskFor(recepiant: String, action: ProbeMessages) => 
+    case AskFor(recepiant: String, action: Any) => 
       findServiceBy(recepiant).map { tracker => tracker forward action }
     /**
      * Stats comes from collector, destined to a particular tracker.
@@ -109,16 +108,18 @@ class Federator(setting: Setting, master: ActorRef)
        tracker forward stats
     }
     case ListService => master forward ListService
+    /**
+     * Inform master service with a particular result.
+     * @param service of a master.
+     * @param result to be sent to the master.
+     */
+    case Inform(service, result) => master ! Inform(service, result)
   }
 
   def groomLeaveEvent: Receive = {
     case event: GroomLeave => services.foreach( tracker => tracker ! event)
   } 
 
-  def inform: Receive = { // TODO: rename to Eclaslate?
-    case Inform(service, result) => master ! Inform(service, result)
-  }
-
-  override def receive = inform orElse groomLeaveEvent orElse dispatch orElse listTracker orElse unknown
+  override def receive = groomLeaveEvent orElse dispatch orElse listTracker orElse unknown
 
 }
