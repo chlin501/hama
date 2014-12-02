@@ -36,9 +36,6 @@ import org.apache.hama.bsp.v2.Job
 import org.apache.hama.conf.Setting
 import org.apache.hama.fs.Operation
 import org.apache.hama.io.PartitionedSplit
-import org.apache.hama.monitor.master.GroomsTracker
-import org.apache.hama.monitor.master.GetMaxTasks
-import org.apache.hama.monitor.master.TotalMaxTasks
 import scala.collection.immutable.Queue
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -48,9 +45,15 @@ import scala.util.Try
 
 sealed trait ReceptionistMessages
 
-final case class InValidation(jobId: BSPJobID, jobConf: HamaConfiguration,
-                              client: ActorRef)
-      extends ReceptionistMessages
+final case class Validate(jobId: BSPJobID, jobConf: HamaConfiguration,
+                          client: ActorRef, actions: Any*)
+      extends ReceptionistMessages 
+final case class ValidationResult(jobId: BSPJobID, jobConf: HamaConfiguration,
+                          client: ActorRef, results: Boolean*)
+      extends ReceptionistMessages 
+
+final case object CheckMaxTasksAllowed
+final case object IfTargetGroomsExist
 
 object Reject {
 
@@ -116,11 +119,10 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
   /* Initialized job */
   protected var waitQueue = Queue.empty[Job]
 
-  protected var validation = Queue.empty[InValidation] 
-
   /* Operation against underlying storage. may need reload. */
   protected val operation = Operation.get(setting.hama)
 
+/*
   // TODO: refactor validation process e.g. Validate(J(id, conf, client), actions: Any*)
   protected def maxTasksFound: Receive = {
     case TotalMaxTasks(available) => {
@@ -138,6 +140,7 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
       validation = rest
     }
   }
+*/
 
   /**
    * BSPJobClient calls submitJob(jobId, jobFile), where jobFile submitted is
@@ -149,8 +152,8 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
     case Submit(jobId, jobFilePath) => {
       LOG.info("Received job {} submitted from the client {}", jobId, sender) 
       val jobConf = newJobConf(jobId, jobFilePath)
-      federator ! AskFor(classOf[GroomsTracker].getName, GetMaxTasks)
-      validation = validation.enqueue(InValidation(jobId, jobConf, sender))
+      federator ! Validate(jobId, jobConf, sender, CheckMaxTasksAllowed,
+                           IfTargetGroomsExist)
 
 /*
       initializeJob(jobId, jobFilePath) match {

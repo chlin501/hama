@@ -28,9 +28,11 @@ import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.ProbeMessages
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedTracker
+import org.apache.hama.monitor.master.GetMaxTasks
 import org.apache.hama.monitor.master.GroomsTracker
 import org.apache.hama.monitor.master.JobTasksTracker
 import org.apache.hama.monitor.master.JvmStatsTracker
+import org.apache.hama.monitor.master.TotalMaxTasks
 
 final case class AskFor(recepiant: String, action: Any) extends ProbeMessages
 
@@ -67,6 +69,8 @@ class Federator(setting: Setting, master: ActorRef)
 
   import Federator._
 
+  protected var validation = Map.empty[Validate, ValidationResult]
+
   override def initializeServices {
     val defaultClasses = defaultTrackers.mkString(",")
     load(setting.hama, defaultClasses).foreach( probe => { 
@@ -99,8 +103,7 @@ class Federator(setting: Setting, master: ActorRef)
     /**
      * Ask tracker executing a specific action.
      */
-    case AskFor(recepiant: String, action: Any) => 
-      findServiceBy(recepiant).map { tracker => tracker forward action }
+    case AskFor(recepiant: String, action: Any) => askFor(recepiant, action)
     /**
      * Stats comes from collector, destined to a particular tracker.
      */
@@ -116,10 +119,33 @@ class Federator(setting: Setting, master: ActorRef)
     case Inform(service, result) => master ! Inform(service, result)
   }
 
-  def groomLeaveEvent: Receive = {
+  protected def askFor(recepiant: String, action: Any) =
+    findServiceBy(recepiant).map { tracker => tracker forward action }
+
+  protected def groomLeaveEvent: Receive = {
     case event: GroomLeave => services.foreach( tracker => tracker ! event)
   } 
 
-  override def receive = groomLeaveEvent orElse dispatch orElse listTracker orElse unknown
+  protected def validate: Receive = {
+    case constraint: Validate => {
+      cache(constraint)
+      constraint.actions.foreach( action => action match { 
+        case CheckMaxTasksAllowed => 
+          askFor(classOf[GroomsTracker].getName, GetMaxTasks)
+        case IfTargetGroomsExist => {
+          // val targetGrooms = jobConf.getStrings("sched.target.grooms")
+          // master ! CheckGroomsExist(jobId, targetGrooms)
+        }
+        case _ => LOG.warning("Unknown validation action: {}", action)
+      })
+    }
+    case TotalMaxTasks(available) => // TODO: check actions.size/ compare and put result 
+    //case TargetGrooms(exist)
+  }
+
+  protected def cache(v: Validate) = 
+    validation ++= Map(v -> ValidationResult(v.jobId, v.jobConf, v.client))
+
+  override def receive = validate orElse groomLeaveEvent orElse dispatch orElse listTracker orElse unknown
 
 }
