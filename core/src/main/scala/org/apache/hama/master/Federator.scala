@@ -21,6 +21,7 @@ import akka.actor.ActorRef
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
+import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Ganglion
 import org.apache.hama.monitor.Inform
@@ -130,8 +131,8 @@ class Federator(setting: Setting, master: ActorRef)
     case constraint: Validate => {
       cache(constraint)
       constraint.actions.keySet.foreach( action => action match { 
-        case CheckMaxTasksAllowed => 
-          askFor(classOf[GroomsTracker].getName, GetMaxTasks)
+        case CheckMaxTasksAllowed => askFor(classOf[GroomsTracker].getName, 
+          GetMaxTasks(constraint.jobId.toString))
         case IfTargetGroomsExist => {
           // TODO: targetGrooms string is created by client (check with master)
           val targetGrooms = constraint.jobConf.getStrings("bsp.target.grooms") 
@@ -141,6 +142,7 @@ class Federator(setting: Setting, master: ActorRef)
                        constraint.jobId)
               update(constraint, 
                      constraint.actions.updated(IfTargetGroomsExist, Valid))
+              areAllVerified(constraint.jobId).map { v => v.receptionist ! v }
             }
             case _ => master ! CheckGroomsExist(constraint.jobId, targetGrooms)
           }
@@ -148,17 +150,69 @@ class Federator(setting: Setting, master: ActorRef)
         case _ => LOG.warning("Unknown validation action: {}", action)
       })
     }
-    case TotalMaxTasks(available) => // TODO: check actions.size/ compare and update actions map
-    case AllGroomsExist(jobId) =>
-    case SomeGroomsNotExist(jobId) =>
+    case TotalMaxTasks(jobId, available) => {
+      // TODO: check actions.size/ compare and update actions map
+    }
+    case AllGroomsExist(jobId) => {
+      updateBy(jobId)(IfTargetGroomsExist, Valid)
+      areAllVerified(jobId).map { v => v.receptionist ! v }
+    }
+    case SomeGroomsNotExist(jobId) => {
+      updateBy(jobId)(IfTargetGroomsExist, 
+                      Invalid("Some target grooms doesn't exists!")) 
+      areAllVerified(jobId).map { v => v.receptionist ! v }
+    }
   }
 
+  /** 
+   * If all actions are verified, either Valid or Invalid, send back to 
+   * receptionist for further actions, such reject or put to wait queue.
+   * Otherwise do nothing and wait for other validation result.
+   */
+  protected def areAllVerified(jobId: BSPJobID): Option[Validate] = {
+    val validate = findValidateBy(jobId)
+    (0 == validate.actions.filter( e => e._2.equals(NotVerified)).size) match {
+      case true => Option(validate)
+      case false => None
+    }
+  }
+
+  /**
+   * Update cooresponded validate object through job id provided with key and 
+   * value.
+   * @param jobId is the id for the job to be verified.
+   * @param key of the action indicating which property to be verified.
+   * @param value is the validation result 
+   */
+  protected def updateBy(jobId: BSPJobID)(key: Any, value: Validation) {
+    val validate = findValidateBy(jobId)
+    update(validate, validate.actions.updated(key, value))
+  }
+
+  protected def findValidateBy(jobId: BSPJobID): Validate = validation.find(v =>
+    v.jobId.equals(jobId)
+  ) match {
+    case Some(found) => found
+    case None => throw new RuntimeException("Validate not found for "+
+                                            jobId.toString+"!")
+  }
+
+  /**
+   * Cache validate object.
+   * @param v is the validation object.
+   */
   protected def cache(v: Validate) = validation ++= Set(v)
 
+  /**
+   * Update validation set with corresponded validation result.
+   * @param old validate object, containing job id, job conf, and client ref.
+   * @param updated is a map containing validation action and result.
+   */
   protected def update(old: Validate, updated: Map[Any, Validation])
                       (implicit jobId: String = old.jobId.toString) = 
     validation = validation.map { e => e.jobId.toString match {
-      case `jobId` => Validate(old.jobId, old.jobConf, old.client, updated)
+      case `jobId` => Validate(old.jobId, old.jobConf, old.client,
+                               old.receptionist, updated)
       case _ => e
     }}
 

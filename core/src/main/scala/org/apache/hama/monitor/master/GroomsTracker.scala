@@ -23,11 +23,13 @@ import org.apache.hama.monitor.ProbeMessages
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.util.Utils._
 
-final case object GetMaxTasks extends ProbeMessages
+final case class GetMaxTasks(jobId: String) extends ProbeMessages
 final case class GetGroomCapacity(host: String, port: Int) extends ProbeMessages
 final case class GroomCapacity(host: String, port: Int, freeSlots: Int) 
       extends ProbeMessages
-final case class TotalMaxTasks(allowed: Int) extends ProbeMessages
+final case class TotalMaxTasks(jobId: String, allowed: Int) 
+     
+       extends ProbeMessages
 
 final class GroomsTracker extends Tracker {
 
@@ -93,7 +95,7 @@ final class GroomsTracker extends Tracker {
     /**
      * Ask max task allowed of the entire groom servers.
      */
-    case GetMaxTasks => inform(from, TotalMaxTasks(totalMaxTasks))
+    case GetMaxTasks(jobId) => inform(from, TotalMaxTasks(jobId, totalMaxTasks))
     /**
      * Check free slot capacity of a particular groom, based on host and port.  
      * @param host is the target groom server name.

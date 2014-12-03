@@ -46,13 +46,21 @@ import scala.util.Try
 sealed trait Validation
 final case object NotVerified extends Validation
 final case object Valid extends Validation
-final case class Invalid(action: Any, reason: String) extends Validation
+final case class Invalid(reason: String) extends Validation
 
 sealed trait ReceptionistMessages
 
+/**
+ * Validate job configuration, sent from a particular client, matched to a 
+ * job id. Validation action and result are stored in actions variable.
+ * @param jobId is an id for a specific job
+ * @param jobConf is a job configuration created by receptionist.
+ * @param client reference of a particular user.
+ */
 final case class Validate(jobId: BSPJobID, 
                           jobConf: HamaConfiguration,
                           client: ActorRef, 
+                          receptionist: ActorRef, 
                           actions: Map[Any, Validation]) 
 extends ReceptionistMessages 
 
@@ -69,6 +77,9 @@ object Reject {
 
 }
 
+/**
+ * Reject is used to notify the remote client's job configuration is not valid.
+ */
 final class Reject extends Writable with ReceptionistMessages {
 
   private var r = ""
@@ -106,12 +117,13 @@ object Receptionist {
 }
 
 /**
- * Receive job submission from clients and put the job to the wait queue.
+ * - Receive job submission from clients.
+ * - Validate job configuration.
+ * - Put the valid job to the wait queue.
+ * - Reject back to the client if invalid.
  * @param setting contains groom related setting.
+ * @param federator validates job configuration.
  */
-// TODO: validate job submitted, e.g.
-//       - reject if job's numBSPTasks > avail slots in grooms 
-//       - reject to the client if invalid.
 class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
 
   import Receptionist._
@@ -156,7 +168,7 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
     case Submit(jobId, jobFilePath) => {
       LOG.info("Received job {} submitted from the client {}", jobId, sender) 
       val jobConf = newJobConf(jobId, jobFilePath)
-      federator ! Validate(jobId, jobConf, sender, 
+      federator ! Validate(jobId, jobConf, sender, self,
                            Map(CheckMaxTasksAllowed -> NotVerified,
                                IfTargetGroomsExist -> NotVerified))
 
@@ -176,7 +188,8 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
     }
   }
   
-  def newJobConf(jobId: BSPJobID, jobFilePath: String): HamaConfiguration = {
+  protected def newJobConf(jobId: BSPJobID, 
+                           jobFilePath: String): HamaConfiguration = {
     val jobConf = new HamaConfiguration() 
     val localJobFilePath = createLocalPath(jobId, jobConf)
     LOG.info("Local job file path is at {}", localJobFilePath)
