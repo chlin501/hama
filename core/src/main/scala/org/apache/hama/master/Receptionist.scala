@@ -43,15 +43,18 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
+sealed trait Validation
+final case object NotVerified extends Validation
+final case object Valid extends Validation
+final case class Invalid(action: Any, reason: String) extends Validation
+
 sealed trait ReceptionistMessages
 
-// TODO: merge Validate's actions and results to map (action -> result)
-final case class Validate(jobId: BSPJobID, jobConf: HamaConfiguration,
-                          client: ActorRef, actions: Any*)
-      extends ReceptionistMessages 
-final case class ValidationResult(jobId: BSPJobID, jobConf: HamaConfiguration,
-                          client: ActorRef, results: Boolean*)
-      extends ReceptionistMessages 
+final case class Validate(jobId: BSPJobID, 
+                          jobConf: HamaConfiguration,
+                          client: ActorRef, 
+                          actions: Map[Any, Validation]) 
+extends ReceptionistMessages 
 
 final case object CheckMaxTasksAllowed
 final case object IfTargetGroomsExist
@@ -153,8 +156,9 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
     case Submit(jobId, jobFilePath) => {
       LOG.info("Received job {} submitted from the client {}", jobId, sender) 
       val jobConf = newJobConf(jobId, jobFilePath)
-      federator ! Validate(jobId, jobConf, sender, CheckMaxTasksAllowed,
-                           IfTargetGroomsExist)
+      federator ! Validate(jobId, jobConf, sender, 
+                           Map(CheckMaxTasksAllowed -> NotVerified,
+                               IfTargetGroomsExist -> NotVerified))
 
 /*
       initializeJob(jobId, jobFilePath) match {

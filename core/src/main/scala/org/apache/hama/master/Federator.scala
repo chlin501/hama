@@ -69,7 +69,7 @@ class Federator(setting: Setting, master: ActorRef)
 
   import Federator._
 
-  protected var validation = Map.empty[Validate, ValidationResult]
+  protected var validation = Set.empty[Validate]
 
   override def initializeServices {
     val defaultClasses = defaultTrackers.mkString(",")
@@ -129,7 +129,7 @@ class Federator(setting: Setting, master: ActorRef)
   protected def validate: Receive = {
     case constraint: Validate => {
       cache(constraint)
-      constraint.actions.foreach( action => action match { 
+      constraint.actions.keySet.foreach( action => action match { 
         case CheckMaxTasksAllowed => 
           askFor(classOf[GroomsTracker].getName, GetMaxTasks)
         case IfTargetGroomsExist => {
@@ -139,7 +139,8 @@ class Federator(setting: Setting, master: ActorRef)
             case null | Array() => {
               LOG.info("Target grooms are not configured for {}.", 
                        constraint.jobId)
-              // set ValidationResult() to true
+              update(constraint, 
+                     constraint.actions.updated(IfTargetGroomsExist, Valid))
             }
             case _ => master ! CheckGroomsExist(constraint.jobId, targetGrooms)
           }
@@ -147,13 +148,19 @@ class Federator(setting: Setting, master: ActorRef)
         case _ => LOG.warning("Unknown validation action: {}", action)
       })
     }
-    case TotalMaxTasks(available) => // TODO: check actions.size/ compare and put result 
+    case TotalMaxTasks(available) => // TODO: check actions.size/ compare and update actions map
     case AllGroomsExist(jobId) =>
     case SomeGroomsNotExist(jobId) =>
   }
 
-  protected def cache(v: Validate) = 
-    validation ++= Map(v -> ValidationResult(v.jobId, v.jobConf, v.client))
+  protected def cache(v: Validate) = validation ++= Set(v)
+
+  protected def update(old: Validate, updated: Map[Any, Validation])
+                      (implicit jobId: String = old.jobId.toString) = 
+    validation = validation.map { e => e.jobId.toString match {
+      case `jobId` => Validate(old.jobId, old.jobConf, old.client, updated)
+      case _ => e
+    }}
 
   override def receive = validate orElse groomLeaveEvent orElse dispatch orElse listTracker orElse unknown
 
