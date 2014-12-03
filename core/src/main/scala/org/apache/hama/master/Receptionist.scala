@@ -29,8 +29,6 @@ import org.apache.hadoop.io.Writable
 import org.apache.hadoop.io.WritableUtils
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
-import org.apache.hama.bsp.BSPJobClient
-import org.apache.hama.bsp.BSPJobClient.RawSplit
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.conf.Setting
@@ -148,26 +146,6 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
   /* Operation against underlying storage. may need reload. */
   protected val operation = Operation.get(setting.hama)
 
-/*
-  // TODO: refactor validation process e.g. Validate(J(id, conf, client), actions: Any*)
-  protected def maxTasksFound: Receive = {
-    case TotalMaxTasks(available) => {
-      val (first, rest) = validation.dequeue
-      val numBSPTasks = first.jobConf.getInt("bsp.peers.num", 1)
-      if(numBSPTasks > available) {
-        LOG.warning("Client {} requests tasks {} than allowed {}!", 
-                    first.client.path.name, numBSPTasks, available)
-        first.client ! Reject("Request "+numBSPTasks+" tasks more than "+
-                              available+" allowed!")
-      } else {
-        // TODO: initialize job 
-        //       put to wait queue
-      } 
-      validation = rest
-    }
-  }
-*/
-
   /**
    * BSPJobClient calls submitJob(jobId, jobFile), where jobFile submitted is
    * the job.xml path.
@@ -181,20 +159,6 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
       federator ! Validate(jobId, jobConf, sender, self,
                            Map(CheckMaxTasksAllowed -> NotVerified,
                                IfTargetGroomsExist -> NotVerified))
-
-/*
-      initializeJob(jobId, jobFilePath) match {
-        case Some(newJob) => {
-          waitQueue = waitQueue.enqueue(newJob)
-          LOG.info("{} jobs are stored in waitQueue.", waitQueue.size)
-        }
-        case None => {
-          LOG.warning("{} is rejected due to invalid requested target groom "+
-                   "servers!", jobId)
-          sender ! Invalid(jobId, jobFilePath) 
-        }      
-      }
-*/
     }
   }
   
@@ -215,71 +179,33 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
     case Validated(jobId, jobConf, client, actions) => {
       val notValid = actions.filterNot { action => action._2.equals(Valid) }
       notValid.size match {
-        case 0 => // TODO: initialize job 
+        case 0 => newJob(jobId, jobConf) match {
+          case Success(newJob) => waitQueue = waitQueue.enqueue(newJob)
+          case Failure(cause) => client ! Reject(cause.getMessage)
+        }
         case _ => client ! Reject(notValid.head._2.asInstanceOf[Invalid].reason)
       }
     }
   }
 
-  /**
-   * Initialize job provided with {@link BSPJobID} and jobFile from the client.
-   * @param jobId is the id of the job to be created.
-   * @param jobFilePath is the path pointed to client's jobFile.
-   * @param Option[Job] returns some if a job is initialized successfully, 
-   *                    otherwise none.
-  def initializeJob(jobId: BSPJobID, jobFilePath: String,
-                    jobConf: HamaConfiguration): Try[Job] = 
-    try {
-      val splits = findSplitsBy(jobId, jobConf)  
-      LOG.info("Start creating job with id {}! ...", jobId)
-// TODO: ask federator
-//      if(!validateRequestedTargets(jobId, jobConf)) { 
-//        None // sender ! JobIntitalizationFailure(cause)
-//      } else {
-//        Some(new Job.Builder().setId(jobId). 
-//                               setConf(jobConf).
-//                               //withTaskTable(splits.getOrElse(null)). 
-//                               build)
-//      }
-
-    None
+  protected def newJob(jobId: BSPJobID, 
+                       jobConf: HamaConfiguration): Try[Job] = try {
+    val splits = findSplitsBy(jobId, jobConf)
+    val job = new Job.Builder().setId(jobId). 
+                              setConf(jobConf).
+                              //withTaskTable(splits). // TODO: test when null
+                              build
+    Success(job)
+  } catch {
+    case e: Exception => Failure(e)
   }
-   */
-
-  /**
-   * Validate if requested target array, in "bsp.sched.targets.grooms", 
-   * exceeds a single GroomServer's maxTasks allowed. 
-   * @return Boolean denotes if user requested groom servers count > maxTasks;
-   *                 true if request is invalid; otherwise false.
-// TODO: ask federator
-  def validateRequestedTargets(jobId: BSPJobID, config: HamaConfiguration): 
-      Boolean = {
-    var valid = true
-    val targets = config.getStrings("bsp.sched.targets.grooms")
-    if(null != targets) { 
-      val trimmed = targets.map{ v => v.trim }
-      val groomToRequestedCount = trimmed.groupBy(k=>k).mapValues{ v=> v.size }
-      LOG.debug("Mapping from groom to requested count: {}", 
-               groomToRequestedCount)
-      groomToRequestedCount.takeWhile{ case (groom, requestedSlotCount)=> {
-        val maxTasksAllowedPerGroom = 0//groomsStat.getOrElse(groom, 0)
-        LOG.debug("User requests {} tasks for groom {}, and the max tasks "+
-                 "allowed is {}", requestedSlotCount, groom, 
-                 maxTasksAllowedPerGroom)
-        if(requestedSlotCount > maxTasksAllowedPerGroom) valid = false
-        valid
-      }}
-    }
-    valid
-  }
-   */
 
   protected def op(jobId: BSPJobID): Operation = {
     val path = new Path(operation.getSystemDirectory, jobId.toString)
     operation.operationFor(path)
   }
 
-  def op(path: Path): Operation = operation.operationFor(path)
+  protected def op(path: Path): Operation = operation.operationFor(path)
 
   /**
    * Copy the job file from jobFilePath to localJobFilePath at local disk.
