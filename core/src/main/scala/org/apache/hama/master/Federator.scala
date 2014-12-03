@@ -171,7 +171,7 @@ class Federator(setting: Setting, master: ActorRef)
    * @param jobId denotes a job id associated with a validate object.
    */
   protected def postCheckFor(jobId: BSPJobID) = areAllVerified(jobId).map { v=> 
-    v.receptionist ! v 
+    v.receptionist ! v.validated
     validation -= v
   }
 

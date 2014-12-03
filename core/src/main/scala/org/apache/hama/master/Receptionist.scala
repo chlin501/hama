@@ -62,6 +62,16 @@ final case class Validate(jobId: BSPJobID,
                           client: ActorRef, 
                           receptionist: ActorRef, 
                           actions: Map[Any, Validation]) 
+extends ReceptionistMessages {
+
+  def validated(): Validated = Validated(jobId, jobConf, client, actions)
+
+}
+
+final case class Validated(jobId: BSPJobID, 
+                           jobConf: HamaConfiguration,
+                           client: ActorRef, 
+                           actions: Map[Any, Validation]) 
 extends ReceptionistMessages 
 
 final case object CheckMaxTasksAllowed
@@ -199,6 +209,19 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
   }
 
   /**
+   * Receive validated result from federator.
+   */
+  protected def validated: Receive = {
+    case Validated(jobId, jobConf, client, actions) => {
+      val notValid = actions.filterNot { action => action._2.equals(Valid) }
+      notValid.size match {
+        case 0 => // TODO: initialize job 
+        case _ => client ! Reject(notValid.head._2.asInstanceOf[Invalid].reason)
+      }
+    }
+  }
+
+  /**
    * Initialize job provided with {@link BSPJobID} and jobFile from the client.
    * @param jobId is the id of the job to be created.
    * @param jobFilePath is the path pointed to client's jobFile.
@@ -251,7 +274,7 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
   }
    */
 
-  def op(jobId: BSPJobID): Operation = {
+  protected def op(jobId: BSPJobID): Operation = {
     val path = new Path(operation.getSystemDirectory, jobId.toString)
     operation.operationFor(path)
   }
@@ -264,8 +287,8 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
    * @param jobFilePath indicates the remote job file path.
    * @param localJobFilePath is the dest of local job file path.
    */
-  def copyJobFile(jobId: BSPJobID)(jobFilePath: String)
-                 (localJobFilePath: String) = {
+  protected def copyJobFile(jobId: BSPJobID)(jobFilePath: String)
+                           (localJobFilePath: String) = {
     op(jobId).copyToLocal(new Path(jobFilePath))(new Path(localJobFilePath))
   }
 
@@ -275,7 +298,7 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
    * @return Option[String] if Some(path) when split file is found; otherwise
    *                        None is returned.
    */
-  def jobSplitFilePath(config: HamaConfiguration): Option[String] = 
+  protected def jobSplitFilePath(config: HamaConfiguration): Option[String] = 
     config.get("bsp.job.split.file") match {
       case null => None
       case path: String => Some(path)
@@ -289,7 +312,7 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
    * @return Option[Array[PartitionedSplit]] are splits files; or None if
    *                                         no splits.
    */
-  def findSplitsBy(jobId: BSPJobID, 
+  protected def findSplitsBy(jobId: BSPJobID, 
                    jobConf: HamaConfiguration): Array[PartitionedSplit] = {
     val path = jobSplitFilePath(jobConf).getOrElse(null) 
     LOG.info("Recreate split file from {}", path)
@@ -297,7 +320,10 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
     splitsFrom(new DataInputStream(input)) 
   }
 
-  def splitsFrom(in: DataInput): Array[PartitionedSplit] = {
+  /**
+   * Read split from a particular data input, and recreate as PartitionedSplit.
+   */
+  protected def splitsFrom(in: DataInput): Array[PartitionedSplit] = {
     val header = new Array[Byte](SPLIT_FILE_HEADER.length)
     in.readFully(header)
     val version = WritableUtils.readVInt(in)
@@ -327,7 +353,8 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
    * @param config is the configuration object for the jobId supplied.
    * @return localJobFilePath points to the job file path at local.
    */
-  def createLocalPath(jobId: BSPJobID, config: HamaConfiguration): String = {
+  protected def createLocalPath(jobId: BSPJobID, 
+                                config: HamaConfiguration): String = {
     val localDir = config.get("bsp.local.dir", "/tmp/bsp/local")
     val subDir = config.get("bsp.local.dir.sub_dir", setting.name)
     if(!operation.local.exists(new Path(localDir, subDir)))
@@ -340,7 +367,7 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
    * Scheduler asks for job computation.
    * Dispense a job to Scheduler.
    */
-  def takeFromWaitQueue: Receive = {
+  protected def takeFromWaitQueue: Receive = {
     case TakeFromWaitQueue => {
       if(!waitQueue.isEmpty) {
         val (job, rest) = waitQueue.dequeue
@@ -352,6 +379,6 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
     }
   }
 
-  override def receive = submitJob orElse takeFromWaitQueue orElse unknown
+  override def receive = submitJob orElse validated orElse takeFromWaitQueue orElse unknown
 
 }
