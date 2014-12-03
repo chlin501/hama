@@ -142,7 +142,7 @@ class Federator(setting: Setting, master: ActorRef)
                        constraint.jobId)
               update(constraint, 
                      constraint.actions.updated(IfTargetGroomsExist, Valid))
-              areAllVerified(constraint.jobId).map { v => v.receptionist ! v }
+              postCheckFor(constraint.jobId)
             }
             case _ => master ! CheckGroomsExist(constraint.jobId, targetGrooms)
           }
@@ -155,13 +155,24 @@ class Federator(setting: Setting, master: ActorRef)
     }
     case AllGroomsExist(jobId) => {
       updateBy(jobId)(IfTargetGroomsExist, Valid)
-      areAllVerified(jobId).map { v => v.receptionist ! v }
+      postCheckFor(jobId)
     }
     case SomeGroomsNotExist(jobId) => {
       updateBy(jobId)(IfTargetGroomsExist, 
                       Invalid("Some target grooms doesn't exists!")) 
-      areAllVerified(jobId).map { v => v.receptionist ! v }
+      postCheckFor(jobId)
     }
+  }
+
+  /**
+   * Post check for a particular job id if all actions are verified; if true,
+   * notify receptionist for further reaction; otherwise do nothing and wait 
+   * for other validation result.
+   * @param jobId denotes a job id associated with a validate object.
+   */
+  protected def postCheckFor(jobId: BSPJobID) = areAllVerified(jobId).map { v=> 
+    v.receptionist ! v 
+    validation -= v
   }
 
   /** 
