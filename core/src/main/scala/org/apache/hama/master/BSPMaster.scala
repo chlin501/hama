@@ -24,6 +24,7 @@ import akka.actor.Props
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.SystemInfo
+import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Inform
 import org.apache.hama.monitor.ListService
@@ -35,6 +36,10 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.collection.immutable.IndexedSeq
 import scala.collection.immutable.Vector
+
+final case class CheckGroomsExist(jobId: BSPJobID, targetGrooms: Array[String])
+final case class AllGroomsExist(jobId: BSPJobID)
+final case class SomeGroomsNotExist(jobId: BSPJobID)
 
 object Registrator {
 
@@ -119,6 +124,27 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     service.path.name 
   }.toArray
 
-  override def receive = dispatch orElse membership orElse unknown
+  protected def checkGroomsExist: Receive = {
+    case CheckGroomsExist(jobId, targetGrooms) => {
+      val uniqueGrooms = targetGrooms.map(_.trim).groupBy(k => k).keySet
+      LOG.debug("Client configures targets: {}", uniqueGrooms.mkString(","))
+      val actual = uniqueGrooms.takeWhile( key => {
+        val array = key.split(",")
+        val host = array(0)
+        val port = array(1) 
+        val existsOrNot = grooms.exists( groom => 
+          groom.path.address.host.equals(Option(host)) &&
+          groom.path.address.port.equals(Option(port.toInt))
+        )
+        if(!existsOrNot) LOG.debug("Requested groom with host {} port {} not "+
+                                   "exists!", host, port)
+        existsOrNot
+      }).size
+      if(uniqueGrooms.size == actual) sender ! AllGroomsExist(jobId) 
+      else sender ! SomeGroomsNotExist(jobId)
+    }
+  }
+
+  override def receive = checkGroomsExist orElse dispatch orElse membership orElse unknown
   
 }

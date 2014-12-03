@@ -45,6 +45,7 @@ import scala.util.Try
 
 sealed trait ReceptionistMessages
 
+// TODO: merge Validate's actions and results to map (action -> result)
 final case class Validate(jobId: BSPJobID, jobConf: HamaConfiguration,
                           client: ActorRef, actions: Any*)
       extends ReceptionistMessages 

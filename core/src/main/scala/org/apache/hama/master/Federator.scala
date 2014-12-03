@@ -133,14 +133,23 @@ class Federator(setting: Setting, master: ActorRef)
         case CheckMaxTasksAllowed => 
           askFor(classOf[GroomsTracker].getName, GetMaxTasks)
         case IfTargetGroomsExist => {
-          // val targetGrooms = jobConf.getStrings("sched.target.grooms")
-          // master ! CheckGroomsExist(jobId, targetGrooms)
+          // TODO: targetGrooms string is created by client (check with master)
+          val targetGrooms = constraint.jobConf.getStrings("bsp.target.grooms") 
+          targetGrooms match {
+            case null | Array() => {
+              LOG.info("Target grooms are not configured for {}.", 
+                       constraint.jobId)
+              // set ValidationResult() to true
+            }
+            case _ => master ! CheckGroomsExist(constraint.jobId, targetGrooms)
+          }
         }
         case _ => LOG.warning("Unknown validation action: {}", action)
       })
     }
     case TotalMaxTasks(available) => // TODO: check actions.size/ compare and put result 
-    //case TargetGrooms(exist)
+    case AllGroomsExist(jobId) =>
+    case SomeGroomsNotExist(jobId) =>
   }
 
   protected def cache(v: Validate) = 
