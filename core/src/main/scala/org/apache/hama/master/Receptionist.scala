@@ -165,7 +165,7 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
   protected def newJobConf(jobId: BSPJobID, 
                            jobFilePath: String): HamaConfiguration = {
     val jobConf = new HamaConfiguration() 
-    val localJobFilePath = createLocalPath(jobId, jobConf)
+    val localJobFilePath = mkLocalPath(jobId, jobConf)
     LOG.info("Local job file path is at {}", localJobFilePath)
     copyJobFile(jobId)(jobFilePath)(localJobFilePath)
     jobConf.addResource(new Path(localJobFilePath))
@@ -279,8 +279,8 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
    * @param config is the configuration object for the jobId supplied.
    * @return localJobFilePath points to the job file path at local.
    */
-  protected def createLocalPath(jobId: BSPJobID, 
-                                config: HamaConfiguration): String = {
+  protected def mkLocalPath(jobId: BSPJobID, 
+                            config: HamaConfiguration): String = {
     val localDir = config.get("bsp.local.dir", "/tmp/bsp/local")
     val subDir = config.get("bsp.local.dir.sub_dir", setting.name)
     if(!operation.local.exists(new Path(localDir, subDir)))

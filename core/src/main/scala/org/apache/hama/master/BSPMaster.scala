@@ -84,6 +84,8 @@ class BSPMaster(setting: Setting, registrator: Registrator)
 
   import BSPMaster._
 
+  // TODO: use strategy and shutdown if any exceptions are thrown
+
   override def initializeServices {
     registrator.register
     join(seedNodes)
@@ -124,7 +126,8 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     service.path.name 
   }.toArray
 
-  protected def checkGroomsExist: Receive = {
+  // TODO: move to membership director?
+  protected def checkGroomsExist: Receive = { 
     case CheckGroomsExist(jobId, targetGrooms) => {
       val uniqueGrooms = targetGrooms.map(_.trim).groupBy(k => k).keySet
       LOG.debug("Client configures targets: {}", uniqueGrooms.mkString(","))
@@ -137,7 +140,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
           groom.path.address.port.equals(Option(port.toInt))
         )
         if(!existsOrNot) LOG.debug("Requested groom with host {} port {} not "+
-                                   "exists!", host, port)
+                                   "exist!", host, port)
         existsOrNot
       }).size
       if(uniqueGrooms.size == actual) sender ! AllGroomsExist(jobId) 

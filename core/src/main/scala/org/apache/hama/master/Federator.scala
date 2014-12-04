@@ -150,8 +150,17 @@ class Federator(setting: Setting, master: ActorRef)
         case _ => LOG.warning("Unknown validation action: {}", action)
       })
     }
-    case TotalMaxTasks(jobId, available) => {
-      // TODO: check actions.size/ compare and update actions map
+    case TotalMaxTasks(jobId, available) => { // TODO: findValidateBy too many times
+      val id = BSPJobID.forName(jobId)
+      val validate = findValidateBy(id)
+      val requested = validate.jobConf.getInt("bsp.peers.num", 1)
+      (available >= requested) match {
+        case true => updateBy(id)(CheckMaxTasksAllowed, Valid)
+        case false => updateBy(id)(CheckMaxTasksAllowed, 
+                      Invalid("Requested tasks ("+requested+") is larger "+
+                              "than total tasks allowed ("+available+")"))
+      }
+      postCheckFor(id)
     }
     case AllGroomsExist(jobId) => {
       updateBy(jobId)(IfTargetGroomsExist, Valid)
