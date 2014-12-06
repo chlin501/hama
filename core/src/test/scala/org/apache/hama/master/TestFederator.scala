@@ -33,7 +33,9 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-final case class V1(jobId: String, result: String)
+final case class DoValidate(v: Validate)
+final case object GetValidation
+final case class ValidationSize(v: Int)
 
 class MockFederator(setting: Setting, master: ActorRef, tester: ActorRef) 
       extends Federator(setting, master) {
@@ -67,9 +69,16 @@ class MockFederator(setting: Setting, master: ActorRef, tester: ActorRef)
 
   }
 
+  def getValidation: Receive = {
+    case GetValidation => {
+      LOG.info("Validation size now is {}", validation.size)
+      tester ! ValidationSize(validation.size)
+    }
+  }
+
+  override def receive = getValidation orElse super.receive
 }
 
-final case class DoValidate(v: Validate)
 
 class MockMaster(setting: Setting, tester: ActorRef)
       extends BSPMaster(setting, null.asInstanceOf[Registrator]) {
@@ -110,8 +119,16 @@ class MockMaster(setting: Setting, tester: ActorRef)
 
   override def groomsExist(host: String, port: Int): Boolean = 
     if(hosts.contains(host) && ports.contains(port)) true else false
+
+  def getValidation: Receive = {
+    case GetValidation => 
+      findServiceBy(Federator.simpleName(setting.hama)).map { fed => {
+        LOG.info("Forward GetValidation to federator ...")
+        fed forward GetValidation
+      }}
+  }
  
-  override def receive = doValidate orElse listTracker orElse super.receive 
+  override def receive = getValidation orElse doValidate orElse listTracker orElse super.receive 
 
 }
 
@@ -144,6 +161,7 @@ class TestFederator extends TestEnv("TestFederator") with JobUtil {
   it("test federator functions.") {
     val expectedServices = Seq(Federator.simpleName(masterSetting.hama))
     val client = createWithArgs("mockclient", classOf[MockClient])
+    val receptionist = client // TODO: change receptionist to real one if needed
     val master = createWithArgs(masterSetting.name, masterSetting.main, 
                                masterSetting, tester)
         
@@ -154,13 +172,15 @@ class TestFederator extends TestEnv("TestFederator") with JobUtil {
     expect(Federator.defaultTrackers.sorted.toSeq)
 
     val jobId = createJobId("test", 3)
-    val v1 = Validate(jobId, jobConf, client, tester, 
+    val v1 = Validate(jobId, jobConf, client, receptionist,  
                       Map(CheckMaxTasksAllowed -> NotVerified, 
                           IfTargetGroomsExist -> NotVerified))
     master ! DoValidate(v1)
-    sleep(3.seconds)
     expect(jobId)
     expect((CheckMaxTasksAllowed, Valid))
     expect((IfTargetGroomsExist, Valid))
+
+    master ! GetValidation
+    expect(ValidationSize(0))
   }
 }

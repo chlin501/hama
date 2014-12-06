@@ -144,7 +144,7 @@ class Federator(setting: Setting, master: ActorRef)
           val targetGrooms = constraint.jobConf.getStrings("bsp.target.grooms") 
           targetGrooms match {
             case null | Array() => {
-              LOG.info("Target grooms are not configured for {}.", 
+              LOG.debug("Target grooms are not configured for {}.", 
                        constraint.jobId)
               update(constraint, 
                      constraint.actions.updated(IfTargetGroomsExist, Valid))
@@ -178,7 +178,7 @@ class Federator(setting: Setting, master: ActorRef)
     val id = BSPJobID.forName(jobId) 
     val validate = findValidateBy(id)
     val requested = validate.jobConf.getInt("bsp.peers.num", 1)
-    LOG.info("Client requests {} tasks and the system has {}", requested, 
+    LOG.debug("Client requests {} tasks and the system has {}", requested, 
              available)
     (available >= requested) match {
       case true => updateBy(id)(CheckMaxTasksAllowed, Valid)
