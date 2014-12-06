@@ -88,7 +88,6 @@ class TestReceptionist extends TestEnv("TestReceptionist") with JobUtil {
     val jobFilePath = createJobFile(jobConf)
     LOG.info("Submit job id "+jobId.toString+" job.xml: "+jobFilePath)
     receptionist ! Submit(jobId, jobFilePath)
-    sleep(6.seconds)
     expect(jobId.toString) 
     expect(jobConf.getStrings("bsp.targets.grooms").mkString(","))
   }
