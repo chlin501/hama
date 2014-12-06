@@ -147,14 +147,13 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
   protected val operation = Operation.get(setting.hama)
 
   /**
-   * BSPJobClient calls submitJob(jobId, jobFile), where jobFile submitted is
-   * the job.xml path.
-   *
-   * This can be seen as entry point of entire procedure.
+   * Clients call submit a jobId and jobFile, where the jobFile is the
+   * the path pointed to job.xml submitted.
    */
   protected def submitJob: Receive = {
     case Submit(jobId, jobFilePath) => {
-      LOG.info("Received job {} submitted from the client {}", jobId, sender) 
+      LOG.info("Received job {} submitted from the client {}", jobId,  
+               sender.path.name) 
       val jobConf = newJobConf(jobId, jobFilePath)
       federator ! Validate(jobId, jobConf, sender, self,
                            Map(CheckMaxTasksAllowed -> NotVerified,

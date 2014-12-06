@@ -17,12 +17,23 @@
  */
 package org.apache.hama.master
 
+import akka.actor.Actor
 import akka.actor.ActorRef
+import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
+import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
+import org.apache.hama.logging.ActorLog
 import org.apache.hama.monitor.ListService
+import org.apache.hama.monitor.ProbeMessages
+import org.apache.hama.monitor.master.TotalMaxTasks
+import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
+
+final case class V1(jobId: String, result: String)
 
 class MockFederator(setting: Setting, master: ActorRef, tester: ActorRef) 
       extends Federator(setting, master) {
@@ -33,7 +44,32 @@ class MockFederator(setting: Setting, master: ActorRef, tester: ActorRef)
     trackers
   }
 
+  override def areAllVerified(jobId: BSPJobID): Option[Validate] = {
+    val r = super.areAllVerified(jobId)
+    r match {
+      case Some(v) => {
+        LOG.info("All validated for job id {}!", jobId)
+        tester ! v.validated.jobId
+        v.validated.actions.foreach { case (k, v) => tester ! (k, v) }
+      }
+      case None => LOG.info("Job id {} has validated {}", jobId, 
+                            findValidateBy(jobId).actions)
+    }
+    r
+  }
+
+  override def inform(service: String, result: ProbeMessages) = {
+    if(result.toString.contains("TotalMaxTasks")) {
+      val r = result.asInstanceOf[TotalMaxTasks]
+      LOG.info("Rewrite service {} result {} tasks to 1024 ..", service, result)
+      self ! TotalMaxTasks(r.jobId, 1024)
+    } else super.inform(service, result)
+
+  }
+
 }
+
+final case class DoValidate(v: Validate)
 
 class MockMaster(setting: Setting, tester: ActorRef)
       extends BSPMaster(setting, null.asInstanceOf[Registrator]) {
@@ -46,8 +82,8 @@ class MockMaster(setting: Setting, tester: ActorRef)
 
   def listTracker: Receive = {
     case ListTracker => 
-      findServiceBy(Federator.simpleName(setting.hama)).map { tracker => 
-        tracker ! ListTracker
+      findServiceBy(Federator.simpleName(setting.hama)).map { fed => 
+        fed ! ListTracker
       }
   }
 
@@ -62,12 +98,32 @@ class MockMaster(setting: Setting, tester: ActorRef)
                        from.path.name)
   }
 
-  override def receive = listTracker orElse super.receive 
+  def doValidate: Receive = {
+    case DoValidate(validate) => 
+      findServiceBy(Federator.simpleName(setting.hama)).map { fed =>
+        fed ! validate
+      }
+  }
+
+  val hosts = Array("groom21", "groom13", "groom4122")
+  val ports = Array(51144, 50014, 50021)
+
+  override def groomsExist(host: String, port: Int): Boolean = 
+    if(hosts.contains(host) && ports.contains(port)) true else false
+ 
+  override def receive = doValidate orElse listTracker orElse super.receive 
 
 }
 
+class MockClient extends Actor with ActorLog {
+
+  override def receive = {
+    case msg@_ => LOG.info("{} receive msg: {}", getClass.getName, msg)
+  }
+}
+
 @RunWith(classOf[JUnitRunner])
-class TestFederator extends TestEnv("TestFederator") {
+class TestFederator extends TestEnv("TestFederator") with JobUtil {
 
   val masterSetting = {
     val setting = Setting.master
@@ -76,8 +132,18 @@ class TestFederator extends TestEnv("TestFederator") {
     setting
   }
 
+  val jobConf = {
+    val conf = new HamaConfiguration
+    conf.setStrings("bsp.target.grooms", "groom21:51144", 
+                                         "groom13:50014", 
+                                         "groom4122:50021")
+    conf.setInt("bsp.peers.num", 5)
+    conf 
+  }
+
   it("test federator functions.") {
     val expectedServices = Seq(Federator.simpleName(masterSetting.hama))
+    val client = createWithArgs("mockclient", classOf[MockClient])
     val master = createWithArgs(masterSetting.name, masterSetting.main, 
                                masterSetting, tester)
         
@@ -86,6 +152,15 @@ class TestFederator extends TestEnv("TestFederator") {
  
     master ! ListTracker 
     expect(Federator.defaultTrackers.sorted.toSeq)
-     
+
+    val jobId = createJobId("test", 3)
+    val v1 = Validate(jobId, jobConf, client, tester, 
+                      Map(CheckMaxTasksAllowed -> NotVerified, 
+                          IfTargetGroomsExist -> NotVerified))
+    master ! DoValidate(v1)
+    sleep(3.seconds)
+    expect(jobId)
+    expect((CheckMaxTasksAllowed, Valid))
+    expect((IfTargetGroomsExist, Valid))
   }
 }

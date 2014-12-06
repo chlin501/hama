@@ -82,8 +82,10 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
 class WrappedTracker(federator: ActorRef, tracker: Tracker) 
     extends WrappedProbe {
 
-  override def preStart() = tracker.initialize
-
+  override def preStart() = {
+    tracker.wrapper = Option(self)
+    tracker.initialize
+  }
   override def listServices() = federator ! ListService
 
   override def servicesFound(services: Array[String]) = 

@@ -108,9 +108,11 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     inform(GroomLeave(name, host, port), Federator.simpleName(setting.hama), 
            Scheduler.simpleName(setting.hama))
 
-  protected def inform(message: Any, names: String*) = names.foreach( name => 
+  protected def inform(message: Any, names: String*) = names.foreach( name => {
+    LOG.debug("Going to inform service {} with result {}", names.mkString(","), 
+             message)
     findServiceBy(name).map { service => service ! message }
-  )
+  })
 
   protected def dispatch: Receive = {
     case Inform(service, result) => inform(result, service)
@@ -130,23 +132,30 @@ class BSPMaster(setting: Setting, registrator: Registrator)
   protected def checkGroomsExist: Receive = { 
     case CheckGroomsExist(jobId, targetGrooms) => {
       val uniqueGrooms = targetGrooms.map(_.trim).groupBy(k => k).keySet
-      LOG.debug("Client configures targets: {}", uniqueGrooms.mkString(","))
+      LOG.info("Client configures targets: {}", uniqueGrooms.mkString(","))
       val actual = uniqueGrooms.takeWhile( key => {
-        val array = key.split(",")
-        val host = array(0)
-        val port = array(1) 
-        val existsOrNot = grooms.exists( groom => 
-          groom.path.address.host.equals(Option(host)) &&
-          groom.path.address.port.equals(Option(port.toInt))
-        )
-        if(!existsOrNot) LOG.debug("Requested groom with host {} port {} not "+
-                                   "exist!", host, port)
-        existsOrNot
+        val array = key.split(":")
+        if(null == array || array.size != 2) {
+          false
+        } else {
+          val host = array(0)
+          val port = array(1) 
+          val existsOrNot = groomsExist(host, port.toInt)
+          if(!existsOrNot) LOG.debug("Requested groom with host {} port {} "+
+                                     "not exist!", host, port)
+          existsOrNot
+       }
       }).size
       if(uniqueGrooms.size == actual) sender ! AllGroomsExist(jobId) 
       else sender ! SomeGroomsNotExist(jobId)
     }
   }
+
+  protected def groomsExist(host: String, port: Int): Boolean = 
+    grooms.exists( groom => 
+      groom.path.address.host.equals(Option(host)) &&
+      groom.path.address.port.equals(Option(port))
+    )
 
   override def receive = checkGroomsExist orElse dispatch orElse membership orElse unknown
   

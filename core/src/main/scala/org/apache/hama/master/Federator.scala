@@ -63,13 +63,14 @@ object Federator {
 
 }
 
-// TODO: calculate tasks <-> groom slots bit map (grooms tracker)
-//       reserve slots for jobs (in receptionist), etc.
 class Federator(setting: Setting, master: ActorRef) 
       extends Ganglion with LocalService {
 
   import Federator._
 
+  /**
+   * Constraints to be verified corresponds to a specific job. 
+   */
   protected var validation = Set.empty[Validate]
 
   override def initializeServices {
@@ -117,7 +118,12 @@ class Federator(setting: Setting, master: ActorRef)
      * @param service of a master.
      * @param result to be sent to the master.
      */
-    case Inform(service, result) => master ! Inform(service, result)
+    case Inform(service, result) => inform(service, result)
+  }
+
+  protected def inform(service: String, result: ProbeMessages) = {
+    LOG.debug("Will inform service {} with result {}", service, result)
+    master ! Inform(service, result)
   }
 
   protected def askFor(recepiant: String, action: Any) =
@@ -127,7 +133,7 @@ class Federator(setting: Setting, master: ActorRef)
     case event: GroomLeave => services.foreach( tracker => tracker ! event)
   } 
 
-  protected def validate: Receive = {
+  protected def validate: Receive = { // TODO: inject w/ trait JobValidator 
     case constraint: Validate => {
       cache(constraint)
       constraint.actions.keySet.foreach( action => action match { 
@@ -150,27 +156,37 @@ class Federator(setting: Setting, master: ActorRef)
         case _ => LOG.warning("Unknown validation action: {}", action)
       })
     }
-    case TotalMaxTasks(jobId, available) => { // TODO: findValidateBy too many times
-      val id = BSPJobID.forName(jobId)
-      val validate = findValidateBy(id)
-      val requested = validate.jobConf.getInt("bsp.peers.num", 1)
-      (available >= requested) match {
-        case true => updateBy(id)(CheckMaxTasksAllowed, Valid)
-        case false => updateBy(id)(CheckMaxTasksAllowed, 
-                      Invalid("Requested tasks ("+requested+") is larger "+
-                              "than total tasks allowed ("+available+")"))
-      }
-      postCheckFor(id)
+    case TotalMaxTasks(jobId, available) => 
+      validateTotalMaxTasks(jobId, available) 
+    case AllGroomsExist(jobId) => validateAllGroomsExist(jobId)
+    case SomeGroomsNotExist(jobId) => validateSomeGroomsNotExist(jobId)
+  }
+
+  protected def validateSomeGroomsNotExist(jobId: BSPJobID) {
+    updateBy(jobId)(IfTargetGroomsExist, 
+                    Invalid("Some target grooms doesn't exists!")) 
+    postCheckFor(jobId)
+  }
+
+  protected def validateAllGroomsExist(jobId: BSPJobID) {
+    updateBy(jobId)(IfTargetGroomsExist, Valid)
+    postCheckFor(jobId)
+  }
+
+  // TODO: findValidateBy too many times
+  protected def validateTotalMaxTasks(jobId: String, available: Int) {
+    val id = BSPJobID.forName(jobId) 
+    val validate = findValidateBy(id)
+    val requested = validate.jobConf.getInt("bsp.peers.num", 1)
+    LOG.info("Client requests {} tasks and the system has {}", requested, 
+             available)
+    (available >= requested) match {
+      case true => updateBy(id)(CheckMaxTasksAllowed, Valid)
+      case false => updateBy(id)(CheckMaxTasksAllowed, 
+                    Invalid("Requested tasks ("+requested+") is larger "+
+                            "than total tasks allowed ("+available+")"))
     }
-    case AllGroomsExist(jobId) => {
-      updateBy(jobId)(IfTargetGroomsExist, Valid)
-      postCheckFor(jobId)
-    }
-    case SomeGroomsNotExist(jobId) => {
-      updateBy(jobId)(IfTargetGroomsExist, 
-                      Invalid("Some target grooms doesn't exists!")) 
-      postCheckFor(jobId)
-    }
+    postCheckFor(id)
   }
 
   /**
@@ -185,7 +201,7 @@ class Federator(setting: Setting, master: ActorRef)
   }
 
   /** 
-   * If all actions are verified, either Valid or Invalid, send back to 
+   * If all constraints are verified, either Valid or Invalid, send back to 
    * receptionist for further actions, such reject or put to wait queue.
    * Otherwise do nothing and wait for other validation result.
    */

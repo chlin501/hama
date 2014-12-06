@@ -21,7 +21,6 @@ import akka.actor.ActorRef
 import akka.actor.Cancellable
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
-//import org.apache.hama.groom.GroomServerStat
 //import org.apache.hama.groom.RequestTask
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
@@ -57,11 +56,11 @@ object Scheduler {
  *   so it's illegal/ wrong to schedule more than 2 tasks to groom1.
  *   only (max) 2 tasks are allowed to be scheduled groom1.
  */
-// TODO: separate schedule functions from this concrete impl.
-//       e.g. class WrappedScheduler(setting: Setting, scheduler: Scheduler)
-//       trait scheduluer#assign // passive
-//       trait scheduluer#schedule // active
-//       execute job one at a time (simpler for recovery).
+// TODO: - separate schedule functions from this concrete impl.
+//         e.g. class WrappedScheduler(setting: Setting, scheduler: Scheduler)
+//         trait scheduluer#assign // passive
+//         trait scheduluer#schedule // active
+//       - complete one job at a time
 class Scheduler(conf: HamaConfiguration, receptionist: ActorRef) 
       extends LocalService with RemoteService {
 
