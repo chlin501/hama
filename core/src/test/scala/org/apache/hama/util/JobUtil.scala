@@ -232,7 +232,7 @@ trait JobUtil extends CommonLog  {
     new File(testRoot, jar)
 
   def getSystemDir(conf: HamaConfiguration): Path = {
-    val sysDir = new Path(conf.get("bsp.system.dir", "/tmp/hama/bsp/system"))
+    val sysDir = new Path(conf.get("bsp.system.dir", "/tmp/hadoop/bsp/system"))
     createIfAbsent(sysDir)
     fsQualified(sysDir)
   }

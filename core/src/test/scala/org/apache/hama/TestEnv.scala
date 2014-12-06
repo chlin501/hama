@@ -72,19 +72,45 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
    * @return File points to the test root path "/tmp/hama".
    */
   def testRoot: File = {
-    val tmpRoot = new File(testRootPath)
-    if(!tmpRoot.exists) tmpRoot.mkdirs
-    tmpRoot
+    val tmp = new File(testRootPath)
+    if(!tmp.exists) tmp.mkdirs
+    tmp
+  }
+
+  def testHadoop: File = { // TODO: merge testRoot, testHadoop, and testBSP
+    val tmp = new File("/tmp/hadoop")
+    if(!tmp.exists) tmp.mkdirs
+    tmp
+  }
+
+  def testBSP: File = {
+    val tmp = new File("/tmp/bsp")
+    if(!tmp.exists) tmp.mkdirs
+    tmp
   }
 
   /**
    * Delete test root path if the path exists.
    */
-  def deleteTestRoot {
+  def deleteTestRoot {  
     testRoot.exists match {
       case true => {
         LOG.info("Delete test root path: "+testRoot.getCanonicalPath)
         FileUtils.deleteDirectory(testRoot)
+      }
+      case false =>
+    }
+    testHadoop.exists match {
+      case true => {
+        LOG.info("Delete test hadoop path: "+testHadoop.getCanonicalPath)
+        FileUtils.deleteDirectory(testHadoop)
+      }
+      case false =>
+    } 
+    testBSP.exists match {
+      case true => {
+        LOG.info("Delete test bsp path: "+testBSP.getCanonicalPath)
+        FileUtils.deleteDirectory(testBSP)
       }
       case false =>
     }
