@@ -133,7 +133,8 @@ class Federator(setting: Setting, master: ActorRef)
     case event: GroomLeave => services.foreach( tracker => tracker ! event)
   } 
 
-  protected def validate: Receive = { // TODO: inject w/ trait JobValidator 
+  // TODO: move validate related functions to trait JobValidator then extends it
+  protected def validate: Receive = { 
     case constraint: Validate => {
       cache(constraint)
       constraint.actions.keySet.foreach( action => action match { 

@@ -18,11 +18,10 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
-import akka.event.Logging
-import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
-import org.apache.hama.groom._
+import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.bsp.v2.Job
 import org.apache.hama.conf.Setting
 import org.apache.hama.io.PartitionedSplit
 import org.apache.hama.util.JobUtil
@@ -31,54 +30,66 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-private final case class GetJob(tester: ActorRef)
-private final case class JobContent(jobId: BSPJobID, 
-                                    localJarFile: String)
+private class MockMaster1(setting: Setting) 
+      extends BSPMaster(setting, null.asInstanceOf[Registrator])
 
-class MockReceptionist(setting: Setting) 
-      extends Receptionist(setting, null.asInstanceOf[ActorRef]) {
+class MockFed(setting: Setting, master: ActorRef) 
+      extends Federator(setting, master) {
 
-  def getJob: Receive = {
-    case GetJob(tester) => {
-      if(waitQueue.isEmpty) 
-        throw new NullPointerException("Job is not enqueued for waitQueue is "+
-                                       "empty!");
-      val job = waitQueue.dequeue._1
-      LOG.info("GetJob: job -> {}", job)
-      job.getLocalJarFile match {
-        case null => tester ! JobContent(job.getId, null)
-        case _ => throw new Error("Jar file path is created by BSPJobClient."+
-                                   "So this should be empty!")
+  override def validate: Receive = {
+    case conditions: Validate => {
+      var newActions = Map.empty[Any, Validation] 
+      conditions.actions.foreach { case (k, v) => 
+        newActions ++= Map(k -> Valid) 
       }
+      LOG.info("Update all validation to valid: {}", newActions)
+      val v1 = Validate(conditions.jobId, conditions.jobConf, 
+                        conditions.client, conditions.receptionist, 
+                        newActions)
+      LOG.info("Send validated result back to {}", sender.path.name)
+      sender ! v1.validated
     }
   }
-  
-  override def receive = getJob orElse super.receive
+}
+
+class MockReceptionist(setting: Setting, federator: ActorRef, tester: ActorRef) 
+      extends Receptionist(setting, federator) {
+
+  override def enqueueJob(newJob: Job) = {
+    LOG.info("Job created is {}", newJob)
+    tester ! newJob.getId.toString
+    val targetGrooms = newJob.getConfiguration.getStrings("bsp.targets.grooms")
+    LOG.info("Target grooms include {}", targetGrooms.mkString(","))
+    tester ! targetGrooms.mkString(",")
+  }
 
 }
 
 @RunWith(classOf[JUnitRunner])
 class TestReceptionist extends TestEnv("TestReceptionist") with JobUtil {
 
-  var receptionist: ActorRef = _
+  val jobConf = {
+    val conf = new HamaConfiguration
+    conf.setStrings("bsp.targets.grooms", "groom5:50021", "groom4:51144", 
+                                          "groom5:50021", "groom4:51144", 
+                                          "groom1:50002") 
+    conf
+  }
 
   it("test submit job to receptionist") {
-    LOG.info("Test submit job to Receptionist")
-    val receptionist = create("receptionist", classOf[MockReceptionist])
+    val setting = Setting.master
+    val master = createWithArgs(setting.name, classOf[MockMaster1], setting)
+    val fed = createWithArgs(Federator.simpleName(setting.hama),
+                             classOf[MockFed], setting, master)
+    val receptionist = createWithArgs(Receptionist.simpleName(setting.hama), 
+                                      classOf[MockReceptionist], setting, fed,
+                                      tester)
     val jobId = createJobId("test-receptionist", 1533)
-    // set target GroomServers
-    testConfiguration.setStrings("bsp.sched.targets.grooms", 
-                                 "groom5", "groom4", "groom5", "groom4", 
-                                 "groom1") 
-    val jobFilePath = createJobFile(testConfiguration)
+    val jobFilePath = createJobFile(jobConf)
     LOG.info("Submit job id "+jobId.toString+" job.xml: "+jobFilePath)
-    receptionist ! GroomStat("groom1", 3)
-    receptionist ! GroomStat("groom4", 2)
-    receptionist ! GroomStat("groom5", 7)
     receptionist ! Submit(jobId, jobFilePath)
-    receptionist ! GetJob(tester)
-    // N.B.: the second parameter is "bsp.jar" and it should be null because
-    //       jar path is originally configured by BSPJobClient.
-    expect(JobContent(jobId, null)) 
+    sleep(6.seconds)
+    expect(jobId.toString) 
+    expect(jobConf.getStrings("bsp.targets.grooms").mkString(","))
   }
 }

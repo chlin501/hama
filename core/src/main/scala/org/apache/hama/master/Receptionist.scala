@@ -179,20 +179,30 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
       val notValid = actions.filterNot { action => action._2.equals(Valid) }
       notValid.size match {
         case 0 => newJob(jobId, jobConf) match {
-          case Success(newJob) => waitQueue = waitQueue.enqueue(newJob)
-          case Failure(cause) => client ! Reject(cause.getMessage)
+          case Success(newJob) => enqueueJob(newJob)
+          case Failure(cause) => {
+            LOG.warning("Fail creating new job because {}", cause)
+            client ! Reject(cause.getMessage)
+          }
         }
-        case _ => client ! Reject(notValid.head._2.asInstanceOf[Invalid].reason)
+        case _ => {
+           val reason = notValid.head._2.asInstanceOf[Invalid].reason
+           LOG.warning("Fail validating configuration because {}", reason)
+           client ! Reject(reason)
+        }
       }
     }
   }
+  
+  protected def enqueueJob(newJob: Job) = waitQueue = waitQueue.enqueue(newJob)
 
   protected def newJob(jobId: BSPJobID, 
                        jobConf: HamaConfiguration): Try[Job] = try {
-    val splits = findSplitsBy(jobId, jobConf)
+    val splits = findSplitsBy(jobConf)
+    LOG.info("Splits found include {}", splits)
     val job = new Job.Builder().setId(jobId). 
                               setConf(jobConf).
-                              //withTaskTable(splits). // TODO: test when null
+                              withTaskTable(splits). 
                               build
     Success(job)
   } catch {
@@ -237,13 +247,18 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
    * @return Option[Array[PartitionedSplit]] are splits files; or None if
    *                                         no splits.
    */
-  protected def findSplitsBy(jobId: BSPJobID, 
-                   jobConf: HamaConfiguration): Array[PartitionedSplit] = {
-    val path = jobSplitFilePath(jobConf).getOrElse(null) 
-    LOG.info("Recreate split file from {}", path)
-    val input = op(operation.getSystemDirectory).open(new Path(path))
-    splitsFrom(new DataInputStream(input)) 
-  }
+  protected def findSplitsBy(jobConf: HamaConfiguration): 
+    Array[PartitionedSplit] = jobSplitFilePath(jobConf) match {
+      case Some(path) => {
+        LOG.info("Recreate split file from path {}", path)
+        val input = op(operation.getSystemDirectory).open(new Path(path))
+        splitsFrom(new DataInputStream(input)) 
+      }
+      case None => {
+        LOG.warning("Split files may not require!")
+        Array()
+      }
+    }
 
   /**
    * Read split from a particular data input, and recreate as PartitionedSplit.

@@ -49,10 +49,10 @@ private[master] final case class GroomEnrollment(
  * This is used to notify Receptionist with GroomServer's maxTasks.
  * @param groomServerName is the GroomServer name.
  * @param maxTasks denotes the capacity the GroomServer has upon registration.
- */
 private[master] final case class GroomStat(
   groomServerName: String, maxTasks: Int
 ) extends MasterMessage
+ */
 
 import org.apache.hama.bsp.BSPJobID
 

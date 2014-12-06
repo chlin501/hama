@@ -32,21 +32,11 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.bsp.BSPJobID;
-//import org.apache.hama.io.PartitionedSplit;
+import org.apache.hama.io.PartitionedSplit;
 
 /**
- * Read only informaion for a job.
+ * Job informaion data.
  */
-//       Note: `Recordable' to produce metrics for reporting to monitor:
-//          - lastCheckpoint: the latest complete checkpoint. complete means
-//                            all checkpoints succeed!
-//          - state 
-//          - progress (streaming do not have progress for it's an infinite run)
-//          - setupProgress: tasks complete setup/ total # tasks 
-//          - cleanupProgress: tasks complete cleanup/ total # tasks
-//          - startTime: the earliest startTime of all tasks.
-//          - finishTime: the latest finishTime of all tasks.
-//          - superstepCount: current superstep count.
 public final class Job implements Writable {
 
   public static final Log LOG = LogFactory.getLog(Job.class);
@@ -288,7 +278,7 @@ public final class Job implements Writable {
     }
     
     private void adjustNumBSPTasks() {
-      final String[] targetGrooms = conf.getStrings("bsp.sched.targets.grooms");
+      final String[] targetGrooms = conf.getStrings("bsp.target.grooms");
       final int numbsptasks = conf.getInt("bsp.peers.num", 1);
       if(null != targetGrooms && targetGrooms.length > numbsptasks) { 
         LOG.info("Adjust numBSPTasks "+numbsptasks+" to "+targetGrooms.length+
@@ -301,12 +291,10 @@ public final class Job implements Writable {
     public Builder withTaskTable() {
       assertParameters();
       adjustNumBSPTasks();
-      //this.taskTable = new TaskTable(this.id, conf, null);
       this.taskTable = new TaskTable(this.id, conf);
       return this;
     }
 
-/*
     public Builder withTaskTable(final PartitionedSplit[] splits) {
       assertParameters();
       adjustNumBSPTasks();
@@ -317,12 +305,11 @@ public final class Job implements Writable {
         return this;
       }
     }
-*/
 
     public Builder setTargets(final String[] targets) {
       if(null == targets || 0 == targets.length) 
         throw new IllegalArgumentException("Invalid targets provided");
-      conf.setStrings("bsp.sched.targets.grooms", targets);
+      conf.setStrings("bsp.target.grooms", targets);
       return this;
     }
      
@@ -337,10 +324,10 @@ public final class Job implements Writable {
         throw new IllegalArgumentException("Invalid GroomServerName "+
                                             groomServerName);
       final String[] newArray = 
-         Arrays.copyOf(conf.getStrings("bsp.sched.targets.grooms"), 
-                       conf.getStrings("bsp.sched.targets.grooms").length+1);
+         Arrays.copyOf(conf.getStrings("bsp.target.grooms"), 
+                       conf.getStrings("bsp.target.grooms").length+1);
       newArray[newArray.length-1] = groomServerName;
-      conf.setStrings("bsp.sched.targets.grooms", newArray);
+      conf.setStrings("bsp.target.grooms", newArray);
       return this;
     }
 
@@ -399,9 +386,8 @@ public final class Job implements Writable {
 
     // align numBSPTasks to # of splits calculated in TaskTable.
     final int actualNumBSPTasks = this.taskTable.getNumBSPTasks();
-    LOG.info("NumBSPTasks is set to "+actualNumBSPTasks+" according to "+
-             "\"bsp.sched.targets.grooms\" and \"bsp.peers.num\" defined.");
     conf.setInt("bsp.peers.num", actualNumBSPTasks); 
+    LOG.info("Align numBSPTasks to "+actualNumBSPTasks);
 
     if(getNumBSPTasks() < getTargets().length) 
       throw new RuntimeException("Target GroomServer "+getTargets().length +
@@ -533,7 +519,7 @@ public final class Job implements Writable {
    *       tasks may run on the same GroomServer.
    */
   public String[] getTargets() {
-    return conf.getStrings("bsp.sched.targets.grooms", new String[]{});
+    return conf.getStrings("bsp.target.grooms", new String[]{});
   }
 
   /**
@@ -541,7 +527,7 @@ public final class Job implements Writable {
    * @return String of all target GroomServers, delimited by comma(,).
    */
   String getTargetStrings() {
-    return conf.get("bsp.sched.targets.grooms", "");
+    return conf.get("bsp.target.grooms", "");
   }
 
   public boolean areAllTasksAssigned() {
