@@ -55,7 +55,7 @@ class MockFed(setting: Setting, master: ActorRef)
 class MockReceptionist(setting: Setting, federator: ActorRef, tester: ActorRef) 
       extends Receptionist(setting, federator) {
 
-  override def enqueueJob(newJob: Job) = {
+  override def enqueueJob(client: ActorRef, newJob: Job) = {
     LOG.info("Job created is {}", newJob)
     tester ! newJob.getId.toString
     val targetGrooms = newJob.getConfiguration.getStrings("bsp.targets.grooms")

@@ -17,6 +17,7 @@
  */
 package org.apache.hama.bsp.v2;
 
+import akka.actor.ActorRef;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -31,6 +32,7 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
 import org.apache.hama.HamaConfiguration;
+import org.apache.hama.SystemInfo;
 import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.io.PartitionedSplit;
 
@@ -40,8 +42,6 @@ import org.apache.hama.io.PartitionedSplit;
 public final class Job implements Writable {
 
   public static final Log LOG = LogFactory.getLog(Job.class);
-
-  private long _current = System.currentTimeMillis();
 
   /* Id for this job. */
   private BSPJobID id;
@@ -62,7 +62,7 @@ public final class Job implements Writable {
   private LongWritable cleanupProgress = new LongWritable(0);
 
   /* Start time for this job. */
-  private LongWritable startTime = new LongWritable(_current);
+  private LongWritable startTime = new LongWritable(now());
 
   /* Finish time for this job. */
   private LongWritable finishTime = new LongWritable(0);
@@ -308,7 +308,7 @@ public final class Job implements Writable {
 
     public Builder setTargets(final String[] targets) {
       if(null == targets || 0 == targets.length) 
-        throw new IllegalArgumentException("Invalid targets provided");
+        throw new IllegalArgumentException("Invalid targets string!");
       conf.setStrings("bsp.target.grooms", targets);
       return this;
     }
@@ -345,6 +345,10 @@ public final class Job implements Writable {
                      taskTable);
     }
 
+  }
+
+  private static long now() {
+    return System.currentTimeMillis();
   }
 
   Job() {} // for Writable
@@ -528,6 +532,30 @@ public final class Job implements Writable {
    */
   String getTargetStrings() {
     return conf.get("bsp.target.grooms", "");
+  }
+
+  public SystemInfo[] targetInfos() {
+    final String sys = conf.get("bsp.actor-system.name", "BSPSystem");
+    final String[] targets = getTargets();
+    SystemInfo[] infos = new SystemInfo[0];
+    if(null != targets && 0 != targets.length) {
+      infos = new SystemInfo[targets.length];
+      for(int idx= 0; idx < targets.length; idx++) {
+        final String[] hostPort = targets[idx].split(":");
+        if(null == hostPort || 2 != hostPort.length) 
+          throw new RuntimeException("Invalid host port "+targets[idx]+"!");
+        final String host = hostPort[0];
+        final String port = hostPort[1];
+        try {
+          final int p = Integer.parseInt(port);
+          final SystemInfo info = new SystemInfo(sys, host, p);
+          infos[idx] = info;
+        } catch(NumberFormatException nfe) {
+          throw new RuntimeException("Invalid port value: "+port, nfe);
+        }
+      }
+    } 
+    return infos;
   }
 
   public boolean areAllTasksAssigned() {

@@ -15,29 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama
+package org.apache.hama.monitor.master
 
-import akka.actor.ActorRef
-import akka.actor.Cancellable
-import scala.concurrent.duration.FiniteDuration
-import scala.concurrent.duration.DurationInt
+import org.apache.hama.monitor.Tracker
 
-trait Tick
-final case object Ticker extends Tick
+// TODO: track master related stats, e.g. state, queue info, etc.
+final class MasterStatsTracker extends Tracker 
 
-trait Periodically { this: Agent => 
+// TODO: finished job metadata
+final class JobHistoryTracker extends Tracker
 
-  protected def tick(target: ActorRef, message: Tick, 
-                     initial: FiniteDuration = 0.seconds,
-                     delay: FiniteDuration = 3.seconds): Cancellable = {
-    import context.dispatcher
-    context.system.scheduler.schedule(initial, delay, target, message)
-  }
+// TODO: checkpoint integrity of a job.
+final class CheckpointTracker extends Tracker
 
-  protected def ticked(message: Tick) { }
-
-  protected def tickMessage: Receive = {
-    case t: Tick => ticked(t)
-  }
- 
-}

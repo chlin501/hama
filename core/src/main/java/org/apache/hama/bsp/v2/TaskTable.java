@@ -293,7 +293,7 @@ public final class TaskTable implements Writable {
       final int lastTask = (columnLength(idx) - 1);
       final Task task = get(idx, lastTask); 
       if(null == task) 
-        throw new RuntimeException("The task at row: "+idx+" not found!");
+        throw new RuntimeException("The last task at row: "+idx+" not found!");
       if(!task.isAssigned()) return task;
     }
     return null;

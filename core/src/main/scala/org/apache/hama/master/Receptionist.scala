@@ -41,12 +41,16 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
+
 sealed trait Validation
 final case object NotVerified extends Validation
 final case object Valid extends Validation
 final case class Invalid(reason: String) extends Validation
 
 sealed trait ReceptionistMessages
+
+final case class Ticket(client: ActorRef, job: Job)
+      extends ReceptionistMessages 
 
 /**
  * Validate job configuration, sent from a particular client, matched to a 
@@ -141,7 +145,7 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
   type MaxTasksPerGroom = Int
 
   /* Initialized job */
-  protected var waitQueue = Queue.empty[Job]
+  protected var waitQueue = Queue.empty[Ticket]
 
   /* Operation against underlying storage. may need reload. */
   protected val operation = Operation.get(setting.hama)
@@ -179,7 +183,7 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
       val notValid = actions.filterNot { action => action._2.equals(Valid) }
       notValid.size match {
         case 0 => newJob(jobId, jobConf) match {
-          case Success(newJob) => enqueueJob(newJob)
+          case Success(newJob) => enqueueJob(client, newJob)
           case Failure(cause) => {
             LOG.warning("Fail creating new job because {}", cause)
             client ! Reject(cause.getMessage)
@@ -194,12 +198,13 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
     }
   }
   
-  protected def enqueueJob(newJob: Job) = waitQueue = waitQueue.enqueue(newJob)
+  protected def enqueueJob(client: ActorRef, newJob: Job) = 
+    waitQueue = waitQueue.enqueue(Ticket(client, newJob))
 
   protected def newJob(jobId: BSPJobID, 
                        jobConf: HamaConfiguration): Try[Job] = try {
     val splits = findSplitsBy(jobConf)
-    LOG.info("Splits found include {}", splits)
+    LOG.debug("Splits found include {}", splits)
     val job = new Job.Builder().setId(jobId). 
                               setConf(jobConf).
                               withTaskTable(splits). 
@@ -288,7 +293,7 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
   }
 
   /**
-   * Create corresponded path and directories. 
+   * Create path and directories for corresponded job locally. 
    * @param jobId denotes which job the operation will be applied.
    * @param config is the configuration object for the jobId supplied.
    * @return localJobFilePath points to the job file path at local.
@@ -300,22 +305,26 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
     if(!operation.local.exists(new Path(localDir, subDir)))
       operation.local.mkdirs(new Path(localDir, subDir))
     val localJobFilePath = "%s/%s/%s.xml".format(localDir, subDir, jobId)
+    LOG.debug("Path created for job {} is at {}", jobId, localJobFilePath)
     localJobFilePath
   }
 
   /**
-   * Scheduler asks for job computation.
+   * Scheduler asks for a new job.
    * Dispense a job to Scheduler.
    */
   protected def takeFromWaitQueue: Receive = {
     case TakeFromWaitQueue => {
-      if(!waitQueue.isEmpty) {
-        val (job, rest) = waitQueue.dequeue
-        waitQueue = rest 
-        LOG.info("Dispense a job {}. Now {} jobs left in wait queue.", 
-                 job.getName, waitQueue.size)
-        sender ! Dispense(job) // sender is scheduler
-      } else LOG.warning("{} jobs in wait queue", waitQueue.size)
+      waitQueue.isEmpty match {
+        case false => {
+          val (ticket, rest) = waitQueue.dequeue
+          waitQueue = rest 
+          LOG.info("After the job {} is dispensed, {} jobs are left in queue.", 
+                   ticket.job.getName, waitQueue.size)
+          sender ! Dispense(ticket) 
+        }
+        case true => LOG.debug("{} jobs in wait queue!", waitQueue.size)
+      } 
     }
   }
 

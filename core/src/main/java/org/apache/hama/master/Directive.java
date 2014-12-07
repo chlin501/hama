@@ -51,14 +51,16 @@ public class Directive implements Writable {
   protected Task task;
 
   public static enum Action {
-    Launch(1), Kill(2), Resume(3); 
+    Launch(1), 
+    Kill(2),  // TODO; rename to cancel?
+    Resume(3); 
 
     int t;
     Action(int t) { this.t = t; }
     public int value() { return this.t; }
   }
 
-  public Directive(){ }
+  public Directive(){ } // for writable
   
   public Directive(final Action action, final Task task, final String master) {
     this.timestamp = System.currentTimeMillis();

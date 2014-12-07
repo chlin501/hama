@@ -29,6 +29,7 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableUtils;
+import org.apache.hama.SystemInfo;
 import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.io.PartitionedSplit;
@@ -77,22 +78,55 @@ public final class Task implements Writable {
    * Denote if this task is assigned and to which GroomServer this task 
    * belongs. 
    */
-  private Marker marker = new Marker(false, ""); 
+  private Marker marker = new Marker(false, SystemInfo.Localhost, 50000); 
  
   final static class Marker implements Writable {
 
-    // TODO: record task with active (true) or passive (false) sched
-    // default is passive
-    // private BooleanWritable active = new BooleanWritable(false);
+    /* true when active schdule task to groom; default is false. */
+    private BooleanWritable active = new BooleanWritable(false);
+
+    /* true when this task is assigned; otherwise false. */
     private BooleanWritable assigned = new BooleanWritable(false);
-    private Text groomServerName = new Text();
+
+    /* groom server host string. */
+    private Text host = new Text();
+
+    /* groom server port value. */
+    private IntWritable port = new IntWritable(50000);
+
+    /**
+     * Target groom server can't be the same actor system of master, so 
+     * port value is needed.
+     */
+    public Marker(final boolean isAssigned, final int portValue) {
+      this(false, SystemInfo.Localhost, portValue);
+    }
    
-    public Marker(final boolean assigned, String groomName) {
-      this.assigned = new BooleanWritable(assigned); 
-      if(null == groomName)
-        this.groomServerName = new Text();
-      else 
-        this.groomServerName = new Text(groomName);
+    public Marker(final boolean isAssigned, final String hostName, 
+                  final int portValue) {
+      this(false, isAssigned, hostName, portValue);
+    }
+
+    public Marker(final boolean isActive, final boolean isAssigned, 
+                  final String hostName, final int portValue) {
+      this.active = new BooleanWritable(isActive);
+      this.assigned = new BooleanWritable(isAssigned); 
+      if(null == hostName || "".equals(hostName)) {
+        this.host = new Text(SystemInfo.Localhost);
+      } else {
+        this.host = new Text(hostName);
+      }
+      if(0 < portValue) {
+        this.port = new IntWritable(portValue);
+      } else throw new RuntimeException("Invalid groom port value: "+portValue);
+    }
+
+    /**
+     * Denote if this task is scheduled in proactive.
+     * @return boolean true if active; otherwise false.
+     */
+    public boolean isActive() {
+      return active.get();
     }
 
     public boolean isAssigned() {
@@ -104,27 +138,39 @@ public final class Task implements Writable {
      * @return String is the name of target GroomServer.
      */
     public String getAssignedTarget() {
-      return this.groomServerName.toString();
+      return host.toString();
+    }
+
+    public int getTargetPort() {
+      return port.get();
     }
 
     @Override
     public void write(DataOutput out) throws IOException {
-      this.assigned.write(out);
-      Text.writeString(out, this.groomServerName.toString());
+      active.write(out);
+      assigned.write(out);
+      Text.writeString(out, host.toString());
+      port.write(out); 
     }
 
     @Override
     public void readFields(DataInput in) throws IOException {
-      this.assigned = new BooleanWritable(false);
-      this.assigned.readFields(in);
-      this.groomServerName = new Text();
-      this.groomServerName = new Text(Text.readString(in));
+      active = new BooleanWritable(false);
+      active.readFields(in);
+      assigned = new BooleanWritable(false);
+      assigned.readFields(in);
+      host = new Text();
+      host = new Text(Text.readString(in));
+      port = new IntWritable(50000);
+      port.readFields(in);
     }
 
     @Override
     public String toString() {
-      return "Marker("+assigned.toString()+","+
-             groomServerName.toString()+")";
+      return "Marker("+active.toString()+","+
+                       assigned.toString()+","+
+                       host.toString()+","+
+                       port.get()+")";
     }
   }
 
@@ -166,7 +212,7 @@ public final class Task implements Writable {
     private Phase phase = Phase.SETUP;
     private State state = State.WAITING;
     private boolean completed = false;
-    private Marker marker = new Marker(false, ""); 
+    private Marker marker = new Marker(false, SystemInfo.Localhost, 50000); 
 
     public Builder() { }
  
@@ -181,9 +227,11 @@ public final class Task implements Writable {
       this.currentSuperstep = old.getCurrentSuperstep(); 
       this.phase = old.getPhase();
       this.state = old.getState();
-      this.completed = old.isCompleted();
-      this.marker = new Marker(old.marker.isAssigned(), 
-                               old.marker.getAssignedTarget()); 
+      this.completed = old.isCompleted(); 
+      this.marker = new Marker(old.marker.isActive(), 
+                               old.marker.isAssigned(),
+                               old.marker.getAssignedTarget(),
+                               old.marker.getTargetPort());  
     }
 
     public Builder setId(final TaskAttemptID id) {
@@ -245,20 +293,23 @@ public final class Task implements Writable {
       return this;
     }
 
-    public Builder scheduleTo(final String groom) {
+    /**
+     * Mark this task is scheduled to a particular target groom.
+     */
+    public Builder scheduleTo(final String groom, final int port) {
       if(null == groom || groom.isEmpty()) 
         throw new IllegalArgumentException("Mark assigned, but groom server "+
                                            "name is not provided!");
-      this.marker = new Marker(true, groom);
+      this.marker = new Marker(true, true, groom, port); 
       return this;
     }
 
     /**
      * Revoke schedule target from a particular GroomServer, and mark it as 
-     * unassigned (false).
+     * unassigned.
      */
-    public Builder unschedule() {
-      this.marker = new Marker(false, "");
+    public Builder revoke() {
+      this.marker = new Marker(false, SystemInfo.Localhost, 50000); 
       return this;
     }
 
@@ -435,23 +486,50 @@ public final class Task implements Writable {
   }
 
   /**
-   * Tell if this task is assigned to a particular {@link GroomServer}.
+   * Denote if this task is actively scheduled to a particular 
+   * {@link GroomServer}.
+   */
+  public boolean isActive() {
+    return this.marker.isActive();
+  }  
+
+  /**
+   * Denote if this task is assigned to a particular {@link GroomServer}.
    */
   public boolean isAssigned() {
     return this.marker.isAssigned();
   }
 
   /**
-   * Tell to which {@link GroomServer} this task is dispatched.
+   * Denote to which {@link GroomServer} this task is dispatched.
    * @return String of the target {@link GroomServer}.
    */
   public String getAssignedTarget() {
     return this.marker.getAssignedTarget();
   } 
 
-  public void markWithTarget(final String name) { // TODO: rename -> assignTo?
-    this.marker = new Marker(true, name);
+  public int getTargetPort() {
+    return this.marker.getTargetPort();
   }
+
+  /**
+   * Active schedule to a particular target groom server.
+   */
+  public void scheduleTo(final String name, final int port) { 
+    this.marker = new Marker(true, true, name, port); 
+  } 
+
+  public void revoke() { 
+      this.marker = new Marker(false, SystemInfo.Localhost, 50000); 
+  }
+
+  /**
+   * Passively assign this task to a particular groom server that issuies 
+   * request.
+   */
+  public void assign(final String name, final int port) { 
+    this.marker = new Marker(false, true, name, port); 
+  } 
 
   /**
    * Total BSP tasks to be executed for a single job.
@@ -503,7 +581,7 @@ public final class Task implements Writable {
     this.phase = WritableUtils.readEnum(in, Phase.class);
     this.completed = new BooleanWritable(false);
     this.completed.readFields(in);
-    this.marker = new Marker(false, "");
+    this.marker = new Marker(false, SystemInfo.Localhost, 50000); 
     this.marker.readFields(in);
   }
 

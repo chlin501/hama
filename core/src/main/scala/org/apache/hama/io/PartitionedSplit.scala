@@ -141,5 +141,12 @@ class PartitionedSplit extends Writable {
     h.readFields(in)
   }
 
+  override def toString(): String = 
+    "PartitionedSplit("+path+","+
+                        partitionId+","+
+                        start+","+
+                        length+","+
+                        hosts.mkString(",")+","+
+                        ")"
 }
 

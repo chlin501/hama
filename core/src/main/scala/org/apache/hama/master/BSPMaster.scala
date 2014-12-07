@@ -78,7 +78,8 @@ object BSPMaster {
  
 }
 
-// TODO: refactor FSM (perhaps remove it)
+// TODO: - refactor FSM (perhaps remove it)
+//       - update internal stats to tracker
 class BSPMaster(setting: Setting, registrator: Registrator) 
       extends LocalService with MembershipDirector { 
 
@@ -96,7 +97,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     val receptionist = getOrCreate(Receptionist.simpleName(conf), 
                                    classOf[Receptionist], setting, federator) 
     getOrCreate(Scheduler.simpleName(conf), classOf[Scheduler], 
-                conf, receptionist) 
+                conf, self, receptionist) 
     // TODO: change master state
   }
 
@@ -157,6 +158,24 @@ class BSPMaster(setting: Setting, registrator: Registrator)
       groom.path.address.port.equals(Option(port))
     )
 
-  override def receive = checkGroomsExist orElse dispatch orElse membership orElse unknown
+  protected def getTargetRefs: Receive = {
+    case GetTargetRefs(infos) => {
+      var matched = Array.empty[ActorRef] 
+      var unmatched = Array.empty[String] 
+      infos.foreach( info => grooms.find( groom => 
+        groom.path.address.host.equals(Option(info.getHost)) &&
+        groom.path.address.port.equals(Option(info.getPort))
+      ) match {
+        case Some(ref) => matched ++= Array(ref)
+        case None => unmatched ++= Array(info.getHost+":"+info.getPort)
+      })
+      unmatched.length match {
+        case 0 => sender ! TargetRefs(matched)
+        case _ => sender ! SomeMatched(matched, unmatched)
+      } 
+    } 
+  }
+
+  override def receive = getTargetRefs orElse checkGroomsExist orElse dispatch orElse membership orElse unknown
   
 }

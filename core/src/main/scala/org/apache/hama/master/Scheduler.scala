@@ -24,14 +24,24 @@ import org.apache.hama.bsp.v2.Task
 //import org.apache.hama.groom.RequestTask
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
+import org.apache.hama.Periodically
+import org.apache.hama.SystemInfo
+import org.apache.hama.Tick
+import org.apache.hama.conf.Setting
 import org.apache.hama.master.Directive.Action
-import org.apache.hama.master.Directive.Action._
+import org.apache.hama.master.Directive.Action.Launch
+import org.apache.hama.master.Directive.Action.Kill
+import org.apache.hama.master.Directive.Action.Resume
 import org.apache.hama.RemoteService
 import scala.collection.immutable.Queue
-import scala.concurrent.duration.DurationInt
-import scala.concurrent.duration.FiniteDuration
 
-final case object NextPlease
+sealed trait SchedulerMessages
+final case object NextPlease extends SchedulerMessages with Tick
+final case class GetTargetRefs(infos: Array[SystemInfo]) 
+      extends SchedulerMessages
+final case class TargetRefs(refs: Array[ActorRef]) extends SchedulerMessages
+final case class SomeMatched(matched: Array[ActorRef],
+                             unmatched: Array[String]) extends SchedulerMessages
 
 object Scheduler {
 
@@ -42,33 +52,21 @@ object Scheduler {
 
 }
 
-/**
- * - Pull a job from {@link Receptionist#waitQueue} if taskAssignQueue is empty.
- * - When scheduling a job, either active or passive, in 
- *   {@link #taskAssignQueue}, scheduler must check the number of total tasks 
- *   to be scheduled to the GroomServer N, which belongs to the same job can't 
- *   exceed a GroomServer's maxTasks.
- *   EX: 
- *     task1 , task2 , task3 , task4 , ..., taskN    <-- task(s)
- *   [ groom1, groom2, groom1, groom8, ..., groom1 ] <-- run on GroomServer(s)
- *   if groom1's maxTasks is 2
- *   we observe tasks runnning on groom1 have count 3 (task1, task3, and taskN)
- *   so it's illegal/ wrong to schedule more than 2 tasks to groom1.
- *   only (max) 2 tasks are allowed to be scheduled groom1.
- */
 // TODO: - separate schedule functions from this concrete impl.
 //         e.g. class WrappedScheduler(setting: Setting, scheduler: Scheduler)
 //         trait scheduluer#assign // passive
 //         trait scheduluer#schedule // active
 //       - complete one job at a time
-class Scheduler(conf: HamaConfiguration, receptionist: ActorRef) 
-      extends LocalService with RemoteService {
+//       - update internal stats to related tracker
+class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef) 
+      extends LocalService with RemoteService with Periodically {
 
-  type GroomServerName = String
+/*
   type TaskCounsellorRef = ActorRef
   type MaxTasksAllowed = Int
-  type TaskAssignQueue = Queue[Job]
-  type ProcessingQueue = Queue[Job]
+  type TaskAssignQueue = Queue[Ticket]
+  type ProcessingQueue = Queue[Ticket]
+*/
 
   /**
    * A queue that holds jobs with tasks left unassigning to GroomServers.
@@ -76,32 +74,48 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
    *       with all tasks are dispatched to GroomServers and is moved to 
    *       processingQueue the next job will be processed. 
    */
-  protected var taskAssignQueue = Queue[Job]()
+  protected var taskAssignQueue = Queue[Ticket]()
 
   /**
-   * A queue that holds jobs having all tasks assigned to GroomServers.
+   * A queue that holds jobs having tasks assigned to GroomServers.
    * A {@link Job} in this queue may be moved back to taskAssignQueue if crash
-   * events occurr.
+   * events occurs.
    */
-  protected var processingQueue = Queue[Job]()
+  protected var processingQueue = Queue[Ticket]()
 
   /* Store jobs that finishes its computation. */
-  // TODO: move finished jobs to Federator's JobHistoryTracker, where storing job's metadata e.g. setting only?
-  // protected var finishedQueue = Queue[Job]() 
+  // TODO: move finished jobs to Federator's JobHistoryTracker, where storing job's metadata e.g. setting
+  // protected var finishedQueue = Queue[Ticket]() 
 
-  var taskAssignQueueChecker: Cancellable = _
+  override def initializeServices = tick(self, NextPlease)
 
-  def isTaskAssignQueueEmpty: Boolean = taskAssignQueue.isEmpty
+  /**
+   * Check if task assign queue is empty.
+   * @return true if task assign queue is empty; otherwise false.
+   */
+  protected def isTaskAssignQueueEmpty: Boolean = taskAssignQueue.isEmpty
+
+  /**
+   * Check if processing queue is empty.
+   * @return true if task processing queue is empty; otherwise false.
+   */
+  protected def isProcessingQueueEmpty: Boolean = processingQueue.isEmpty
+
+  override def ticked(message: Tick) = message match {
+    case NextPlease => if(isTaskAssignQueueEmpty && isProcessingQueueEmpty)
+      receptionist ! TakeFromWaitQueue
+    case _ => LOG.warning("Unknown tick message {} for {}", name, message)
+  }
 
   /**
    * Check if the taskQueue is empty. If true, ask Receptionist to dispense a 
    * job; otherwise do nothing.
-   */
   def nextPlease: Receive = {
     case NextPlease => {
-      if(isTaskAssignQueueEmpty) receptionist ! TakeFromWaitQueue 
+      //if(isTaskAssignQueueEmpty) receptionist ! TakeFromWaitQueue 
     }
   }
+   */
 
   /**
    * Move a job to a specific queue pending for further processing
@@ -109,13 +123,13 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
    * If a job contains particular target GroomServer, schedule tasks to those
    * GroomServers.
    * 
-   * Assuming GroomServer's maxTasks is not changed over time.
+   * Assume GroomServer's maxTasks is not changed over time. (Maybe dynamic 
+   * in the future.)
    */
   def dispense: Receive = {
-    case Dispense(job) => { 
-      taskAssignQueue = taskAssignQueue.enqueue(job)
-      // TODO: activeSchedule requires askin' GroomManager first (async) for crash info
-      activeSchedule(job) 
+    case Dispense(ticket) => { 
+      taskAssignQueue = taskAssignQueue.enqueue(ticket)
+      activeSchedule(ticket.job) 
     }
   }
 
@@ -125,33 +139,74 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
    * are not available.
    * @param job contains tasks to be scheduled.
    */
-  def activeSchedule(job: Job) {
-    if(null != job.getTargets && 0 < job.getTargets.length) { 
-      val (from, to) = schedule(taskAssignQueue)  
-      this.taskAssignQueue = from
-      if(!to.isEmpty) 
-        this.processingQueue = processingQueue.enqueue(to.dequeue._1)
-      LOG.info("In activeSchedule, taskAssignQueue has {} jobs, and "+
-               "processingQueue has {} jobs", 
-               taskAssignQueue.size, processingQueue.size)
+  def activeSchedule(job: Job) = job.getTargets match {
+    case null => 
+    case _ => job.getTargets.length match { 
+      case 0 =>
+      case _ => schedule(job)
+/*
+       {
+        val (from, to) = schedule(taskAssignQueue)  
+        this.taskAssignQueue = from
+        to.isEmpty match {
+          case false => processingQueue = processingQueue.enqueue(to.dequeue._1)
+          case true =>
+        }
+        LOG.debug("In activeSchedule, taskAssignQueue has {} jobs, and "+
+                  "processingQueue has {} jobs", 
+                  taskAssignQueue.size, processingQueue.size)
+      }
+*/
+    }
+  }
+
+  // TODO: alllow impl to obtain stats from tracker   
+  protected def schedule(job: Job) {
+    val targetGrooms = job.targetInfos  
+    LOG.info("Request target grooms {} refs for scheduling!", 
+             targetGrooms.mkString(","))
+    master ! GetTargetRefs(targetGrooms)
+  }
+
+  /**
+   * Master replies corresponded groom references.   
+   */
+  protected def targetsResult: Receive = {
+    case TargetRefs(refs) => {
+      val (ticket, rest) = taskAssignQueue.dequeue
+      refs.foreach( ref => ticket.job.nextUnassignedTask match {
+        case null =>
+        case task@_ => {
+          task.scheduleTo(ref.path.address.host.getOrElse(""),
+                          ref.path.address.port.getOrElse(50000))
+          ref ! new Directive(Launch, task, setting.hama.get("master.name", 
+                                                             setting.name))
+        }
+      }) 
+    }
+    case SomeMatched(matched, unmatched) => taskAssignQueue.dequeue match { 
+      case tuple: (Ticket, Queue[Ticket]) => {
+        tuple._1.client ! Reject("Grooms "+unmatched.mkString(", ")+
+                                 " are missing!")
+      }
+      case _ =>
     }
   }
 
   /**
    * Positive schedule tasks.
    * Actual function that exhaustively schedules tasks to target GroomServers.
-   */
   def schedule(fromQueue: TaskAssignQueue): 
       (TaskAssignQueue, ProcessingQueue) = { 
     LOG.info("TaskAssignQueue size is {}", fromQueue.size)
     val (job, rest) = fromQueue.dequeue
-    val groomServers = job.getTargets  
+    val targetGrooms = job.targetInfos  
     var from = Queue[Job](); var to = Queue[Job]()
-    groomServers.foreach( groomName => {
-      val (taskCounsellorActor, maxTasksAllowed) = (null, 0)
-        //groomTaskCounsellors.getOrElse(groomName, (null, 0)) 
-      if(null != taskCounsellorActor) { // TODO: taskcounsellorActor == null 
-        LOG.debug("GroomServer's taskCounsellor {} found!", groomName)
+    targetGrooms.foreach( info => { 
+      // TODO: ask master for groom actor ref
+      //       wait for target groom refs (via msg) 
+      //       schedule tasks
+
         val currentTaskScheduled = job.getTaskCountFor(groomName)
         if(maxTasksAllowed < currentTaskScheduled)
           throw new IllegalStateException("Current tasks "+currentTaskScheduled+
@@ -164,12 +219,12 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
                                         " to groom server "+groomName+", "+
                                         "which allows "+maxTasksAllowed+
                                         " tasks to run.")
-      } else LOG.warning("Can't find taskCounsellor for {}", groomName)
     })
     if(!to.isEmpty) from = rest else from = from.enqueue(job)
     LOG.debug("In schedule function, from queue: {} to queue: {}", from, to)
     (from, to)
   }
+   */
 
   /**
    * Mark the task with the corresponded {@link GroomServer}; then dispatch 
@@ -179,7 +234,6 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
    * @param targetActor is the remote GroomServer's {@link TaskCounsellor}.
    * @param targetGroomServer to which the task will be scheduled.
    * @param d is the dispatch function.
-   */
   def bookThenDispatch(job: Job, targetActor: TaskCounsellorRef,  
                        targetGroomServer: String, 
                        d: (TaskCounsellorRef, Action, Task) => Unit): 
@@ -198,25 +252,26 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
     if(job.areAllTasksAssigned) to = to.enqueue(job)
     to
   }
+   */
 
   /** 
    * Dispatch a Task to a GroomServer.
    * @param from is the GroomServer task manager.
    * @param action denotes what action will be performed upon the task.
    * @param task is the task to be executed.
-   */
   protected def dispatch(from: TaskCounsellorRef, action: Action, task: Task) {
     from ! new Directive(action, task,  
                          conf.get("master.name", "bspmaster"))  
   }
+   */
 
   /**
    * Dispense next unassigned task. None indiecates all tasks are assigned.
-   */
   def unassignedTask(job: Job): Option[Task] = {
     val task = job.nextUnassignedTask;
     if(null != task) Some(task) else None
   }
+   */
 
   /**
    * GroomServer's TaskCounsellor requests for assigning a task.
@@ -288,5 +343,5 @@ class Scheduler(conf: HamaConfiguration, receptionist: ActorRef)
     }
   }
 */
-  override def receive = /*requestTask orElse*/ dispense orElse nextPlease orElse timeout orElse unknown
+  override def receive = tickMessage orElse /*requestTask orElse*/ dispense /*orElse nextPlease*/ orElse targetsResult orElse timeout orElse unknown
 }

@@ -133,10 +133,13 @@ public class TestTask extends TestCase {
 
   public void testBuildFromOldTask() throws Exception {
     final Task old = createTask(7);
-    final Task newTask1 = new Task.Builder(old).scheduleTo("groom12").build();
+    final Task newTask1 = new Task.Builder(old).scheduleTo("groom12", 50001).
+                                                build();
     LOG.info("Old task: "+old+" newTask1: "+newTask1);
     assertTrue("Old task is not assigned, but new task should be assigned!", 
                old.isAssigned() != newTask1.isAssigned());
+    assertEquals("New task should be active scheduled!", 
+                 true, newTask1.isActive());
 
     newTask1.barrierEnterPhase();
     final Task.Phase newTask1Phase = newTask1.getPhase();
