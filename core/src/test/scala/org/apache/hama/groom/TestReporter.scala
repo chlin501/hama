@@ -76,17 +76,20 @@ class MockGroom(setting: Setting, tester: ActorRef)
       }
   }
 
-  override def forwardStats(stats: Stats) = stats.dest match {
-    case GTracker => stats.data.toString match {
-      case "Test sampe!" => {
-        LOG.info("Stats delegated to GroomServer has dest {} data {}", 
-                 stats.dest, stats.data.toString)
-        tester ! stats.dest
-        tester ! stats.data.toString
+  override def forwardToMaster(msg: Any): Unit = msg match {
+    case stats: Stats => stats.dest match {
+      case GTracker => stats.data.toString match {
+        case "Test sampe!" => {
+          LOG.info("Stats delegated to GroomServer has dest {} data {}", 
+                   stats.dest, stats.data.toString)
+          tester ! stats.dest
+          tester ! stats.data.toString
+        }
+        case _ => LOG.info("Rest stats destined to GroomsTracker is {}", stats)
       }
-      case _ => LOG.info("Rest stats destined to GroomsTracker is {}", stats)
+      case _ => LOG.info("Stats destined to other trackers {}", stats)
     }
-    case _ => LOG.info("Stats destined to other trackers {}", stats)
+    case _ => super.forwardToMaster(msg)
   }
 
   def forwardStatsData: Receive = {

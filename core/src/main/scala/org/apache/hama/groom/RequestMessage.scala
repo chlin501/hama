@@ -17,6 +17,34 @@
  */
 package org.apache.hama.groom
 
+import java.io.IOException
+import java.io.DataInput
+import java.io.DataOutput
+import org.apache.hama.monitor.GroomStats
+import org.apache.hadoop.io.Writable
+
 sealed trait RequestMessage
 case object TaskRequest extends RequestMessage
-//case class RequestTask(stat: GroomServerStat) extends RequestMessage
+final class  RequestTask extends Writable with RequestMessage {
+
+  protected[groom] var s: Option[GroomStats] = None
+
+  def stats(): Option[GroomStats] = s
+
+  @throws(classOf[IOException])
+  override def write(out: DataOutput) = s match {
+    case Some(stats) => {
+      out.writeBoolean(true)
+      stats.write(out)
+    } 
+    case None => out.writeBoolean(false)
+  }
+
+  @throws(classOf[IOException])
+  override def readFields(in: DataInput): Unit = if(in.readBoolean) {
+    val stats = new GroomStats
+    stats.readFields(in)
+    s = Option(stats)
+  }
+ 
+}

@@ -108,8 +108,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     case TaskRequest => {
       if(hasFreeSlots) { 
         if(!hasTaskInQueue) { 
-          //LOG.debug("Request {} for assigning new tasks ...", getSchedulerPath)
-          //sched ! RequestTask(currentGroomServerStat) TODO: groom server on behalf of sending request to master. instead of lookup and send directly.
+          //groom ! RequestTask(currentGroomStats) TODO: groom server on behalf of sending request to master. instead of lookup and send directly.
         } 
       } 
     }

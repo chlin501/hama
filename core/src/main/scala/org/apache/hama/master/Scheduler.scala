@@ -21,7 +21,7 @@ import akka.actor.ActorRef
 import akka.actor.Cancellable
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
-//import org.apache.hama.groom.RequestTask
+import org.apache.hama.groom.RequestTask
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.Periodically
@@ -276,13 +276,14 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
   /**
    * GroomServer's TaskCounsellor requests for assigning a task.
    * @return Receive partiail function.
-  def requestTask: Receive = {
-    case RequestTask(stat) => {
-      LOG.debug("GroomServer {} requests for assigning a task.", stat.getName)
-      passiveAssign(stat, sender)
-    }
-  } xxx
    */
+  def requestTask: Receive = {
+    case req: RequestTask => {
+      LOG.debug("GroomServer form {}:{} requests for assigning a task.", 
+                req.stats.map{ s => s.host}, req.stats.map{ s=> s.port})
+      //passiveAssign(req.stat, sender)
+    }
+  } 
 
   /**
    * Assign a task to the requesting GroomServer's task manager.
