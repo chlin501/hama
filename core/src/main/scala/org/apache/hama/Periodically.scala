@@ -27,14 +27,14 @@ final case object Ticker extends Tick
 
 trait Periodically { this: Agent => 
 
-  protected def tick(target: ActorRef, message: Tick, 
+  protected def tick(target: ActorRef, message: Any, 
                      initial: FiniteDuration = 0.seconds,
                      delay: FiniteDuration = 3.seconds): Cancellable = {
     import context.dispatcher
     context.system.scheduler.schedule(initial, delay, target, message)
   }
 
-  protected def ticked(message: Tick) { }
+  protected def ticked(message: Any) { }
 
   protected def tickMessage: Receive = {
     case t: Tick => ticked(t)

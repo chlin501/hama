@@ -18,12 +18,12 @@
 package org.apache.hama.groom
 
 import akka.actor.ActorRef
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.Periodically
+import org.apache.hama.Service
+import org.apache.hama.Spawnable
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.HamaConfiguration
-import org.apache.hama.Service
-import org.apache.hama.Agent
-import org.apache.hama.Spawnable
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GetTaskStats
@@ -48,7 +48,7 @@ object TaskCounsellor {
 // TODO: create stats class (extends writable) with slot, max task, etc. info
 //       once started up, pass spec to reporter, which reports to monitor.
 class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef) 
-      extends Service with Spawnable {
+      extends Service with Spawnable with Periodically {
 
   /**
    * The max size of slots can't exceed configured maxTasks.
@@ -78,8 +78,10 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     LOG.debug("{} GroomServer slots are initialied.", constraint)
   }
 
-  override def initializeServices = initializeSlots(setting.hama.getInt(
-    "bsp.tasks.maximum", 3))
+  override def initializeServices = {
+    tick(self, TaskRequest)
+    initializeSlots(setting.hama.getInt("bsp.tasks.maximum", 3))
+  }
 
   protected def hasTaskInQueue: Boolean = !directiveQueue.isEmpty
 
@@ -98,23 +100,15 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     if(!isOccupied) hasFreeSlot = true else hasFreeSlot = false
     hasFreeSlot
   }
-
-  /**
-   * Check if slots are available and any unprocessed directive in queue. When
-   * slots are free but any directives exist, process directive first. 
-   * @return Receive is partial function.
-   */
-  protected def taskRequest: Receive = {
-    case TaskRequest => {
-      if(hasFreeSlots) { 
-        if(!hasTaskInQueue) { 
-          //groom ! RequestTask(currentGroomStats) TODO: groom server on behalf of sending request to master. instead of lookup and send directly.
-        } 
-      } 
+  
+  override def ticked(msg: Any): Unit = msg match {
+    case TaskRequest => if(hasFreeSlots) { 
+      if(!hasTaskInQueue) groom ! RequestTask(currentGroomStats) 
     }
+    case _ => 
   }
   
-   //TODO: get sysload from collector periodically.
+  //TODO: get sysload from collector periodically.
 
   /** 
    * Collect tasks information for report.
@@ -446,6 +440,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
                                sender.path.name)
   }
 
-  override def receive = report orElse launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse taskRequest orElse receiveDirective orElse unknown
+  override def receive = tickMessage orElse report orElse launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse receiveDirective orElse unknown
 
 }

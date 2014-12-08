@@ -25,7 +25,17 @@ import org.apache.hadoop.io.Writable
 
 sealed trait RequestMessage
 case object TaskRequest extends RequestMessage
-final class  RequestTask extends Writable with RequestMessage {
+
+object RequestTask {
+
+  def apply(stats: GroomStats): RequestTask = {
+    val req = new RequestTask
+    req.s = Option(stats)
+    req
+  }
+}
+
+final class RequestTask extends Writable with RequestMessage {
 
   protected[groom] var s: Option[GroomStats] = None
 

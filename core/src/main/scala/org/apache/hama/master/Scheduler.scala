@@ -26,7 +26,6 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.Periodically
 import org.apache.hama.SystemInfo
-import org.apache.hama.Tick
 import org.apache.hama.conf.Setting
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action.Launch
@@ -36,7 +35,7 @@ import org.apache.hama.RemoteService
 import scala.collection.immutable.Queue
 
 sealed trait SchedulerMessages
-final case object NextPlease extends SchedulerMessages with Tick
+final case object NextPlease extends SchedulerMessages  
 final case class GetTargetRefs(infos: Array[SystemInfo]) 
       extends SchedulerMessages
 final case class TargetRefs(refs: Array[ActorRef]) extends SchedulerMessages
@@ -101,7 +100,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
    */
   protected def isProcessingQueueEmpty: Boolean = processingQueue.isEmpty
 
-  override def ticked(message: Tick) = message match {
+  override def ticked(message: Any) = message match {
     case NextPlease => if(isTaskAssignQueueEmpty && isProcessingQueueEmpty)
       receptionist ! TakeFromWaitQueue
     case _ => LOG.warning("Unknown tick message {} for {}", name, message)
