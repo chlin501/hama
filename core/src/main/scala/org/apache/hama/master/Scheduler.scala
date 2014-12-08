@@ -281,7 +281,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
       LOG.debug("GroomServer {} requests for assigning a task.", stat.getName)
       passiveAssign(stat, sender)
     }
-  }
+  } xxx
    */
 
   /**

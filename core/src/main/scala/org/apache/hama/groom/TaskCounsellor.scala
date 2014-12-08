@@ -56,7 +56,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected var slots = Set.empty[Slot]
 
   /**
-   * All {@link Directive}s are stored in this queue. 
+   * {@link Directive}s are stored in this queue. 
    */
   protected var directiveQueue = Queue[Directive]()
 
@@ -92,7 +92,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     var isOccupied = true
     var hasFreeSlot = false
     slots.takeWhile(slot => {
-      isOccupied = !None.equals(slot.task)
+      isOccupied = !None.equals(slot.taskAttemptId)
       isOccupied
     })
     if(!isOccupied) hasFreeSlot = true else hasFreeSlot = false
@@ -106,8 +106,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected def taskRequest: Receive = {
     case TaskRequest => {
-      //LOG.debug("In TaskRequest, sched: {}, hasTaskInQueue: {}, "+
-                //"hasFreeSlots: {}", sched, hasTaskInQueue, hasFreeSlots)
       if(hasFreeSlots) { 
         if(!hasTaskInQueue) { 
           //LOG.debug("Request {} for assigning new tasks ...", getSchedulerPath)
@@ -117,11 +115,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
   }
   
-  /**
-   * Calculate sys loading vlaue, including cpu, memory, etc.
-  def sysload: Double = {
-  }
-   */
+   //TODO: get sysload from collector periodically.
 
   /** 
    * Collect tasks information for report.
@@ -150,17 +144,14 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @return Option[ActorRef] contains {@link Executor} if matched; otherwise
    *                          None is returned.
    */
-  def findTargetToKill(task: Task): Option[ActorRef] = { 
-    slots.find( slot => { 
-      slot.task match {
-        case Some(found) => found.getId.equals(task.getId)
-        case None => false
-      }
+  def findTargetToKill(task: Task): Option[ActorRef] = slots.find( slot => 
+    slot.taskAttemptId match {
+      case Some(taskAttemptId) => taskAttemptId.equals(task.getId)
+      case None => false
     }) match {
       case Some(slot) => slot.executor 
       case None => None
     }
-  }
 
   /**
    * 1. Create an Executor actor.
@@ -168,23 +159,19 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * Forked child process will send {@link PullForExecution} message for task 
    * execution.
    */
-  def initializeExecutor(master: String) {
-    pickUp match {
-      case Some(slot) => { 
-        LOG.debug("Initialize executor for slot seq {}.", slot.seq)
-        val executorName = setting.hama.get("bsp.groom.name", "groomServer") +
-                           "_executor_" + slot.seq 
-        val executor = spawn(executorName, classOf[Executor], setting.hama, 
-                             self)
-        executor ! Fork(slot.seq) 
-        val newSlot = Slot(slot.seq, None, master, Some(executor))
-        slots -= slot
-        slots += newSlot
-      }
-      case None => {// all slots are in use 
-        LOG.debug("All slots are in use! {}", slots.mkString("\n"))
-      }
+  def initializeExecutor(master: String): Unit = pickUp match {
+    case Some(slot) => { 
+      LOG.debug("Initialize executor for slot seq {}.", slot.seq)
+      val executorName = setting.hama.get("bsp.groom.name", "groomServer") +
+                         "_executor_" + slot.seq 
+      val executor = spawn(executorName, classOf[Executor], setting.hama, 
+                           self)
+      executor ! Fork(slot.seq) 
+      val newSlot = Slot(slot.seq, None, master, Some(executor))
+      slots -= slot
+      slots += newSlot
     }
+    case None => LOG.debug("All slots are in use! {}", slots.mkString("\n"))
   }
 
   /**
@@ -195,7 +182,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     var free: Slot = null
     var flag = true
     slots.takeWhile( slot => {
-      val isEmpty = None.equals(slot.task) //TODO: it is also necessary to check if executor is None!!! Otherwise the slot picked up may be (task == None) but executor is already occupied (executor != None).
+      val isEmpty = None.equals(slot.taskAttemptId) //TODO: it is also necessary to check if executor is None!!! Otherwise the slot picked up may be (task == None) but executor is already occupied (executor != None).
       if(isEmpty) {
         free = slot
         flag = false
@@ -212,29 +199,27 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @return Receive is partial function.
    */
   def receiveDirective: Receive = {
-    case directive: Directive => { 
-      directive match {
-        case null => LOG.warning("Directive dispatched from {} is null!", 
-                                 sender.path.name)
-        case _ => {
-          LOG.debug("Receive directive action: "+directive.action+" task: "+
-                    directive.task.getId.toString+" master: "+directive.master)
-          directive.action match {
-            case Launch | Resume => {
-              initializeExecutor(directive.master) 
-              directiveQueue = directiveQueue.enqueue(directive)
-            }
-            case Kill => {
-              findTargetToKill(directive.task) match {
-                case Some(executor) => 
-                  executor ! new KillTask(directive.task.getId)
-                case None => LOG.warning("Ask to Kill task {}, but no "+
-                                         "corresponded executor found!", 
-                                         directive.task.toString)
-              }
-            }
-            case d@_ => LOG.warning("Unknown directive {}", d)
+    case directive: Directive => directive match {
+      case null => LOG.warning("Directive dispatched from {} is null!", 
+                               sender.path.name)
+      case _ => {
+        LOG.debug("Receive directive action: "+directive.action+" task: "+
+                  directive.task.getId.toString+" master: "+directive.master)
+        directive.action match {
+          case Launch | Resume => {
+            initializeExecutor(directive.master) 
+            directiveQueue = directiveQueue.enqueue(directive)
           }
+          case Kill => {
+            findTargetToKill(directive.task) match {
+              case Some(executor) => 
+                executor ! new KillTask(directive.task.getId)
+              case None => LOG.warning("Ask to Kill task {}, but no "+
+                                       "corresponded executor found!", 
+                                       directive.task.toString)
+            }
+          }
+          case d@_ => LOG.warning("Unknown directive {}", d)
         }
       }
     }
@@ -249,23 +234,20 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   def book(slotSeq: Int, task: Task, executor: ActorRef) {
     slots.find(slot => (slotSeq == slot.seq)) match {
-      case Some(slot) => {
-        slot.task match {
-          case None => {
-            val newSlot = Slot(slot.seq, Some(task), slot.master, 
-                               Some(executor))
-            slots -= slot 
-            slots += newSlot
-          }
-          case Some(found) => 
-            throw new RuntimeException(("Task %1$s can't run on slot %2$s "+  
-                                       "because %3%s is running.").
-                                       format(task.getId, slotSeq, found.getId))
+      case Some(slot) => slot.taskAttemptId match {
+        case None => {
+          val newSlot = Slot(slot.seq, Some(task.getId), slot.master, 
+                             Some(executor))
+          slots -= slot 
+          slots += newSlot
         }
+        case Some(found) => 
+          throw new RuntimeException("Task "+task.getId+" can't run on slot "+
+                                     slotSeq+" because "+found+" is running.")
       }
-      case None => throw new RuntimeException(("Slot with seq %1$s not found "+
-                                              "for task %2$s!").format(slotSeq, 
-                                              task.getId))
+      case None => 
+        throw new RuntimeException("Slot with seq "+slotSeq+" not found "+
+                                   "for task "+task.getId+"!")
     }
   }
 
@@ -325,8 +307,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   def doKillAck(action: KillAck) {
     slots.find( slot => {
       val seqEquals = (slot.seq == action.slotSeq)  
-      val idEquals = slot.task match {
-        case Some(found) => found.getId.equals(action.taskAttemptId)
+      val idEquals = slot.taskAttemptId match {
+        case Some(found) => found.equals(action.taskAttemptId)
         case None => false
       }
       seqEquals && idEquals
@@ -338,8 +320,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
         // TODO: inform reporter!! 
       } 
       case None => LOG.warning("Killed task {} not found for slot seq {}. "+
-                               "Slots contains {}", 
-                               action.taskAttemptId, action.slotSeq, slots)
+                               "Slots contains {}", action.taskAttemptId, 
+                               action.slotSeq, slots)
     }
   }
 
@@ -397,8 +379,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
           }
           case _ => {
             LOG.warning("Unknown action {} for task {} from master {}", 
-                                directive.action, directive.task.getId, 
-                                directive.master)
+                        directive.action, directive.task.getId, 
+                        directive.master)
             directiveQueue = rest
           }
         }
@@ -440,10 +422,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       case Some(executor) => {
         LOG.debug("Send shutdown container message to {} ...", executor)
         executor ! ShutdownContainer
-        if(!None.equals(found.task)) 
+        val taskAttemptId = found.taskAttemptId
+        if(!None.equals(taskAttemptId)) 
           throw new RuntimeException("Task at slot seq "+found.seq+
-                                     " is not"+ "empty! task: "+found.task)
-        val newSlot = Slot(found.seq, found.task, found.master, None)
+                                     " is not"+ "empty! task: "+taskAttemptId)
+        val newSlot = Slot(found.seq, taskAttemptId, found.master, None)
         slots -= found
         slots += newSlot
       }

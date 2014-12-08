@@ -74,11 +74,9 @@ class Aggregator(setting: Setting, groom: ActorRef, reporter: ActorRef,
               executor.path.name, slots)
     tester ! executor.path.name
     decrement
-    if(isZero) {
-      slots.foreach( slot => 
-        tester ! slot.task
-      )
-    }
+    if(isZero) slots.foreach( slot => 
+      tester ! slot.taskAttemptId
+    )
   }
 
   override def receive = super.receive

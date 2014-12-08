@@ -18,19 +18,17 @@
 package org.apache.hama.groom
 
 import akka.actor.ActorRef
-import org.apache.hama.bsp.v2.Task
+import org.apache.hama.bsp.TaskAttemptID
 
 /**
  * A slot holds relation from its id sequence to a specific
  * {@link org.apache.hama.bsp.v2.Task}.
  * @param seq of this slot.
- * @param task that runs on this slot.
+ * @param taskAttemptId that runs on this slot.
  * @param master to which this slot belongs.
  * @param executor that executes the task for this slot.
  */
-// TODO: change Task to taskAttemptId because Task would be obselete once
-//       task gets executed by superstep worker. task stats may change.
 final case class Slot(seq: Int, 
-                      task: Option[Task], 
+                      taskAttemptId: Option[TaskAttemptID], 
                       master: String, 
                       executor: Option[ActorRef]) 

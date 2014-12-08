@@ -149,10 +149,11 @@ object GroomStats { // TODO: remove queue
      case _ => d.task.getId.toString
   }}.toArray
 
-  def list(slots: Set[Slot]): Array[String] = slots.map { s => s.task match {
-    case None => nullString
-    case Some(t) => t.getId.toString
-  }}.toArray
+  def list(slots: Set[Slot]): Array[String] = 
+    slots.map { s => s.taskAttemptId match {
+      case None => nullString
+      case Some(taskAttemptId) => taskAttemptId.toString
+    }}.toArray
 
   final def toWritable(strings: Array[String]): ArrayWritable = {
     val w = new ArrayWritable(classOf[Text])
