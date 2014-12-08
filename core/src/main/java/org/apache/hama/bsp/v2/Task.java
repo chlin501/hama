@@ -137,11 +137,11 @@ public final class Task implements Writable {
      * Tell to which GroomServer this task is dispatched.
      * @return String is the name of target GroomServer.
      */
-    public String getAssignedTarget() {
+    public String getAssignedHost() {
       return host.toString();
     }
 
-    public int getTargetPort() {
+    public int getAssignedPort() {
       return port.get();
     }
 
@@ -230,8 +230,8 @@ public final class Task implements Writable {
       this.completed = old.isCompleted(); 
       this.marker = new Marker(old.marker.isActive(), 
                                old.marker.isAssigned(),
-                               old.marker.getAssignedTarget(),
-                               old.marker.getTargetPort());  
+                               old.marker.getAssignedHost(),
+                               old.marker.getAssignedPort());  
     }
 
     public Builder setId(final TaskAttemptID id) {
@@ -504,16 +504,21 @@ public final class Task implements Writable {
    * Denote to which {@link GroomServer} this task is dispatched.
    * @return String of the target {@link GroomServer}.
    */
-  public String getAssignedTarget() {
-    return this.marker.getAssignedTarget();
+  public String getAssignedHost() {
+    return this.marker.getAssignedHost();
   } 
 
-  public int getTargetPort() {
-    return this.marker.getTargetPort();
+  public int getAssignedPort() {
+    return this.marker.getAssignedPort();
+  }
+
+  public String getAssignedHostPort() {
+    return getAssignedHost() + ":" + getAssignedPort();
   }
 
   /**
-   * Active schedule to a particular target groom server.
+   * Mark this is an action that actively schedules a task to a particular 
+   * target groom server.
    */
   public void scheduleTo(final String name, final int port) { 
     this.marker = new Marker(true, true, name, port); 
@@ -524,10 +529,10 @@ public final class Task implements Writable {
   }
 
   /**
-   * Passively assign this task to a particular groom server that issuies 
-   * request.
+   * Mark this is an action that passively assigns a task to a particular groom
+   * server which issuies a request.
    */
-  public void assign(final String name, final int port) { 
+  public void assignedTo(final String name, final int port) { 
     this.marker = new Marker(false, true, name, port); 
   } 
 

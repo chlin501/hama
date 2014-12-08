@@ -61,17 +61,17 @@ class MockScheduler(conf: HamaConfiguration, tester: ActorRef,
 
   override def dispatch(from: ActorRef, action: Action, task: Task) {
     LOG.debug("Task will be dispatched to {} via actor {}", 
-             task.getAssignedTarget, from.path.name)
+             task.getAssignedHost, from.path.name)
     groomTaskCounsellors.find(p =>   
-      p._1.equals(task.getAssignedTarget)
+      p._1.equals(task.getAssignedHost)
     ) match {
       case Some(found) => {
         LOG.info("Target groom server {} is found. Sending message {} ...", 
-                 found, task.getAssignedTarget)
-        tester ! task.getAssignedTarget
+                 found, task.getAssignedHost)
+        tester ! task.getAssignedHost
       }
       case None => 
-        throw new RuntimeException("TaskCounsellor "+task.getAssignedTarget+
+        throw new RuntimeException("TaskCounsellor "+task.getAssignedHost+
                                    " not found!")
     }
   }

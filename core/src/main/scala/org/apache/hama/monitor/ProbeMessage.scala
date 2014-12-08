@@ -210,6 +210,8 @@ final class GroomStats extends Writable with ProbeMessages {
   def host(): String = h 
 
   def port(): Int = p
+
+  def hostPort(): String = host + ":" + port
   
   def maxTasks(): Int = mt
  

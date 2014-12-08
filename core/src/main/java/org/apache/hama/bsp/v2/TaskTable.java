@@ -226,12 +226,14 @@ public final class TaskTable implements Writable {
     final Map<String, Integer> cache = new HashMap<String, Integer>();
     for(int row=0;row<rowLength(); row++) {
       final Task task = latestTaskAt(row);
-      final String groomName = task.getAssignedTarget();
-      final Integer count = cache.get(groomName);
+      if(null == task) 
+        throw new RuntimeException("The lastest task at "+row+" is not found!");
+      final String hostPort = task.getAssignedHostPort();
+      final Integer count = cache.get(hostPort);
       if(null == count) {
-        cache.put(groomName, new Integer(1)); 
+        cache.put(hostPort, new Integer(1)); 
       } else {
-        cache.put(groomName, new Integer(count.intValue()+1));
+        cache.put(hostPort, new Integer(count.intValue()+1));
       }
     }
     return cache;
@@ -289,26 +291,29 @@ public final class TaskTable implements Writable {
    *              are already assigned to GroomServers.
    */
   public Task nextUnassignedTask() {
-    for(int idx = 0; idx < rowLength(); idx++) {
-      final int lastTask = (columnLength(idx) - 1);
-      final Task task = get(idx, lastTask); 
+    for(int row = 0; row < rowLength(); row++) {
+      final int lastTaskPos = (columnLength(row) - 1);
+      final Task task = get(row, lastTaskPos); 
       if(null == task) 
-        throw new RuntimeException("The last task at row: "+idx+" not found!");
+        throw new RuntimeException("The last task at row "+row+" not found!");
       if(!task.isAssigned()) return task;
     }
     return null;
   }
 
+/*
   public boolean areAllTasksAssigned() {
     int count = 0;
     for(int idx = 0; idx < rowLength(); idx++) {
-      final Task task = get(idx, 0);
+      final int lastTaskPos = (columnLength(row) - 1);
+      final Task task = get(idx, lastTaskPos);
       if(null == task) 
         throw new RuntimeException("The task at row: "+idx+" not found!");
       if(task.isAssigned()) count++;
     }
     if(rowLength() == count) return true; else return false;
   }
+*/
 
   @Override
   public void write(DataOutput out) throws IOException {

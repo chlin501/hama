@@ -558,9 +558,11 @@ public final class Job implements Writable {
     return infos;
   }
 
+/*
   public boolean areAllTasksAssigned() {
     return this.taskTable.areAllTasksAssigned();
   }
+*/
 
   /**
    * Find the current task assignment count according to the GroomServer name.

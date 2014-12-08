@@ -19,18 +19,19 @@ package org.apache.hama.master
 
 import akka.actor.ActorRef
 import akka.actor.Cancellable
-import org.apache.hama.bsp.v2.Job
-import org.apache.hama.bsp.v2.Task
-import org.apache.hama.groom.RequestTask
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.Periodically
 import org.apache.hama.SystemInfo
+import org.apache.hama.bsp.v2.Job
+import org.apache.hama.bsp.v2.Task
+import org.apache.hama.groom.RequestTask
 import org.apache.hama.conf.Setting
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action.Launch
 import org.apache.hama.master.Directive.Action.Kill
 import org.apache.hama.master.Directive.Action.Resume
+import org.apache.hama.monitor.GroomStats
 import org.apache.hama.RemoteService
 import scala.collection.immutable.Queue
 
@@ -60,10 +61,11 @@ object Scheduler {
 class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef) 
       extends LocalService with RemoteService with Periodically {
 
+  type TaskAssignQueue = Queue[Ticket]
+
 /*
   type TaskCounsellorRef = ActorRef
   type MaxTasksAllowed = Int
-  type TaskAssignQueue = Queue[Ticket]
   type ProcessingQueue = Queue[Ticket]
 */
 
@@ -100,6 +102,10 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
    */
   protected def isProcessingQueueEmpty: Boolean = processingQueue.isEmpty
 
+  /**
+   * Periodically check if pulling a job for processing is needed.
+   * @param message denotes which action to execute.
+   */
   override def ticked(message: Any) = message match {
     case NextPlease => if(isTaskAssignQueueEmpty && isProcessingQueueEmpty)
       receptionist ! TakeFromWaitQueue
@@ -168,13 +174,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
   }
 
   /**
-   * Master replies corresponded groom references.   
+   * Master replies after scheduler asks for groom references.
    */
   protected def targetsResult: Receive = {
     case TargetRefs(refs) => {
       val (ticket, rest) = taskAssignQueue.dequeue
       refs.foreach( ref => ticket.job.nextUnassignedTask match {
-        case null =>
+        case null => moveToProcessingQueue(ticket, rest)
         case task@_ => {
           task.scheduleTo(ref.path.address.host.getOrElse(""),
                           ref.path.address.port.getOrElse(50000))
@@ -278,11 +284,40 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
    */
   def requestTask: Receive = {
     case req: RequestTask => {
-      LOG.debug("GroomServer form {}:{} requests for assigning a task.", 
-                req.stats.map{ s => s.host}, req.stats.map{ s=> s.port})
-      //passiveAssign(req.stat, sender)
+      LOG.debug("GroomServer form {} at {}:{} requests for assigning a task.", 
+                sender.path.name, req.stats.map { s => s.host}, 
+                req.stats.map { s=> s.port})
+      passiveAssign(req.stats, sender)
     }
   } 
+
+  protected def passiveAssign(stats: Option[GroomStats], from: ActorRef) = 
+    if(!taskAssignQueue.isEmpty) {
+      val (ticket, rest) = taskAssignQueue.dequeue
+      stats.map { s => assign(ticket, rest, s, from) }
+    }
+
+  protected def assign(ticket: Ticket, rest: TaskAssignQueue, stats: GroomStats,
+                       from: ActorRef) {
+    val currentTasks = ticket.job.getTaskCountFor(stats.hostPort)
+    val maxTasksAllowed = stats.maxTasks
+    LOG.info("Currently {} tasks at {}, and {} tasks allowed.", 
+             currentTasks, stats.host, maxTasksAllowed)
+    (maxTasksAllowed >= (currentTasks+1)) match {
+      case true => ticket.job.nextUnassignedTask match {
+        case null => moveToProcessingQueue(ticket, rest)
+        case task@_ => {
+          task.assignedTo(from.path.address.host.getOrElse(""),
+                          from.path.address.port.getOrElse(50000))
+          from ! new Directive(Launch, task, setting.hama.get("master.name", 
+                                                              setting.name))
+        }
+      }
+      case false => LOG.warning("Drop GroomServer {} requests for a new task "+ 
+                                "because the number of tasks exceeds {} "+
+                                "allowed!", stats.host, maxTasksAllowed) 
+    }
+  }
 
   /**
    * Assign a task to the requesting GroomServer's task manager.
@@ -343,5 +378,17 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
     }
   }
 */
+
+  /**
+   * Move ticket to processing queue because all tasks are dispatched. 
+   * @param ticket contains job and client reference.
+   * @param rest is the queue after dequeuing ticket.
+   */
+  protected def moveToProcessingQueue(ticket: Ticket, rest: TaskAssignQueue) = 
+    if(!taskAssignQueue.isEmpty) {
+      taskAssignQueue = rest
+      processingQueue = processingQueue.enqueue(ticket) 
+    }
+
   override def receive = tickMessage orElse /*requestTask orElse*/ dispense /*orElse nextPlease*/ orElse targetsResult orElse timeout orElse unknown
 }
