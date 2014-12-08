@@ -63,12 +63,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
 
   type TaskAssignQueue = Queue[Ticket]
 
-/*
-  type TaskCounsellorRef = ActorRef
-  type MaxTasksAllowed = Int
-  type ProcessingQueue = Queue[Ticket]
-*/
-
   /**
    * A queue that holds jobs with tasks left unassigning to GroomServers.
    * N.B.: Jobs in this queue are processed sequentially. Only after a job 
@@ -84,9 +78,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
    */
   protected var processingQueue = Queue[Ticket]()
 
-  /* Store jobs that finishes its computation. */
-  // TODO: move finished jobs to Federator's JobHistoryTracker, where storing job's metadata e.g. setting
-  // protected var finishedQueue = Queue[Ticket]() 
+  // TODO: move the finished job to Federator's JobHistoryTracker, 
+  //       where storing job's metadata e.g. setting
 
   override def initializeServices = tick(self, NextPlease)
 
@@ -111,16 +104,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
       receptionist ! TakeFromWaitQueue
     case _ => LOG.warning("Unknown tick message {} for {}", name, message)
   }
-
-  /**
-   * Check if the taskQueue is empty. If true, ask Receptionist to dispense a 
-   * job; otherwise do nothing.
-  def nextPlease: Receive = {
-    case NextPlease => {
-      //if(isTaskAssignQueueEmpty) receptionist ! TakeFromWaitQueue 
-    }
-  }
-   */
 
   /**
    * Move a job to a specific queue pending for further processing
@@ -149,19 +132,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
     case _ => job.getTargets.length match { 
       case 0 =>
       case _ => schedule(job)
-/*
-       {
-        val (from, to) = schedule(taskAssignQueue)  
-        this.taskAssignQueue = from
-        to.isEmpty match {
-          case false => processingQueue = processingQueue.enqueue(to.dequeue._1)
-          case true =>
-        }
-        LOG.debug("In activeSchedule, taskAssignQueue has {} jobs, and "+
-                  "processingQueue has {} jobs", 
-                  taskAssignQueue.size, processingQueue.size)
-      }
-*/
     }
   }
 
@@ -197,86 +167,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
       case _ =>
     }
   }
-
-  /**
-   * Positive schedule tasks.
-   * Actual function that exhaustively schedules tasks to target GroomServers.
-  def schedule(fromQueue: TaskAssignQueue): 
-      (TaskAssignQueue, ProcessingQueue) = { 
-    LOG.info("TaskAssignQueue size is {}", fromQueue.size)
-    val (job, rest) = fromQueue.dequeue
-    val targetGrooms = job.targetInfos  
-    var from = Queue[Job](); var to = Queue[Job]()
-    targetGrooms.foreach( info => { 
-      // TODO: ask master for groom actor ref
-      //       wait for target groom refs (via msg) 
-      //       schedule tasks
-
-        val currentTaskScheduled = job.getTaskCountFor(groomName)
-        if(maxTasksAllowed < currentTaskScheduled)
-          throw new IllegalStateException("Current tasks "+currentTaskScheduled+
-                                          " for "+groomName+" exceeds "+
-                                          maxTasksAllowed)
-        if((currentTaskScheduled+1) <= maxTasksAllowed)  
-          to = bookThenDispatch(job, taskCounsellorActor, groomName, dispatch)
-        else throw new RuntimeException("Can't assign task because currently "+
-                                        currentTaskScheduled+" tasks scheduled"+
-                                        " to groom server "+groomName+", "+
-                                        "which allows "+maxTasksAllowed+
-                                        " tasks to run.")
-    })
-    if(!to.isEmpty) from = rest else from = from.enqueue(job)
-    LOG.debug("In schedule function, from queue: {} to queue: {}", from, to)
-    (from, to)
-  }
-   */
-
-  /**
-   * Mark the task with the corresponded {@link GroomServer}; then dispatch 
-   * the task to that {@link GroomServer}.
-   * Also if all tasks are assigned, cleanup the task assign queue.
-   * @param job contains tasks to be scheduled.
-   * @param targetActor is the remote GroomServer's {@link TaskCounsellor}.
-   * @param targetGroomServer to which the task will be scheduled.
-   * @param d is the dispatch function.
-  def bookThenDispatch(job: Job, targetActor: TaskCounsellorRef,  
-                       targetGroomServer: String, 
-                       d: (TaskCounsellorRef, Action, Task) => Unit): 
-      ProcessingQueue = {
-    var to = Queue[Job]()
-    unassignedTask(job) match {
-      case Some(task) => {
-        // scan job's tasks checking if sumup of scheduled to the same groom 
-        // server's tasks > maxTasks if passive assigned.
-        task.markWithTarget(targetGroomServer) 
-        d(targetActor, Launch, task)
-      }
-      case None => 
-    }
-    LOG.info("Are all tasks assigned? {}", job.areAllTasksAssigned)
-    if(job.areAllTasksAssigned) to = to.enqueue(job)
-    to
-  }
-   */
-
-  /** 
-   * Dispatch a Task to a GroomServer.
-   * @param from is the GroomServer task manager.
-   * @param action denotes what action will be performed upon the task.
-   * @param task is the task to be executed.
-  protected def dispatch(from: TaskCounsellorRef, action: Action, task: Task) {
-    from ! new Directive(action, task,  
-                         conf.get("master.name", "bspmaster"))  
-  }
-   */
-
-  /**
-   * Dispense next unassigned task. None indiecates all tasks are assigned.
-  def unassignedTask(job: Job): Option[Task] = {
-    val task = job.nextUnassignedTask;
-    if(null != task) Some(task) else None
-  }
-   */
 
   /**
    * GroomServer's TaskCounsellor requests for assigning a task.
@@ -320,66 +210,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
   }
 
   /**
-   * Assign a task to the requesting GroomServer's task manager.
-   * Assign function follows after schedule one, it means th rest unassigned
-   * tasks are all for passive.
-   * @param groomServerStat is the most recent stat of a GroomServer.
-   * @param taskCounsellor refers to the remote GroomServer TaskCounsellor instance.
-  def passiveAssign(stat: GroomServerStat, taskCounsellor: ActorRef) {
-      val (from, to) = 
-        assign(stat, taskAssignQueue, taskCounsellor, dispatch) 
-      this.taskAssignQueue = from
-      if(!to.isEmpty) 
-        this.processingQueue = processingQueue.enqueue(to.dequeue._1)
-      LOG.info("In passiveAssign, taskAssignQueue has {} jobs, and "+
-               "processingQueue has {} jobs", 
-               taskAssignQueue.size, processingQueue.size)
-  }
-   */
-
-  /**
-   * Assign a task to a particular GroomServer by delegating that task to 
-   * dispatch function, which normally uses actor ! message.
-  def assign(stat: GroomServerStat, fromQueue: TaskAssignQueue, 
-             taskCounsellor: ActorRef, d: (ActorRef, Action, Task) => Unit): 
-      (TaskAssignQueue, ProcessingQueue) = {
-    if(!fromQueue.isEmpty) {
-      val (job, rest) = fromQueue.dequeue 
-      var from = Queue[Job]()
-      var to = Queue[Job]()
-      val currentTaskAssigned = job.getTaskCountFor(stat.getName)
-      if(stat.getMaxTasks < currentTaskAssigned)
-        throw new IllegalStateException("Current tasks "+currentTaskAssigned+
-                                        " for "+stat.getName+" exceeds "+
-                                        stat.getMaxTasks+" allowed.")
-      if((currentTaskAssigned+1) <= stat.getMaxTasks) 
-        to = bookThenDispatch(job, taskCounsellor, stat.getName, d) 
-      else 
-        LOG.warning("Drop GroomServer {} task request for only {} slots are "+
-                    "available and are full.", 
-                    stat.getName, stat.getMaxTasks)
-      if(!to.isEmpty) from = rest else from = from.enqueue(job)
-      LOG.debug("In assign function, from queue: {}, to queue: {}", from, to)
-      (from, to)
-    } else {
-      (fromQueue, Queue[Job]())
-    }
-  }
-   */
-  
-/*
-  * Rescheduling tasks when a GroomServer goes offline.
-  def reschedTasks: Receive = {
-    case RescheduleTasks(spec) => {
-       LOG.info("Failed GroomServer having GroomServerSpec "+spec)
-       // TODO: 1. check if job.getTargets is empty or not.
-       //       2. if targets has values, call schedule(); otherwise 
-       //          put into assign task queue, waiting for groom request.
-    }
-  }
-*/
-
-  /**
    * Move ticket to processing queue because all tasks are dispatched. 
    * @param ticket contains job and client reference.
    * @param rest is the queue after dequeuing ticket.
@@ -390,5 +220,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
       processingQueue = processingQueue.enqueue(ticket) 
     }
 
-  override def receive = tickMessage orElse /*requestTask orElse*/ dispense /*orElse nextPlease*/ orElse targetsResult orElse timeout orElse unknown
+  // TODO: reschedule/ reassign tasks
+  //       if it's the target grooms that fail 
+  //          if other target grooms has free slots, then reschdule
+  //          else fail job and notify client.
+  //       else wait for other groom requesting for task.
+
+  override def receive = tickMessage orElse requestTask orElse dispense orElse targetsResult orElse timeout orElse unknown
 }
