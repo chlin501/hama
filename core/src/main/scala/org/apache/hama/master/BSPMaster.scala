@@ -26,6 +26,7 @@ import org.apache.hama.LocalService
 import org.apache.hama.SystemInfo
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
+import org.apache.hama.groom.RequestTask
 import org.apache.hama.monitor.Inform
 import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.ServicesAvailable
@@ -112,7 +113,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
   protected def inform(message: Any, names: String*) = names.foreach( name => {
     LOG.debug("Going to inform service {} with result {}", names.mkString(","), 
              message)
-    findServiceBy(name).map { service => service ! message }
+    findServiceBy(name).map { service => service forward message }
   })
 
   protected def dispatch: Receive = {
@@ -130,7 +131,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
   }.toArray
 
   // TODO: move to membership director?
-  protected def checkGroomsExist: Receive = { 
+  protected def msgFromReceptionist: Receive = { 
     case CheckGroomsExist(jobId, targetGrooms) => {
       val uniqueGrooms = targetGrooms.map(_.trim).groupBy(k => k).keySet
       LOG.info("Client configures targets: {}", uniqueGrooms.mkString(","))
@@ -158,7 +159,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
       groom.path.address.port.equals(Option(port))
     )
 
-  protected def getTargetRefs: Receive = {
+  protected def msgFromSched: Receive = {
     case GetTargetRefs(infos) => {
       var matched = Array.empty[ActorRef] 
       var unmatched = Array.empty[String] 
@@ -176,6 +177,10 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     } 
   }
 
-  override def receive = getTargetRefs orElse checkGroomsExist orElse dispatch orElse membership orElse unknown
+  protected def msgFromGroom: Receive = {
+    case req: RequestTask => inform(req, Scheduler.simpleName(setting.hama))
+  }
+
+  override def receive = msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
   
 }

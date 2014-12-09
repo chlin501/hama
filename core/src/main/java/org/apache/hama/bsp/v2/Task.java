@@ -525,7 +525,7 @@ public final class Task implements Writable {
   } 
 
   public void revoke() { 
-      this.marker = new Marker(false, SystemInfo.Localhost, 50000); 
+    this.marker = new Marker(false, SystemInfo.Localhost, 50000); 
   }
 
   /**

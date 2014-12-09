@@ -23,6 +23,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.Periodically
 import org.apache.hama.SystemInfo
+import org.apache.hama.Tick
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.groom.RequestTask
@@ -36,7 +37,7 @@ import org.apache.hama.RemoteService
 import scala.collection.immutable.Queue
 
 sealed trait SchedulerMessages
-final case object NextPlease extends SchedulerMessages  
+final case object NextPlease extends SchedulerMessages with Tick
 final case class GetTargetRefs(infos: Array[SystemInfo]) 
       extends SchedulerMessages
 final case class TargetRefs(refs: Array[ActorRef]) extends SchedulerMessages
@@ -56,12 +57,12 @@ object Scheduler {
 //         e.g. class WrappedScheduler(setting: Setting, scheduler: Scheduler)
 //         trait scheduluer#assign // passive
 //         trait scheduluer#schedule // active
-//       - complete one job at a time
 //       - update internal stats to related tracker
 class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef) 
       extends LocalService with RemoteService with Periodically {
 
   type TaskAssignQueue = Queue[Ticket]
+  type ProcessingQueue = Queue[Ticket]
 
   /**
    * A queue that holds jobs with tasks left unassigning to GroomServers.
@@ -99,7 +100,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
    * Periodically check if pulling a job for processing is needed.
    * @param message denotes which action to execute.
    */
-  override def ticked(message: Any) = message match {
+  override def ticked(message: Tick) = message match {
     case NextPlease => if(isTaskAssignQueueEmpty && isProcessingQueueEmpty)
       receptionist ! TakeFromWaitQueue
     case _ => LOG.warning("Unknown tick message {} for {}", name, message)
@@ -114,7 +115,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
    * Assume GroomServer's maxTasks is not changed over time. (Maybe dynamic 
    * in the future.)
    */
-  def dispense: Receive = {
+  protected def dispense: Receive = {
     case Dispense(ticket) => { 
       taskAssignQueue = taskAssignQueue.enqueue(ticket)
       activeSchedule(ticket.job) 
@@ -127,7 +128,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
    * are not available.
    * @param job contains tasks to be scheduled.
    */
-  def activeSchedule(job: Job) = job.getTargets match {
+  protected def activeSchedule(job: Job) = job.getTargets match {
     case null => 
     case _ => job.getTargets.length match { 
       case 0 =>
@@ -135,30 +136,34 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
     }
   }
 
-  // TODO: alllow impl to obtain stats from tracker   
+  // TODO: allow impl to obtain stats, etc. from tracker   
   protected def schedule(job: Job) {
     val targetGrooms = job.targetInfos  
-    LOG.info("Request target grooms {} refs for scheduling!", 
-             targetGrooms.mkString(","))
+    LOG.debug("{} requests target grooms refs {} for scheduling!", 
+             name, targetGrooms.mkString(","))
     master ! GetTargetRefs(targetGrooms)
+  }
+ 
+  protected def targetRefsFound(refs: Array[ActorRef]) {
+    val (ticket, rest) = taskAssignQueue.dequeue
+    refs.foreach( ref => ticket.job.nextUnassignedTask match {
+      case null => moveToProcessingQueue(ticket, rest)
+      case task@_ => {
+        val (host, port) = getTargetHostPort(ref)
+        LOG.debug("Task {} is scheduled to target host {} port {}", 
+                 task.getId, host, port)
+        task.scheduleTo(host, port)
+        ref ! new Directive(Launch, task, setting.hama.get("master.name", 
+                                                           setting.name))
+      }
+    })
   }
 
   /**
    * Master replies after scheduler asks for groom references.
    */
   protected def targetsResult: Receive = {
-    case TargetRefs(refs) => {
-      val (ticket, rest) = taskAssignQueue.dequeue
-      refs.foreach( ref => ticket.job.nextUnassignedTask match {
-        case null => moveToProcessingQueue(ticket, rest)
-        case task@_ => {
-          task.scheduleTo(ref.path.address.host.getOrElse(""),
-                          ref.path.address.port.getOrElse(50000))
-          ref ! new Directive(Launch, task, setting.hama.get("master.name", 
-                                                             setting.name))
-        }
-      }) 
-    }
+    case TargetRefs(refs) => targetRefsFound(refs)
     case SomeMatched(matched, unmatched) => taskAssignQueue.dequeue match { 
       case tuple: (Ticket, Queue[Ticket]) => {
         tuple._1.client ! Reject("Grooms "+unmatched.mkString(", ")+
@@ -166,6 +171,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
       }
       case _ =>
     }
+  }
+
+  protected def getTargetHostPort(ref: ActorRef): (String, Int) = {
+    val host = ref.path.address.host.getOrElse("")
+    val port = ref.path.address.port.getOrElse(50000)
+    (host, port)
   }
 
   /**
@@ -191,14 +202,16 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
                        from: ActorRef) {
     val currentTasks = ticket.job.getTaskCountFor(stats.hostPort)
     val maxTasksAllowed = stats.maxTasks
-    LOG.info("Currently {} tasks at {}, and {} tasks allowed.", 
+    LOG.debug("Currently there are {} tasks at {}, with max {} tasks allowed.", 
              currentTasks, stats.host, maxTasksAllowed)
     (maxTasksAllowed >= (currentTasks+1)) match {
       case true => ticket.job.nextUnassignedTask match {
         case null => moveToProcessingQueue(ticket, rest)
         case task@_ => {
-          task.assignedTo(from.path.address.host.getOrElse(""),
-                          from.path.address.port.getOrElse(50000))
+          val (host, port) = getTargetHostPort(from)
+          LOG.debug("Task {} is assigned with target host {} port {}", 
+                   task.getId, host, port)
+          task.assignedTo(host, port)
           from ! new Directive(Launch, task, setting.hama.get("master.name", 
                                                               setting.name))
         }

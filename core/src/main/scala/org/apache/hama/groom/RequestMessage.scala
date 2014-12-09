@@ -20,11 +20,12 @@ package org.apache.hama.groom
 import java.io.IOException
 import java.io.DataInput
 import java.io.DataOutput
+import org.apache.hama.Tick
 import org.apache.hama.monitor.GroomStats
 import org.apache.hadoop.io.Writable
 
 sealed trait RequestMessage
-case object TaskRequest extends RequestMessage
+case object TaskRequest extends RequestMessage with Tick
 
 object RequestTask {
 

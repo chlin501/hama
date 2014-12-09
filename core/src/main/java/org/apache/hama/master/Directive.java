@@ -122,7 +122,9 @@ public class Directive implements Writable {
 
   @Override 
   public String toString() {
-    return "Directive action: "+action.toString()+" master: "+master +
-           " timestamp: "+timestamp+" task: "+task.toString();
+    return "Directive("+action.toString() + "," +
+                        master + "," +
+                        timestamp + "," + 
+                        task.toString()+")";
   }
 }

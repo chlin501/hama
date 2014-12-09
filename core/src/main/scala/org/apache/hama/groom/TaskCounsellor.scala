@@ -22,19 +22,18 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.Periodically
 import org.apache.hama.Service
 import org.apache.hama.Spawnable
+import org.apache.hama.Tick
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.conf.Setting
+import org.apache.hama.master.Scheduler
+import org.apache.hama.master.Directive
+import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GetTaskStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.GroomStats._
-import org.apache.hama.master._
-import org.apache.hama.master.Directive._
-import org.apache.hama.master.Directive.Action._
 import scala.collection.immutable.Queue
-import scala.concurrent.duration.DurationInt
-import scala.concurrent.duration.FiniteDuration
 
 object TaskCounsellor {
 
@@ -101,9 +100,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     hasFreeSlot
   }
   
-  override def ticked(msg: Any): Unit = msg match {
+  override def ticked(msg: Tick): Unit = msg match {
     case TaskRequest => if(hasFreeSlots) { 
-      if(!hasTaskInQueue) groom ! RequestTask(currentGroomStats) 
+      if(!hasTaskInQueue) groom ! RequestTask(currentGroomStats)
     }
     case _ => 
   }

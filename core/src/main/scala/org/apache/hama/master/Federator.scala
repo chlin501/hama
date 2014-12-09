@@ -123,7 +123,7 @@ class Federator(setting: Setting, master: ActorRef)
 
   protected def inform(service: String, result: ProbeMessages) = {
     LOG.debug("Will inform service {} with result {}", service, result)
-    master ! Inform(service, result)
+    master forward Inform(service, result)
   }
 
   protected def askFor(recepiant: String, action: Any) =

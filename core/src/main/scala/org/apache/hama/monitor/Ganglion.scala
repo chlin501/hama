@@ -58,7 +58,7 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
     collector.initialize
   }
 
-  override def ticked(tick: Any) = collector.request()
+  override def ticked(tick: Tick) = collector.request()
 
   override def listServices() = reporter ! ListService
 
