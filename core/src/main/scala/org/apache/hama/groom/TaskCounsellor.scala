@@ -136,8 +136,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @return Option[ActorRef] contains {@link Executor} if matched; otherwise
    *                          None is returned.
    */
-  def findTargetToKill(task: Task): Option[ActorRef] = slots.find( slot => 
-    slot.taskAttemptId match {
+  protected def findTargetToKill(task: Task): Option[ActorRef] = 
+    slots.find( slot => slot.taskAttemptId match {
       case Some(taskAttemptId) => taskAttemptId.equals(task.getId)
       case None => false
     }) match {
@@ -151,7 +151,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * Forked child process will send {@link PullForExecution} message for task 
    * execution.
    */
-  def initializeExecutor(master: String): Unit = pickUp match {
+  protected def initializeExecutor(master: String): Unit = pickUp match {
     case Some(slot) => { 
       LOG.debug("Initialize executor for slot seq {}.", slot.seq)
       val executorName = setting.hama.get("bsp.groom.name", "groomServer") +
@@ -170,7 +170,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * Pick up a slot that is not in use.
    * @return Option[Slot] contains either a slot or None if no slot available.
    */
-  def pickUp: Option[Slot] = {
+  protected def pickUp: Option[Slot] = {
     var free: Slot = null
     var flag = true
     slots.takeWhile( slot => {
@@ -190,7 +190,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * Receive {@link Directive} from Scheduler, deciding what to do next.
    * @return Receive is partial function.
    */
-  def receiveDirective: Receive = {
+  protected def receiveDirective: Receive = {
     case directive: Directive => directive match {
       case null => LOG.warning("Directive dispatched from {} is null!", 
                                sender.path.name)
@@ -202,14 +202,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
             initializeExecutor(directive.master) 
             directiveQueue = directiveQueue.enqueue(directive)
           }
-          case Kill => {
-            findTargetToKill(directive.task) match {
-              case Some(executor) => 
-                executor ! new KillTask(directive.task.getId)
-              case None => LOG.warning("Ask to Kill task {}, but no "+
-                                       "corresponded executor found!", 
-                                       directive.task.toString)
-            }
+          case Kill => findTargetToKill(directive.task) match {
+            case Some(executor) => executor ! new KillTask(directive.task.getId)
+            case None => LOG.warning("Ask to Kill task {}, but no "+
+                                     "corresponded executor found!", 
+                                     directive.task.toString)
           }
           case d@_ => LOG.warning("Unknown directive {}", d)
         }
@@ -224,7 +221,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @param task is the task being executed
    * @param executor is the executor that runs the task.
    */
-  def book(slotSeq: Int, task: Task, executor: ActorRef) {
+  protected def book(slotSeq: Int, task: Task, executor: ActorRef) {
     slots.find(slot => (slotSeq == slot.seq)) match {
       case Some(slot) => slot.taskAttemptId match {
         case None => {
@@ -247,7 +244,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * Executor ack for Launch action.
    * @return Receive is partial function.
    */
-  def launchAck: Receive = {
+  protected def launchAck: Receive = {
     case action: LaunchAck => {
       preLaunchAck(action)
       doAck(action.slotSeq, action.taskAttemptId, sender)
@@ -255,14 +252,15 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
   }
 
-  def preLaunchAck(ack: LaunchAck) { }
-  def postLaunchAck(ack: LaunchAck) { }
+  protected def preLaunchAck(ack: LaunchAck) { }
+
+  protected def postLaunchAck(ack: LaunchAck) { }
 
   /**
    * Executor ack for Resume action.
    * @return Receive is partial function.
    */
-  def resumeAck: Receive = {
+  protected def resumeAck: Receive = {
     case action: ResumeAck => {
       preResumeAck(action)
       doAck(action.slotSeq, action.taskAttemptId, sender)
@@ -270,15 +268,16 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
   }
 
-  def preResumeAck(ack: ResumeAck) { }
-  def postResumeAck(ack: ResumeAck) { }
+  protected def preResumeAck(ack: ResumeAck) { }
+
+  protected def postResumeAck(ack: ResumeAck) { }
 
   /**
    * Executor ack for Kill action.
    * Verify corresponded task is with Kill action and correct taskAttemptId.
    * @param Receive is partial function.
    */
-  def killAck: Receive = {
+  protected def killAck: Receive = {
     case action: KillAck => {
       preKillAck(action)
       doKillAck(action)
@@ -286,8 +285,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
   }
 
-  def preKillAck(ack: KillAck) { }
-  def postKillAck(ack: KillAck) { }
+  protected def preKillAck(ack: KillAck) { }
+
+  protected def postKillAck(ack: KillAck) { }
 
   /**
    * - Find corresponded slot seq and task attempt id replied from 
@@ -296,25 +296,23 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @param action is the KillAck that contains {@link TaskAttemptID} and slot
    *               seq. 
    */
-  def doKillAck(action: KillAck) {
-    slots.find( slot => {
-      val seqEquals = (slot.seq == action.slotSeq)  
-      val idEquals = slot.taskAttemptId match {
-        case Some(found) => found.equals(action.taskAttemptId)
-        case None => false
-      }
-      seqEquals && idEquals
-    }) match {
-      case Some(slot) => {
-        val newSlot = Slot(slot.seq, None, slot.master, slot.executor)
-        slots -= slot 
-        slots += newSlot 
-        // TODO: inform reporter!! 
-      } 
-      case None => LOG.warning("Killed task {} not found for slot seq {}. "+
-                               "Slots contains {}", action.taskAttemptId, 
-                               action.slotSeq, slots)
+  def doKillAck(action: KillAck) = slots.find( slot => {
+    val seqEquals = (slot.seq == action.slotSeq)  
+    val idEquals = slot.taskAttemptId match {
+      case Some(found) => found.equals(action.taskAttemptId)
+      case None => false
     }
+    seqEquals && idEquals
+  }) match {
+    case Some(slot) => {
+      val newSlot = Slot(slot.seq, None, slot.master, slot.executor)
+      slots -= slot 
+      slots += newSlot 
+      // TODO: inform reporter!! 
+    } 
+    case None => LOG.warning("Killed task {} not found for slot seq {}. "+
+                             "Slots contains {}", action.taskAttemptId, 
+                             action.slotSeq, slots)
   }
 
   /**
@@ -326,14 +324,15 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @param slotSeq is the sequence number of slot.
    * @param taskAttemptId is the task attempt id executed at Container.
    */
-  def doAck(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) {
-    if(!pendingQueue.isEmpty) {
-      pendingQueue.find( directive =>
-        directive.task.getId.equals(taskAttemptId) 
-      ) match {
+  protected def doAck(slotSeq: Int, taskAttemptId: TaskAttemptID, 
+                      from: ActorRef): Unit = pendingQueue.isEmpty match {
+    case true => LOG.warning("Pending queue is empty when slot {}, "+
+                             "task {} ack!", slotSeq, taskAttemptId)
+    case false => pendingQueue.find( directive => 
+      directive.task.getId.equals(taskAttemptId)) match {
         case Some(directive) => { 
           LOG.debug("doAck action: {} task: {} executor: {}", 
-                   directive.action, directive.task.getId, from)
+                    directive.action, directive.task.getId, from)
           book(slotSeq, directive.task, from)
           pendingQueue = pendingQueue diff Queue(directive)
           // TODO: inform reporter!!
@@ -341,9 +340,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
         case None => LOG.error("No pending directive for task {}, slot {} "+
                                "matches ack.", taskAttemptId, slotSeq)
       }
-    } else LOG.warning("Pending queue is empty when slot {}, task {} ack!", 
-                       slotSeq, taskAttemptId)
-  }
+  } 
 
   /**
    * Executor on behalf of Container requests for task execution.
@@ -351,36 +348,34 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * - perform function accoding to {@link Directive#action}.
    * @return Receive is partial function.
    */
-  def pullForExecution: Receive = {
-    case PullForExecution(slotSeq) => {
-      if(!directiveQueue.isEmpty) {
-        val (directive, rest) = directiveQueue.dequeue 
-        directive.action match {
-          case Launch => {
-            LOG.debug("{} requests for LaunchTask.", sender)
-            sender ! new LaunchTask(directive.task)
-            pendingQueue = pendingQueue.enqueue(directive)
-            directiveQueue = rest 
-          }
-          case Kill => // Kill will be issued when receiveDirective, not here.
-          case Resume => {
-            LOG.debug("{} requests for ResumeTask.", sender)
-            sender ! new ResumeTask(directive.task)
-            pendingQueue = pendingQueue.enqueue(directive)
-            directiveQueue = rest  
-          }
-          case _ => {
-            LOG.warning("Unknown action {} for task {} from master {}", 
-                        directive.action, directive.task.getId, 
-                        directive.master)
-            directiveQueue = rest
-          }
+  protected def pullForExecution: Receive = {
+    case PullForExecution(slotSeq) => if(!directiveQueue.isEmpty) {
+      val (directive, rest) = directiveQueue.dequeue 
+      directive.action match {
+        case Launch => {
+          LOG.debug("{} requests for LaunchTask.", sender)
+          sender ! new LaunchTask(directive.task)
+          pendingQueue = pendingQueue.enqueue(directive)
+          directiveQueue = rest 
+        }
+        case Kill => // Kill will be issued when receiveDirective, not here.
+        case Resume => {
+          LOG.debug("{} requests for ResumeTask.", sender)
+          sender ! new ResumeTask(directive.task)
+          pendingQueue = pendingQueue.enqueue(directive)
+          directiveQueue = rest  
+        }
+        case _ => {
+          LOG.warning("Unknown action {} for task {} from master {}", 
+                      directive.action, directive.task.getId, 
+                      directive.master)
+          directiveQueue = rest
         }
       }
     }
   }
 
-  def stopExecutor: Receive = {
+  protected def stopExecutor: Receive = {
     case StopExecutor(slotSeq) => slots.find( slot => 
       slot.seq == slotSeq && !None.equals(slot.executor)
     ) match { 
@@ -394,7 +389,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
   }
 
-  def containerStopped: Receive = {
+  protected def containerStopped: Receive = {
     case ContainerStopped => {
       preContainerStopped(sender)
       whenContainerStopped(sender)
@@ -402,10 +397,10 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
   }
  
-  def preContainerStopped(executor: ActorRef) {}
+  protected def preContainerStopped(executor: ActorRef) {}
 
-  def whenContainerStopped(from: ActorRef) = slots.find( slot => 
-    slot.executor match {
+  protected def whenContainerStopped(from: ActorRef) = slots.find( slot =>
+    slot.executor match { 
       case Some(found) => found.path.name.equals(from.path.name)
       case None => false
     }
@@ -429,9 +424,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
                                             from.path.name)
   }
 
-  def postContainerStopped(executor: ActorRef) {}
+  protected def postContainerStopped(executor: ActorRef) {}
 
-  def report: Receive = { 
+  protected def report: Receive = { 
     case GetGroomStats =>  sender ! currentGroomStats
     case GetTaskStats => { // sender ! TaskStats(tasks) 
     }
