@@ -26,14 +26,13 @@ import org.apache.hama.SystemInfo
 import org.apache.hama.Tick
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.groom.RequestTask
 import org.apache.hama.conf.Setting
+import org.apache.hama.groom.RequestTask
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action.Launch
 import org.apache.hama.master.Directive.Action.Kill
 import org.apache.hama.master.Directive.Action.Resume
 import org.apache.hama.monitor.GroomStats
-import org.apache.hama.RemoteService
 import scala.collection.immutable.Queue
 
 sealed trait SchedulerMessages
@@ -59,7 +58,7 @@ object Scheduler {
 //         trait scheduluer#schedule // active
 //       - update internal stats to related tracker
 class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef) 
-      extends LocalService with RemoteService with Periodically {
+      extends LocalService with Periodically {
 
   type TaskAssignQueue = Queue[Ticket]
   type ProcessingQueue = Queue[Ticket]
@@ -239,5 +238,5 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
   //          else fail job and notify client.
   //       else wait for other groom requesting for task.
 
-  override def receive = tickMessage orElse requestTask orElse dispense orElse targetsResult orElse timeout orElse unknown
+  override def receive = tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
 }
