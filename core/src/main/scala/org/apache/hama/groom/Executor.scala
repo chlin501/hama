@@ -105,9 +105,12 @@ class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
  * An actor forks a child process for executing tasks.
  * @param conf cntains necessary setting for launching the child process.
  */
-class Executor(conf: HamaConfiguration, taskCounsellorListener: ActorRef) 
+class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef) 
       extends Agent {
+
+  type CommandQueue = Queue[Command]
  
+  // TODO: move to Setting?
   val pathSeparator = System.getProperty("path.separator")
   val fileSeparator = System.getProperty("file.separator")
   val javaHome = System.getProperty("java.home")
@@ -226,7 +229,7 @@ class Executor(conf: HamaConfiguration, taskCounsellorListener: ActorRef)
   def createProcess(cmd: Seq[String], conf: HamaConfiguration) {
     val builder = new ProcessBuilder(seqAsJavaList(cmd))
     builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
-    try { // TODO: use Try instead
+    try { // TODO: use Try[Boolean] instead
       process = builder.start
       stdout = context.actorOf(Props(classOf[StdOut], 
                                      process.getInputStream, 
@@ -240,7 +243,7 @@ class Executor(conf: HamaConfiguration, taskCounsellorListener: ActorRef)
                                "stderr%s".format(slotSeq)) 
     } catch {
       case ioe: IOException => LOG.error("Fail launching Container process {}",
-                                         ioe)
+                                         ioe) // TODO: notify task counsellor 
     }
   }
 
@@ -250,7 +253,7 @@ class Executor(conf: HamaConfiguration, taskCounsellorListener: ActorRef)
    */
   def fork: Receive = {
     case Fork(slotSeq) => {
-      if(0 >= slotSeq) 
+      if(0 >= slotSeq)  // TODO: sender ! IllegalSlotSequence(slotSeq)
         throw new IllegalArgumentException("Invalid slotSeq: "+slotSeq)
       this.slotSeq = slotSeq
       fork(slotSeq) 
@@ -268,7 +271,7 @@ class Executor(conf: HamaConfiguration, taskCounsellorListener: ActorRef)
 
   def launchAck: Receive = {
     case action: LaunchAck => 
-      taskCounsellorListener ! new LaunchAck(action.slotSeq, action.taskAttemptId) 
+      taskCounsellor ! new LaunchAck(action.slotSeq, action.taskAttemptId) 
   }
 
   /** 
@@ -282,7 +285,7 @@ class Executor(conf: HamaConfiguration, taskCounsellorListener: ActorRef)
 
   def resumeAck: Receive = {
     case action: ResumeAck => 
-      taskCounsellorListener ! new ResumeAck(action.slotSeq, action.taskAttemptId)
+      taskCounsellor ! new ResumeAck(action.slotSeq, action.taskAttemptId)
   }
 
   /**
@@ -297,7 +300,7 @@ class Executor(conf: HamaConfiguration, taskCounsellorListener: ActorRef)
 
   def killAck: Receive = {
     case action: KillAck => 
-      taskCounsellorListener ! new KillAck(action.slotSeq, action.taskAttemptId)
+      taskCounsellor ! new KillAck(action.slotSeq, action.taskAttemptId)
   }
 
   /**
@@ -329,7 +332,7 @@ class Executor(conf: HamaConfiguration, taskCounsellorListener: ActorRef)
         container ! cmd.msg
         commandQueue = rest  
       }
-      afterContainerReady(taskCounsellorListener)
+      afterContainerReady(taskCounsellor)
     }
   }
 
@@ -339,7 +342,7 @@ class Executor(conf: HamaConfiguration, taskCounsellorListener: ActorRef)
    * @return Receive is partial function.
    */
   def containerStopped: Receive = {
-    case ContainerStopped => taskCounsellorListener ! ContainerStopped
+    case ContainerStopped => taskCounsellor ! ContainerStopped
   }
 
   /**
@@ -347,12 +350,10 @@ class Executor(conf: HamaConfiguration, taskCounsellorListener: ActorRef)
    * @return Receive is partial function.
    */
   def stopProcess: Receive = {
-    case StopProcess => {
-      container match {
-        case null => 
-          commandQueue = commandQueue.enqueue(Command(StopContainer, sender)) 
-        case _ => container ! StopContainer 
-      }
+    case StopProcess => container match {
+      case null => 
+        commandQueue = commandQueue.enqueue(Command(StopContainer, sender)) 
+      case _ => container ! StopContainer 
     }
   }
 
@@ -386,12 +387,12 @@ class Executor(conf: HamaConfiguration, taskCounsellorListener: ActorRef)
     case result: Occupied => {
       LOG.warning("Slot {} is occupied by {}.", result.getSlotSeq, 
                   result.getTaskAttemptId.toString)
-      taskCounsellorListener ! result
+      taskCounsellor ! result
     }
   }
 
   protected def report: Receive = {
-    case r: Report => taskCounsellorListener ! r
+    case r: Report => taskCounsellor ! r
   }
 
   def receive = launchAck orElse occupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownContainer orElse report orElse unknown

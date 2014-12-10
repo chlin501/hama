@@ -31,6 +31,8 @@ import scala.util.Failure
 
 object Setting {
 
+  def toConfig(content: String): Config = ConfigFactory.parseString(content)
+
   def change(systemName: String, nodes: Setting*) = nodes.foreach ( node => 
     node.isInstanceOf[MasterSetting] match {
       case true => node.hama.set("master.actor-system.name", systemName) 
@@ -52,6 +54,8 @@ object Setting {
 }
 
 trait Setting {
+
+  import Setting._
 
   protected def akka(host: String, port: Int, role: String): String = s"""
     akka {
@@ -107,10 +111,11 @@ trait Setting {
 
 class MasterSetting(conf: HamaConfiguration) extends Setting {
 
+  import Setting._
 
   override def hama(): HamaConfiguration = conf
 
-  override def config(): Config = ConfigFactory.parseString(" master { " + 
+  override def config(): Config = toConfig(" master { " + 
     akka(host, port, "master") + " }").getConfig("master")
 
   protected def info(system: String, host: String, port: Int): SystemInfo = 
@@ -140,9 +145,11 @@ class MasterSetting(conf: HamaConfiguration) extends Setting {
 
 class GroomSetting(conf: HamaConfiguration) extends Setting {
 
+  import Setting._
+
   override def hama(): HamaConfiguration = conf
 
-  override def config(): Config = ConfigFactory.parseString(" groom { " + 
+  override def config(): Config = toConfig(" groom { " + 
     akka(host, port, "groom") + " }").getConfig("groom")
 
   protected def info(system: String, host: String, port: Int): SystemInfo = 

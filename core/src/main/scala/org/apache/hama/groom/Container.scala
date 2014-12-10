@@ -330,7 +330,8 @@ class Container(conf: HamaConfiguration) extends LocalService
    */
   def stopContainer: Receive = {
    case StopContainer => {
-      executor.map( found => found ! ContainerStopped)
+      // TODO: stop worker operations
+      executor.map { found => found ! ContainerStopped }
       LOG.debug("ContainerStopped message is sent ...")
     }
   }

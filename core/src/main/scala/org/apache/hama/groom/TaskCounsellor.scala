@@ -65,6 +65,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected var pendingQueue = Queue[Directive]()
 
+  protected def maxTasks(): Int = setting.hama.getInt("bsp.tasks.maximum", 3)
+
   /**
    * Initialize slots with default slots value to 3, which comes from maxTasks,
    * or "bsp.tasks.maximum".
@@ -77,9 +79,10 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     LOG.debug("{} GroomServer slots are initialied.", constraint)
   }
 
+
   override def initializeServices = {
     tick(self, TaskRequest)
-    initializeSlots(setting.hama.getInt("bsp.tasks.maximum", 3))
+    initializeSlots(maxTasks)
   }
 
   protected def hasTaskInQueue: Boolean = !directiveQueue.isEmpty
@@ -117,7 +120,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     val name = setting.name
     val host = setting.host
     val port = setting.port
-    val maxTasks = setting.hama.getInt("bsp.tasks.maximum", 3) 
     val queueIds = list(directiveQueue) 
     val slotIds = list(slots) 
     LOG.debug("Current groom stats: name {}, host {}, port {}, maxTasks {}, "+
@@ -154,10 +156,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def initializeExecutor(master: String): Unit = pickUp match {
     case Some(slot) => { 
       LOG.debug("Initialize executor for slot seq {}.", slot.seq)
-      val executorName = setting.hama.get("bsp.groom.name", "groomServer") +
-                         "_executor_" + slot.seq 
-      val executor = spawn(executorName, classOf[Executor], setting.hama, 
-                           self)
+      val executorName = setting.name + "_executor_" + slot.seq // TODO: move to object Executor { def name(setting, seq): String ... }
+      val executor = spawn(executorName, classOf[Executor], setting.hama, self)
       executor ! Fork(slot.seq) 
       val newSlot = Slot(slot.seq, None, master, Some(executor))
       slots -= slot
@@ -194,23 +194,26 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     case directive: Directive => directive match {
       case null => LOG.warning("Directive dispatched from {} is null!", 
                                sender.path.name)
-      case _ => {
-        LOG.debug("Receive directive action: "+directive.action+" task: "+
-                  directive.task.getId.toString+" master: "+directive.master)
-        directive.action match {
-          case Launch | Resume => {
-            initializeExecutor(directive.master) 
-            directiveQueue = directiveQueue.enqueue(directive)
-          }
-          case Kill => findTargetToKill(directive.task) match {
-            case Some(executor) => executor ! new KillTask(directive.task.getId)
-            case None => LOG.warning("Ask to Kill task {}, but no "+
-                                     "corresponded executor found!", 
-                                     directive.task.toString)
-          }
-          case d@_ => LOG.warning("Unknown directive {}", d)
-        }
+      case _ => directiveReceived(directive) 
+    }
+  }
+
+  protected def directiveReceived(directive: Directive) {
+    LOG.info("xxxxxxxxxxxxx Receive directive action: "+directive.action+" task: "+
+             directive.task.getId.toString+" master: "+directive.master)
+    directive.action match {
+      case Launch | Resume => {
+LOG.info("xxxxxxxxxxxxxx Launch or Resume a task ... ")
+        initializeExecutor(directive.master) 
+        directiveQueue = directiveQueue.enqueue(directive)
       }
+      case Kill => findTargetToKill(directive.task) match {
+        case Some(executor) => executor ! new KillTask(directive.task.getId)
+        case None => LOG.warning("Ask to Kill task {}, but no "+
+                                 "corresponded executor found!", 
+                                 directive.task.toString)
+      }
+      case d@_ => LOG.warning("Unknown directive {}", d)
     }
   }
 
