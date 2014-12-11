@@ -41,6 +41,9 @@ import org.apache.hama.monitor.Report
 import org.apache.hama.util.BSPNetUtils
 import scala.collection.immutable.Queue
 import scala.collection.JavaConversions._
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 trait ExecutorMessages
 /**
@@ -49,6 +52,10 @@ trait ExecutorMessages
 final case class IllegalSlotSequence(seq: Int) extends ExecutorMessages
 final case class Command(msg: Any, recipient: ActorRef) extends ExecutorMessages
 final case object StreamClosed extends ExecutorMessages   
+final case class Instances(process: Process, stdout: ActorRef, 
+                           stderr: ActorRef) extends ExecutorMessages
+final case class PeerProcessCreationFailure(cause: Throwable) 
+      extends ExecutorMessages
 
 trait ExecutorLog { // TODO: refactor this after all log is switched 
 
@@ -111,6 +118,13 @@ object Executor {
   val hamaHome = System.getProperty("hama.home.dir")
   val javacp: String  = System.getProperty("java.class.path")
   val logPath: String = System.getProperty("hama.log.dir")
+
+  def java(): String = 
+    new File(new File(javaHome, "bin"), "java").getCanonicalPath
+
+  def defaultOpts(conf: HamaConfiguration): String = 
+    conf.get("bsp.child.java.opts", "-Xmx200m")
+
 }
 
 /**
@@ -124,11 +138,10 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
 
   type CommandQueue = Queue[Command]
 
-  val operation = Operation.get(conf)
-  var commandQueue = Queue[Command]()
+  protected val operation = Operation.get(conf)
+  protected var commandQueue = Queue[Command]()
   protected var container: Option[ActorRef] = None 
-  protected var stdout: Option[ActorRef] = None
-  protected var stderr: Option[ActorRef] = None
+  protected var instances: Option[Instances] = None
   protected var isStdoutClosed = false
   protected var isStderrClosed = false
 
@@ -137,15 +150,11 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * use default 50001.
    * @param String of the port value.
    */
-  def taskPort: String = {
+  protected def taskPort: String = {
     val port = BSPNetUtils.getFreePort(50002).toString
     LOG.debug("Port value to be used is {}", port)
     port
   }
-
-  // Note: it seems when using conf.get the stack lost track, e.g. LOG.info, 
-  //       after conf.get  
-  def defaultOpts: String = conf.get("bsp.child.java.opts", "-Xmx200m")
 
   /**
    * Assemble java command for launching the child process.  
@@ -154,14 +163,13 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * @param child is the class used to launced the process.
    * @return Seq[String] is the command for launching the process.
    */
-  def javaArgs(cp: String, slotSeq: Int, child: Class[_]): Seq[String] = {
-    val java = new File(new File(javaHome, "bin"), "java").getCanonicalPath
-    LOG.debug("Java for slot seq {} is at {}", slotSeq, java)
-    val opts = defaultOpts
+  protected def javaArgs(cp: String, slotSeq: Int, child: Class[_]): 
+      Seq[String] = {
+    val opts = defaultOpts(conf)
     val bspClassName = child.getName
     val bspPeerSystemName = conf.get("bsp.child.actor-system.name", 
                                         "BSPPeerSystem")
-    // decide the host to which remote module will listen, default to 0.0.0.0 
+    // decide to which address the peer will listen, default to 0.0.0.0 
     val listeningTo = conf.get("bsp.peer.hostname", "0.0.0.0") 
     val command = Seq(java) ++ Seq(opts) ++  
                   Seq("-classpath") ++ Seq(classpath(hamaHome, cp)) ++
@@ -185,7 +193,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
     lib.listFiles(new FilenameFilter {
       def accept(dir: File, name: String): Boolean = true
     }).foreach( jar => { cp += ":"+jar })
-    LOG.debug("Classpath: {}", cp)
+    LOG.debug("Classpath is configured to {}", cp)
     cp
   }
 
@@ -193,11 +201,14 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * Fork a child process based on command assembled.
    * @param slotSeq indicate which seq the slot is.
    */
-  def fork(slotSeq: Int) {
+  def fork(slotSeq: Int, from: ActorRef) {
     val containerClass = conf.getClass("bsp.child.class", classOf[Container])
     LOG.debug("Container class to be instantiated is {}", containerClass)
     val cmd = javaArgs(javacp, slotSeq, containerClass)
-    createProcess(slotSeq, cmd, conf) 
+    createProcess(slotSeq, cmd, conf) match {
+      case Success(instances) => this.instances = Option(instances)
+      case Failure(cause) => from ! PeerProcessCreationFailure(cause)
+    }
   }
 
   /**
@@ -205,30 +216,32 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * @param cmd is the command to excute the process.
    * @param conf contains related information for creating process.
    */
-  def createProcess(seq: Int, cmd: Seq[String], conf: HamaConfiguration) {
-    val builder = new ProcessBuilder(seqAsJavaList(cmd))
-    builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
-    try { // TODO: use Try[Boolean] instead
+  def createProcess(seq: Int, cmd: Seq[String], conf: HamaConfiguration): 
+    Try[Instances] = try { 
+      val builder = new ProcessBuilder(seqAsJavaList(cmd))
+      builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
       val process = builder.start
-      stdout = Option(spawn("stdout%s".format(seq), classOf[StdOut], 
-                            process.getInputStream, conf, self))
-                               
-      stderr = Option(spawn("stderr%s".format(seq), classOf[StdErr], 
-                            process.getErrorStream, conf, self))
+      val stdout = spawn("stdout%s".format(seq), classOf[StdOut], 
+                         process.getInputStream, conf, self)
+                                
+      val stderr = spawn("stderr%s".format(seq), classOf[StdErr], 
+                         process.getErrorStream, conf, self)
+      Success(Instances(process, stdout, stderr))
     } catch {
-      case ioe: IOException => LOG.error("Fail launching Container process {}",
-                                         ioe) // TODO: notify task counsellor 
+      case ioe: IOException => {
+        LOG.error("Fail launching Container process {} for slot {}", ioe, seq) 
+        Failure(ioe)
+      }
     }
-  }
 
   /**
    * Create a container for executing tasks that will assign to it.
    * @return Receive partial function.
    */
-  def fork: Receive = {
+  protected def fork: Receive = {
     case Fork(seq) => seq match {
-      case x if x <= 0 => sender ! IllegalSlotSequence(seq)
-      case _ => fork(seq) 
+      case x if (x <= 0) => sender ! IllegalSlotSequence(seq)
+      case _ => fork(seq, sender) 
     }
   } 
 
@@ -281,11 +294,13 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
       taskCounsellor ! new KillAck(action.slotSeq, action.taskAttemptId)
   }
 
-  protected def stdoutName(): String = stdout.map { s => s.path.name }.
-    getOrElse(null)
+  protected def stdoutName(): String = instances.map { instance => 
+    instance.stdout.path.name 
+  }.getOrElse(null)
 
-  protected def stderrName(): String = stderr.map { s => s.path.name }.
-    getOrElse(null)
+  protected def stderrName(): String = instances.map { instance => 
+    instance.stderr.path.name  
+  }.getOrElse(null)
 
   /**
    * Once the stream, including input and error stream, is closed, the system
