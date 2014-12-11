@@ -35,6 +35,7 @@ import org.apache.commons.lang.math.NumberUtils
 import org.apache.hadoop.io.IOUtils
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.Service
 import org.apache.hama.Spawnable
 import org.apache.hama.fs.Operation
 import org.apache.hama.monitor.Report
@@ -56,6 +57,10 @@ final case class Instances(process: Process, stdout: ActorRef,
                            stderr: ActorRef) extends ExecutorMessages
 final case class PeerProcessCreationFailure(cause: Throwable) 
       extends ExecutorMessages
+/**
+ * Denote which forked process is offline.
+ */
+final case class ContainerOffline(slotSeq: Int) extends ExecutorMessages
 
 trait ExecutorLog { // TODO: refactor this after all log is switched 
 
@@ -132,7 +137,7 @@ object Executor {
  * @param conf cntains necessary setting for launching the child process.
  */
 class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef) 
-      extends Agent with Spawnable {
+      extends Service with Spawnable {
 
   import Executor._
 
@@ -144,6 +149,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
   protected var instances: Option[Instances] = None
   protected var isStdoutClosed = false
   protected var isStderrClosed = false
+  protected var slotSeq: Int = -1
 
   /**
    * Pick up a port value configured in HamaConfiguration object. Otherwise
@@ -203,7 +209,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    */
   protected def fork(slotSeq: Int, from: ActorRef) {
     val containerClass = conf.getClass("bsp.child.class", classOf[Container])
-    LOG.debug("Container class to be instantiated is {}", containerClass)
+    LOG.debug("Container class to be instantiated: {}", containerClass)
     val cmd = javaArgs(javacp, slotSeq, containerClass)
     createProcess(slotSeq, cmd, conf) match {
       case Success(instances) => this.instances = Option(instances)
@@ -240,8 +246,11 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    */
   protected def fork: Receive = {
     case Fork(seq) => seq match {
-      case x if (x <= 0) => sender ! IllegalSlotSequence(seq)
-      case _ => fork(seq, sender) 
+      case s if (s <= 0) => sender ! IllegalSlotSequence(seq)
+      case _ => {
+        this.slotSeq = seq
+        fork(seq, sender) 
+      }
     }
   } 
 
@@ -325,6 +334,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    */
   protected def containerReady: Receive = {
     case ContainerReady(seq) => {
+      context watch sender
       container = Option(sender)
       while(!commandQueue.isEmpty) {
         val (cmd, rest) = commandQueue.dequeue
@@ -376,10 +386,6 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
     }
   }
 
-  protected def terminated: Receive = {
-    case Terminated(target) => LOG.warning("{} is offline.", target.path.name)
-  }
-
   /**
    * Reply to {@link TaskCounsellor} that slot is occupied!
    * @return Receive is partial function.
@@ -396,7 +402,13 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
     case r: Report => taskCounsellor ! r
   }
 
-  override def receive = launchAck orElse occupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownContainer orElse report orElse unknown
+  override def offline(target: ActorRef) = target.path.name match { 
+    case name if name.equals(Container.name(slotSeq)) => 
+      taskCounsellor ! ContainerOffline(slotSeq)
+    case _ => LOG.warning("Unknown contianer {} is offline!", target.path.name)
+  }
+
+  override def receive = launchAck orElse occupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse superviseeIsTerminated orElse shutdownContainer orElse report orElse unknown
      
 }
 

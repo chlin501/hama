@@ -199,11 +199,10 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   }
 
   protected def directiveReceived(directive: Directive) {
-    LOG.info("xxxxxxxxxxxxx Receive directive action: "+directive.action+" task: "+
+    LOG.info("Receive directive action: "+directive.action+" task: "+
              directive.task.getId.toString+" master: "+directive.master)
     directive.action match {
       case Launch | Resume => {
-LOG.info("xxxxxxxxxxxxxx Launch or Resume a task ... ")
         initializeExecutor(directive.master) 
         directiveQueue = directiveQueue.enqueue(directive)
       }
@@ -437,6 +436,14 @@ LOG.info("xxxxxxxxxxxxxx Launch or Resume a task ... ")
                                sender.path.name)
   }
 
-  override def receive = tickMessage orElse report orElse launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse receiveDirective orElse unknown
+  // TODO: check which task runs on corresponded executor.
+  //       if found, pass task id to master waiting for instruction
+  //       else log
+  protected def containerOffline: Receive = {
+    case ContainerOffline(slotSeq) => 
+ 
+  }
+
+  override def receive = tickMessage orElse report orElse launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse receiveDirective orElse containerOffline orElse unknown
 
 }

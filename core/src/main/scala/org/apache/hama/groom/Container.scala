@@ -127,9 +127,12 @@ object Container {
 
   def launch(system: ActorSystem, containerClass: Class[_], 
              conf: HamaConfiguration, seq: Int) {
-    system.actorOf(Props(containerClass, conf), 
-                   "container%s".format(seq))
+    system.actorOf(Props(containerClass, conf), name(seq))
   }
+
+  def lowercase(): String = classOf[Container].getSimpleName.toLowerCase
+
+  def name(seq: Int): String = "%s%s".format(lowercase, seq)
 
   @throws(classOf[Throwable])
   def main(args: Array[String]) = {
