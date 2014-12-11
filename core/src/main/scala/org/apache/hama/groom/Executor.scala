@@ -19,9 +19,7 @@ package org.apache.hama.groom
 
 import akka.actor.Actor
 import akka.actor.ActorRef
-import akka.actor.Props
 import akka.actor.Terminated
-import akka.event.Logging
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
@@ -37,14 +35,20 @@ import org.apache.commons.lang.math.NumberUtils
 import org.apache.hadoop.io.IOUtils
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.Spawnable
 import org.apache.hama.fs.Operation
 import org.apache.hama.monitor.Report
 import org.apache.hama.util.BSPNetUtils
 import scala.collection.immutable.Queue
 import scala.collection.JavaConversions._
 
-final case class Command(msg: Any, recipient: ActorRef)
-final case object StreamClosed
+trait ExecutorMessages
+/**
+ * Slot sequence value is smaller than 0 (inclusive).
+ */
+final case class IllegalSlotSequence(seq: Int) extends ExecutorMessages
+final case class Command(msg: Any, recipient: ActorRef) extends ExecutorMessages
+final case object StreamClosed extends ExecutorMessages   
 
 trait ExecutorLog { // TODO: refactor this after all log is switched 
 
@@ -101,32 +105,32 @@ class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
   }
 }
 
+object Executor {
+
+  val javaHome = System.getProperty("java.home")
+  val hamaHome = System.getProperty("hama.home.dir")
+  val javacp: String  = System.getProperty("java.class.path")
+  val logPath: String = System.getProperty("hama.log.dir")
+}
+
 /**
  * An actor forks a child process for executing tasks.
  * @param conf cntains necessary setting for launching the child process.
  */
 class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef) 
-      extends Agent {
+      extends Agent with Spawnable {
+
+  import Executor._
 
   type CommandQueue = Queue[Command]
- 
-  // TODO: move to Setting?
-  val pathSeparator = System.getProperty("path.separator")
-  val fileSeparator = System.getProperty("file.separator")
-  val javaHome = System.getProperty("java.home")
-  val hamaHome = System.getProperty("hama.home.dir")
-  val javacp: String  = System.getProperty("java.class.path")
-  val logPath: String = System.getProperty("hama.log.dir")
-  val taskCounsellorName = conf.get("groom.taskcounsellor.name", "taskCounsellor") 
+
   val operation = Operation.get(conf)
   var commandQueue = Queue[Command]()
-  protected var container: ActorRef =_ // TODO: Option
-  protected var stdout: ActorRef = _
-  protected var stderr: ActorRef = _
+  protected var container: Option[ActorRef] = None 
+  protected var stdout: Option[ActorRef] = None
+  protected var stderr: Option[ActorRef] = None
   protected var isStdoutClosed = false
   protected var isStderrClosed = false
-  protected var process: Process = _
-  protected var slotSeq: Int = -1
 
   /**
    * Pick up a port value configured in HamaConfiguration object. Otherwise
@@ -190,57 +194,27 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * @param slotSeq indicate which seq the slot is.
    */
   def fork(slotSeq: Int) {
-    val containerClass = 
-      conf.getClass("bsp.child.class", classOf[Container])
+    val containerClass = conf.getClass("bsp.child.class", classOf[Container])
     LOG.debug("Container class to be instantiated is {}", containerClass)
     val cmd = javaArgs(javacp, slotSeq, containerClass)
-    createProcess(cmd, conf) 
+    createProcess(slotSeq, cmd, conf) 
   }
-
-  /**
-   * Configure working directory, either be configuration's key 
-   * "bsp.working.dir" or file system's working directory.
-   * @param conf will store working directory configuration. The content of
-   *             this variable comes from {@link GroomServerRunner} because the 
-   *             process needs to be reused. So it shouldn't be a specific 
-   *             task's working directory as bsp.GroomServer#BSPPeerChild.
-   * @return String of working directory.
-  def defaultWorkingDirectory(conf: HamaConfiguration): String = {
-    var workDir = conf.get("bsp.working.dir")
-    workDir match {
-      case null => { 
-        val fsDir = operation.getWorkingDirectory
-        LOG.debug("Use file system's working directory {}", fsDir.toString)
-        conf.set("bsp.working.dir", fsDir.toString)
-        workDir = fsDir.toString
-      }
-      case _ => 
-    } 
-    LOG.debug("Working directory for slot {} is set to {}", slotSeq, workDir)
-    workDir
-  }
-   */  
 
   /**
    * Fork a child process as container.
    * @param cmd is the command to excute the process.
    * @param conf contains related information for creating process.
    */
-  def createProcess(cmd: Seq[String], conf: HamaConfiguration) {
+  def createProcess(seq: Int, cmd: Seq[String], conf: HamaConfiguration) {
     val builder = new ProcessBuilder(seqAsJavaList(cmd))
     builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
     try { // TODO: use Try[Boolean] instead
-      process = builder.start
-      stdout = context.actorOf(Props(classOf[StdOut], 
-                                     process.getInputStream, 
-                                     conf, 
-                                     self),
-                               "stdout%s".format(slotSeq)) 
-      stderr = context.actorOf(Props(classOf[StdErr], 
-                                     process.getErrorStream, 
-                                     conf,
-                                     self),
-                               "stderr%s".format(slotSeq)) 
+      val process = builder.start
+      stdout = Option(spawn("stdout%s".format(seq), classOf[StdOut], 
+                            process.getInputStream, conf, self))
+                               
+      stderr = Option(spawn("stderr%s".format(seq), classOf[StdErr], 
+                            process.getErrorStream, conf, self))
     } catch {
       case ioe: IOException => LOG.error("Fail launching Container process {}",
                                          ioe) // TODO: notify task counsellor 
@@ -252,11 +226,9 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * @return Receive partial function.
    */
   def fork: Receive = {
-    case Fork(slotSeq) => {
-      if(0 >= slotSeq)  // TODO: sender ! IllegalSlotSequence(slotSeq)
-        throw new IllegalArgumentException("Invalid slotSeq: "+slotSeq)
-      this.slotSeq = slotSeq
-      fork(slotSeq) 
+    case Fork(seq) => seq match {
+      case x if x <= 0 => sender ! IllegalSlotSequence(seq)
+      case _ => fork(seq) 
     }
   } 
 
@@ -266,7 +238,9 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * @param Receive is partial function.
    */
   def launchTask: Receive = {
-    case action: LaunchTask => container ! new LaunchTask(action.task)
+    case action: LaunchTask => container.map { c => 
+      c ! new LaunchTask(action.task)
+    }
   }
 
   def launchAck: Receive = {
@@ -280,8 +254,11 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * @param Receive is partial function.
    */
   def resumeTask: Receive = {
-    case action: ResumeTask => container ! new ResumeTask(action.task)
+    case action: ResumeTask => container.map { c => 
+      c ! new ResumeTask(action.task)
+    }
   }
+
 
   def resumeAck: Receive = {
     case action: ResumeAck => 
@@ -294,25 +271,32 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * @param Receive is partial function.
    */
   def killTask: Receive = {
-    case action: KillTask => 
-      container ! new KillTask(action.taskAttemptId)
+    case action: KillTask => container.map { c => 
+      c ! new KillTask(action.taskAttemptId)
+    }
   }
 
-  def killAck: Receive = {
+  protected def killAck: Receive = {
     case action: KillAck => 
       taskCounsellor ! new KillAck(action.slotSeq, action.taskAttemptId)
   }
+
+  protected def stdoutName(): String = stdout.map { s => s.path.name }.
+    getOrElse(null)
+
+  protected def stderrName(): String = stderr.map { s => s.path.name }.
+    getOrElse(null)
 
   /**
    * Once the stream, including input and error stream, is closed, the system
    * will destroy process automatically.
    */
-  def streamClosed: Receive = {
+  protected def streamClosed: Receive = {
     case StreamClosed => {
       LOG.debug("{} notifies InputStream is closed!", sender.path.name)
-      if(sender.path.name.equals("stdout%s".format(slotSeq))) { 
+      if(sender.path.name.equals(stdoutName)) { 
         isStdoutClosed = true
-      } else if(sender.path.name.equals("stderr%s".format(slotSeq))) {
+      } else if(sender.path.name.equals(stderrName)) {
         isStderrClosed = true
       } else LOG.warning("[Warning] Sender {} asks for closing stream.", 
                          sender.path.name)
@@ -325,18 +309,20 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * @return Receive is partial function.
    */
   def containerReady: Receive = {
-    case ContainerReady => {
-      container = sender
+    case ContainerReady(seq) => {
+      container = Option(sender)
       while(!commandQueue.isEmpty) {
         val (cmd, rest) = commandQueue.dequeue
-        container ! cmd.msg
+        container.map { c => c ! cmd.msg }
         commandQueue = rest  
       }
-      afterContainerReady(taskCounsellor)
+      afterContainerReady(seq, taskCounsellor)
     }
   }
 
-  def afterContainerReady(target: ActorRef) = target ! PullForExecution(slotSeq) 
+  def afterContainerReady(seq: Int, target: ActorRef) = 
+    target ! PullForExecution(seq) 
+
   /**
    * Notify when Container is stopped.
    * @return Receive is partial function.
@@ -351,9 +337,9 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    */
   def stopProcess: Receive = {
     case StopProcess => container match {
-      case null => 
+      case None => 
         commandQueue = commandQueue.enqueue(Command(StopContainer, sender)) 
-      case _ => container ! StopContainer 
+      case Some(c) => c ! StopContainer 
     }
   }
 
@@ -365,11 +351,11 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
   def shutdownContainer: Receive = {
     case ShutdownContainer => {
       container match {
-        case null => commandQueue = 
+        case None => commandQueue = 
           commandQueue.enqueue(Command(ShutdownContainer, sender)) 
-        case _ => {
-          LOG.debug("Shutdown container {}", container)
-          container ! ShutdownContainer 
+        case Some(c) => {
+          LOG.debug("Shutdown container {}", c)
+          c ! ShutdownContainer 
         }
       }
     }

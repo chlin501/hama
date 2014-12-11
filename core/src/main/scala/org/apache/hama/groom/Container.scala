@@ -66,7 +66,7 @@ final case class Args(actorSystemName: String, listeningTo: String, port: Int,
 
 object Container {
 
-  // TODO: 1. move to setting obj. 2. post to zk?
+  // TODO: move to ContainerSetting
   def toConfig(listeningTo: String, port: Int): Config = {
     ConfigFactory.parseString(s"""
       peerContainer {
@@ -95,14 +95,14 @@ object Container {
   }
 
   def toArgs(args: Array[String]): Args = {
-    if(null == args || 0 == args.length)
-      throw new IllegalArgumentException("No arguments supplied when "+
-                                         "Container is forked.")
+    require(null != args && 0 < args.length, "Arguments not supplied!")
+
     val actorSystemName = args(0)
     // N.B.: it may binds to 0.0.0.0 for all inet.
     val listeningTo = args(1) 
     val port = args(2).toInt
     val seq = args(3).toInt
+    require( seq > 0, "Invalid slot seq "+seq+" when forking a child process!")
     val config = toConfig(listeningTo, port) 
     Args(actorSystemName, listeningTo, port, seq, config)
   }
@@ -198,11 +198,11 @@ class Container(conf: HamaConfiguration) extends LocalService
 
   override def afterLinked(proxy: ActorRef) {
     executor = Option(proxy)
-    executor.map( found => {
-      found ! ContainerReady
+    executor.map { found => {
+      found ! ContainerReady(slotSeq)
       LOG.info("Slot seq {} sends ContainerReady to {}", slotSeq, 
                found.path.name)
-    })
+    }}
   }
 
   /**

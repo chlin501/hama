@@ -26,7 +26,7 @@ sealed trait GroomMessage
 /**
  * Singnify Container actor is ready.
  */
-private[groom] final case object ContainerReady extends GroomMessage
+private[groom] final case class ContainerReady(seq: Int) extends GroomMessage
 
 /**
  * Singnify Container actor is stopped.
