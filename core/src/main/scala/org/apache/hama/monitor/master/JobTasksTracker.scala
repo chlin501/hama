@@ -22,24 +22,6 @@ import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.monitor.Tracker
 
-final class JobTasksTracker extends Tracker {
-
-/*
-  private var tasksStat = Map.empty[BSPJobID, Set[Task]]
-
-  private def reportTask: Receive = {
-    case newTask: Task => {  // report
-      val bspJobId = newTask.getId.getJobID
-      LOG.info("Report task with BSPJobID {}.", bspJobId)
-      tasksStat.find(p=> p._1.equals(bspJobId)) match {
-        case Some((id, oldTasks)) => 
-          tasksStat ++= Map(bspJobId -> (Set(newTask)++oldTasks))
-        case None => tasksStat ++= Map(bspJobId -> Set(newTask))
-      }
-    }
-  }
-
-  override def receive = reportTask orElse unknown
-*/
-
-}
+// TODO: notify to scheduler for each task update 
+//       or merge to scheduler?
+final class JobTasksTracker extends Tracker 

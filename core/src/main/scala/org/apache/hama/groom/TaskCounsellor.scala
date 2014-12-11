@@ -18,6 +18,10 @@
 package org.apache.hama.groom
 
 import akka.actor.ActorRef
+import java.io.DataInput
+import java.io.DataOutput
+import java.io.IOException
+import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Periodically
 import org.apache.hama.Service
@@ -34,6 +38,31 @@ import org.apache.hama.monitor.GetTaskStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.GroomStats._
 import scala.collection.immutable.Queue
+
+object TaskFailure {
+
+  def apply(id: TaskAttemptID): TaskFailure = {
+    val taskFailure = new TaskFailure()
+    taskFailure.id = id
+    taskFailure
+  }
+}
+
+final class TaskFailure extends Writable {
+
+  protected[groom] var id: TaskAttemptID = new TaskAttemptID
+
+  def taskAttemptId(): TaskAttemptID = id
+
+  @throws(classOf[IOException])
+  override def write(out: DataOutput) = id.write(out) 
+
+  @throws(classOf[IOException])
+  override def readFields(in: DataInput) {
+    id = new TaskAttemptID()
+    id.readFields(in)
+  }
+}
 
 object TaskCounsellor {
 
@@ -419,8 +448,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
         slots -= found
         slots += newSlot
       }
-      case None => throw new RuntimeException("Impossible! Executor not "+
-                                              "found for "+from.path.name)
+      case None => throw new RuntimeException("Executor not found for "+
+                                              from.path.name)
     }
     case None => throw new RuntimeException("No executor found for "+
                                             from.path.name)
@@ -428,22 +457,33 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def postContainerStopped(executor: ActorRef) {}
 
-  protected def report: Receive = { 
+  protected def messageFromCollector: Receive = { 
     case GetGroomStats =>  sender ! currentGroomStats
-    case GetTaskStats => { // sender ! TaskStats(tasks) 
-    }
-    case rest@_ => LOG.warning("Unknown metrics request for reporting from {}",
+    case GetTaskStats => // TODO: sender ! TaskStats(tasks) 
+    case rest@_ => LOG.warning("Unknown stats request for reporting from {}",
                                sender.path.name)
   }
 
-  // TODO: check which task runs on corresponded executor.
-  //       if found, pass task id to master waiting for instruction
-  //       else log
-  protected def containerOffline: Receive = {
-    case ContainerOffline(slotSeq) => 
- 
+  /**
+   * Delegate to groom notifying master that a task fails.
+   * The message comes from container to executor.
+   */
+  protected def messageFromContainer: Receive = {
+    case ContainerOffline(slotSeq) => slots.find( slot => 
+      slot.seq == slotSeq
+    ) match {
+      case Some(found) => found.taskAttemptId.map { id => 
+        groom ! TaskFailure(id) 
+        // TODO: also report to tracker for blacklist stats
+        //       groom ! ContainerFailure(slotSeq)
+        //       groom forward ContainerFailure(slotSeq)
+        //       tracker records groom host:port -> (slot, crash count)
+      } 
+      case None => LOG.warning("Unknown container with slot seq {} fails!", 
+                               slotSeq)
+    }
   }
 
-  override def receive = tickMessage orElse report orElse launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse receiveDirective orElse containerOffline orElse unknown
+  override def receive = tickMessage orElse messageFromCollector orElse launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse receiveDirective orElse messageFromContainer orElse unknown
 
 }
