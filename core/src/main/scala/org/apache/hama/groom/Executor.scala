@@ -185,7 +185,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * @param hamaHome is pointed to hama home.dir directory.
    * @return String of classpath value.
    */
-  def classpath(hamaHome: String, parentClasspath: String): String = {
+  protected def classpath(hamaHome: String, parentClasspath: String): String = {
     if(null == hamaHome) 
       throw new RuntimeException("Variable hama.home.dir is not set!")
     var cp = "./:%s:%s/conf".format(parentClasspath, hamaHome)
@@ -201,7 +201,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * Fork a child process based on command assembled.
    * @param slotSeq indicate which seq the slot is.
    */
-  def fork(slotSeq: Int, from: ActorRef) {
+  protected def fork(slotSeq: Int, from: ActorRef) {
     val containerClass = conf.getClass("bsp.child.class", classOf[Container])
     LOG.debug("Container class to be instantiated is {}", containerClass)
     val cmd = javaArgs(javacp, slotSeq, containerClass)
@@ -216,23 +216,23 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * @param cmd is the command to excute the process.
    * @param conf contains related information for creating process.
    */
-  def createProcess(seq: Int, cmd: Seq[String], conf: HamaConfiguration): 
-    Try[Instances] = try { 
-      val builder = new ProcessBuilder(seqAsJavaList(cmd))
-      builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
-      val process = builder.start
-      val stdout = spawn("stdout%s".format(seq), classOf[StdOut], 
-                         process.getInputStream, conf, self)
+  protected def createProcess(seq: Int, cmd: Seq[String], 
+                              conf: HamaConfiguration): Try[Instances] = try { 
+    val builder = new ProcessBuilder(seqAsJavaList(cmd))
+    builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
+    val process = builder.start
+    val stdout = spawn("stdout%s".format(seq), classOf[StdOut], 
+                       process.getInputStream, conf, self)
                                 
-      val stderr = spawn("stderr%s".format(seq), classOf[StdErr], 
-                         process.getErrorStream, conf, self)
-      Success(Instances(process, stdout, stderr))
-    } catch {
-      case ioe: IOException => {
-        LOG.error("Fail launching Container process {} for slot {}", ioe, seq) 
-        Failure(ioe)
-      }
+    val stderr = spawn("stderr%s".format(seq), classOf[StdErr], 
+                       process.getErrorStream, conf, self)
+    Success(Instances(process, stdout, stderr))
+  } catch {
+    case ioe: IOException => {
+      LOG.error("Fail launching Container process {} for slot {}", ioe, seq) 
+      Failure(ioe)
     }
+  }
 
   /**
    * Create a container for executing tasks that will assign to it.
@@ -250,13 +250,13 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * This should happens after {@link Container} is ready.
    * @param Receive is partial function.
    */
-  def launchTask: Receive = {
+  protected def launchTask: Receive = {
     case action: LaunchTask => container.map { c => 
       c ! new LaunchTask(action.task)
     }
   }
 
-  def launchAck: Receive = {
+  protected def launchAck: Receive = {
     case action: LaunchAck => 
       taskCounsellor ! new LaunchAck(action.slotSeq, action.taskAttemptId) 
   }
@@ -266,14 +266,14 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * This should happens after {@link Container} is ready.
    * @param Receive is partial function.
    */
-  def resumeTask: Receive = {
+  protected def resumeTask: Receive = {
     case action: ResumeTask => container.map { c => 
       c ! new ResumeTask(action.task)
     }
   }
 
 
-  def resumeAck: Receive = {
+  protected def resumeAck: Receive = {
     case action: ResumeAck => 
       taskCounsellor ! new ResumeAck(action.slotSeq, action.taskAttemptId)
   }
@@ -283,7 +283,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * This should happens after {@link Container} is ready.
    * @param Receive is partial function.
    */
-  def killTask: Receive = {
+  protected def killTask: Receive = {
     case action: KillTask => container.map { c => 
       c ! new KillTask(action.taskAttemptId)
     }
@@ -323,7 +323,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * Container notify when it's in ready state.
    * @return Receive is partial function.
    */
-  def containerReady: Receive = {
+  protected def containerReady: Receive = {
     case ContainerReady(seq) => {
       container = Option(sender)
       while(!commandQueue.isEmpty) {
@@ -335,14 +335,14 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
     }
   }
 
-  def afterContainerReady(seq: Int, target: ActorRef) = 
+  protected def afterContainerReady(seq: Int, target: ActorRef) = 
     target ! PullForExecution(seq) 
 
   /**
    * Notify when Container is stopped.
    * @return Receive is partial function.
    */
-  def containerStopped: Receive = {
+  protected def containerStopped: Receive = {
     case ContainerStopped => taskCounsellor ! ContainerStopped
   }
 
@@ -350,7 +350,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * Send StopContainer message to shutdown Container process.
    * @return Receive is partial function.
    */
-  def stopProcess: Receive = {
+  protected def stopProcess: Receive = {
     case StopProcess => container match {
       case None => 
         commandQueue = commandQueue.enqueue(Command(StopContainer, sender)) 
@@ -363,7 +363,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * child process.
    * @param Receive is partial function.
    */
-  def shutdownContainer: Receive = {
+  protected def shutdownContainer: Receive = {
     case ShutdownContainer => {
       container match {
         case None => commandQueue = 
@@ -396,7 +396,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
     case r: Report => taskCounsellor ! r
   }
 
-  def receive = launchAck orElse occupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownContainer orElse report orElse unknown
+  override def receive = launchAck orElse occupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse terminated orElse shutdownContainer orElse report orElse unknown
      
 }
 
