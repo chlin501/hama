@@ -47,20 +47,10 @@ import scala.util.Success
 import scala.util.Try
 
 trait ExecutorMessages
-/**
- * Slot sequence value is smaller than 0 (inclusive).
- */
-final case class IllegalSlotSequence(seq: Int) extends ExecutorMessages
 final case class Command(msg: Any, recipient: ActorRef) extends ExecutorMessages
 final case object StreamClosed extends ExecutorMessages   
 final case class Instances(process: Process, stdout: ActorRef, 
                            stderr: ActorRef) extends ExecutorMessages
-final case class PeerProcessCreationFailure(slotSeq: Int, cause: Throwable) 
-      extends ExecutorMessages
-/**
- * Denote which forked process is offline.
- */
-final case class ContainerOffline(slotSeq: Int) extends ExecutorMessages
 
 trait ExecutorLog { // TODO: refactor this after all log is switched 
 
@@ -139,21 +129,21 @@ object Executor {
  * An actor forks a child process for executing tasks.
  * @param conf cntains necessary setting for launching the child process.
  */
-class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef) 
+class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef) 
       extends Service with Spawnable {
 
   import Executor._
 
   type CommandQueue = Queue[Command]
 
-  protected val operation = Operation.get(conf)
   protected var commandQueue = Queue[Command]()
   /* container is the entry point that takes cares of peer execution */
   protected var container: Option[ActorRef] = None 
   protected var instances: Option[Instances] = None
   protected var isStdoutClosed = false
   protected var isStderrClosed = false
-  protected var slotSeq: Int = -1
+
+  override def initializeServices() = fork(slotSeq) 
 
   /**
    * Pick up a port value configured in HamaConfiguration object. Otherwise
@@ -211,18 +201,22 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * Fork a child process based on command assembled.
    * @param slotSeq indicate which seq the slot is.
    */
-  protected def fork(slotSeq: Int, from: ActorRef) {
+  protected def fork(slotSeq: Int) {
     val containerClass = conf.getClass("bsp.child.class", classOf[Container])
     LOG.debug("Container class to be instantiated: {}", containerClass)
     val cmd = javaArgs(javacp, slotSeq, containerClass)
     createProcess(slotSeq, cmd, conf) match {
       case Success(instances) => this.instances = Option(instances)
-      case Failure(cause) => from ! PeerProcessCreationFailure(slotSeq, cause)
+      case Failure(cause) => {
+        LOG.error("Fail forking child process for slot {} due to {}", slotSeq, 
+                  cause)
+        context.stop(self)
+      }
     }
   }
 
   /**
-   * Fork a child process as container.
+   * Create container subprocess.
    * @param cmd is the command to excute the process.
    * @param conf contains related information for creating process.
    */
@@ -243,20 +237,6 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
       Failure(ioe)
     }
   }
-
-  /**
-   * Create a container for executing tasks that will assign to it.
-   * @return Receive partial function.
-   */
-  protected def fork: Receive = {
-    case Fork(seq) => seq match {
-      case s if (s <= 0) => sender ! IllegalSlotSequence(seq)
-      case _ => {
-        this.slotSeq = seq
-        fork(seq, sender) 
-      }
-    }
-  } 
 
   /**
    * Ask {@link Container} to launch a task.
@@ -409,12 +389,18 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * @param target container that is offline.
    */
   override def offline(target: ActorRef) = target.path.name match { 
-    case name if name.equals(Container.name(slotSeq)) => 
-      taskCounsellor ! ContainerOffline(slotSeq)
+    case name if name.equals(Container.name(slotSeq)) => {
+      instances.map { o => {
+        o.process.destroy
+        context.stop(o.stdout)
+        context.stop(o.stderr)
+      }} 
+      context.stop(self) 
+    }
     case _ => LOG.warning("Unknown contianer {} is offline!", target.path.name)
   }
 
-  override def receive = launchAck orElse occupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse fork orElse streamClosed orElse stopProcess orElse containerStopped orElse superviseeIsTerminated orElse shutdownContainer orElse report orElse unknown
+  override def receive = launchAck orElse occupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse streamClosed orElse stopProcess orElse containerStopped orElse superviseeIsTerminated orElse shutdownContainer orElse report orElse unknown
      
 }
 

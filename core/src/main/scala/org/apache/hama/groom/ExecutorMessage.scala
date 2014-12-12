@@ -21,8 +21,6 @@ import org.apache.hama.HamaConfiguration
 
 sealed trait ExecutorMessage
 
-private[groom] final case class Fork(slotSeq: Int) extends ExecutorMessage
-
 /**
  * {@link TaskCounsellor} notifies {@link Executor} to stop
  * {@link Container}.
