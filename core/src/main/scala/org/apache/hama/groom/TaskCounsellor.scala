@@ -34,7 +34,6 @@ import org.apache.hama.master.Scheduler
 import org.apache.hama.master.Directive
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.GetGroomStats
-import org.apache.hama.monitor.GetTaskStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.GroomStats._
 import scala.collection.immutable.Queue
@@ -177,12 +176,17 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   /**
    * Initialize an executor if needed; otherwise dispatch directive to the 
    * executor that has no task being executed.
+   * 
+   * Once initialized or dispatched, corresponded container will acks for 
+   * booking task attempt id field in slot.
    */
-  protected def initializeExecutor(d: Directive) = shouldNewExecutor match {
+  protected def initializeOrDispatch(d: Directive) = shouldNewExecutor match {
     case true => slots.find( slot => None.equals(slot.executor)) match {
       case Some(found) => {
-        updateSlot(found, found.seq, d.task.getId, d.master, 
-                   newExecutor(found)) 
+        val newSlot = Slot(found.seq, None, d.master, 
+                           Option(newExecutor(found)))
+        slots -= found
+        slots += newSlot
         directiveQueue = directiveQueue.enqueue(d)
       }
       case None =>
@@ -191,13 +195,13 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       case Some(found) => d.action match {
         case Launch => found.executor.map { e => 
           e ! new LaunchTask(d.task) 
-          updateSlot(found, found.seq, d.task.getId, d.master, e) 
+          pendingQueue = pendingQueue.enqueue(d)
         }
         case Resume => found.executor.map { e => 
           e ! new ResumeTask(d.task) 
-          updateSlot(found, found.seq, d.task.getId, d.master, e) 
+          pendingQueue = pendingQueue.enqueue(d)
         }
-        case Kill => // not here
+        case Kill => // won't be here
       }
       case None =>
     }
@@ -205,16 +209,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   // TODO: when a task finishes, by exaiming stats reported from executor, 
   //       update slot taskAttemptId to None
-
-  protected def updateSlot(old: Slot, 
-                           slotSeq: Int, 
-                           taskAttemptId: TaskAttemptID, 
-                           master: String, 
-                           executor: ActorRef) {
-    val newSlot = Slot(slotSeq, Option(taskAttemptId), master, Option(executor))
-    slots -= old 
-    slots += newSlot
-  }
 
   protected def shouldNewExecutor(): Boolean = slots.exists( slot =>
     None.equals(slot.executor)
@@ -240,15 +234,19 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
   }
 
+  /**
+   * Initialize child process if no executor found; otherwise dispatch action 
+   * to child process directly.
+   * When directive is kill, slot update will be done after ack is received.
+   */
   protected def directiveReceived(directive: Directive) {
     LOG.info("Receive directive action: "+directive.action+" task: "+
              directive.task.getId.toString+" master: "+directive.master)
     directive.action match {
-      case Launch | Resume => initializeExecutor(directive) 
+      case Launch | Resume => initializeOrDispatch(directive) 
       case Kill => findTarget(directive.task) match {
         case Some(slot) => slot.executor.map { e => 
-          e ! new KillTask(directive.task.getId)
-          updateSlot(slot, slot.seq, null, slot.master, e)
+          e ! new KillTask(directive.task.getId) 
         }
         case None => LOG.warning("Ask to Kill task {}, but no "+
                                  "corresponded executor found!", 
@@ -269,8 +267,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     slots.find(slot => (slotSeq == slot.seq)) match {
       case Some(slot) => slot.taskAttemptId match {
         case None => {
-          val newSlot = Slot(slot.seq, Some(task.getId), slot.master, 
-                             Some(executor))
+          val newSlot = Slot(slot.seq, Option(task.getId), slot.master, 
+                             Option(executor))
           slots -= slot 
           slots += newSlot
         }
@@ -285,7 +283,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   }
 
   /**
-   * Executor ack for Launch action.
+   * Executor confirms lauch task received.
    * @return Receive is partial function.
    */
   protected def launchAck: Receive = {
@@ -340,7 +338,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @param action is the KillAck that contains {@link TaskAttemptID} and slot
    *               seq. 
    */
-  def doKillAck(action: KillAck) = slots.find( slot => {
+  protected def doKillAck(action: KillAck) = slots.find( slot => {
     val seqEquals = (slot.seq == action.slotSeq)  
     val idEquals = slot.taskAttemptId match {
       case Some(found) => found.equals(action.taskAttemptId)
@@ -348,15 +346,16 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
     seqEquals && idEquals
   }) match {
-    case Some(slot) => {
-      val newSlot = Slot(slot.seq, None, slot.master, slot.executor)
-      slots -= slot 
-      slots += newSlot 
-      // TODO: inform reporter!! 
-    } 
+    case Some(oldSlot) => cleanupSlot(oldSlot) // TODO: also inform reporter!!
     case None => LOG.warning("Killed task {} not found for slot seq {}. "+
-                             "Slots contains {}", action.taskAttemptId, 
+                             "Slots currently contain {}", action.taskAttemptId,
                              action.slotSeq, slots)
+  }
+
+  protected def cleanupSlot(old: Slot) {
+    val newSlot = Slot(old.seq, None, old.master, old.executor)
+    slots -= old 
+    slots += newSlot
   }
 
   /**
@@ -373,17 +372,18 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     case true => LOG.warning("Pending queue is empty when slot {}, "+
                              "task {} ack!", slotSeq, taskAttemptId)
     case false => pendingQueue.find( directive => 
-      directive.task.getId.equals(taskAttemptId)) match {
-        case Some(directive) => { 
-          LOG.debug("doAck action: {} task: {} executor: {}", 
-                    directive.action, directive.task.getId, from)
-          book(slotSeq, directive.task, from)
-          pendingQueue = pendingQueue diff Queue(directive)
-          // TODO: inform reporter!!
-        }
-        case None => LOG.error("No pending directive for task {}, slot {} "+
-                               "matches ack.", taskAttemptId, slotSeq)
+      directive.task.getId.equals(taskAttemptId)
+    ) match {
+      case Some(directive) => { 
+        LOG.debug("doAck action: {} task: {} executor: {}", 
+                  directive.action, directive.task.getId, from)
+        book(slotSeq, directive.task, from)
+        pendingQueue = pendingQueue diff Queue(directive)
+        // TODO: inform reporter!!
       }
+      case None => LOG.error("No pending directive for task {}, slot {} "+
+                             "matches ack.", taskAttemptId, slotSeq)
+    }
   } 
 
   /**
@@ -402,7 +402,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
           pendingQueue = pendingQueue.enqueue(directive)
           directiveQueue = rest 
         }
-        case Kill => // Kill will be issued when receiveDirective, not here.
+        case Kill => LOG.warning("Container {} shouldn't request kill action!",
+                                 sender.path.name)
         case Resume => {
           LOG.debug("{} requests for ResumeTask.", sender)
           sender ! new ResumeTask(directive.task)
@@ -472,7 +473,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def messageFromCollector: Receive = { 
     case GetGroomStats =>  sender ! currentGroomStats
-    case GetTaskStats => // TODO: remove this one.
     case rest@_ => LOG.warning("Unknown stats request for reporting from {}",
                                sender.path.name)
   }

@@ -52,5 +52,4 @@ final class TaskStatsCollector extends Collector {
   override def statsFound(s: Writable) = report(s)
 
   override def dest(): String = classOf[JobTasksTracker].getName
-
 }
