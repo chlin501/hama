@@ -419,7 +419,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
                                sender.path.name)
   }
 
-  // TODO: retry count for newExecutor func.
+  // TODO: retry count constraint for newExecutor func. 
+  //       if retry exceeds upper limit, remove corresponded slot seq from slots
+  //       update max tasks (create a new groom stats) to master
   override def offline(from: ActorRef) = from.path.name match {
     case name if name.contains("_executor_") => from.path.name.split("_") match{
       case ary if (ary.size == 3) => newExecutor(ary(2).toInt) 
