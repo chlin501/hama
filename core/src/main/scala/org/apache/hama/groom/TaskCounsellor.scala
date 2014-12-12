@@ -82,7 +82,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   /**
    * {@link Directive}s are stored in this queue when executors are not yet
-   * initialized. Once executors are all initializsed, directives will be
+   * initialized. Once executors are all initialized, directives will be
    * dispatched to executor directly.
    */
   protected var directiveQueue = Queue.empty[Directive]
@@ -91,7 +91,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * {@link Directive}s to be acked will be placed in this queue. After acked,
    * the directive will be removed.
    */
-  protected var pendingQueue = Queue.empty[Directive]
+  //protected var pendingQueue = Queue.empty[Directive]
 
   protected def maxTasks(): Int = setting.hama.getInt("bsp.tasks.maximum", 3)
 
@@ -195,11 +195,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       case Some(found) => d.action match {
         case Launch => found.executor.map { e => 
           e ! new LaunchTask(d.task) 
-          pendingQueue = pendingQueue.enqueue(d)
+          //pendingQueue = pendingQueue.enqueue(d)
         }
         case Resume => found.executor.map { e => 
           e ! new ResumeTask(d.task) 
-          pendingQueue = pendingQueue.enqueue(d)
+          //pendingQueue = pendingQueue.enqueue(d)
         }
         case Kill => // won't be here
       }
@@ -263,23 +263,24 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @param task is the task being executed
    * @param executor is the executor that runs the task.
    */
-  protected def book(slotSeq: Int, task: Task, executor: ActorRef) {
-    slots.find(slot => (slotSeq == slot.seq)) match {
-      case Some(slot) => slot.taskAttemptId match {
-        case None => {
-          val newSlot = Slot(slot.seq, Option(task.getId), slot.master, 
-                             Option(executor))
-          slots -= slot 
-          slots += newSlot
-        }
-        case Some(found) => 
-          throw new RuntimeException("Task "+task.getId+" can't run on slot "+
-                                     slotSeq+" because "+found+" is running.")
+  protected def book(slotSeq: Int, taskAttemptId: TaskAttemptID, 
+                     executor: ActorRef) = slots.find( slot => 
+    (slotSeq == slot.seq)
+  ) match {
+    case Some(slot) => slot.taskAttemptId match {
+      case None => {
+        val newSlot = Slot(slot.seq, Option(taskAttemptId), slot.master, 
+                           Option(executor))
+        slots -= slot 
+        slots += newSlot
       }
-      case None => 
-        throw new RuntimeException("Slot with seq "+slotSeq+" not found "+
-                                   "for task "+task.getId+"!")
+      case Some(found) => 
+        throw new RuntimeException("Task "+found+" can't be booked at slot "+
+                                   slotSeq+" for the task "+found+" exists!")
     }
+    case None => throw new RuntimeException("Slot with seq "+slotSeq+
+                                            " not found for task "+
+                                            taskAttemptId+"!")
   }
 
   /**
@@ -289,7 +290,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def launchAck: Receive = {
     case action: LaunchAck => {
       preLaunchAck(action)
-      doAck(action.slotSeq, action.taskAttemptId, sender)
+      book(action.slotSeq, action.taskAttemptId, sender)
       postLaunchAck(action)
     }
   }
@@ -299,13 +300,13 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def postLaunchAck(ack: LaunchAck) { }
 
   /**
-   * Executor ack for Resume action.
+   * Executor confirms resume task received.
    * @return Receive is partial function.
    */
   protected def resumeAck: Receive = {
     case action: ResumeAck => {
       preResumeAck(action)
-      doAck(action.slotSeq, action.taskAttemptId, sender)
+      book(action.slotSeq, action.taskAttemptId, sender)
       postResumeAck(action)
     }
   }
@@ -367,6 +368,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @param slotSeq is the sequence number of slot.
    * @param taskAttemptId is the task attempt id executed at Container.
    */
+
+/*
   protected def doAck(slotSeq: Int, taskAttemptId: TaskAttemptID, 
                       from: ActorRef): Unit = pendingQueue.isEmpty match {
     case true => LOG.warning("Pending queue is empty when slot {}, "+
@@ -378,18 +381,20 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
         LOG.debug("doAck action: {} task: {} executor: {}", 
                   directive.action, directive.task.getId, from)
         book(slotSeq, directive.task, from)
-        pendingQueue = pendingQueue diff Queue(directive)
+        //pendingQueue = pendingQueue diff Queue(directive)
         // TODO: inform reporter!!
       }
       case None => LOG.error("No pending directive for task {}, slot {} "+
                              "matches ack.", taskAttemptId, slotSeq)
     }
   } 
+*/
 
   /**
    * Executor on behalf of Container requests for task execution.
    * - dequeue a directive from queue.
    * - perform function accoding to {@link Directive#action}.
+   * - move the directive to pending queue waiting for ack.
    * @return Receive is partial function.
    */
   protected def pullForExecution: Receive = {
@@ -399,24 +404,22 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
         case Launch => {
           LOG.debug("{} requests for LaunchTask.", sender)
           sender ! new LaunchTask(directive.task)
-          pendingQueue = pendingQueue.enqueue(directive)
-          directiveQueue = rest 
+          //pendingQueue = pendingQueue.enqueue(directive)
         }
         case Kill => LOG.warning("Container {} shouldn't request kill action!",
                                  sender.path.name)
         case Resume => {
           LOG.debug("{} requests for ResumeTask.", sender)
           sender ! new ResumeTask(directive.task)
-          pendingQueue = pendingQueue.enqueue(directive)
-          directiveQueue = rest  
+          //pendingQueue = pendingQueue.enqueue(directive)
         }
         case _ => {
           LOG.warning("Unknown action {} for task {} from master {}", 
                       directive.action, directive.task.getId, 
                       directive.master)
-          directiveQueue = rest
         }
       }
+      directiveQueue = rest
     }
   }
 
