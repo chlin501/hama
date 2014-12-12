@@ -87,12 +87,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected var directiveQueue = Queue.empty[Directive]
 
-  /**
-   * {@link Directive}s to be acked will be placed in this queue. After acked,
-   * the directive will be removed.
-   */
-  //protected var pendingQueue = Queue.empty[Directive]
-
   protected def maxTasks(): Int = setting.hama.getInt("bsp.tasks.maximum", 3)
 
   /**
@@ -107,34 +101,22 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     LOG.debug("{} GroomServer slots are initialied.", constraint)
   }
 
-
   override def initializeServices = {
     tick(self, TaskRequest)
     initializeSlots(maxTasks)
   }
 
-  /**
-   * Check if there is slot available. 
-   * @return Boolean denotes whether having free slots. Tree if free slots 
-   *                 available, false otherwise.
-   */
-  protected def hasFreeSlot(): Boolean = {
-    var isOccupied = true
-    var freeSlot = false
-    slots.takeWhile( slot => {
-      isOccupied = !None.equals(slot.taskAttemptId)
-      isOccupied
-    })
-    if(!isOccupied) freeSlot = true else freeSlot = false
-    freeSlot
-  }
+  protected def numSlotsOccupied(): Int = slots.count( slot => 
+    !None.equals(slot.taskAttemptId)
+  ) 
   
   /**
-   * Periodically request master for a new task when the groom has free slots
+   * Periodically request to master for a new task when the groom has free slots
    * and no task in directive queue.
    */
   override def ticked(msg: Tick): Unit = msg match {
-    case TaskRequest => if(hasFreeSlot) groom ! RequestTask(currentGroomStats)
+    case TaskRequest => if((directiveQueue.size + numSlotsOccupied) < maxTasks)
+      groom ! RequestTask(currentGroomStats) 
     case _ => 
   }
   
