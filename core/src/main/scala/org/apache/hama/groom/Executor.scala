@@ -55,7 +55,7 @@ final case class Command(msg: Any, recipient: ActorRef) extends ExecutorMessages
 final case object StreamClosed extends ExecutorMessages   
 final case class Instances(process: Process, stdout: ActorRef, 
                            stderr: ActorRef) extends ExecutorMessages
-final case class PeerProcessCreationFailure(cause: Throwable) 
+final case class PeerProcessCreationFailure(slotSeq: Int, cause: Throwable) 
       extends ExecutorMessages
 /**
  * Denote which forked process is offline.
@@ -130,6 +130,9 @@ object Executor {
   def defaultOpts(conf: HamaConfiguration): String = 
     conf.get("bsp.child.java.opts", "-Xmx200m")
 
+  def simpleName(conf: HamaConfiguration, slotSeq: Int): String = 
+    GroomServer.simpleName(conf) + "_executor_" + slotSeq
+
 }
 
 /**
@@ -145,6 +148,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
 
   protected val operation = Operation.get(conf)
   protected var commandQueue = Queue[Command]()
+  /* container is the entry point that takes cares of peer execution */
   protected var container: Option[ActorRef] = None 
   protected var instances: Option[Instances] = None
   protected var isStdoutClosed = false
@@ -213,7 +217,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
     val cmd = javaArgs(javacp, slotSeq, containerClass)
     createProcess(slotSeq, cmd, conf) match {
       case Success(instances) => this.instances = Option(instances)
-      case Failure(cause) => from ! PeerProcessCreationFailure(cause)
+      case Failure(cause) => from ! PeerProcessCreationFailure(slotSeq, cause)
     }
   }
 
@@ -329,7 +333,7 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
   }
 
   /**
-   * Container notify when it's in ready state.
+   * Container replies when it's ready.
    * @return Receive is partial function.
    */
   protected def containerReady: Receive = {
@@ -374,20 +378,18 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
    * @param Receive is partial function.
    */
   protected def shutdownContainer: Receive = {
-    case ShutdownContainer => {
-      container match {
-        case None => commandQueue = 
-          commandQueue.enqueue(Command(ShutdownContainer, sender)) 
-        case Some(c) => {
-          LOG.debug("Shutdown container {}", c)
-          c ! ShutdownContainer 
-        }
+    case ShutdownContainer => container match {
+      case None => commandQueue = 
+         commandQueue.enqueue(Command(ShutdownContainer, sender)) 
+      case Some(c) => {
+        LOG.debug("Shutdown container {}", c)
+        c ! ShutdownContainer 
       }
     }
   }
 
   /**
-   * Reply to {@link TaskCounsellor} that slot is occupied!
+   * Notify {@link TaskCounsellor} that slot is occupied!
    * @return Receive is partial function.
    */
   protected def occupied: Receive = {
@@ -402,6 +404,10 @@ class Executor(conf: HamaConfiguration, taskCounsellor: ActorRef)
     case r: Report => taskCounsellor ! r
   }
 
+  /**
+   * Observe container offline event, so notify task counsellor.
+   * @param target container that is offline.
+   */
   override def offline(target: ActorRef) = target.path.name match { 
     case name if name.equals(Container.name(slotSeq)) => 
       taskCounsellor ! ContainerOffline(slotSeq)

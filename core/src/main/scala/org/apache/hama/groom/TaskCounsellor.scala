@@ -73,8 +73,6 @@ object TaskCounsellor {
 
 }
 
-// TODO: create stats class (extends writable) with slot, max task, etc. info
-//       once started up, pass spec to reporter, which reports to monitor.
 class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef) 
       extends Service with Spawnable with Periodically {
 
@@ -84,15 +82,17 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected var slots = Set.empty[Slot]
 
   /**
-   * {@link Directive}s are stored in this queue. 
+   * {@link Directive}s are stored in this queue when executors are not yet
+   * initialized. Once executors are all initializsed, directives will be
+   * dispatched to executor directly.
    */
-  protected var directiveQueue = Queue[Directive]()
+  protected var directiveQueue = Queue.empty[Directive]
 
   /**
    * {@link Directive}s to be acked will be placed in this queue. After acked,
-   * directive will be removed.
+   * the directive will be removed.
    */
-  protected var pendingQueue = Queue[Directive]()
+  protected var pendingQueue = Queue.empty[Directive]
 
   protected def maxTasks(): Int = setting.hama.getInt("bsp.tasks.maximum", 3)
 
@@ -114,28 +114,28 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     initializeSlots(maxTasks)
   }
 
-  protected def hasTaskInQueue: Boolean = !directiveQueue.isEmpty
-
   /**
    * Check if there is slot available. 
    * @return Boolean denotes whether having free slots. Tree if free slots 
    *                 available, false otherwise.
    */
-  protected def hasFreeSlots(): Boolean = {
+  protected def hasFreeSlot(): Boolean = {
     var isOccupied = true
-    var hasFreeSlot = false
-    slots.takeWhile(slot => {
+    var freeSlot = false
+    slots.takeWhile( slot => {
       isOccupied = !None.equals(slot.taskAttemptId)
       isOccupied
     })
-    if(!isOccupied) hasFreeSlot = true else hasFreeSlot = false
-    hasFreeSlot
+    if(!isOccupied) freeSlot = true else freeSlot = false
+    freeSlot
   }
   
+  /**
+   * Periodically request master for a new task when the groom has free slots
+   * and no task in directive queue.
+   */
   override def ticked(msg: Tick): Unit = msg match {
-    case TaskRequest => if(hasFreeSlots) { 
-      if(!hasTaskInQueue) groom ! RequestTask(currentGroomStats)
-    }
+    case TaskRequest => if(hasFreeSlot) groom ! RequestTask(currentGroomStats)
     case _ => 
   }
   
@@ -167,52 +167,65 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @return Option[ActorRef] contains {@link Executor} if matched; otherwise
    *                          None is returned.
    */
-  protected def findTargetToKill(task: Task): Option[ActorRef] = 
-    slots.find( slot => slot.taskAttemptId match {
+  protected def findTarget(task: Task): Option[Slot] = slots.find( slot => 
+    slot.taskAttemptId match {
       case Some(taskAttemptId) => taskAttemptId.equals(task.getId)
       case None => false
-    }) match {
-      case Some(slot) => slot.executor 
-      case None => None
     }
+  ) 
 
   /**
-   * 1. Create an Executor actor.
-   * 2. Send Fork message so that {@link Executor} will fork a child process.
-   * Forked child process will send {@link PullForExecution} message for task 
-   * execution.
+   * Initialize an executor if needed; otherwise dispatch directive to the 
+   * executor that has no task being executed.
    */
-  protected def initializeExecutor(master: String): Unit = pickUp match {
-    case Some(slot) => { 
-      LOG.debug("Initialize executor for slot seq {}.", slot.seq)
-      val executorName = setting.name + "_executor_" + slot.seq // TODO: move to object Executor { def name(setting, seq): String ... }
-      val executor = spawn(executorName, classOf[Executor], setting.hama, self)
-      executor ! Fork(slot.seq) 
-      val newSlot = Slot(slot.seq, None, master, Some(executor))
-      slots -= slot
-      slots += newSlot
+  protected def initializeExecutor(d: Directive) = shouldNewExecutor match {
+    case true => slots.find( slot => None.equals(slot.executor)) match {
+      case Some(found) => {
+        updateSlot(found, found.seq, d.task.getId, d.master, 
+                   newExecutor(found)) 
+        directiveQueue = directiveQueue.enqueue(d)
+      }
+      case None =>
     }
-    case None => LOG.debug("All slots are in use! {}", slots.mkString("\n"))
+    case false => slots.find( slot => None.equals(slot.taskAttemptId)) match {
+      case Some(found) => d.action match {
+        case Launch => found.executor.map { e => 
+          e ! new LaunchTask(d.task) 
+          updateSlot(found, found.seq, d.task.getId, d.master, e) 
+        }
+        case Resume => found.executor.map { e => 
+          e ! new ResumeTask(d.task) 
+          updateSlot(found, found.seq, d.task.getId, d.master, e) 
+        }
+        case Kill => // not here
+      }
+      case None =>
+    }
   }
 
-  /**
-   * Pick up a slot that is not in use.
-   * @return Option[Slot] contains either a slot or None if no slot available.
-   */
-  protected def pickUp: Option[Slot] = {
-    var free: Slot = null
-    var flag = true
-    slots.takeWhile( slot => {
-      val isEmpty = None.equals(slot.taskAttemptId) //TODO: it is also necessary to check if executor is None!!! Otherwise the slot picked up may be (task == None) but executor is already occupied (executor != None).
-      if(isEmpty) {
-        free = slot
-        flag = false
-      } else {
-        if(null != free) flag = false
-      }
-      flag
-    })
-    if(null == free) None else Some(free)
+  // TODO: when a task finishes, by exaiming stats reported from executor, 
+  //       update slot taskAttemptId to None
+
+  protected def updateSlot(old: Slot, 
+                           slotSeq: Int, 
+                           taskAttemptId: TaskAttemptID, 
+                           master: String, 
+                           executor: ActorRef) {
+    val newSlot = Slot(slotSeq, Option(taskAttemptId), master, Option(executor))
+    slots -= old 
+    slots += newSlot
+  }
+
+  protected def shouldNewExecutor(): Boolean = slots.exists( slot =>
+    None.equals(slot.executor)
+  )
+
+  protected def newExecutor(foundSlot: Slot): ActorRef = { 
+    LOG.debug("Initialize executor for slot seq {}.", foundSlot.seq)
+    val executorName = Executor.simpleName(setting.hama, foundSlot.seq)
+    val executor = spawn(executorName, classOf[Executor], setting.hama, self) 
+    executor ! Fork(foundSlot.seq) 
+    executor
   }
 
   /**
@@ -231,12 +244,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     LOG.info("Receive directive action: "+directive.action+" task: "+
              directive.task.getId.toString+" master: "+directive.master)
     directive.action match {
-      case Launch | Resume => {
-        initializeExecutor(directive.master) 
-        directiveQueue = directiveQueue.enqueue(directive)
-      }
-      case Kill => findTargetToKill(directive.task) match {
-        case Some(executor) => executor ! new KillTask(directive.task.getId)
+      case Launch | Resume => initializeExecutor(directive) 
+      case Kill => findTarget(directive.task) match {
+        case Some(slot) => slot.executor.map { e => 
+          e ! new KillTask(directive.task.getId)
+          updateSlot(slot, slot.seq, null, slot.master, e)
+        }
         case None => LOG.warning("Ask to Kill task {}, but no "+
                                  "corresponded executor found!", 
                                  directive.task.toString)
@@ -459,16 +472,16 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def messageFromCollector: Receive = { 
     case GetGroomStats =>  sender ! currentGroomStats
-    case GetTaskStats => // TODO: sender ! TaskStats(tasks) 
+    case GetTaskStats => // TODO: remove this one.
     case rest@_ => LOG.warning("Unknown stats request for reporting from {}",
                                sender.path.name)
   }
 
   /**
    * Delegate to groom notifying master that a task fails.
-   * The message comes from container to executor.
+   * The message comes from container or executor.
    */
-  protected def messageFromContainer: Receive = {
+  protected def messageFromExecutor: Receive = {
     case ContainerOffline(slotSeq) => slots.find( slot => 
       slot.seq == slotSeq
     ) match {
@@ -476,14 +489,26 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
         groom ! TaskFailure(id) 
         // TODO: also report to tracker for blacklist stats
         //       groom ! ContainerFailure(slotSeq)
-        //       groom forward ContainerFailure(slotSeq)
-        //       tracker records groom host:port -> (slot, crash count)
+        //       then groom forward ContainerFailure(slotSeq) to master
+        //       where tracker records groom host:port -> (slot, crash count)
       } 
       case None => LOG.warning("Unknown container with slot seq {} fails!", 
                                slotSeq)
     }
+    case IllegalSlotSequence(seq) => 
+      LOG.warning("Unable to fork child process due to invalid slot seq "+seq) 
+    case PeerProcessCreationFailure(seq, cause) => {
+      // TODO: 1. fork again 
+      //          record retry times
+      //          once reach max retry do cleanup slots info and then go to 2.
+      //       2. or report to master in switching task to other node.
+      //          groom froward MoveTask(taskAttemptId) to master
+      //       
+      //       for 1 and 2 both do cleanup slots info associated slot to task
+      LOG.error("Fail forking a child process! Reason: {}", cause) 
+    }
   }
 
-  override def receive = tickMessage orElse messageFromCollector orElse launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse receiveDirective orElse messageFromContainer orElse unknown
+  override def receive = tickMessage orElse messageFromCollector orElse launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse receiveDirective orElse messageFromExecutor orElse unknown
 
 }

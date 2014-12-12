@@ -27,7 +27,8 @@ import org.apache.hama.monitor.Collector
 import org.apache.hama.monitor.GetTaskStats
 import org.apache.hama.monitor.master.JobTasksTracker
 
-
+// TODO: remove. task counsellor will forward task stats to tracker/ sched in 
+//       master.
 /**
  * Collector tasks stats and send to JobTasksTracker.
  */
