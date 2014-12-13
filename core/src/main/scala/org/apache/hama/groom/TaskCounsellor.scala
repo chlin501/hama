@@ -420,9 +420,17 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   // TODO: retry count constraint for newExecutor func. 
   //       if retry exceeds upper limit, remove corresponded slot seq from slots
   //       update max tasks (create a new groom stats) to master
+  //       - remove ack funcs.
+  //       - book slot with task attempt id once receiving pullForExecution msg
+  //         so when excutor offline, counsellor can notify master.
   override def offline(from: ActorRef) = from.path.name match {
     case name if name.contains("_executor_") => from.path.name.split("_") match{
-      case ary if (ary.size == 3) => newExecutor(ary(2).toInt) 
+      case ary if (ary.size == 3) => {
+        // - find matched seq with directive in queue (seq -> directive). 
+        //   if found, recreate executor (fork) 
+        //   else check coresponded slot and report to master
+        //newExecutor(ary(2).toInt) 
+      }
       case _ => LOG.warning("Invalid executor name", from.path.name)
     }
     case _ => LOG.warning("Unknown actor {} offline!", from.path.name)

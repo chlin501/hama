@@ -19,7 +19,8 @@ package org.apache.hama.groom
 
 import akka.actor.Actor
 import akka.actor.ActorRef
-import akka.actor.Terminated
+import akka.actor.OneForOneStrategy
+import akka.actor.SupervisorStrategy.Stop
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.File
@@ -42,6 +43,8 @@ import org.apache.hama.monitor.Report
 import org.apache.hama.util.BSPNetUtils
 import scala.collection.immutable.Queue
 import scala.collection.JavaConversions._
+import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.duration.DurationInt
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
@@ -143,6 +146,16 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
   protected var isStdoutClosed = false
   protected var isStderrClosed = false
 
+/*
+  protected var retries = 0
+  protected val maxRetries = conf.getInt("groom.container.max_retries", 3)
+*/
+
+  override val supervisorStrategy =
+    OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 5 minutes) {
+      case e: Exception => Stop  
+    }
+
   override def initializeServices() = fork(slotSeq) 
 
   /**
@@ -205,11 +218,12 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
     val containerClass = conf.getClass("bsp.child.class", classOf[Container])
     LOG.debug("Container class to be instantiated: {}", containerClass)
     val cmd = javaArgs(javacp, slotSeq, containerClass)
-    createProcess(slotSeq, cmd, conf) match {
+    newContainer(slotSeq, cmd, conf) match {
       case Success(instances) => this.instances = Option(instances)
       case Failure(cause) => {
-        LOG.error("Fail forking child process for slot {} due to {}", slotSeq, 
-                  cause)
+        LOG.info("Fail creating child process for slot {} due to {}", slotSeq,
+                 cause)
+        cleanupInstances
         context.stop(self)
       }
     }
@@ -220,8 +234,8 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
    * @param cmd is the command to excute the process.
    * @param conf contains related information for creating process.
    */
-  protected def createProcess(seq: Int, cmd: Seq[String], 
-                              conf: HamaConfiguration): Try[Instances] = try { 
+  protected def newContainer(seq: Int, cmd: Seq[String], 
+                             conf: HamaConfiguration): Try[Instances] = try { 
     val builder = new ProcessBuilder(seqAsJavaList(cmd))
     builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
     val process = builder.start
@@ -232,9 +246,9 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
                        process.getErrorStream, conf, self)
     Success(Instances(process, stdout, stderr))
   } catch {
-    case ioe: IOException => {
-      LOG.error("Fail launching Container process {} for slot {}", ioe, seq) 
-      Failure(ioe)
+    case e: Exception => {
+      LOG.error("Fail launching Container process {} for slot {}", e, seq) 
+      Failure(e)
     }
   }
 
@@ -384,23 +398,41 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
     case r: Report => taskCounsellor ! r
   }
 
+  protected def cleanupInstances() = { 
+    instances.map { o => {
+      o.process.destroy
+      context.stop(o.stdout)
+      context.stop(o.stderr)
+    }} 
+    instances = None
+  }
+
   /**
    * Observe container offline event, so notify task counsellor.
    * @param target container that is offline.
    */
   override def offline(target: ActorRef) = target.path.name match { 
     case name if name.equals(Container.name(slotSeq)) => {
-      instances.map { o => {
-        o.process.destroy
-        context.stop(o.stdout)
-        context.stop(o.stderr)
-      }} 
-      context.stop(self) 
+      LOG.warning("Container {} is offline!", target.path.name) 
+      cleanupInstances
+      context.stop(self)
     }
     case _ => LOG.warning("Unknown contianer {} is offline!", target.path.name)
   }
 
+/*
+  protected def retry() {
+    cleanupInstances    
+    retries match { 
+      case n if (n < maxRetries) => {
+        fork(slotSeq)
+        retries += 1
+      }
+      case _ => context.stop(self) 
+    }
+  }
+*/
+
   override def receive = launchAck orElse slotOccupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse streamClosed orElse stopProcess orElse containerStopped orElse superviseeIsTerminated orElse shutdownContainer orElse report orElse unknown
      
 }
-
