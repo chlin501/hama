@@ -237,25 +237,23 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @param task is the task being executed
    * @param executor is the executor that runs the task.
    */
-  protected def book(slotSeq: Int, taskAttemptId: TaskAttemptID, 
-                     executor: ActorRef) = slots.find( slot => 
-    (slotSeq == slot.seq)
-  ) match {
-    case Some(slot) => slot.taskAttemptId match {
-      case None => {
-        val newSlot = Slot(slot.seq, Option(taskAttemptId), slot.master, 
-                           Option(executor))
-        slots -= slot 
-        slots += newSlot
+  protected def book(slotSeq: Int, taskAttemptId: TaskAttemptID) = 
+    slots.find( slot => (slotSeq == slot.seq)) match {
+      case Some(slot) => slot.taskAttemptId match {
+        case None => {
+          val newSlot = Slot(slot.seq, Option(taskAttemptId), slot.master, 
+                             slot.executor)
+          slots -= slot 
+          slots += newSlot
+        }
+        case Some(found) => 
+          throw new RuntimeException("Task "+found+" can't be booked at slot "+
+                                     slotSeq+" for the task "+found+" exists!")
       }
-      case Some(found) => 
-        throw new RuntimeException("Task "+found+" can't be booked at slot "+
-                                   slotSeq+" for the task "+found+" exists!")
+      case None => throw new RuntimeException("Slot with seq "+slotSeq+
+                                              " not found for task "+
+                                              taskAttemptId+"!")
     }
-    case None => throw new RuntimeException("Slot with seq "+slotSeq+
-                                            " not found for task "+
-                                            taskAttemptId+"!")
-  }
 
   /**
    * Executor confirms lauch task received.
@@ -264,7 +262,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def launchAck: Receive = {
     case action: LaunchAck => {
       preLaunchAck(action)
-      book(action.slotSeq, action.taskAttemptId, sender)
+      book(action.slotSeq, action.taskAttemptId)
       postLaunchAck(action)
     }
   }
@@ -280,7 +278,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def resumeAck: Receive = {
     case action: ResumeAck => {
       preResumeAck(action)
-      book(action.slotSeq, action.taskAttemptId, sender)
+      book(action.slotSeq, action.taskAttemptId)
       postResumeAck(action)
     }
   }

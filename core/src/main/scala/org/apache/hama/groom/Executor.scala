@@ -369,14 +369,14 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
   }
 
   /**
-   * Notify {@link TaskCounsellor} that slot is occupied!
+   * Notify {@link TaskCounsellor} that slot is already occupied!
    * @return Receive is partial function.
    */
-  protected def occupied: Receive = {
-    case result: Occupied => {
-      LOG.warning("Slot {} is occupied by {}.", result.getSlotSeq, 
-                  result.getTaskAttemptId.toString)
-      taskCounsellor ! result
+  protected def slotOccupied: Receive = {
+    case occupied: Occupied => {
+      LOG.warning("Slot {} is occupied by {}.", occupied.getSlotSeq, 
+                  occupied.getTaskAttemptId.toString)
+      taskCounsellor ! occupied
     }
   }
 
@@ -400,7 +400,7 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
     case _ => LOG.warning("Unknown contianer {} is offline!", target.path.name)
   }
 
-  override def receive = launchAck orElse occupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse streamClosed orElse stopProcess orElse containerStopped orElse superviseeIsTerminated orElse shutdownContainer orElse report orElse unknown
+  override def receive = launchAck orElse slotOccupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse streamClosed orElse stopProcess orElse containerStopped orElse superviseeIsTerminated orElse shutdownContainer orElse report orElse unknown
      
 }
 

@@ -66,6 +66,8 @@ final case class Args(actorSystemName: String, listeningTo: String, port: Int,
 
 object Container {
 
+  def hamaHome: String = System.getProperty("hama.home.dir")
+
   // TODO: move to ContainerSetting
   def toConfig(listeningTo: String, port: Int): Config = {
     ConfigFactory.parseString(s"""
@@ -127,7 +129,7 @@ object Container {
 
   def launch(system: ActorSystem, containerClass: Class[_], 
              conf: HamaConfiguration, seq: Int) {
-    system.actorOf(Props(containerClass, conf), name(seq))
+    system.actorOf(Props(containerClass, conf, seq), name(seq))
   }
 
   def lowercase(): String = classOf[Container].getSimpleName.toLowerCase
@@ -146,12 +148,12 @@ object Container {
  * @param conf contains common setting for the forked process instead of tasks
  *             to be executed later on.
  */
-class Container(conf: HamaConfiguration) extends LocalService 
+class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService 
                                          with RemoteService 
                                          with ActorLocator {
 
   import Container._
-
+ 
   /**
    * Once detecting exceptions thrown by children, report master and stop 
    * actors.
@@ -181,29 +183,22 @@ class Container(conf: HamaConfiguration) extends LocalService
    */
   protected var latestTask: Option[Task] = None
 
-  //override def configuration: HamaConfiguration = conf
+  protected val ExecutorName = Executor.simpleName(conf, slotSeq)
 
   protected def stopAll() {
     coordinator.map { (c) => context.stop(c) }
-    // messeenger
+    // TODO: messeenger
     // syncer
   }
-
-  // TODO: refactor if there's better way to config hama home.
-  protected def hamaHome: String = System.getProperty("hama.home.dir")
-
-  protected def slotSeq: Int = conf.getInt("bsp.child.slot.seq", -1)
-
-  protected def executorName: String = "groomServer_executor_"+slotSeq
  
   override def initializeServices =
-    lookup(executorName, locate(ExecutorLocator(conf)))
+    lookup(ExecutorName, locate(ExecutorLocator(conf)))
 
   override def afterLinked(proxy: ActorRef) {
     executor = Option(proxy)
     executor.map { found => {
       found ! ContainerReady(slotSeq)
-      LOG.info("Slot seq {} sends ContainerReady to {}", slotSeq, 
+      LOG.info("Container with slot seq {} replies ready to {}!", slotSeq, 
                found.path.name)
     }}
   }
@@ -227,7 +222,7 @@ class Container(conf: HamaConfiguration) extends LocalService
    */
   def launchTask: Receive = {
     case action: LaunchTask => if(!isOccupied(coordinator)) {
-      this.latestTask = Option(new Task.Builder(action.task).build)
+      this.latestTask = Option(action.task.newTask)
       doLaunch(action.task)
       postLaunch(slotSeq, action.task.getId, sender)
     } else reply(sender, slotSeq, action.task.getId)
@@ -346,9 +341,7 @@ class Container(conf: HamaConfiguration) extends LocalService
   def shutdownContainer: Receive = {
     case ShutdownContainer => {
       LOG.debug("Unwatch remote executro {} ...", executor)
-      executor.map( found => context.unwatch(found) )
-      //LOG.debug("Stop {} itself ...", name)
-      //context.stop(self)
+      executor.map { found => context.unwatch(found) }
       LOG.info("Completely shutdown BSPContainer system ...")
       context.system.shutdown
     }
@@ -359,13 +352,9 @@ class Container(conf: HamaConfiguration) extends LocalService
    * itself.
    * @param target actor is {@link Executor}
    */
-  override def offline(target: ActorRef) {
-    LOG.warning("{} is offline!", target.path.name)
-    val ExecutorName = executorName
-    target.path.name match {
-      case `ExecutorName` => self ! ShutdownContainer
-      case rest@_ => LOG.warning("Unexpected actor {} is offline!", rest)
-    }
+  override def offline(target: ActorRef) = target.path.name match {
+    case `ExecutorName` => self ! ShutdownContainer
+    case _ => LOG.warning("Unexpected actor {} is offline!", target.path.name)
   }
 
   def report: Receive = {

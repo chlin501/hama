@@ -37,8 +37,8 @@ final case class MockExecutorLocator(conf: HamaConfiguration)
 /**
  * For TestExecutor
  */
-class MockContainer(conf: HamaConfiguration) extends Container(conf) 
-                                             with ActorLocator {
+class MockContainer(conf: HamaConfiguration, slotSeq: Int) 
+      extends Container(conf, slotSeq) with ActorLocator {
   import scala.language.implicitConversions
 
   implicit def locateMockExecutor(mock: MockExecutorLocator) = 
@@ -61,7 +61,7 @@ class MockContainer(conf: HamaConfiguration) extends Container(conf)
   }
 
   override def initializeServices {
-    lookup(executorName, locate(MockExecutorLocator(conf)))
+    lookup(ExecutorName, locate(MockExecutorLocator(conf)))
   }
  
   override def receive = super.receive
