@@ -263,10 +263,12 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
     }
   }
 
+/*
   protected def launchAck: Receive = {
     case action: LaunchAck => 
       taskCounsellor ! new LaunchAck(action.slotSeq, action.taskAttemptId) 
   }
+*/
 
   /** 
    * Ask {@link Container} to resume a specific task.
@@ -280,10 +282,12 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
   }
 
 
+/*
   protected def resumeAck: Receive = {
     case action: ResumeAck => 
       taskCounsellor ! new ResumeAck(action.slotSeq, action.taskAttemptId)
   }
+*/
 
   /**
    * Ask {@link Container} to kill the task that is currently running.
@@ -433,6 +437,6 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
   }
 */
 
-  override def receive = launchAck orElse slotOccupied orElse resumeAck orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse streamClosed orElse stopProcess orElse containerStopped orElse superviseeIsTerminated orElse shutdownContainer orElse report orElse unknown
+  override def receive = /*launchAck orElse*/ slotOccupied orElse /*resumeAck orElse*/ killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse streamClosed orElse stopProcess orElse containerStopped orElse superviseeIsTerminated orElse shutdownContainer orElse report orElse unknown
      
 }

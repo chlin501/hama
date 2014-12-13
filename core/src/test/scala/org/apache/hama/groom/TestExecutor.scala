@@ -61,6 +61,7 @@ class Aggregator(setting: Setting, groom: ActorRef, reporter: ActorRef,
     LOG.info("Done initializing {} with {} slots ...", name, maxTasks)
   }
 
+/*
   // LaunchAck(2,attempt_test_0001_000007_2)
   override def postLaunchAck(ack: LaunchAck) {
     LOG.debug("<LaunchAck> {} receives {} with current slots {}.", 
@@ -76,6 +77,7 @@ class Aggregator(setting: Setting, groom: ActorRef, reporter: ActorRef,
     tester ! ack.taskAttemptId.toString
     increament
   }
+*/
 
   override def postKillAck(ack: KillAck) {
     LOG.debug("<KillAck> {} receives {} with current slots {}", 

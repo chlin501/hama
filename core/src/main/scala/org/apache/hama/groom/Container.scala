@@ -162,12 +162,12 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
        case _: IOException => {  
          stopAll
-         latestTask.map { (task) => notifyExecutor(task) }
+         //latestTask.map { (task) => notifyExecutor(task) }
          Stop 
        }
        case _: RuntimeException => { 
          stopAll
-         latestTask.map { (task) => notifyExecutor(task) }
+         //latestTask.map { (task) => notifyExecutor(task) }
          Stop 
        }
     }
@@ -180,8 +180,8 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
   /**
    * This variable records the latest task information, which might be slightly 
    * outdated from that held by {@link Coordinator}.
-   */
   protected var latestTask: Option[Task] = None
+   */
 
   protected val ExecutorName = Executor.simpleName(conf, slotSeq)
 
@@ -222,7 +222,7 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
    */
   def launchTask: Receive = {
     case action: LaunchTask => if(!isOccupied(coordinator)) {
-      this.latestTask = Option(action.task.newTask)
+      //this.latestTask = Option(action.task.newTask)
       doLaunch(action.task)
       postLaunch(slotSeq, action.task.getId, sender)
     } else reply(sender, slotSeq, action.task.getId)
@@ -262,12 +262,12 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
                                     messenger,
                                     peer,
                                     tasklog))
-    this.coordinator.map { c => c ! Execute }
+    this.coordinator.map { c => c ! Execute } // TODO: move Execute to initializeServices
   }
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
-    from ! new LaunchAck(slotSeq, taskAttemptId)
-    LOG.debug("LaunchAck is sent back!")
+    //from ! new LaunchAck(slotSeq, taskAttemptId)
+    //LOG.debug("LaunchAck is sent back!")
   }
 
   /**
@@ -287,8 +287,8 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
   }
 
   def postResume(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
-    from ! new ResumeAck(slotSeq, taskAttemptId)
-    LOG.debug("ResumeAck is sent back!")
+    //from ! new ResumeAck(slotSeq, taskAttemptId)
+    //LOG.debug("ResumeAck is sent back!")
   }
 
   /**
@@ -328,7 +328,7 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
    */
   def stopContainer: Receive = {
    case StopContainer => {
-      // TODO: stop worker operations
+      stopAll
       executor.map { found => found ! ContainerStopped }
       LOG.debug("ContainerStopped message is sent ...")
     }
@@ -357,14 +357,16 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
     case _ => LOG.warning("Unexpected actor {} is offline!", target.path.name)
   }
 
+/*
   def report: Receive = {
     case r: Report => {
-      this.latestTask = Option(r.getTask)
+      //this.latestTask = Option(r.getTask)
       notifyExecutor(r.getTask)
     }
   }
 
   def notifyExecutor(task: Task) = executor.map { (e) => e ! new Report(task) }
+*/
 
-  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse report orElse unknown
+  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse /*report orElse*/ unknown
 }

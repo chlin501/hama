@@ -37,31 +37,13 @@ import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.GroomStats._
 import scala.collection.immutable.Queue
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
-object TaskFailure {
-
-  def apply(id: TaskAttemptID): TaskFailure = {
-    val taskFailure = new TaskFailure()
-    taskFailure.id = id
-    taskFailure
-  }
-}
-
-final class TaskFailure extends Writable {
-
-  protected[groom] var id: TaskAttemptID = new TaskAttemptID
-
-  def taskAttemptId(): TaskAttemptID = id
-
-  @throws(classOf[IOException])
-  override def write(out: DataOutput) = id.write(out) 
-
-  @throws(classOf[IOException])
-  override def readFields(in: DataInput) {
-    id = new TaskAttemptID()
-    id.readFields(in)
-  }
-}
+trait TaskCounsellorMessage
+final case class SlotToDirective(seq: Int, directive: Directive)
+      extends TaskCounsellorMessage
 
 object TaskCounsellor {
 
@@ -85,7 +67,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * initialized. Once executors are all initialized, directives will be
    * dispatched to executor directly.
    */
-  protected var directiveQueue = Queue.empty[Directive]
+  protected var directiveQueue = Queue.empty[SlotToDirective]
 
   protected def maxTasks(): Int = setting.hama.getInt("bsp.tasks.maximum", 3)
 
@@ -130,12 +112,10 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     val name = setting.name
     val host = setting.host
     val port = setting.port
-    val queueIds = list(directiveQueue) 
     val slotIds = list(slots) 
     LOG.debug("Current groom stats: name {}, host {}, port {}, maxTasks {}, "+
-              "queue tasks ids {}, slots ids {}", name, host, port, maxTasks, 
-              queueIds, slotIds)
-    GroomStats(name, host, port, maxTasks, queueIds, slotIds)
+              "slots ids {}", name, host, port, maxTasks, slotIds)
+    GroomStats(name, host, port, maxTasks, slotIds)
   } 
 
   /**
@@ -154,9 +134,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   /**
    * Initialize an executor if needed; otherwise dispatch directive to the 
    * executor that has no task being executed.
-   * 
-   * Once initialized or dispatched, corresponded container will acks for 
-   * booking task attempt id field in slot.
    */
   protected def initializeOrDispatch(d: Directive) = shouldNewExecutor match {
     case true => slots.find( slot => None.equals(slot.executor)) match {
@@ -165,14 +142,20 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
                            Option(newExecutor(found.seq)))
         slots -= found
         slots += newSlot
-        directiveQueue = directiveQueue.enqueue(d)
+        directiveQueue = directiveQueue.enqueue(SlotToDirective(found.seq, d))
       }
       case None =>
     }
     case false => slots.find( slot => None.equals(slot.taskAttemptId)) match {
       case Some(found) => d.action match {
-        case Launch => found.executor.map { e => e ! new LaunchTask(d.task) }
-        case Resume => found.executor.map { e => e ! new ResumeTask(d.task) }
+        case Launch => found.executor.map { e => 
+          e ! new LaunchTask(d.task) 
+          book(found.seq, d.task.getId)
+        }
+        case Resume => found.executor.map { e => 
+          e ! new ResumeTask(d.task) 
+          book(found.seq, d.task.getId)
+        }
         case Kill => // won't be here
       }
       case None =>
@@ -202,8 +185,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected def receiveDirective: Receive = {
     case directive: Directive => directive match {
-      case null => LOG.warning("Directive dispatched from {} is null!", 
-                               sender.path.name)
+      case null => LOG.error("Directive dispatched from {} is null!", sender.path.name)
       case _ => directiveReceived(directive) 
     }
   }
@@ -231,8 +213,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   }
 
   /**
-   * Book the slot with corresponded {@link Task} and {@link Executor} when
-   * receiving LaunchAck and ResumeAck.
+   * Book the slot with corresponded {@link Task} and {@link Executor}.
    * @param slotSeq indicates the <i>N</i>th slot.
    * @param task is the task being executed
    * @param executor is the executor that runs the task.
@@ -258,7 +239,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   /**
    * Executor confirms lauch task received.
    * @return Receive is partial function.
-   */
   protected def launchAck: Receive = {
     case action: LaunchAck => {
       preLaunchAck(action)
@@ -270,11 +250,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def preLaunchAck(ack: LaunchAck) { }
 
   protected def postLaunchAck(ack: LaunchAck) { }
+   */
 
   /**
    * Executor confirms resume task received.
    * @return Receive is partial function.
-   */
   protected def resumeAck: Receive = {
     case action: ResumeAck => {
       preResumeAck(action)
@@ -286,6 +266,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def preResumeAck(ack: ResumeAck) { }
 
   protected def postResumeAck(ack: ResumeAck) { }
+   */
 
   /**
    * Executor ack for Kill action.
@@ -340,17 +321,21 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected def pullForExecution: Receive = {
     case PullForExecution(slotSeq) => if(!directiveQueue.isEmpty) {
-      val (directive, rest) = directiveQueue.dequeue 
+      val (slotToDirective, rest) = directiveQueue.dequeue 
+      val seq = slotToDirective.seq
+      val directive = slotToDirective.directive
       directive.action match {
         case Launch => {
           LOG.debug("{} requests for LaunchTask.", sender)
           sender ! new LaunchTask(directive.task)
+          book(seq, directive.task.getId)
         }
         case Kill => LOG.warning("Container {} shouldn't request kill action!",
                                  sender.path.name)
         case Resume => {
           LOG.debug("{} requests for ResumeTask.", sender)
           sender ! new ResumeTask(directive.task)
+          book(seq, directive.task.getId)
         }
         case _ => LOG.warning("Unknown action {} for task {} from master {}", 
                               directive.action, directive.task.getId, 
@@ -384,6 +369,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
  
   protected def preContainerStopped(executor: ActorRef) {}
 
+  /**
+   * When container stopped
+   */
   protected def whenContainerStopped(from: ActorRef) = slots.find( slot =>
     slot.executor match { 
       case Some(found) => found.path.name.equals(from.path.name)
@@ -396,17 +384,15 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
         executor ! ShutdownContainer
         val taskAttemptId = found.taskAttemptId
         if(!None.equals(taskAttemptId)) 
-          LOG.warning("Task {} at slot seq {} is not empty! ", taskAttemptId,
-                      found.seq)
-        val newSlot = Slot(found.seq, taskAttemptId, found.master, None)
+          LOG.error("Task {} at slot seq {} is not empty! ", taskAttemptId,
+                    found.seq)
+        val newSlot = Slot(found.seq, None, found.master, None)
         slots -= found
         slots += newSlot
       }
-      case None => throw new RuntimeException("Executor not found for "+
-                                              from.path.name)
+      case None => LOG.error("Executor not found for ", from.path.name)
     }
-    case None => throw new RuntimeException("No executor found for "+
-                                            from.path.name)
+    case None => LOG.error("No executor found for ", from.path.name)
   }
 
   protected def postContainerStopped(executor: ActorRef) {}
@@ -420,22 +406,35 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   // TODO: retry count constraint for newExecutor func. 
   //       if retry exceeds upper limit, remove corresponded slot seq from slots
   //       update max tasks (create a new groom stats) to master
-  //       - remove ack funcs.
+  //       - remove ack funcs (directly book slot once send task to executor).
   //       - book slot with task attempt id once receiving pullForExecution msg
   //         so when excutor offline, counsellor can notify master.
   override def offline(from: ActorRef) = from.path.name match {
     case name if name.contains("_executor_") => from.path.name.split("_") match{
       case ary if (ary.size == 3) => {
+        Try(ary(2).toInt) match {
+          case Success(seq) => slots.find( slot => (slot.seq == seq)) match {
+            case Some(found) => found.taskAttemptId match {
+              case Some(taskRunning) => // report to master
+              case None => // newExecutor(seq)  record retry times and cmp to max retries
+            }
+            case None => LOG.error("No slot seq found for executor {}",
+                                   seq)
+          }
+          case Failure(cause) => LOG.error("Invalid executor name {} throws {}",
+                                           from.path.name, cause)
+        }
         // - find matched seq with directive in queue (seq -> directive). 
-        //   if found, recreate executor (fork) 
-        //   else check coresponded slot and report to master
-        //newExecutor(ary(2).toInt) 
+        //   if found, recreate executor (fork) with max retries [task is not yet executed] 
+        //      if exceeds max retries, report to master (update slot)
+        //   else check coresponded slot (update slot task id to none) and then
+        //        report to master
       }
-      case _ => LOG.warning("Invalid executor name", from.path.name)
+      case _ => LOG.error("Invalid executor name", from.path.name)
     }
     case _ => LOG.warning("Unknown actor {} offline!", from.path.name)
   }
 
-  override def receive = tickMessage orElse messageFromCollector orElse launchAck orElse resumeAck orElse killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse receiveDirective orElse superviseeIsTerminated orElse unknown
+  override def receive = tickMessage orElse messageFromCollector orElse /*launchAck orElse resumeAck orElse*/ killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse receiveDirective orElse superviseeIsTerminated orElse unknown
 
 }

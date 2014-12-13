@@ -26,7 +26,7 @@ import org.apache.hadoop.io.ArrayWritable
 import org.apache.hadoop.io.ObjectWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.master.Directive
+//import org.apache.hama.master.Directive
 import org.apache.hama.groom.GroomServer
 import org.apache.hama.groom.Slot
 import org.apache.hama.util.Utils._
@@ -121,13 +121,13 @@ final class TaskStats extends Writable with ProbeMessages {
 object GroomStats { // TODO: remove queue
 
   def apply(name: String, host: String, port: Int, maxTasks: Int,
-            queue: Array[String], slots: Array[String]): GroomStats = {
+            /*queue: Array[String],*/ slots: Array[String]): GroomStats = {
     val stats = new GroomStats
     stats.n = name
     stats.h = host
     stats.p = port
     stats.mt = maxTasks
-    stats.q = toWritable(queue)
+    //stats.q = toWritable(queue)
     stats.s = toWritable(slots) 
     stats
   }
@@ -139,15 +139,19 @@ object GroomStats { // TODO: remove queue
     stats.h = host
     stats.p = port
     stats.mt = maxTasks
-    stats.q = defaultQueue
+    //stats.q = defaultQueue
     stats.s = defaultSlots(maxTasks)
     stats
   }
 
-  def list(ds: Queue[Directive]): Array[String] = ds.map { d => d match {
-    case null => nullString
-     case _ => d.task.getId.toString
-  }}.toArray
+/*
+  def list(ds: Queue[Directive]): Array[String] = ds.map { d => 
+    d.directive match {
+      case null => nullString
+      case _ => d.task.getId.toString
+    }
+  }.toArray
+*/
 
   def list(slots: Set[Slot]): Array[String] = 
     slots.map { s => s.taskAttemptId match {
@@ -161,11 +165,13 @@ object GroomStats { // TODO: remove queue
     w
   }
 
+/*
   final def defaultQueue(): ArrayWritable = {
     val w = new ArrayWritable(classOf[Text])
     w.set(Array[Text]().asInstanceOf[Array[Writable]])
     w
   }
+*/
 
   final def defaultSlots(maxTasks: Int): ArrayWritable = {
     val w = new ArrayWritable(classOf[Text])
@@ -199,8 +205,9 @@ final class GroomStats extends Writable with ProbeMessages {
   /* max tasks */
   protected[monitor] var mt: Int = 3
 
-  /* queue */ // TODO: remove
+  /* queue 
   protected[monitor] var q = defaultQueue
+   */ 
 
   /* slots */
   protected[monitor] var s = defaultSlots(mt)
@@ -215,7 +222,7 @@ final class GroomStats extends Writable with ProbeMessages {
   
   def maxTasks(): Int = mt
  
-  def queue(): Array[String] = q.toStrings
+  //def queue(): Array[String] = q.toStrings
 
   def slots(): Array[String] = s.toStrings
 
@@ -225,7 +232,7 @@ final class GroomStats extends Writable with ProbeMessages {
     Text.writeString(out, host)
     out.writeInt(port)
     out.writeInt(maxTasks)
-    q.write(out)
+    //q.write(out)
     s.write(out)
   }
 
@@ -235,8 +242,8 @@ final class GroomStats extends Writable with ProbeMessages {
     h = Text.readString(in)
     p = in.readInt
     mt = in.readInt
-    q = defaultQueue
-    q.readFields(in)
+    //q = defaultQueue
+    //q.readFields(in)
     s = defaultSlots(mt)
     s.readFields(in)
   }
@@ -244,14 +251,14 @@ final class GroomStats extends Writable with ProbeMessages {
   override def equals(o: Any): Boolean = o match {
     case that: GroomStats => that.isInstanceOf[GroomStats] &&
       that.n.equals(n) && that.h.equals(h) && (that.p == p) && 
-      (that.mt == mt) && that.q.toStrings.equals(q.toStrings) &&
+      (that.mt == mt) /*&& that.q.toStrings.equals(q.toStrings)*/ &&
       that.s.toStrings.equals(s.toStrings) 
     case _ => false
   }
   
   override def hashCode(): Int = 
     41 * ( 
-      41 * ( 
+      //41 * ( 
         41 * ( 
           41 * (
             41 * (
@@ -259,7 +266,7 @@ final class GroomStats extends Writable with ProbeMessages {
             ) + h.toString.hashCode
           ) + p
         ) + mt
-      ) + q.toStrings.hashCode
+      //) + q.toStrings.hashCode
     ) + s.toStrings.hashCode
 }
 
