@@ -411,29 +411,36 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   //         so when excutor offline, counsellor can notify master.
   override def offline(from: ActorRef) = from.path.name match {
     case name if name.contains("_executor_") => from.path.name.split("_") match{
-      case ary if (ary.size == 3) => {
-        Try(ary(2).toInt) match {
-          case Success(seq) => slots.find( slot => (slot.seq == seq)) match {
-            case Some(found) => found.taskAttemptId match {
-              case Some(taskRunning) => // report to master
-              case None => // newExecutor(seq)  record retry times and cmp to max retries
-            }
-            case None => LOG.error("No slot seq found for executor {}",
-                                   seq)
-          }
-          case Failure(cause) => LOG.error("Invalid executor name {} throws {}",
-                                           from.path.name, cause)
-        }
-        // - find matched seq with directive in queue (seq -> directive). 
-        //   if found, recreate executor (fork) with max retries [task is not yet executed] 
-        //      if exceeds max retries, report to master (update slot)
-        //   else check coresponded slot (update slot task id to none) and then
-        //        report to master
-      }
+      case ary if (ary.size == 3) => extractSeq(ary(2), { seq => 
+        matchSlot(seq, { (seq, id) => 
+          taskAttemptIdFound(seq, id, { seq => newExecutor(seq) /* TODO: retry max retry ,etc.*/ }) 
+        }) 
+      })
       case _ => LOG.error("Invalid executor name", from.path.name)
     }
     case _ => LOG.warning("Unknown actor {} offline!", from.path.name)
   }
+
+  protected def taskAttemptIdFound(seq: Int, 
+                                   taskAttemptId: Option[TaskAttemptID], 
+                                   f: (Int) => Unit) = 
+    taskAttemptId match {
+      case Some(runningTaskId) => //groom ! RescheduleTask(runningTaskId)
+      case None => f(seq) // whether a task in queue or not restart execturor
+    }
+
+  protected def matchSlot(seq: Int, f: (Int, Option[TaskAttemptID]) => Unit) = 
+    slots.find( slot => slot.seq == seq) match {
+      case Some(found) => f(found.seq, found.taskAttemptId)
+      case None => LOG.error("No slot seq found for executor {}", seq)
+    }
+
+  protected def extractSeq(seq: String, f:(Int) => Unit) = 
+    Try(seq.toInt) match {
+      case Success(seq) => f(seq)
+      case Failure(cause) => LOG.error("Invalid executor seq {} for {}",
+                                       seq, cause)
+    }
 
   override def receive = tickMessage orElse messageFromCollector orElse /*launchAck orElse resumeAck orElse*/ killAck orElse pullForExecution orElse stopExecutor orElse containerStopped orElse receiveDirective orElse superviseeIsTerminated orElse unknown
 
