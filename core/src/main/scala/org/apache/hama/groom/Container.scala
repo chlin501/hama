@@ -266,8 +266,6 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
   }
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
-    //from ! new LaunchAck(slotSeq, taskAttemptId)
-    //LOG.debug("LaunchAck is sent back!")
   }
 
   /**
@@ -286,10 +284,7 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
     LOG.info("function doResume is not yet implemented!") // TODO:
   }
 
-  def postResume(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
-    //from ! new ResumeAck(slotSeq, taskAttemptId)
-    //LOG.debug("ResumeAck is sent back!")
-  }
+  def postResume(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) { }
 
   /**
    * Kill the task that is running.

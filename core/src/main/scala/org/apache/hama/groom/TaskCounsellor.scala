@@ -432,7 +432,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       }
       case Some(retryCount) if (retryCount >= maxRetries) => { 
         // TODO: update slots executor to None
-        //       send report to master as black list or remove slot 
+        //       send report to master as black list 
+        //         or remove slot then update groom stats and report master
+        //       reset retries map (seq -> 0)
       }
       case None => { // 0
         f(seq)

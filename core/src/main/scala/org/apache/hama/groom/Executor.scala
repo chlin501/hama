@@ -146,13 +146,8 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
   protected var isStdoutClosed = false
   protected var isStderrClosed = false
 
-/*
-  protected var retries = 0
-  protected val maxRetries = conf.getInt("groom.container.max_retries", 3)
-*/
-
   override val supervisorStrategy =
-    OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 5 minutes) {
+    OneForOneStrategy(maxNrOfRetries = 1, withinTimeRange = 1 minutes) {
       case e: Exception => Stop  
     }
 
@@ -263,12 +258,6 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
     }
   }
 
-/*
-  protected def launchAck: Receive = {
-    case action: LaunchAck => 
-      taskCounsellor ! new LaunchAck(action.slotSeq, action.taskAttemptId) 
-  }
-*/
 
   /** 
    * Ask {@link Container} to resume a specific task.
@@ -280,14 +269,6 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
       c ! new ResumeTask(action.task)
     }
   }
-
-
-/*
-  protected def resumeAck: Receive = {
-    case action: ResumeAck => 
-      taskCounsellor ! new ResumeAck(action.slotSeq, action.taskAttemptId)
-  }
-*/
 
   /**
    * Ask {@link Container} to kill the task that is currently running.
@@ -424,19 +405,6 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
     case _ => LOG.warning("Unknown contianer {} is offline!", target.path.name)
   }
 
-/*
-  protected def retry() {
-    cleanupInstances    
-    retries match { 
-      case n if (n < maxRetries) => {
-        fork(slotSeq)
-        retries += 1
-      }
-      case _ => context.stop(self) 
-    }
-  }
-*/
-
-  override def receive = /*launchAck orElse*/ slotOccupied orElse /*resumeAck orElse*/ killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse streamClosed orElse stopProcess orElse containerStopped orElse superviseeIsTerminated orElse shutdownContainer orElse report orElse unknown
+  override def receive = slotOccupied orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse streamClosed orElse stopProcess orElse containerStopped orElse superviseeIsTerminated orElse shutdownContainer orElse report orElse unknown
      
 }
