@@ -128,14 +128,19 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def numSlotsOccupied(): Int = slots.count( slot => 
     !None.equals(slot.taskAttemptId)
   ) 
-  
+
+  protected def requestTask(): Boolean = 
+    setting.hama.getBoolean("groom.request.task", true) 
+
   /**
    * Periodically request to master for a new task when the groom has free slots
    * and no task in directive queue.
    */
   override def ticked(msg: Tick): Unit = msg match {
-    case TaskRequest => if((directiveQueue.size + numSlotsOccupied) < maxTasks)
-      groom ! RequestTask(currentGroomStats) 
+    case TaskRequest => if(requestTask) {
+      if((directiveQueue.size + numSlotsOccupied) < maxTasks)
+        groom ! RequestTask(currentGroomStats) 
+    }
     case _ => 
   }
   
