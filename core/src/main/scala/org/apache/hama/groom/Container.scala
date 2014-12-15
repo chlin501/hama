@@ -114,7 +114,7 @@ object Container {
     val arguments = toArgs(args)
     val system = ActorSystem("BSPPeerSystem%s".format(arguments.seq), 
                              arguments.config.getConfig("peerContainer"))
-    defaultConf.set("bsp.child.actor-system.name", arguments.actorSystemName)
+    defaultConf.set("bsp.actor-system.name", arguments.actorSystemName)
     val listeningTo = defaultConf.get("bsp.peer.hostname", 
                                       arguments.listeningTo)
     // Note: if default listening to 0.0.0.0, change host to host name.

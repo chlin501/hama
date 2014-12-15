@@ -155,7 +155,7 @@ class TestExecutor extends TestEnv("TestExecutor", TestExecutor.config)
     taskCounsellor ! directive2
     LOG.info("Task2's id is {}", task2.getId) // attempt_test_0003_000001_3
 
-    val waitTime = 15.seconds
+    val waitTime = 10.seconds
 
     LOG.info("Wait for {} secs ...", waitTime)
     sleep(waitTime)

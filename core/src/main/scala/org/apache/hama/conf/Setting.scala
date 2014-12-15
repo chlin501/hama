@@ -25,12 +25,14 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.SystemInfo
 import org.apache.hama.master.BSPMaster
 import org.apache.hama.groom.GroomServer
+import org.apache.hama.groom.Container
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 
 object Setting {
 
+  // TODO: rename to fromString?
   def toConfig(content: String): Config = ConfigFactory.parseString(content)
 
   def change(systemName: String, nodes: Setting*) = nodes.foreach ( node => 
@@ -50,6 +52,10 @@ object Setting {
   def groom(): Setting = groom(new HamaConfiguration)
 
   def groom(conf: HamaConfiguration): Setting = new GroomSetting(conf)
+
+  def container(): Setting = container(new HamaConfiguration)
+
+  def container(conf: HamaConfiguration): Setting = new ContainerSetting(conf)
 
 }
 
@@ -175,5 +181,60 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
 
   override def port(): Int = conf.getInt("groom.port", 50000)
 
+}
 
+class ContainerSetting(conf: HamaConfiguration) extends Setting {
+
+  import Setting._
+
+  protected def content(listeningTo: String, port: Int): String = s"""
+    akka {
+      actor {
+        provider = "akka.remote.RemoteActorRefProvider"
+        serializers {
+          java = "akka.serialization.JavaSerializer"
+          proto = "akka.remote.serialization.ProtobufSerializer"
+          writable = "org.apache.hama.io.serialization.WritableSerializer"
+        }
+        serialization-bindings {
+          "com.google.protobuf.Message" = proto
+          "org.apache.hadoop.io.Writable" = writable
+        }
+      }
+      remote.netty.tcp {
+        hostname = "$listeningTo"
+        port = $port
+      }
+    }
+  """
+
+  override def hama(): HamaConfiguration = conf
+
+  override def config(): Config = toConfig(" container { " + 
+    content(host, port) + " }").getConfig("container")
+
+  protected def info(system: String, host: String, port: Int): SystemInfo = 
+    new SystemInfo(system, host, port)
+
+  override def info(): SystemInfo = info(sys, host, port)
+
+  override def name(): String = conf.get("container.name", 
+    classOf[Container].getSimpleName)
+
+  override def main(): Class[Actor] = {
+    val name = conf.get("bsp.main", classOf[Container].getName)
+    toClass[Container](name) match {
+      case Success(clazz) => clazz.asInstanceOf[Class[Actor]] 
+      case Failure(cause) => classOf[Container].asInstanceOf[Class[Actor]] 
+    }
+  }
+
+  override def sys(): String = conf.get("bsp.actor-system.name", "BSPSystem")
+
+  override def host(): String = conf.get("bsp.peer.hostname", 
+                                         InetAddress.getLocalHost.getHostName)
+
+  override def port(): Int = conf.getInt("bsp.peer.port", 61000)
+
+  
 }
