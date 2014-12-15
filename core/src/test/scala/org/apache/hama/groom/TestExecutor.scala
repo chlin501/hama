@@ -126,8 +126,8 @@ class TestExecutor extends TestEnv("TestExecutor", TestExecutor.config)
   def config(conf: HamaConfiguration) {
     //conf.setBoolean("bsp.tasks.log.console", true)
     conf.set("bsp.working.dir", testRoot.getCanonicalPath)
-    conf.set("groom.actor-system.name", "TestExecutor")
-    conf.setClass("bsp.child.class", classOf[MockContainer], classOf[Container])
+    //conf.set("groom.actor-system.name", "TestExecutor")
+    conf.setClass("container.main", classOf[MockContainer], classOf[Container])
     conf.setBoolean("groom.request.task", false)
   }
 

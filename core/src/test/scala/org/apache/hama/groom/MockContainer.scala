@@ -18,6 +18,7 @@
 package org.apache.hama.groom
 
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.conf.Setting
 import org.apache.hama.util.ActorLocator
 import org.apache.hama.util.ActorPathMagnet
 
@@ -27,8 +28,11 @@ import org.apache.hama.util.ActorPathMagnet
 object MockContainer {
 
   def main(args: Array[String]) = {
-    val (sys, conf, seq)= Container.initialize(args)
-    Container.launch(sys, classOf[MockContainer], conf, seq)
+    val parameters = Container.initialize(args)
+    parameters.setting.hama.setClass("container.main", 
+                                     classOf[MockContainer], 
+                                     classOf[Container])
+    Container.launchFrom(parameters)
   }
 }
 
@@ -37,8 +41,8 @@ final case class MockExecutorLocator(conf: HamaConfiguration)
 /**
  * For TestExecutor
  */
-class MockContainer(conf: HamaConfiguration, slotSeq: Int) 
-      extends Container(conf, slotSeq) with ActorLocator {
+class MockContainer(setting: Setting, slotSeq: Int) 
+      extends Container(setting, slotSeq) with ActorLocator {
 
   import scala.language.implicitConversions
 
@@ -62,7 +66,7 @@ class MockContainer(conf: HamaConfiguration, slotSeq: Int)
   }
 
   override def initializeServices {
-    lookup(ExecutorName, locate(MockExecutorLocator(conf)))
+    lookup(ExecutorName, locate(MockExecutorLocator(setting.hama)))
   }
  
   override def receive = super.receive

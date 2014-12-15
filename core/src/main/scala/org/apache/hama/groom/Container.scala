@@ -28,13 +28,15 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import java.net.InetAddress
 import org.apache.hadoop.io.Writable
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.RemoteService
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Coordinator
 import org.apache.hama.bsp.v2.Execute
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.HamaConfiguration
-import org.apache.hama.LocalService
-import org.apache.hama.RemoteService
+import org.apache.hama.conf.Setting
+import org.apache.hama.logging.CommonLog
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.MessageExecutive
@@ -48,98 +50,53 @@ import org.apache.hama.util.ExecutorLocator
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
-/**
- * Args contains information for launching akka ActorSystem.
- * Note that listeningTo value may be bound to 0.0.0.0 so that the system can
- * accept messages from the machine with many interfaces bound to it.  
- * 
- * @param actorSystemName denotes the actor system that runs actors on forked.
- *                        process.
- * @param listeningTo denotes the host/ interfaces the remote actor modules 
- *                    listens to.
- * @param port is the port value used by the remote actor module.
- * @param seq tells this process is the N-th forked by {@link TaskCounsellor}.
- * @param config contains related setting for activating remote actor module.
- */
-final case class Args(actorSystemName: String, listeningTo: String, port: Int, 
-                      seq: Int, config: Config)
+protected[groom] final case class Parameters(system: ActorSystem, 
+                                             setting: Setting)
 
-object Container {
+object Container extends CommonLog {
 
   def hamaHome: String = System.getProperty("hama.home.dir")
-
-  // TODO: move to ContainerSetting
-  def toConfig(listeningTo: String, port: Int): Config = {
-    ConfigFactory.parseString(s"""
-      peerContainer {
-        akka {
-          actor {
-            provider = "akka.remote.RemoteActorRefProvider"
-            serializers {
-              java = "akka.serialization.JavaSerializer"
-              proto = "akka.remote.serialization.ProtobufSerializer"
-              writable = "org.apache.hama.io.serialization.WritableSerializer"
-            }
-            serialization-bindings {
-              "com.google.protobuf.Message" = proto
-              "org.apache.hadoop.io.Writable" = writable
-            }
-          }
-          remote {
-            netty.tcp {
-              hostname = "$listeningTo"
-              port = $port 
-            }
-          }
-        }
-      }
-    """)
-  }
-
-  def toArgs(args: Array[String]): Args = {
-    require(null != args && 0 < args.length, "Arguments not supplied!")
-
-    val actorSystemName = args(0)
-    // N.B.: it may binds to 0.0.0.0 for all inet.
-    val listeningTo = args(1) 
-    val port = args(2).toInt
-    val seq = args(3).toInt
-    require( seq > 0, "Invalid slot seq "+seq+" when forking a child process!")
-    val config = toConfig(listeningTo, port) 
-    Args(actorSystemName, listeningTo, port, seq, config)
-  }
-
-  def initialize(args: Array[String]): (ActorSystem, HamaConfiguration, Int) = {
-    val defaultConf = new HamaConfiguration()
-    val arguments = toArgs(args)
-    val system = ActorSystem("BSPPeerSystem%s".format(arguments.seq), 
-                             arguments.config.getConfig("peerContainer"))
-    defaultConf.set("bsp.actor-system.name", arguments.actorSystemName)
-    val listeningTo = defaultConf.get("bsp.peer.hostname", 
-                                      arguments.listeningTo)
-    // Note: if default listening to 0.0.0.0, change host to host name.
-    if("0.0.0.0".equals(listeningTo)) { 
-       defaultConf.set("bsp.peer.hostname", 
-                       InetAddress.getLocalHost.getHostName)
-    }
-    defaultConf.setInt("bsp.peer.port", arguments.port)
-    defaultConf.setInt("bsp.child.slot.seq", arguments.seq)
-    (system, defaultConf, arguments.seq)
-  }
-
-  def launch(system: ActorSystem, containerClass: Class[_], 
-             conf: HamaConfiguration, seq: Int) {
-    system.actorOf(Props(containerClass, conf, seq), name(seq))
-  }
 
   def lowercase(): String = classOf[Container].getSimpleName.toLowerCase
 
   def name(seq: Int): String = "%s%s".format(lowercase, seq)
 
+  def customize(setting: Setting, args: Array[String]): Setting = {
+    require(4 != args.length, "Some arguments are missing!")
+    val sys = args(0)
+    val listeningTo = args(1) // Note: it may binds to 0.0.0.0 for all inet.
+    val port = args(2).toInt
+    val seq = args(3).toInt
+    require( seq > 0, "Invalid slot seq "+seq+" when forking a child process!")
+    setting.hama.set("bsp.actor-system.name", sys)
+    setting.hama.get("bsp.peer.hostname", listeningTo)
+    setting.hama.setInt("bsp.peer.port", port)
+    setting.hama.setInt("bsp.child.slot.seq", seq)
+    setting
+  }
+
+  def initialize(args: Array[String]): Parameters = {
+    val setting = customize(Setting.container, args)
+    val system = ActorSystem(setting.sys, setting.config)
+    Parameters(system, setting)
+  }
+
+  def launchFrom(parameters: Parameters) {
+    val system = parameters.system
+    val setting = parameters.setting
+    val containerClass = setting.main 
+    val seq = setting.hama.getInt("bsp.child.slot.seq", -1)
+    LOG.info("Starting BSP slot {} peer system {} at {}:{} with container {} ",
+             seq, system.name, setting.host, setting.port, 
+             containerClass.getName)
+    system.actorOf(Props(containerClass, setting, seq), name(seq))
+  }
+
   @throws(classOf[Throwable])
   def main(args: Array[String]) = {
-    val (sys, conf, seq)= initialize(args)
-    launch(sys, classOf[Container], conf, seq)
+    require(null != args && 0 < args.length, "Arguments not supplied!")
+    val parameters = initialize(args)
+    launchFrom(parameters)
   }
 }
 
@@ -148,8 +105,8 @@ object Container {
  * @param conf contains common setting for the forked process instead of tasks
  *             to be executed later on.
  */
-class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService 
-                                         with RemoteService 
+class Container(setting: Setting, slotSeq: Int) extends LocalService 
+                                                with RemoteService 
                                          with ActorLocator {
 
   import Container._
@@ -183,7 +140,7 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
   protected var latestTask: Option[Task] = None
    */
 
-  protected val ExecutorName = Executor.simpleName(conf, slotSeq)
+  protected val ExecutorName = Executor.simpleName(setting.hama, slotSeq)
 
   protected def stopAll() {
     coordinator.map { (c) => context.stop(c) }
@@ -192,7 +149,7 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
   }
  
   override def initializeServices =
-    lookup(ExecutorName, locate(ExecutorLocator(conf)))
+    lookup(ExecutorName, locate(ExecutorLocator(setting.hama)))
 
   override def afterLinked(proxy: ActorRef) {
     executor = Option(proxy)
@@ -239,7 +196,7 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
                         task.getId, 
                         slotSeq)
 
-    val messenger = spawn("messenger-"+Peer.nameFrom(conf), 
+    val messenger = spawn("messenger-"+Peer.nameFrom(setting.hama), 
                           classOf[MessageExecutive[BSPMessageBundle[Writable]]],
                           slotSeq, 
                           task.getId,
@@ -248,15 +205,15 @@ class Container(conf: HamaConfiguration, slotSeq: Int) extends LocalService
 
     val peer = spawn("syncer", 
                      classOf[PeerClient], 
-                     conf, 
+                     setting.hama, 
                      task.getId,
-                     CuratorBarrier(conf, task.getId, task.getTotalBSPTasks),
-                     CuratorRegistrator(conf),
+                     CuratorBarrier(setting.hama, task.getId, task.getTotalBSPTasks),
+                     CuratorRegistrator(setting.hama),
                      tasklog)
 
     this.coordinator = Option(spawn("coordinator", 
                                     classOf[Coordinator], 
-                                    conf, 
+                                    setting.hama, 
                                     task, 
                                     self, 
                                     messenger,

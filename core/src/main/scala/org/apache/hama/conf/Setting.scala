@@ -222,14 +222,15 @@ class ContainerSetting(conf: HamaConfiguration) extends Setting {
     classOf[Container].getSimpleName)
 
   override def main(): Class[Actor] = {
-    val name = conf.get("bsp.main", classOf[Container].getName)
+    val name = conf.get("container.main", classOf[Container].getName)
     toClass[Container](name) match {
       case Success(clazz) => clazz.asInstanceOf[Class[Actor]] 
       case Failure(cause) => classOf[Container].asInstanceOf[Class[Actor]] 
     }
   }
 
-  override def sys(): String = conf.get("bsp.actor-system.name", "BSPSystem")
+  override def sys(): String = 
+    conf.get("bsp.actor-system.name", "BSPSystem")
 
   override def host(): String = conf.get("bsp.peer.hostname", 
                                          InetAddress.getLocalHost.getHostName)
