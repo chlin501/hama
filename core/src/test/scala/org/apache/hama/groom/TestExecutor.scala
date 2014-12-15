@@ -118,20 +118,17 @@ object TestExecutor {
 class TestExecutor extends TestEnv("TestExecutor", TestExecutor.config)
                    with JobUtil {
 
-  override def afterAll { }
-
   def newDirective(action: Directive.Action, task: Task): Directive = 
     new Directive(action, task, "testMaster")
 
   def config(conf: HamaConfiguration) {
-    //conf.setBoolean("bsp.tasks.log.console", true)
+    //conf.setBoolean("groom.executor.log.console", true)
     conf.set("bsp.working.dir", testRoot.getCanonicalPath)
-    //conf.set("groom.actor-system.name", "TestExecutor")
     conf.setClass("container.main", classOf[MockContainer], classOf[Container])
     conf.setBoolean("groom.request.task", false)
   }
 
-  it("test task management and executor ...") {
+  it("test task management, executor, and container ...") {
 
     val setting = Setting.groom
     config(setting.hama)

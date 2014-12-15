@@ -230,12 +230,12 @@ class ContainerSetting(conf: HamaConfiguration) extends Setting {
   }
 
   override def sys(): String = 
-    conf.get("bsp.actor-system.name", "BSPSystem")
+    conf.get("container.actor-system.name", "BSPSystem")
 
-  override def host(): String = conf.get("bsp.peer.hostname", 
+  override def host(): String = conf.get("container.host", 
                                          InetAddress.getLocalHost.getHostName)
 
-  override def port(): Int = conf.getInt("bsp.peer.port", 61000)
+  override def port(): Int = conf.getInt("container.port", 61000)
 
   
 }

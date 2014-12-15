@@ -62,16 +62,17 @@ object Container extends CommonLog {
   def name(seq: Int): String = "%s%s".format(lowercase, seq)
 
   def customize(setting: Setting, args: Array[String]): Setting = {
-    require(4 != args.length, "Some arguments are missing!")
+    require(4 == args.length, "Some arguments are missing! Arguments: "+
+                              args.mkString(","))
     val sys = args(0)
     val listeningTo = args(1) // Note: it may binds to 0.0.0.0 for all inet.
     val port = args(2).toInt
     val seq = args(3).toInt
     require( seq > 0, "Invalid slot seq "+seq+" when forking a child process!")
-    setting.hama.set("bsp.actor-system.name", sys)
-    setting.hama.get("bsp.peer.hostname", listeningTo)
-    setting.hama.setInt("bsp.peer.port", port)
-    setting.hama.setInt("bsp.child.slot.seq", seq)
+    setting.hama.set("container.actor-system.name", sys)
+    setting.hama.get("container.host", listeningTo)
+    setting.hama.setInt("container.port", port)
+    setting.hama.setInt("container.slot.seq", seq)
     setting
   }
 
@@ -85,7 +86,7 @@ object Container extends CommonLog {
     val system = parameters.system
     val setting = parameters.setting
     val containerClass = setting.main 
-    val seq = setting.hama.getInt("bsp.child.slot.seq", -1)
+    val seq = setting.hama.getInt("container.slot.seq", -1)
     LOG.info("Starting BSP slot {} peer system {} at {}:{} with container {} ",
              seq, system.name, setting.host, setting.port, 
              containerClass.getName)

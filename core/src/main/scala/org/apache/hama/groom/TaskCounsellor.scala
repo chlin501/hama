@@ -212,7 +212,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def newExecutor(slotSeq: Int): ActorRef = { 
     val executorName = Executor.simpleName(setting.hama, slotSeq)
-    val executor = spawn(executorName, classOf[Executor], setting.hama, slotSeq,
+    val executor = spawn(executorName, classOf[Executor], setting, slotSeq,
                          self) 
     context watch executor
     LOG.info("Executor for slot seq {} is spawned and watched.", slotSeq)
@@ -225,9 +225,13 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected def receiveDirective: Receive = {
     case directive: Directive => directive match {
-      case null => LOG.error("xxxxxxxxxxxxxxxxxxxx Directive dispatched from {} is null!", 
+      case null => LOG.error("Directive dispatched from {} is null!", 
                              sender.path.name)
-      case _ => directiveReceived(directive) 
+      case _ => {
+        LOG.info("Receive directive for action: "+directive.action+" task: "+
+                 directive.task.getId+" master: "+directive.master)
+        directiveReceived(directive) 
+      }
     }
   }
 
@@ -236,21 +240,16 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * to child process directly.
    * When directive is kill, slot update will be done after ack is received.
    */
-  protected def directiveReceived(directive: Directive) {
-    LOG.info("xxxxxxxxxxxxxxxxx Receive directive for action: "+directive.action+" task: "+
-             directive.task.getId+" master: "+directive.master)
-    directive.action match {
-      case Launch | Resume => initializeOrDispatch(directive) 
-      case Kill => findTarget(directive.task) match {
-        case Some(slot) => slot.executor.map { e => 
-          e ! new KillTask(directive.task.getId) 
-        }
-        case None => LOG.warning("Ask to Kill task {}, but no "+
-                                 "corresponded executor found!", 
-                                 directive.task.toString)
+  protected def directiveReceived(d: Directive) = d.action match {
+    case Launch | Resume => initializeOrDispatch(d) 
+    case Kill => findTarget(d.task) match {
+      case Some(slot) => slot.executor.map { e => 
+        e ! new KillTask(d.task.getId) 
       }
-      case d@_ => LOG.warning("Unknown directive {}", d)
+      case None => LOG.warning("Ask to Kill task {}, but no corresponded "+
+                               "executor found!", d.task.toString)
     }
+    case _ => LOG.warning("Unknown directive {}", d)
   }
 
   /**

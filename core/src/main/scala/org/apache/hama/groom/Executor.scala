@@ -38,6 +38,7 @@ import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Service
 import org.apache.hama.Spawnable
+import org.apache.hama.conf.Setting
 import org.apache.hama.fs.Operation
 import org.apache.hama.monitor.Report
 import org.apache.hama.util.BSPNetUtils
@@ -63,7 +64,7 @@ trait ExecutorLog { // TODO: refactor this after all log is switched Logging
     try { 
       val logPath = System.getProperty("hama.log.dir")
       logPath match {
-        case null | "" => logWith(conf, "/tmp/logs", executor, input, ext)
+        case null | "" => logWith(conf, "/tmp/hama/logs", executor, input, ext)
         case _ => logWith(conf, logPath, executor, input, ext) 
       }
     } catch { 
@@ -76,7 +77,7 @@ trait ExecutorLog { // TODO: refactor this after all log is switched Logging
 
   def logWith(conf: HamaConfiguration, logPath: String, executor: ActorRef,
               input: InputStream, ext: String) = 
-    if(!conf.getBoolean("bsp.tasks.log.console", false)) {
+    if(!conf.getBoolean("groom.executor.log.console", false)) {
       val logDir = new File(logPath)
       if(!logDir.exists) logDir.mkdirs
       val out = new FileOutputStream(new File(logDir, 
@@ -123,7 +124,7 @@ object Executor {
     new File(new File(javaHome, "bin"), "java").getCanonicalPath
 
   def defaultOpts(conf: HamaConfiguration): String = 
-    conf.get("bsp.child.java.opts", "-Xmx200m")
+    conf.get("container.java.opts", "-Xmx200m")
 
   def simpleName(conf: HamaConfiguration, slotSeq: Int): String = 
     GroomServer.simpleName(conf) + "_executor_" + slotSeq
@@ -132,9 +133,9 @@ object Executor {
 
 /**
  * An actor forks a child process for executing tasks.
- * @param conf cntains necessary setting for launching the child process.
+ * @param setting cntains necessary setting for launching the child process.
  */
-class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef) 
+class Executor(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef) 
       extends Service with Spawnable {
 
   import Executor._
@@ -160,7 +161,7 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
    * use default 50001.
    * @param String of the port value.
    */
-  protected def taskPort: String = {
+  protected def taskPort(): String = {
     val port = BSPNetUtils.getFreePort(50002).toString
     LOG.debug("Port value to be used is {}", port)
     port
@@ -175,17 +176,16 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
    */
   protected def javaArgs(cp: String, slotSeq: Int, child: Class[_]): 
       Seq[String] = {
-    val opts = defaultOpts(conf)
+    val opts = defaultOpts(setting.hama)
     val bspClassName = child.getName
-    val bspPeerSystemName = conf.get("bsp.child.actor-system.name", 
-                                        "BSPPeerSystem")
+    val actorSysName = setting.sys
     // decide to which address the peer will listen, default to 0.0.0.0 
-    val listeningTo = conf.get("bsp.peer.hostname", "0.0.0.0") 
+    val listeningTo = setting.host
     val command = Seq(java) ++ Seq(opts) ++  
                   Seq("-classpath") ++ Seq(classpath(hamaHome, cp)) ++
-                  Seq(bspClassName) ++ Seq(bspPeerSystemName) ++ 
+                  Seq(bspClassName) ++ Seq(actorSysName) ++ 
                   Seq(listeningTo) ++ Seq(taskPort) ++ Seq(slotSeq.toString)
-    LOG.debug("java args: {}", command.mkString(" "))
+    LOG.debug("Java command to be executed: {}", command.mkString(" "))
     command
   }
 
@@ -207,15 +207,19 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
     cp
   }
 
+  protected def containerClass(): Class[Container] = {
+    val clazz = setting.hama.getClass("container.main", classOf[Container])
+    LOG.info("Container class to be instantiated: {}", clazz.getName)
+    clazz.asInstanceOf[Class[Container]]
+  }
+
   /**
    * Fork a child process based on command assembled.
    * @param slotSeq indicate which seq the slot is.
    */
   protected def fork(slotSeq: Int) {
-    val containerClass = conf.getClass("bsp.child.class", classOf[Container])
-    LOG.info("Container class to be instantiated: {}", containerClass)
     val cmd = javaArgs(javacp, slotSeq, containerClass)
-    newContainer(slotSeq, cmd, conf) match {
+    newContainer(slotSeq, cmd, setting.hama) match {
       case Success(instances) => this.instances = Option(instances)
       case Failure(cause) => {
         LOG.info("Fail creating child process for slot {} due to {}", slotSeq,
