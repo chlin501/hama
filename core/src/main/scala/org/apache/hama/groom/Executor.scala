@@ -55,7 +55,7 @@ final case object StreamClosed extends ExecutorMessages
 final case class Instances(process: Process, stdout: ActorRef, 
                            stderr: ActorRef) extends ExecutorMessages
 
-trait ExecutorLog { // TODO: refactor this after all log is switched 
+trait ExecutorLog { // TODO: refactor this after all log is switched Logging
 
   def log(name: String, input: InputStream, conf: HamaConfiguration, 
           executor: ActorRef, ext: String, error: (String, Any*) => Unit) {
@@ -63,18 +63,8 @@ trait ExecutorLog { // TODO: refactor this after all log is switched
     try { 
       val logPath = System.getProperty("hama.log.dir")
       logPath match {
-        case null | "" => error("{} is not set!", "hama.log.dir")
-        case _ => {
-          if(!conf.getBoolean("bsp.tasks.log.console", false)) {
-            val logDir = new File(logPath)
-            if(!logDir.exists) logDir.mkdirs
-            val out = new FileOutputStream(new File(logDir, 
-              "%s.%s".format(executor.path.name, ext)))
-            Iterator.continually(input.read).takeWhile(-1!=).foreach(out.write) 
-          } else {
-            Iterator.continually(input.read).takeWhile(-1!=).foreach(println) 
-          }
-        }
+        case null | "" => logWith(conf, "/tmp/logs", executor, input, ext)
+        case _ => logWith(conf, logPath, executor, input, ext) 
       }
     } catch { 
       case e: Exception => error("Fail reading "+name, e) 
@@ -83,6 +73,18 @@ trait ExecutorLog { // TODO: refactor this after all log is switched
       executor ! StreamClosed 
     }
   }
+
+  def logWith(conf: HamaConfiguration, logPath: String, executor: ActorRef,
+              input: InputStream, ext: String) = 
+    if(!conf.getBoolean("bsp.tasks.log.console", false)) {
+      val logDir = new File(logPath)
+      if(!logDir.exists) logDir.mkdirs
+      val out = new FileOutputStream(new File(logDir, 
+        "%s.%s".format(executor.path.name, ext)))
+      Iterator.continually(input.read).takeWhile(-1!=).foreach(out.write) 
+    } else {
+      Iterator.continually(input.read).takeWhile(-1!=).foreach(println) 
+    }
 
 }
 
@@ -211,7 +213,7 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
    */
   protected def fork(slotSeq: Int) {
     val containerClass = conf.getClass("bsp.child.class", classOf[Container])
-    LOG.debug("Container class to be instantiated: {}", containerClass)
+    LOG.info("Container class to be instantiated: {}", containerClass)
     val cmd = javaArgs(javacp, slotSeq, containerClass)
     newContainer(slotSeq, cmd, conf) match {
       case Success(instances) => this.instances = Option(instances)
@@ -239,6 +241,7 @@ class Executor(conf: HamaConfiguration, slotSeq: Int, taskCounsellor: ActorRef)
                                 
     val stderr = spawn("stderr%s".format(seq), classOf[StdErr], 
                        process.getErrorStream, conf, self)
+    LOG.info("Successfully fork a container process for slot seq {}", seq)
     Success(Instances(process, stdout, stderr))
   } catch {
     case e: Exception => {

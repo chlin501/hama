@@ -71,7 +71,7 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
    * All files within this folder 
    * @return File points to the test root path "/tmp/hama".
    */
-  def testRoot: File = {
+  def testRoot: File = { 
     val tmp = new File(testRootPath)
     if(!tmp.exists) tmp.mkdirs
     tmp

@@ -39,22 +39,23 @@ final case class MockExecutorLocator(conf: HamaConfiguration)
  */
 class MockContainer(conf: HamaConfiguration, slotSeq: Int) 
       extends Container(conf, slotSeq) with ActorLocator {
+
   import scala.language.implicitConversions
 
   implicit def locateMockExecutor(mock: MockExecutorLocator) = 
       new ActorPathMagnet {
     type Path = String
     def apply(): Path = {
-      val actorSystemName = mock.conf.get("bsp.groom.actor-system.name", 
-                                     "TestExecutor")
-      val port = mock.conf.getInt("bsp.groom.actor-system.port", 50000)
-      val host = mock.conf.get("bsp.groom.actor-system.host", "127.0.0.1")
       val seq = mock.conf.getInt("bsp.child.slot.seq", 1)
-      val addr = ("akka.tcp://%1$s@%2$s:%3$d/user/taskCounsellor/" +
-                  "groomServer_executor_%4$s").format(actorSystemName, 
-                                                      host, 
-                                                      port,
-                                                      seq)
+      val counsellorName = TaskCounsellor.simpleName(mock.conf)
+      val executorName = Executor.simpleName(mock.conf, seq)
+      val actorSystemName = mock.conf.get("groom.actor-system.name", 
+                                     "TestExecutor")
+      val port = mock.conf.getInt("groom.port", 50000)
+      val host = mock.conf.get("groom.host", "127.0.0.1")
+      val addr = ("akka.tcp://%s@%s:%d/user/" + counsellorName + "/" +
+                  executorName).format(actorSystemName, host, port)
+
       LOG.info("Mock executor path to be looked up is at {}", addr)
       addr  
     }

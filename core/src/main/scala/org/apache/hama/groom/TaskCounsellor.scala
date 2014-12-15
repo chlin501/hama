@@ -117,11 +117,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     for(seq <- 1 to constraint) {
       slots ++= Set(Slot(seq, None, "", None))
     }
-    LOG.debug("{} GroomServer slots are initialied.", constraint)
+    LOG.info("{} GroomServer slots are initialied.", constraint)
   }
 
   override def initializeServices = {
-    tick(self, TaskRequest)
+    if(requestTask) tick(self, TaskRequest)
     initializeSlots(maxTasks)
   }
 
@@ -137,10 +137,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * and no task in directive queue.
    */
   override def ticked(msg: Tick): Unit = msg match {
-    case TaskRequest => if(requestTask) {
-      if((directiveQueue.size + numSlotsOccupied) < maxTasks)
-        groom ! RequestTask(currentGroomStats) 
-    }
+    case TaskRequest => if((directiveQueue.size + numSlotsOccupied) < maxTasks)
+      groom ! RequestTask(currentGroomStats) 
     case _ => 
   }
   
@@ -217,7 +215,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     val executor = spawn(executorName, classOf[Executor], setting.hama, slotSeq,
                          self) 
     context watch executor
-    LOG.debug("Executor for slot seq {} is spawned and watched.", slotSeq)
+    LOG.info("Executor for slot seq {} is spawned and watched.", slotSeq)
     executor
   }
 
@@ -227,7 +225,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected def receiveDirective: Receive = {
     case directive: Directive => directive match {
-      case null => LOG.error("Directive dispatched from {} is null!", 
+      case null => LOG.error("xxxxxxxxxxxxxxxxxxxx Directive dispatched from {} is null!", 
                              sender.path.name)
       case _ => directiveReceived(directive) 
     }
@@ -239,8 +237,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * When directive is kill, slot update will be done after ack is received.
    */
   protected def directiveReceived(directive: Directive) {
-    LOG.info("Receive directive action: "+directive.action+" task: "+
-             directive.task.getId.toString+" master: "+directive.master)
+    LOG.info("xxxxxxxxxxxxxxxxx Receive directive for action: "+directive.action+" task: "+
+             directive.task.getId+" master: "+directive.master)
     directive.action match {
       case Launch | Resume => initializeOrDispatch(directive) 
       case Kill => findTarget(directive.task) match {
@@ -323,6 +321,16 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     slots += newSlot
   }
 
+  protected def pullForLaunch(seq: Int, directive: Directive, from: ActorRef) {
+    from ! new LaunchTask(directive.task)
+    book(seq, directive.task.getId)
+  }
+
+  protected def pullForResume(seq: Int, directive: Directive, from: ActorRef) {
+    sender ! new ResumeTask(directive.task)
+    book(seq, directive.task.getId)
+  }
+
   /**
    * Executor on behalf of Container requests for task execution.
    * - dequeue a directive from queue.
@@ -332,21 +340,20 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected def pullForExecution: Receive = {
     case PullForExecution(slotSeq) => if(!directiveQueue.isEmpty) {
+      LOG.info("{} is asking for task execution...", sender.path.name)
       val (slotToDirective, rest) = directiveQueue.dequeue 
       val seq = slotToDirective.seq
       val directive = slotToDirective.directive
       directive.action match {
         case Launch => {
-          LOG.debug("{} requests for LaunchTask.", sender)
-          sender ! new LaunchTask(directive.task)
-          book(seq, directive.task.getId)
+          LOG.info("{} requests for LaunchTask.", sender.path.name)
+          pullForLaunch(seq, directive, sender)
         }
         case Kill => LOG.warning("Container {} shouldn't request kill action!",
                                  sender.path.name)
         case Resume => {
-          LOG.debug("{} requests for ResumeTask.", sender)
-          sender ! new ResumeTask(directive.task)
-          book(seq, directive.task.getId)
+          LOG.info("{} requests for ResumeTask.", sender.path.name)
+          pullForResume(seq, directive, sender)
         }
         case _ => LOG.warning("Unknown action {} for task {} from master {}", 
                               directive.action, directive.task.getId, 
@@ -409,9 +416,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def postContainerStopped(executor: ActorRef) {}
 
   protected def messageFromCollector: Receive = { 
-    case GetGroomStats =>  sender ! currentGroomStats
-    case rest@_ => LOG.warning("Unknown stats request for reporting from {}",
-                               sender.path.name)
+    case GetGroomStats => sender ! currentGroomStats
   }
 
   override def offline(from: ActorRef) = from.path.name match {
