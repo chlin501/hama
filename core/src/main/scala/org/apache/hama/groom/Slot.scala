@@ -31,4 +31,5 @@ import org.apache.hama.bsp.TaskAttemptID
 final case class Slot(seq: Int, 
                       taskAttemptId: Option[TaskAttemptID], 
                       master: String, 
-                      executor: Option[ActorRef]) 
+                      executor: Option[ActorRef],
+                      container: Option[ActorRef]) 

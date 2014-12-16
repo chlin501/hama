@@ -36,7 +36,7 @@ object MockContainer {
   }
 }
 
-final case class MockExecutorLocator(conf: HamaConfiguration)
+final case class MockTaskCounsellorLocator(conf: HamaConfiguration)
 
 /**
  * For TestExecutor
@@ -46,27 +46,25 @@ class MockContainer(setting: Setting, slotSeq: Int)
 
   import scala.language.implicitConversions
 
-  implicit def locateMockExecutor(mock: MockExecutorLocator) = 
+  implicit def locateMockTaskCounsellor(mock: MockTaskCounsellorLocator) = 
       new ActorPathMagnet {
     type Path = String
     def apply(): Path = {
-      val seq = mock.conf.getInt("bsp.child.slot.seq", 1)
       val counsellorName = TaskCounsellor.simpleName(mock.conf)
-      val executorName = Executor.simpleName(mock.conf, seq)
       val actorSystemName = mock.conf.get("groom.actor-system.name", 
                                      "TestExecutor")
-      val port = mock.conf.getInt("groom.port", 50000)
       val host = mock.conf.get("groom.host", "127.0.0.1")
-      val addr = ("akka.tcp://%s@%s:%d/user/" + counsellorName + "/" +
-                  executorName).format(actorSystemName, host, port)
+      val port = mock.conf.getInt("groom.port", 50000)
+      val addr = "akka.tcp://%s@%s:%d/user/%s".format(actorSystemName, host, 
+                                                      port, counsellorName)
 
-      LOG.info("Mock executor path to be looked up is at {}", addr)
+      LOG.info("Mock task counsellor path to be looked up is at {}", addr)
       addr  
     }
   }
 
   override def initializeServices {
-    lookup(ExecutorName, locate(MockExecutorLocator(setting.hama)))
+    lookup(TaskCounsellorName, locate(MockTaskCounsellorLocator(setting.hama)))
   }
  
   override def receive = super.receive

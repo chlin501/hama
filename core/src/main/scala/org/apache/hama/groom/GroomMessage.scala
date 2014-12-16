@@ -28,11 +28,6 @@ sealed trait GroomMessage
  */
 private[groom] final case class ContainerReady(seq: Int) extends GroomMessage
 
-/**
- * Singnify Container actor is stopped.
- */
-private[groom] final case object ContainerStopped extends GroomMessage
-
 private[groom] final case class PullForExecution(
   slotSeq: Int
 ) extends GroomMessage

@@ -85,6 +85,8 @@ class MockTaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef,
 
 object TestExecutor {
 
+  val actorSystemName = "TextExecutor"
+
   def content(): String = """
     groom {
       akka {
@@ -115,14 +117,19 @@ object TestExecutor {
 } 
 
 @RunWith(classOf[JUnitRunner])
-class TestExecutor extends TestEnv("TestExecutor", TestExecutor.config)
+class TestExecutor extends TestEnv(TestExecutor.actorSystemName, 
+                                   TestExecutor.config)
                    with JobUtil {
+
+  override def afterAll { }
 
   def newDirective(action: Directive.Action, task: Task): Directive = 
     new Directive(action, task, "testMaster")
 
   def config(conf: HamaConfiguration) {
     //conf.setBoolean("groom.executor.log.console", true)
+    conf.set("groom.actor-system.name", 
+             TestExecutor.actorSystemName) // for MockContainer lookup
     conf.set("bsp.working.dir", testRoot.getCanonicalPath)
     conf.setClass("container.main", classOf[MockContainer], classOf[Container])
     conf.setBoolean("groom.request.task", false)
@@ -152,7 +159,7 @@ class TestExecutor extends TestEnv("TestExecutor", TestExecutor.config)
     taskCounsellor ! directive2
     LOG.info("Task2's id is {}", task2.getId) // attempt_test_0003_000001_3
 
-    val waitTime = 10.seconds
+    val waitTime = 15.seconds
 
     LOG.info("Wait for {} secs ...", waitTime)
     sleep(waitTime)

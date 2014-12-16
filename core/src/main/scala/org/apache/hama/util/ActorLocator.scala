@@ -18,10 +18,14 @@
 package org.apache.hama.util
 
 import org.apache.hama.HamaConfiguration
+/*
 import org.apache.hama.monitor.master.JvmStatsTracker
 import org.apache.hama.monitor.master.GroomsTracker
 import org.apache.hama.monitor.master.JobTasksTracker
 import org.apache.hama.master.Scheduler
+*/
+import org.apache.hama.groom.GroomServer
+import org.apache.hama.groom.TaskCounsellor
 import org.apache.hama.ProxyInfo
 
 /**
@@ -55,18 +59,22 @@ trait ActorLocator {
 
 }
 
-final case class MasterLocator(info: ProxyInfo)
 // TODO: remove? 
+/*
+final case class MasterLocator(info: ProxyInfo)
 final case class JvmStatsTrackerLocator(conf: HamaConfiguration)
 final case class GroomsTrackerLocator(conf: HamaConfiguration)
 final case class JobTasksTrackerLocator(conf: HamaConfiguration)
 final case class SchedulerLocator(conf: HamaConfiguration)
 final case class ExecutorLocator(conf: HamaConfiguration)
+*/
+final case class TaskCounsellorLocator(conf: HamaConfiguration)
 
 object ActorPathMagnet {
 
   import scala.language.implicitConversions 
 
+/*
   implicit def locateMaster(locator: MasterLocator) = new ActorPathMagnet {
     type Path = String
     def apply(): Path = locator.info.getPath
@@ -142,6 +150,22 @@ object ActorPathMagnet {
                      appendChildPath(executorName).
                      build.
                      getPath
+    }
+  }
+*/
+
+  implicit def locateTaskCounsellor(locator: TaskCounsellorLocator) = 
+      new ActorPathMagnet {
+    type Path = String
+    def apply(): Path = {
+       val taskCounsellorName = TaskCounsellor.simpleName(locator.conf)
+       val groomName = GroomServer.simpleName(locator.conf)
+       new ProxyInfo.GroomBuilder(taskCounsellorName, locator.conf).
+                    createActorPath.
+                    appendChildPath(groomName).
+                    appendChildPath(taskCounsellorName).
+                    build.
+                    getPath
     }
   }
 }

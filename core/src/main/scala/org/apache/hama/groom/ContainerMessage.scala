@@ -20,9 +20,11 @@ package org.apache.hama.groom
 sealed trait ContainerMessage
 
 /**
- * {@link Executor} notifies {@link Container} to stop.
+ * Stop all operations. 
  */
-final case object StopContainer extends ContainerMessage
+final case class StopOperations(seq: Int) extends ContainerMessage
+
+final case class OperationsStopped(seq: Int) extends ContainerMessage
 
 /**
  * Shutdown {@link Container} system.

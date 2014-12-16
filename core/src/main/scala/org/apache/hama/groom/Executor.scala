@@ -51,10 +51,29 @@ import scala.util.Success
 import scala.util.Try
 
 trait ExecutorMessages
-final case class Command(msg: Any, recipient: ActorRef) extends ExecutorMessages
-final case object StreamClosed extends ExecutorMessages   
+//final case class Command(msg: Any, recipient: ActorRef) extends ExecutorMessages
+//final case object StreamClosed extends ExecutorMessages   
 final case class Instances(process: Process, stdout: ActorRef, 
                            stderr: ActorRef) extends ExecutorMessages
+
+object ProcessFailureException {
+
+  def apply(slotSeq: Int, cause: Throwable): ProcessFailureException = {
+    val e = new ProcessFailureException
+    e.seq = slotSeq
+    e.initCause(cause)
+    e
+  }
+
+}
+final class ProcessFailureException extends RuntimeException {
+
+  protected var seq: Int = -1
+
+  def slotSeq(): Int = seq
+
+}
+
 
 trait ExecutorLog { // TODO: refactor this after all log is switched Logging
 
@@ -71,7 +90,7 @@ trait ExecutorLog { // TODO: refactor this after all log is switched Logging
       case e: Exception => error("Fail reading "+name, e) 
     } finally { 
       input.close 
-      executor ! StreamClosed 
+      //executor ! StreamClosed 
     }
   }
 
@@ -140,19 +159,21 @@ class Executor(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
 
   import Executor._
 
-  type CommandQueue = Queue[Command]
+  //type CommandQueue = Queue[Command]
 
-  protected var commandQueue = Queue[Command]()
+  //protected var commandQueue = Queue[Command]()
   /* container is the entry point that takes cares of peer execution */
   protected var container: Option[ActorRef] = None 
   protected var instances: Option[Instances] = None
   protected var isStdoutClosed = false
   protected var isStderrClosed = false
 
+/*
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 1, withinTimeRange = 1 minutes) {
       case e: Exception => Stop  
     }
+*/
 
   override def initializeServices() = fork(slotSeq) 
 
@@ -220,12 +241,12 @@ class Executor(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
   protected def fork(slotSeq: Int) {
     val cmd = javaArgs(javacp, slotSeq, containerClass)
     newContainer(slotSeq, cmd, setting.hama) match {
-      case Success(instances) => this.instances = Option(instances)
+      case Success(instances) => 
+        LOG.info("Container process with slot {} exits normally!", slotSeq)
       case Failure(cause) => {
-        LOG.info("Fail creating child process for slot {} due to {}", slotSeq,
-                 cause)
         cleanupInstances
         context.stop(self)
+        //throw ProcessFailureException(slotSeq, cause)
       }
     }
   }
@@ -236,7 +257,7 @@ class Executor(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
    * @param conf contains related information for creating process.
    */
   protected def newContainer(seq: Int, cmd: Seq[String], 
-                             conf: HamaConfiguration): Try[Instances] = try { 
+                             conf: HamaConfiguration): Try[Int] = try { 
     val builder = new ProcessBuilder(seqAsJavaList(cmd))
     builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
     val process = builder.start
@@ -245,149 +266,18 @@ class Executor(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
                                 
     val stderr = spawn("stderr%s".format(seq), classOf[StdErr], 
                        process.getErrorStream, conf, self)
-    LOG.info("Successfully fork a container process for slot seq {}", seq)
-    Success(Instances(process, stdout, stderr))
+    LOG.info("Container process for slot seq {} is forked ...", seq)
+    this.instances = Option(Instances(process, stdout, stderr))
+    val exitValue = process.waitFor // blocking call
+    LOG.info("Conainer process exits with value {}", exitValue)
+    if(0 != exitValue) 
+      throw new RuntimeException("Non 0 exit value: "+exitValue)
+    Success(exitValue)
   } catch {
     case e: Exception => {
-      LOG.error("Fail launching Container process {} for slot {}", e, seq) 
+      LOG.error("Container process with slot {} fails because {}", seq, e) 
       Failure(e)
     }
-  }
-
-  /**
-   * Ask {@link Container} to launch a task.
-   * This should happens after {@link Container} is ready.
-   * @param Receive is partial function.
-   */
-  protected def launchTask: Receive = {
-    case action: LaunchTask => container.map { c => 
-      c ! new LaunchTask(action.task)
-    }
-  }
-
-
-  /** 
-   * Ask {@link Container} to resume a specific task.
-   * This should happens after {@link Container} is ready.
-   * @param Receive is partial function.
-   */
-  protected def resumeTask: Receive = {
-    case action: ResumeTask => container.map { c => 
-      c ! new ResumeTask(action.task)
-    }
-  }
-
-  /**
-   * Ask {@link Container} to kill the task that is currently running.
-   * This should happens after {@link Container} is ready.
-   * @param Receive is partial function.
-   */
-  protected def killTask: Receive = {
-    case action: KillTask => container.map { c => 
-      c ! new KillTask(action.taskAttemptId)
-    }
-  }
-
-  protected def killAck: Receive = {
-    case action: KillAck => 
-      taskCounsellor ! new KillAck(action.slotSeq, action.taskAttemptId)
-  }
-
-  protected def stdoutName(): String = instances.map { instance => 
-    instance.stdout.path.name 
-  }.getOrElse(null)
-
-  protected def stderrName(): String = instances.map { instance => 
-    instance.stderr.path.name  
-  }.getOrElse(null)
-
-  /**
-   * Once the stream, including input and error stream, is closed, the system
-   * will destroy process automatically.
-   */
-  protected def streamClosed: Receive = {
-    case StreamClosed => {
-      LOG.debug("{} notifies InputStream is closed!", sender.path.name)
-      if(sender.path.name.equals(stdoutName)) { 
-        isStdoutClosed = true
-      } else if(sender.path.name.equals(stderrName)) {
-        isStderrClosed = true
-      } else LOG.warning("[Warning] Sender {} asks for closing stream.", 
-                         sender.path.name)
-      if(isStdoutClosed && isStderrClosed) self ! StopProcess
-    }
-  }
-
-  /**
-   * Container replies when it's ready.
-   * @return Receive is partial function.
-   */
-  protected def containerReady: Receive = {
-    case ContainerReady(seq) => {
-      context watch sender
-      container = Option(sender)
-      while(!commandQueue.isEmpty) {
-        val (cmd, rest) = commandQueue.dequeue
-        container.map { c => c ! cmd.msg }
-        commandQueue = rest  
-      }
-      afterContainerReady(seq, taskCounsellor)
-    }
-  }
-
-  protected def afterContainerReady(seq: Int, target: ActorRef) = 
-    target ! PullForExecution(seq) 
-
-  /**
-   * Notify when Container is stopped.
-   * @return Receive is partial function.
-   */
-  protected def containerStopped: Receive = {
-    case ContainerStopped => taskCounsellor ! ContainerStopped
-  }
-
-  /**
-   * Send StopContainer message to shutdown Container process.
-   * @return Receive is partial function.
-   */
-  protected def stopProcess: Receive = {
-    case StopProcess => container match {
-      case None => 
-        commandQueue = commandQueue.enqueue(Command(StopContainer, sender)) 
-      case Some(c) => c ! StopContainer 
-    }
-  }
-
-  /**
-   * Issue shutdown command to {@link Container}, which shuts down the
-   * child process.
-   * @param Receive is partial function.
-   */
-  protected def shutdownContainer: Receive = {
-    case ShutdownContainer => container match {
-      case None => commandQueue = 
-         commandQueue.enqueue(Command(ShutdownContainer, sender)) 
-      case Some(c) => {
-        LOG.debug("Shutdown container {}", c)
-        c ! ShutdownContainer 
-      }
-    }
-  }
-
-  /**
-   * Notify {@link TaskCounsellor} that slot is already occupied!
-   * @return Receive is partial function.
-   */
-  protected def slotOccupied: Receive = {
-    case occupied: Occupied => {
-      LOG.warning("Slot {} is occupied by {}.", occupied.getSlotSeq, 
-                  occupied.getTaskAttemptId.toString)
-      taskCounsellor ! occupied
-    }
-  }
-
-  protected def report: Receive = {
-    case r: Report => taskCounsellor ! r
   }
 
   protected def cleanupInstances() = { 
@@ -399,19 +289,6 @@ class Executor(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
     instances = None
   }
 
-  /**
-   * Observe container offline event, so notify task counsellor.
-   * @param target container that is offline.
-   */
-  override def offline(target: ActorRef) = target.path.name match { 
-    case name if name.equals(Container.name(slotSeq)) => {
-      LOG.warning("Container {} is offline!", target.path.name) 
-      cleanupInstances
-      context.stop(self)
-    }
-    case _ => LOG.warning("Unknown contianer {} is offline!", target.path.name)
-  }
-
-  override def receive = slotOccupied orElse killAck orElse launchTask orElse resumeTask orElse killTask orElse containerReady orElse streamClosed orElse stopProcess orElse containerStopped orElse superviseeIsTerminated orElse shutdownContainer orElse report orElse unknown
+  override def receive = unknown
      
 }

@@ -46,7 +46,8 @@ import org.apache.hama.sync.CuratorBarrier
 import org.apache.hama.sync.CuratorRegistrator
 import org.apache.hama.sync.PeerClient
 import org.apache.hama.util.ActorLocator
-import org.apache.hama.util.ExecutorLocator
+//import org.apache.hama.util.ExecutorLocator
+import org.apache.hama.util.TaskCounsellorLocator
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
@@ -94,11 +95,20 @@ object Container extends CommonLog {
   }
 
   @throws(classOf[Throwable])
-  def main(args: Array[String]) = {
+  def main(args: Array[String]) = try {
     require(null != args && 0 < args.length, "Arguments not supplied!")
     val parameters = initialize(args)
     launchFrom(parameters)
+  } catch {
+    case e: Exception => {
+      LOG.error("Fail launching bsp peer process because {}", e);
+      System.exit(-1);
+    }
   }
+  
+  def simpleName(conf: HamaConfiguration, slotSeq: Int): String = 
+    conf.get("container.name", classOf[Container].getSimpleName) + slotSeq
+
 }
 
 /**
@@ -108,7 +118,7 @@ object Container extends CommonLog {
  */
 class Container(setting: Setting, slotSeq: Int) extends LocalService 
                                                 with RemoteService 
-                                         with ActorLocator {
+                                                with ActorLocator {
 
   import Container._
  
@@ -117,48 +127,41 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
    * actors.
    */
   override val supervisorStrategy =
-    OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 1 minute) {
-       case _: IOException => {  
+    OneForOneStrategy(maxNrOfRetries = 1, withinTimeRange = 1 minute) {
+       case _: Exception => {  
          stopAll
-         //latestTask.map { (task) => notifyExecutor(task) }
-         Stop 
-       }
-       case _: RuntimeException => { 
-         stopAll
-         //latestTask.map { (task) => notifyExecutor(task) }
          Stop 
        }
     }
 
-
-  protected var executor: Option[ActorRef] = None
+  protected var taskCounsellor: Option[ActorRef] = None
 
   protected var coordinator: Option[ActorRef] = None
 
+  protected val TaskCounsellorName = TaskCounsellor.simpleName(setting.hama)
+
   /**
-   * This variable records the latest task information, which might be slightly 
-   * outdated from that held by {@link Coordinator}.
-  protected var latestTask: Option[Task] = None
+   * Stop all realted operations.
    */
-
-  protected val ExecutorName = Executor.simpleName(setting.hama, slotSeq)
-
   protected def stopAll() {
     coordinator.map { (c) => context.stop(c) }
+    coordinator = None
     // TODO: messeenger
     // syncer
   }
  
   override def initializeServices =
-    lookup(ExecutorName, locate(ExecutorLocator(setting.hama)))
+    lookup(TaskCounsellorName, locate(TaskCounsellorLocator(setting.hama)))
+    //lookup(ExecutorName, locate(ExecutorLocator(setting.hama)))
 
-  override def afterLinked(proxy: ActorRef) {
-    executor = Option(proxy)
-    executor.map { found => {
-      found ! ContainerReady(slotSeq)
+  override def afterLinked(proxy: ActorRef) = proxy.path.name match {
+    case `TaskCounsellorName` => {
+      taskCounsellor = Option(proxy)
+      proxy ! ContainerReady(slotSeq)
       LOG.info("Container with slot seq {} replies ready to {}!", slotSeq, 
-               found.path.name)
-    }}
+               proxy.path.name)
+    } 
+    case _ => LOG.warning("Unknown taget {} is linked!", proxy.path.name)
   }
 
   /**
@@ -175,12 +178,11 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
 
   /**
    * - Create coordinator 
-   * - When that actor finishes setup, sending ack back to executor.
+   * - When that actor finishes setup, sending ack back to task counsellor.
    * @param Receive is partial function.
    */
   def launchTask: Receive = {
     case action: LaunchTask => if(!isOccupied(coordinator)) {
-      //this.latestTask = Option(action.task.newTask)
       doLaunch(action.task)
       postLaunch(slotSeq, action.task.getId, sender)
     } else reply(sender, slotSeq, action.task.getId)
@@ -196,6 +198,7 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
                         hamaHome, 
                         task.getId, 
                         slotSeq)
+    context watch tasklog 
 
     val messenger = spawn("messenger-"+Peer.nameFrom(setting.hama), 
                           classOf[MessageExecutive[BSPMessageBundle[Writable]]],
@@ -203,6 +206,7 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
                           task.getId,
                           self, 
                           tasklog)
+    context watch messenger
 
     val peer = spawn("syncer", 
                      classOf[PeerClient], 
@@ -211,7 +215,9 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
                      CuratorBarrier(setting.hama, task.getId, task.getTotalBSPTasks),
                      CuratorRegistrator(setting.hama),
                      tasklog)
+    context watch peer
 
+/*
     this.coordinator = Option(spawn("coordinator", 
                                     classOf[Coordinator], 
                                     setting.hama, 
@@ -220,15 +226,19 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
                                     messenger,
                                     peer,
                                     tasklog))
-    this.coordinator.map { c => c ! Execute } // TODO: move Execute to initializeServices
+
+    this.coordinator.map { c => 
+      c ! Execute 
+      context watch c
+    } // TODO: move Execute to initializeServices
+*/
   }
 
-  def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = {
-  }
+  def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) {}
 
   /**
    * - Asynchronouly create task with an actor.
-   * - When that actor finishes setup, sending ack back to executor.
+   * - When that actor finishes setup, sending ack back to task counsellor.
    * @param Receive is partial function.
    */
   def resumeTask: Receive = {
@@ -255,36 +265,14 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
     }
   }
 
-  def doKill(taskAttemptId: TaskAttemptID) {
-    LOG.info("function doKill is not yet implemented!") // TODO:
-  }
+  def doKill(taskAttemptId: TaskAttemptID) = stopAll // TODO: any other operations?
 
   def postKill(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = 
     from ! new KillAck(slotSeq, taskAttemptId)
 
-  /**
-   * A function to close all necessary operations before shutting down the 
-   * system.
-   */
-  protected def close { 
-    LOG.info("Stop related operations before exiting programme ...")
-  }
-
-  override def postStop {
-    close
+  override def stopServices() {
+    stopAll
     super.postStop
-  }
-
-  /**
-   * Close all related process operations and then shutdown the actor system.
-   * @return Receive is partial function.
-   */
-  def stopContainer: Receive = {
-   case StopContainer => {
-      stopAll
-      executor.map { found => found ! ContainerStopped }
-      LOG.debug("ContainerStopped message is sent ...")
-    }
   }
 
   /**
@@ -293,9 +281,8 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
    */
   def shutdownContainer: Receive = {
     case ShutdownContainer => {
-      LOG.debug("Unwatch remote executro {} ...", executor)
-      executor.map { found => context.unwatch(found) }
-      LOG.info("Completely shutdown BSPContainer system ...")
+      taskCounsellor.map { found => context.unwatch(found) }
+      LOG.info("Call context.system.shutdown ...")
       context.system.shutdown
     }
   }
@@ -306,20 +293,24 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
    * @param target actor is {@link Executor}
    */
   override def offline(target: ActorRef) = target.path.name match {
-    case `ExecutorName` => self ! ShutdownContainer
+    case `TaskCounsellorName` => self ! ShutdownContainer
+    //case coordinator => self ! ShutdownContainer
+    //case messenger => self ! ShutdownContainer
+    //case syncer => self ! ShutdownContainer
     case _ => LOG.warning("Unexpected actor {} is offline!", target.path.name)
   }
 
-/*
+/* TODO: send the latest task to task counsellor and then to scheduler
   def report: Receive = {
     case r: Report => {
-      //this.latestTask = Option(r.getTask)
-      notifyExecutor(r.getTask)
+      reportToTaskCounsellor(r.getTask)
     }
   }
 
-  def notifyExecutor(task: Task) = executor.map { (e) => e ! new Report(task) }
+  def reportToTaskCounsellor(task: Task) = taskCounsellor.map { (e) => 
+    e ! new Report(task) 
+  }
 */
 
-  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse stopContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse /*report orElse*/ unknown
+  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse /*report orElse*/ unknown
 }

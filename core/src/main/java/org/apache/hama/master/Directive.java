@@ -95,6 +95,19 @@ public class Directive implements Writable {
   }
 
   @Override
+  public boolean equals(Object o) {
+    if (o == this) return true;
+    if (null == o) return false;
+    if (getClass() != o.getClass()) return false;
+
+    final Directive d = (Directive) o;
+    if (!d.task.equals(task)) return false;
+    if (!d.master.equals(master)) return false;
+    if (!d.action.toString().equals(action.toString())) return false;
+    return true;
+  }
+
+  @Override
   public void write(DataOutput out) throws IOException {
     out.writeLong(timestamp());
     Text.writeString(out, master());
