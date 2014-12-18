@@ -337,6 +337,6 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     case SetCoordinator(bspPeer) => coordinator = Option(bspPeer)
   }
 
-  override def receive = setCoordinator orElse sendMessage orElse currentMessage orElse numberCurrentMessages orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeIsTerminated orElse getLocalQueueMsgs orElse unknown 
+  override def receive = setCoordinator orElse sendMessage orElse currentMessage orElse numberCurrentMessages orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeOffline orElse getLocalQueueMsgs orElse unknown 
 
 }

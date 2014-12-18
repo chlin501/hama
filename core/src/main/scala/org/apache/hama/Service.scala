@@ -63,7 +63,7 @@ trait Service extends Agent {
   /**
    * when target service is offline.
    */
-  protected def superviseeIsTerminated: Receive = {
+  protected def superviseeOffline: Receive = {
     case Terminated(target) => offline(target)
   }
 

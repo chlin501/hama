@@ -51,8 +51,6 @@ import scala.util.Success
 import scala.util.Try
 
 trait ExecutorMessages
-//final case class Command(msg: Any, recipient: ActorRef) extends ExecutorMessages
-//final case object StreamClosed extends ExecutorMessages   
 final case class Instances(process: Process, stdout: ActorRef, 
                            stderr: ActorRef) extends ExecutorMessages
 
@@ -90,7 +88,6 @@ trait ExecutorLog { // TODO: refactor this after all log is switched Logging
       case e: Exception => error("Fail reading "+name, e) 
     } finally { 
       input.close 
-      //executor ! StreamClosed 
     }
   }
 
@@ -154,26 +151,11 @@ object Executor {
  * An actor forks a child process for executing tasks.
  * @param setting cntains necessary setting for launching the child process.
  */
-class Executor(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef) 
-      extends Service with Spawnable {
+class Executor(setting: Setting, slotSeq: Int) extends Service with Spawnable {
 
   import Executor._
 
-  //type CommandQueue = Queue[Command]
-
-  //protected var commandQueue = Queue[Command]()
-  /* container is the entry point that takes cares of peer execution */
-  protected var container: Option[ActorRef] = None 
   protected var instances: Option[Instances] = None
-  protected var isStdoutClosed = false
-  protected var isStderrClosed = false
-
-/*
-  override val supervisorStrategy =
-    OneForOneStrategy(maxNrOfRetries = 1, withinTimeRange = 1 minutes) {
-      case e: Exception => Stop  
-    }
-*/
 
   override def initializeServices() = fork(slotSeq) 
 
@@ -217,7 +199,7 @@ class Executor(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
    * @return String of classpath value.
    */
   protected def classpath(hamaHome: String, parentClasspath: String): String = {
-    if(null == hamaHome) 
+    if(null == hamaHome)  // TODO: find better to handle side effect 
       throw new RuntimeException("Variable hama.home.dir is not set!")
     var cp = "./:%s:%s/conf".format(parentClasspath, hamaHome)
     val lib = new File(hamaHome, "lib")
@@ -245,8 +227,7 @@ class Executor(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
         LOG.info("Container process with slot {} exits normally!", slotSeq)
       case Failure(cause) => {
         cleanupInstances
-        context.stop(self)
-        //throw ProcessFailureException(slotSeq, cause)
+        throw ProcessFailureException(slotSeq, cause)
       }
     }
   }
@@ -274,10 +255,7 @@ class Executor(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
       throw new RuntimeException("Non 0 exit value: "+exitValue)
     Success(exitValue)
   } catch {
-    case e: Exception => {
-      LOG.error("Container process with slot {} fails because {}", seq, e) 
-      Failure(e)
-    }
+    case e: Exception => Failure(e)
   }
 
   protected def cleanupInstances() = { 

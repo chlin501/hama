@@ -312,5 +312,5 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
   }
 */
 
-  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse actorReply orElse timeout orElse superviseeIsTerminated orElse /*report orElse*/ unknown
+  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse actorReply orElse timeout orElse superviseeOffline orElse /*report orElse*/ unknown
 }

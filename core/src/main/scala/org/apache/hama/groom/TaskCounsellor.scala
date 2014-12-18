@@ -18,6 +18,8 @@
 package org.apache.hama.groom
 
 import akka.actor.ActorRef
+import akka.actor.SupervisorStrategy.Stop
+import akka.actor.OneForOneStrategy
 import java.io.DataInput
 import java.io.DataOutput
 import java.io.IOException
@@ -40,12 +42,8 @@ import scala.collection.immutable.Queue
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
-
-/*
-trait TaskCounsellorMessage
-final case class SlotToDirective(seq: Int, directive: Directive)
-      extends TaskCounsellorMessage
-*/
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.FiniteDuration
 
 object TaskFailure {
 
@@ -58,7 +56,6 @@ object TaskFailure {
 }
 
 protected[groom] final class TaskFailure extends Writable {
-                                            //with TaskCounsellorMessage { 
 
   protected[groom] var id: Option[TaskAttemptID] = None
 
@@ -92,24 +89,13 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   type RetryCount = Int
 
-/*
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 1, withinTimeRange = 1 minute) {
-       case pfe: ProcessFailureException => {
-         val seq = pdf.slotSeq
-         slots.find( slot => (slot.seq == seq)).map { slot => 
-           slot.executor.map { container => context.stop(container) }
-         }
-         Stop
-       }
-       //case _: ContainerException => // container related exception
-       case e: Exception => {
-         LOG.warning("Unknown failure", e)
-         Resume
-       }
+      case pfe: ProcessFailureException => {
+        unwatchContainerWith(pfe.slotSeq)
+        Stop
+      }
     }
-*/
-
 
   /**
    * The max size of slots can't exceed configured maxTasks.
@@ -126,7 +112,15 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   //protected var directiveQueue = Queue.empty[SlotToDirective]
   protected var directiveQueue = Queue.empty[Directive]
 
-  protected def maxTasks(): Int = setting.hama.getInt("bsp.tasks.maximum", 3)
+  protected def unwatchContainerWith(seq: Int) = slots.find( slot => 
+    (slot.seq == seq)).map { slot => slot.container.map { container => 
+    context unwatch container 
+  }}
+
+  protected def defaultMaxTasks(): Int = 
+    setting.hama.getInt("bsp.tasks.maximum", 3)
+
+  protected def currentMaxTasks(): Int = slots.count({ slot => true})
 
   protected def maxRetries(): Int = 
     setting.hama.getInt("groom.executor.max_retries", 3)
@@ -145,7 +139,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   override def initializeServices = {
     if(requestTask) tick(self, TaskRequest)
-    initializeSlots(maxTasks)
+    initializeSlots(defaultMaxTasks)
   }
 
   protected def numSlotsOccupied(): Int = slots.count( slot => 
@@ -160,8 +154,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * and no task in directive queue.
    */
   override def ticked(msg: Tick): Unit = msg match {
-    case TaskRequest => if((directiveQueue.size + numSlotsOccupied) < maxTasks)
-      groom ! RequestTask(currentGroomStats) 
+    case TaskRequest => 
+      if((directiveQueue.size + numSlotsOccupied) < currentMaxTasks) 
+        groom ! RequestTask(currentGroomStats) 
     case _ => 
   }
   
@@ -176,9 +171,10 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     val host = setting.host
     val port = setting.port
     val slotIds = list(slots) 
+    val maxTasksNow = currentMaxTasks
     LOG.debug("Current groom stats: name {}, host {}, port {}, maxTasks {}, "+
-              "slots ids {}", name, host, port, maxTasks, slotIds)
-    GroomStats(name, host, port, maxTasks, slotIds)
+              "slots ids {}", name, host, port, maxTasksNow, slotIds)
+    GroomStats(name, host, port, maxTasksNow, slotIds)
   } 
 
   /**
@@ -238,8 +234,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def newExecutor(slotSeq: Int): ActorRef = { 
     val executorName = Executor.simpleName(setting.hama, slotSeq)
-    val executor = spawn(executorName, classOf[Executor], setting, slotSeq,
-                         self)  
+    val executor = spawn(executorName, classOf[Executor], setting, slotSeq)
     context watch executor
     executor
   }
@@ -360,145 +355,79 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     book(seq, directive.task.getId, from)
   }
 
-  /**
-   * Executor on behalf of Container requests for task execution.
-   * - dequeue a directive from queue.
-   * - perform function accoding to {@link Directive#action}.
-   * - move the directive to pending queue waiting for ack.
-   * @return Receive is partial function.
-  protected def pullForExecution: Receive = {
-    case PullForExecution(slotSeq) => if(!directiveQueue.isEmpty) {
-      LOG.info("{} is asking for task execution...", sender.path.name)
-      val (slotToDirective, rest) = directiveQueue.dequeue 
-      val seq = slotToDirective.seq
-      val directive = slotToDirective.directive
-      directive.action match {
-        case Launch => {
-          LOG.info("{} requests for LaunchTask.", sender.path.name)
-          pullForLaunch(seq, directive, sender)
-        }
-        case Kill => LOG.warning("Container {} shouldn't request kill action!",
-                                 sender.path.name)
-        case Resume => {
-          LOG.info("{} requests for ResumeTask.", sender.path.name)
-          pullForResume(seq, directive, sender)
-        }
-        case _ => LOG.warning("Unknown action {} for task {} from master {}", 
-                              directive.action, directive.task.getId, 
-                              directive.master)
-      }
-      directiveQueue = rest
-    }
-  }
-
-  protected def stopExecutor: Receive = {
-    case StopExecutor(slotSeq) => slots.find( slot => 
-      slot.seq == slotSeq && !None.equals(slot.executor)
-    ) match { 
-      case Some(found) => found.executor match { 
-        case Some(executor) => executor ! StopProcess
-        case None => throw new RuntimeException("Impossible! slot "+slotSeq+
-                                                "no executor exists!")
-      }
-      case None => LOG.info("Executor may not be initialized for slot seq {}.",
-                            slotSeq)
-    }
-  }
-
-  protected def containerStopped: Receive = {
-    case ContainerStopped => {
-      preContainerStopped(sender)
-      whenContainerStopped(sender)
-      postContainerStopped(sender)
-    }
-  }
- 
-  protected def preContainerStopped(executor: ActorRef) {}
-
-   * When container stopped
-  protected def whenContainerStopped(from: ActorRef) = slots.find( slot =>
-    slot.executor match { 
-      case Some(found) => found.path.name.equals(from.path.name)
-      case None => false
-    }
-  ) match { 
-    case Some(found) => found.executor match {
-      case Some(executor) => {
-        LOG.debug("Send shutdown container message to {} ...", executor)
-        executor ! ShutdownContainer
-        val taskAttemptId = found.taskAttemptId
-        if(!None.equals(taskAttemptId)) 
-          LOG.error("Task {} at slot seq {} is not empty! ", taskAttemptId,
-                    found.seq)
-        val newSlot = Slot(found.seq, None, found.master, None, None)
-        slots -= found
-        slots += newSlot
-      }
-      case None => LOG.error("Executor not found for ", from.path.name)
-    }
-    case None => LOG.error("No executor found for ", from.path.name)
-  }
-
-  protected def postContainerStopped(executor: ActorRef) {}
-   */
-
   protected def messageFromCollector: Receive = { 
     case GetGroomStats => sender ! currentGroomStats
   }
 
-/* TODO: check container instead. 
-           
   override def offline(from: ActorRef) = from.path.name match {
     case name if name.contains("_executor_") => from.path.name.split("_") match{
       case ary if (ary.size == 3) => extractSeq(ary(2), { seq => 
-        matchSlot(seq, { (seq, id) => 
-          matchTaskAttemptId(seq, id, { seq => 
-            checkRetries(seq, { seq => newExecutor(seq) })
-          }) 
-        }) 
+        matchSlot(seq, { slot => whenSlotFound(slot, { slot => 
+          checkIfRetries(slot, { seq => newExecutor(seq) })
+        })}) 
       })
       case _ => LOG.error("Invalid executor name", from.path.name)
     }
-    case name if name.contains("Container") 
-
-    case _ => LOG.warning("Unknown actor {} offline!", from.path.name)
+    case name if name.contains(Container.lowercase) => // TODO: clean up matched slot. if no task running, new executor; otherwise update slot, report to master
+    case _ => LOG.warning("Unknown supervisee {} offline!", from.path.name)
   }
 
-  protected def checkRetries(seq: Int, f:(Int) => Unit) = 
-    retries.get(seq) match {
+  protected def cleanupSlot(old: Slot) = slots.map { slot => 
+    if(slot.seq == old.seq) {
+      slots -= slot
+      val newSlot = Slot(old.seq, None, old.master, None, None)
+      slots += newSlot
+  }}
+
+  protected def checkIfRetries(old: Slot, f:(Int) => Unit) = 
+    retries.get(old.seq) match {
       case Some(retryCount) if (retryCount < maxRetries) => {
-        f(seq) 
+        cleanupSlot(old)
+        f(old.seq) 
         val v = retryCount + 1
-        retries ++= Map(seq -> v)
+        retries ++= Map(old.seq -> v)
       }
-      case Some(retryCount) if (retryCount >= maxRetries) => { 
-        // TODO: update slots container to None
-        //       send report to master as black list 
-        //         or remove slot then update groom stats and report master
-        //       reset retries map (seq -> 0)
+      case Some(retryCount) if (retryCount >= maxRetries) => {
+        slots -= old 
+        retries = retries.updated(old.seq, 0)   
+        // TODO: report groom stats to master 
+        //       black list!
       }
       case None => { // 0
-        f(seq)
-        retries ++= Map(seq -> 1)
+        cleanupSlot(old)
+        f(old.seq)
+        retries ++= Map(old.seq -> 1)
       }
     }
 
+  /**
    * If a task attempt id is found in slot, denoting a task running at that
    * container fails, task counsellor notify schedule that a task fails; 
    * otherwise respawning executor.
-  protected def matchTaskAttemptId(seq: Int, 
-                                   taskAttemptId: Option[TaskAttemptID], 
-                                   f: (Int) => Unit) = 
-    taskAttemptId match {
-      case Some(runningTaskId) => groom ! TaskFailure(runningTaskId)
-      case None => f(seq) // whether a task in queue or not, restart execturor
+   */
+  protected def whenSlotFound(slot: Slot, 
+                              retry:(Slot) => Unit) = slot.taskAttemptId match {
+    case Some(runningTaskId) => { 
+      groom ! TaskFailure(runningTaskId)
+      retry(slot)
     }
+    case None => retry(slot) // whether directives in queue or not, restart execturor
+  }
 
-  protected def matchSlot(seq: Int, f: (Int, Option[TaskAttemptID]) => Unit) = 
-    slots.find( slot => slot.seq == seq) match {
-      case Some(found) => f(found.seq, found.taskAttemptId)
-      case None => LOG.error("No slot seq found for executor {}", seq)
-    }
+  protected def matchSlot(seq: Int, 
+                          matched: (Slot) => Unit): Unit = 
+    matchSlot(seq, { slot => matched(slot) }, { 
+      LOG.error("No slot matched to seq {}", seq) 
+    })
+
+  protected def matchSlot(seq: Int, 
+                          matched: (Slot) => Unit, 
+                          notMatched: => Unit) = slots.find( slot => 
+    (slot.seq == seq) 
+  ) match {
+    case Some(found) => matched(found)
+    case None => notMatched
+  }
 
   protected def extractSeq(seq: String, f:(Int) => Unit) = 
     Try(seq.toInt) match {
@@ -506,7 +435,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       case Failure(cause) => LOG.error("Invalid executor seq {} for {}",
                                        seq, cause)
     }
-*/
 
   /**
    * Container replies when it's ready.
@@ -538,6 +466,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
   }
 
-  override def receive = containerReady orElse tickMessage orElse messageFromCollector orElse killAck orElse /*pullForExecution orElse stopExecutor orElse containerStopped orElse*/ receiveDirective orElse superviseeIsTerminated orElse unknown
+  override def receive = containerReady orElse tickMessage orElse messageFromCollector orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
 
 }
