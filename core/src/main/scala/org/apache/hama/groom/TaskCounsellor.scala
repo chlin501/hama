@@ -120,7 +120,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def defaultMaxTasks(): Int = 
     setting.hama.getInt("bsp.tasks.maximum", 3)
 
-  protected def currentMaxTasks(): Int = slots.count({ slot => true})
+  protected def maxTasksAllowed(): Int = slots.size // no black list at the moment
 
   protected def maxRetries(): Int = 
     setting.hama.getInt("groom.executor.max_retries", 3)
@@ -155,7 +155,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   override def ticked(msg: Tick): Unit = msg match {
     case TaskRequest => 
-      if((directiveQueue.size + numSlotsOccupied) < currentMaxTasks) 
+      if((directiveQueue.size + numSlotsOccupied) < maxTasksAllowed) 
         groom ! RequestTask(currentGroomStats) 
     case _ => 
   }
@@ -171,7 +171,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     val host = setting.host
     val port = setting.port
     val slotIds = list(slots) 
-    val maxTasksNow = currentMaxTasks
+    val maxTasksNow = maxTasksAllowed
     LOG.debug("Current groom stats: name {}, host {}, port {}, maxTasks {}, "+
               "slots ids {}", name, host, port, maxTasksNow, slotIds)
     GroomStats(name, host, port, maxTasksNow, slotIds)
@@ -233,7 +233,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   //       to None
 
   protected def newExecutor(slotSeq: Int): ActorRef = { 
-    val executorName = Executor.simpleName(setting.hama, slotSeq)
+    val executorConf = new HamaConfiguration(setting.hama)
+    executorConf.setInt("groom.executor.slot.seq", slotSeq)
+    val executorName = Executor.simpleName(executorConf)
     val executor = spawn(executorName, classOf[Executor], setting, slotSeq)
     context watch executor
     executor
@@ -359,16 +361,22 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     case GetGroomStats => sender ! currentGroomStats
   }
 
+  /**
+   * When an executor fails, counsellor unwatch container so container won't 
+   * be observed on offline; when only container fails (no executor), offline 
+   * will notify accordingly.  
+   */
   override def offline(from: ActorRef) = from.path.name match {
     case name if name.contains("_executor_") => from.path.name.split("_") match{
       case ary if (ary.size == 3) => extractSeq(ary(2), { seq => 
         matchSlot(seq, { slot => whenSlotFound(slot, { slot => 
-          checkIfRetries(slot, { seq => newExecutor(seq) })
+          checkIfRetry(slot, { seq => newExecutor(seq) })
         })}) 
       })
       case _ => LOG.error("Invalid executor name", from.path.name)
     }
-    case name if name.contains(Container.lowercase) => // TODO: clean up matched slot. if no task running, new executor; otherwise update slot, report to master
+   // TODO: clean up matched slot. if no task running, new executor; otherwise update slot, report to master
+    case name if name.contains("Container") => //...  
     case _ => LOG.warning("Unknown supervisee {} offline!", from.path.name)
   }
 
@@ -379,26 +387,31 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       slots += newSlot
   }}
 
-  protected def checkIfRetries(old: Slot, f:(Int) => Unit) = 
-    retries.get(old.seq) match {
-      case Some(retryCount) if (retryCount < maxRetries) => {
-        cleanupSlot(old)
-        f(old.seq) 
-        val v = retryCount + 1
-        retries ++= Map(old.seq -> v)
-      }
-      case Some(retryCount) if (retryCount >= maxRetries) => {
-        slots -= old 
-        retries = retries.updated(old.seq, 0)   
-        // TODO: report groom stats to master 
-        //       black list!
-      }
-      case None => { // 0
-        cleanupSlot(old)
-        f(old.seq)
-        retries ++= Map(old.seq -> 1)
-      }
+  /**
+   * WhenSlotFound function already reports task failure event. This function
+   * only deals with retry action.
+   */ 
+  protected def checkIfRetry(old: Slot, 
+                             f:(Int) => Unit) = retries.get(old.seq) match {
+    case Some(retryCount) if (retryCount < maxRetries) => {
+      cleanupSlot(old)
+      f(old.seq) 
+      val v = retryCount + 1
+      retries ++= Map(old.seq -> v)
     }
+    case Some(retryCount) if (retryCount >= maxRetries) => {
+      slots -= old 
+      retries = retries.updated(old.seq, 0)   
+      // TODO: report groom stats to master 
+      //       black list?
+      //       when slots.size == 0, notify groom to halt/ shutdown itself because no slot to run task? 
+    }
+    case None => { // 0
+      cleanupSlot(old)
+      f(old.seq)
+      retries ++= Map(old.seq -> 1)
+    }
+  }
 
   /**
    * If a task attempt id is found in slot, denoting a task running at that

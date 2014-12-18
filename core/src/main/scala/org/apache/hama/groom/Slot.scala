@@ -28,6 +28,7 @@ import org.apache.hama.bsp.TaskAttemptID
  * @param master to which this slot belongs.
  * @param executor that executes the task for this slot.
  */
+// TODO: slot manager? manage insert, update, delete, clean slot fields, etc.
 final case class Slot(seq: Int, 
                       taskAttemptId: Option[TaskAttemptID], 
                       master: String, 

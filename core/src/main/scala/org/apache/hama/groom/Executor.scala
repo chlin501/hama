@@ -142,8 +142,9 @@ object Executor {
   def defaultOpts(conf: HamaConfiguration): String = 
     conf.get("container.java.opts", "-Xmx200m")
 
-  def simpleName(conf: HamaConfiguration, slotSeq: Int): String = 
-    GroomServer.simpleName(conf) + "_executor_" + slotSeq
+  def simpleName(conf: HamaConfiguration): String = 
+    GroomServer.simpleName(conf) + "_executor_" + 
+    conf.getInt("groom.executor.slot.seq", -1)
 
 }
 

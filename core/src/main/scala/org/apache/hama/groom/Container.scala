@@ -58,9 +58,11 @@ object Container extends CommonLog {
 
   def hamaHome: String = System.getProperty("hama.home.dir")
 
+/*
   def lowercase(): String = classOf[Container].getSimpleName.toLowerCase
 
   def name(seq: Int): String = "%s%s".format(lowercase, seq)
+*/
 
   def customize(setting: Setting, args: Array[String]): Setting = {
     require(4 == args.length, "Some arguments are missing! Arguments: "+
@@ -91,7 +93,7 @@ object Container extends CommonLog {
     LOG.info("Starting BSP slot {} peer system {} at {}:{} with container {} ",
              seq, system.name, setting.host, setting.port, 
              containerClass.getName)
-    system.actorOf(Props(containerClass, setting, seq), name(seq))
+    system.actorOf(Props(containerClass, setting, seq), setting.name)
   }
 
   @throws(classOf[Throwable])
@@ -106,8 +108,9 @@ object Container extends CommonLog {
     }
   }
   
-  def simpleName(conf: HamaConfiguration, slotSeq: Int): String = 
-    conf.get("container.name", classOf[Container].getSimpleName) + slotSeq
+  def simpleName(conf: HamaConfiguration): String = 
+    conf.get("container.name", classOf[Container].getSimpleName) + 
+    conf.getInt("container.slot.seq", -1)
 
 }
 

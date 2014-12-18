@@ -129,8 +129,7 @@ class MasterSetting(conf: HamaConfiguration) extends Setting {
 
   override def info(): SystemInfo = info(sys, host, port)
 
-  override def name(): String = conf.get("master.name", 
-                                         classOf[BSPMaster].getSimpleName)
+  override def name(): String = BSPMaster.simpleName(conf)
 
   override def main(): Class[Actor] = {
     val name = conf.get("master.main", classOf[BSPMaster].getName)
@@ -163,8 +162,7 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
 
   override def info(): SystemInfo = info(sys, host, port)
 
-  override def name(): String = conf.get("groom.name", 
-    classOf[GroomServer].getSimpleName)
+  override def name(): String = GroomServer.simpleName(conf)
 
   override def main(): Class[Actor] = {
     val name = conf.get("groom.main", classOf[GroomServer].getName)
@@ -218,8 +216,7 @@ class ContainerSetting(conf: HamaConfiguration) extends Setting {
 
   override def info(): SystemInfo = info(sys, host, port)
 
-  override def name(): String = conf.get("container.name", 
-    classOf[Container].getSimpleName)
+  override def name(): String = Container.simpleName(conf)
 
   override def main(): Class[Actor] = {
     val name = conf.get("container.main", classOf[Container].getName)
