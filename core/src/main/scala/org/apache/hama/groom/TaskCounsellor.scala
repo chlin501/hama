@@ -206,7 +206,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     // TODO: move to Deployable#deploy(name, class, addr, setting)
     val addr = Address(info.getProtocol.toString, info.getActorSystemName, 
                        info.getHost, info.getPort)
-    context.actorOf(Props(classOf[Container]).
+    context.actorOf(Props(classOf[Container], setting, seq).
                       withDeploy(Deploy(scope = RemoteScope(addr))),
                     Container.simpleName(setting.hama))
   }  
