@@ -18,9 +18,13 @@
 package org.apache.hama.groom
 
 import akka.actor.ActorRef
+import akka.actor.Address
+import akka.actor.Deploy
+import akka.actor.OneForOneStrategy
+import akka.actor.Props
 import akka.actor.SupervisorStrategy.Restart
 import akka.actor.SupervisorStrategy.Stop
-import akka.actor.OneForOneStrategy
+import akka.remote.RemoteScope
 import java.io.DataInput
 import java.io.DataOutput
 import java.io.IOException
@@ -196,7 +200,16 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }})
   }
 
-  protected def deployContainer(seq: Int) { }  // TODO: new container with remote deploy
+  protected def deployContainer(seq: Int) { 
+    setting.hama.setInt("container.slot.seq", seq) 
+    val info = setting.info
+    // TODO: move to Deployable#deploy(name, class, addr, setting)
+    val addr = Address(info.getProtocol.toString, info.getActorSystemName, 
+                       info.getHost, info.getPort)
+    context.actorOf(Props(classOf[Container]).
+                      withDeploy(Deploy(scope = RemoteScope(addr))),
+                    Container.simpleName(setting.hama))
+  }  
 
   protected def numSlotsOccupied(): Int = slots.count( slot => 
     !None.equals(slot.taskAttemptId)
