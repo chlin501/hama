@@ -105,6 +105,7 @@ object Container extends CommonLog {
   def main(args: Array[String]) = try {
     require(null != args && 0 < args.length, "Arguments not supplied!")
     initialize(args)
+    LOG.info("Container process is started!")
   } catch {
     case e: Exception => { 
       LOG.error("Fail launching peer process because {}", e);

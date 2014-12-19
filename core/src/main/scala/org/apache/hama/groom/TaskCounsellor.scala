@@ -25,6 +25,11 @@ import java.io.DataInput
 import java.io.DataOutput
 import java.io.IOException
 import org.apache.hadoop.io.Writable
+import org.apache.curator.framework.CuratorFramework
+import org.apache.curator.framework.recipes.cache.PathChildrenCache
+import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent
+import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent.Type._
+import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Periodically
 import org.apache.hama.Service
@@ -33,12 +38,14 @@ import org.apache.hama.Tick
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.conf.Setting
+import org.apache.hama.logging.CommonLog
 import org.apache.hama.master.Scheduler
 import org.apache.hama.master.Directive
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.GroomStats._
+import org.apache.hama.util.Curator
 import scala.collection.immutable.Queue
 import scala.util.Failure
 import scala.util.Success
@@ -74,6 +81,33 @@ protected[groom] final class TaskFailure extends Writable {
   
 }
 
+protected[groom] class SlotListener(setting: Setting) extends Curator 
+                                                         with CommonLog {
+
+  protected var herald: Option[PathChildrenCache] = None
+
+  protected[groom] def containerZkPath(): String = 
+    "/container/%s:%s".format(setting.host, setting.port)
+
+  protected[groom] def initialize() = herald = 
+    initializeCurator(setting.hama).map { curator => 
+      val h = new PathChildrenCache(curator, containerZkPath, false)
+      h.start 
+      h
+    }
+
+  protected[groom] def reactWith(callback: (String) => Unit) = herald.map { h =>
+    h.getListenable.addListener(new PathChildrenCacheListener() {
+      override def childEvent(curator: CuratorFramework, 
+                              event: PathChildrenCacheEvent) = 
+        event.getType match {
+          case CHILD_ADDED => callback(event.getData.getPath)
+          case rest@_ => LOG.debug("Event {} gets called!", rest)
+        }
+    })
+  }
+}
+
 object TaskCounsellor {
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
@@ -103,6 +137,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       }
     }
 
+  protected val slotListener = new SlotListener(setting)
+
   /**
    * The max size of slots can't exceed configured maxTasks.
    */
@@ -117,6 +153,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   //protected var directiveQueue = Queue.empty[SlotToDirective]
   protected var directiveQueue = Queue.empty[Directive]
+
 
   protected def unwatchContainerWith(seq: Int) = slots.find( slot => 
     (slot.seq == seq)).map { slot => slot.container.map { container => 
@@ -143,10 +180,23 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     LOG.info("{} GroomServer slots are initialied.", constraint)
   }
 
+
   override def initializeServices = {
     if(requestTask) tick(self, TaskRequest)
     initializeSlots(defaultMaxTasks)
+    slotListener.initialize
+    slotListener.reactWith({ childPath => {
+      val registeredSeq = childPath diff (slotListener.containerZkPath + "/")
+      Try(registeredSeq.toInt) match {
+        case Success(seq) => deployContainer(seq)  
+        case Failure(cause) => 
+          LOG.error("Invalid registered slot seq {} due to {} ", registeredSeq,
+                    cause)
+      }
+    }})
   }
+
+  protected def deployContainer(seq: Int) { }  // TODO: new container with remote deploy
 
   protected def numSlotsOccupied(): Int = slots.count( slot => 
     !None.equals(slot.taskAttemptId)
