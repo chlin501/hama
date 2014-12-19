@@ -52,12 +52,15 @@ class Registrator(setting: Setting) extends Curator {
 
   initializeCurator(setting.hama)
 
-  def register() {
+  def mkPath(): String = {
     val sys = setting.info.getActorSystemName
     val host = setting.info.getHost
     val port = setting.info.getPort
-    val path = "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host,
-                                        port)
+    "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host, port)
+  }
+
+  def register() {
+    val path = mkPath
     LOG.debug("Master znode will be registered at {}", path)
     create(path, CreateMode.EPHEMERAL)
   }

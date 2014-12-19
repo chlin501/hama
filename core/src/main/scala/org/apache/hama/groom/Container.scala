@@ -17,7 +17,6 @@
  */
 package org.apache.hama.groom
 
-import java.io.IOException
 import akka.actor.ActorSystem
 import akka.actor.ActorRef
 import akka.actor.Cancellable
@@ -46,23 +45,40 @@ import org.apache.hama.sync.CuratorBarrier
 import org.apache.hama.sync.CuratorRegistrator
 import org.apache.hama.sync.PeerClient
 import org.apache.hama.util.ActorLocator
-//import org.apache.hama.util.ExecutorLocator
+import org.apache.hama.util.Curator
 import org.apache.hama.util.TaskCounsellorLocator
+import org.apache.zookeeper.CreateMode
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
-protected[groom] final case class Parameters(system: ActorSystem, 
-                                             setting: Setting)
+object SlotRegister {
+
+  def apply(setting: Setting): SlotRegister = 
+    new SlotRegister(setting)
+
+}
+
+class SlotRegister(setting: Setting) extends Curator {
+
+  initializeCurator(setting.hama)
+
+  def seq(): Int = setting.hama.getInt("container.slot.seq", -1)
+
+  def mkPath(): String = "/container/%s:%s/%s".format(setting.host, 
+                                                      setting.port, 
+                                                      seq)
+
+  def register() {
+    val path = mkPath
+    LOG.debug("Record slot seq at {}", path)
+    create(path, CreateMode.EPHEMERAL)
+  }
+
+}
 
 object Container extends CommonLog {
 
   def hamaHome: String = System.getProperty("hama.home.dir")
-
-/*
-  def lowercase(): String = classOf[Container].getSimpleName.toLowerCase
-
-  def name(seq: Int): String = "%s%s".format(lowercase, seq)
-*/
 
   def customize(setting: Setting, args: Array[String]): Setting = {
     require(4 == args.length, "Some arguments are missing! Arguments: "+
@@ -79,31 +95,19 @@ object Container extends CommonLog {
     setting
   }
 
-  def initialize(args: Array[String]): Parameters = {
+  def initialize(args: Array[String]) {
     val setting = customize(Setting.container, args)
-    val system = ActorSystem(setting.sys, setting.config)
-    Parameters(system, setting)
-  }
-
-  def launchFrom(parameters: Parameters) {
-    val system = parameters.system
-    val setting = parameters.setting
-    val containerClass = setting.main 
-    val seq = setting.hama.getInt("container.slot.seq", -1)
-    LOG.info("Starting BSP slot {} peer system {} at {}:{} with container {} ",
-             seq, system.name, setting.host, setting.port, 
-             containerClass.getName)
-    system.actorOf(Props(containerClass, setting, seq), setting.name)
+    ActorSystem(setting.sys, setting.config)
+    SlotRegister(setting).register
   }
 
   @throws(classOf[Throwable])
   def main(args: Array[String]) = try {
     require(null != args && 0 < args.length, "Arguments not supplied!")
-    val parameters = initialize(args)
-    launchFrom(parameters)
+    initialize(args)
   } catch {
-    case e: Exception => {
-      LOG.error("Fail launching bsp peer process because {}", e);
+    case e: Exception => { 
+      LOG.error("Fail launching peer process because {}", e);
       System.exit(-1);
     }
   }
@@ -126,13 +130,14 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
   import Container._
  
   /**
-   * Once detecting exceptions thrown by children, report master and stop 
-   * actors.
+   * Capture exceptions thrown by coordinator, etc.
+   * Report master and stop actors.
    */
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 1, withinTimeRange = 1 minute) {
        case _: Exception => {  
          stopAll
+         // TODO: report task counsellor with failed task id 
          Stop 
        }
     }
@@ -291,15 +296,12 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
   }
 
   /**
-   * When {@link Executor} is offline, {@link Container} will shutdown
+   * When {@link TaskCounsellor} is offline, {@link Container} will shutdown
    * itself.
    * @param target actor is {@link Executor}
    */
   override def offline(target: ActorRef) = target.path.name match {
     case `TaskCounsellorName` => self ! ShutdownContainer
-    //case coordinator => self ! ShutdownContainer
-    //case messenger => self ! ShutdownContainer
-    //case syncer => self ! ShutdownContainer
     case _ => LOG.warning("Unexpected actor {} is offline!", target.path.name)
   }
 

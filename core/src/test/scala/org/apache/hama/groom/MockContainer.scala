@@ -22,20 +22,6 @@ import org.apache.hama.conf.Setting
 import org.apache.hama.util.ActorLocator
 import org.apache.hama.util.ActorPathMagnet
 
-/**
- * For TestExecutor.
- */
-object MockContainer {
-
-  def main(args: Array[String]) = {
-    val parameters = Container.initialize(args)
-    parameters.setting.hama.setClass("container.main", 
-                                     classOf[MockContainer], 
-                                     classOf[Container])
-    Container.launchFrom(parameters)
-  }
-}
-
 final case class MockTaskCounsellorLocator(conf: HamaConfiguration)
 
 /**

@@ -54,19 +54,44 @@ trait ExecutorMessages
 final case class Instances(process: Process, stdout: ActorRef, 
                            stderr: ActorRef) extends ExecutorMessages
 
-object ProcessFailureException {
+sealed trait ExecutorException extends RuntimeException {
 
-  def apply(slotSeq: Int, cause: Throwable): ProcessFailureException = {
-    val e = new ProcessFailureException
-    e.seq = slotSeq
+  def slotSeq(): Int
+
+}
+
+object ClasspathException {
+
+  def apply(slotSeq: Int, msg: String): ClasspathException = {
+    val cause = new RuntimeException(msg)
+    apply(slotSeq, cause)
+  }
+
+  def apply(slotSeq: Int, cause: Throwable): ClasspathException = {
+    val e = new ClasspathException(slotSeq)
     e.initCause(cause)
     e
   }
 
 }
-final class ProcessFailureException extends RuntimeException {
 
-  protected var seq: Int = -1
+final class ClasspathException(seq: Int) extends ExecutorException {
+
+  def slotSeq(): Int = seq
+
+}
+
+object ProcessFailureException {
+
+  def apply(slotSeq: Int, cause: Throwable): ProcessFailureException = {
+    val e = new ProcessFailureException(slotSeq)
+    e.initCause(cause)
+    e
+  }
+
+}
+
+final class ProcessFailureException(seq: Int) extends ExecutorException {
 
   def slotSeq(): Int = seq
 
@@ -201,7 +226,7 @@ class Executor(setting: Setting, slotSeq: Int) extends Service with Spawnable {
    */
   protected def classpath(hamaHome: String, parentClasspath: String): String = {
     if(null == hamaHome)  // TODO: find better to handle side effect 
-      throw new RuntimeException("Variable hama.home.dir is not set!")
+      throw ClasspathException(slotSeq, "Variable hama.home.dir is not set!")
     var cp = "./:%s:%s/conf".format(parentClasspath, hamaHome)
     val lib = new File(hamaHome, "lib")
     lib.listFiles(new FilenameFilter {

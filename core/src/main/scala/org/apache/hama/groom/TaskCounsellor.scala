@@ -18,6 +18,7 @@
 package org.apache.hama.groom
 
 import akka.actor.ActorRef
+import akka.actor.SupervisorStrategy.Restart
 import akka.actor.SupervisorStrategy.Stop
 import akka.actor.OneForOneStrategy
 import java.io.DataInput
@@ -91,9 +92,14 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   override val supervisorStrategy =
     OneForOneStrategy(maxNrOfRetries = 1, withinTimeRange = 1 minute) {
-      case pfe: ProcessFailureException => {
-        unwatchContainerWith(pfe.slotSeq)
+      case ee: ExecutorException => {
+        unwatchContainerWith(ee.slotSeq)
         Stop
+      }
+      case _: Exception => { // TODO: deloy container instead of creating one in remeoting 
+        // TODO: check if it's container
+        //       report master with task id  
+        Restart
       }
     }
 
@@ -376,7 +382,16 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       case _ => LOG.error("Invalid executor name", from.path.name)
     }
    // TODO: clean up matched slot. if no task running, new executor; otherwise update slot, report to master
-    case name if name.contains("Container") => //...  
+    case name if name.contains("Container") => /*{
+      val seq = from.path.name.replace("Container", "") 
+      seq forall Character.isDigit {
+        case true => extratSeq(seq, { seq => matchSlot(seq, { slot => 
+           whenSlotFound(slot, { slot => checkIfRetry(slot => { seq => })}) 
+         }) 
+        })
+        case false => LOG.error("Invalid Container name: {}", name)
+      }
+    }*/
     case _ => LOG.warning("Unknown supervisee {} offline!", from.path.name)
   }
 
