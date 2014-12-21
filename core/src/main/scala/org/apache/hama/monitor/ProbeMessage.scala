@@ -26,7 +26,6 @@ import org.apache.hadoop.io.ArrayWritable
 import org.apache.hadoop.io.ObjectWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
-//import org.apache.hama.master.Directive
 import org.apache.hama.groom.GroomServer
 import org.apache.hama.groom.Slot
 import org.apache.hama.util.Utils._
@@ -88,16 +87,16 @@ class Stats(d: String, v: Writable) extends Writable with ProbeMessages {
 
 }
 
-object GroomStats { // TODO: remove queue
+// TODO: change slot to slot stats with slot black list, etc.
+object GroomStats {  
 
   def apply(name: String, host: String, port: Int, maxTasks: Int,
-            /*queue: Array[String],*/ slots: Array[String]): GroomStats = {
+            slots: Array[String]): GroomStats = {
     val stats = new GroomStats
     stats.n = name
     stats.h = host
     stats.p = port
     stats.mt = maxTasks
-    //stats.q = toWritable(queue)
     stats.s = toWritable(slots) 
     stats
   }
@@ -109,19 +108,9 @@ object GroomStats { // TODO: remove queue
     stats.h = host
     stats.p = port
     stats.mt = maxTasks
-    //stats.q = defaultQueue
     stats.s = defaultSlots(maxTasks)
     stats
   }
-
-/*
-  def list(ds: Queue[Directive]): Array[String] = ds.map { d => 
-    d.directive match {
-      case null => nullString
-      case _ => d.task.getId.toString
-    }
-  }.toArray
-*/
 
   def list(slots: Set[Slot]): Array[String] = 
     slots.map { s => s.taskAttemptId match {
@@ -134,14 +123,6 @@ object GroomStats { // TODO: remove queue
     w.set(strings.map { e => new Text(e) })
     w
   }
-
-/*
-  final def defaultQueue(): ArrayWritable = {
-    val w = new ArrayWritable(classOf[Text])
-    w.set(Array[Text]().asInstanceOf[Array[Writable]])
-    w
-  }
-*/
 
   final def defaultSlots(maxTasks: Int): ArrayWritable = {
     val w = new ArrayWritable(classOf[Text])
@@ -175,12 +156,8 @@ final class GroomStats extends Writable with ProbeMessages {
   /* max tasks */
   protected[monitor] var mt: Int = 3
 
-  /* queue 
-  protected[monitor] var q = defaultQueue
-   */ 
-
   /* slots */
-  protected[monitor] var s = defaultSlots(mt)
+  protected[monitor] var s = defaultSlots(mt) // TODO: change to SlotStats { status [task attemptid | none] (option), crash count (int), isInBlacklist (boolean) 
   
   def name(): String = n 
 
@@ -192,8 +169,6 @@ final class GroomStats extends Writable with ProbeMessages {
   
   def maxTasks(): Int = mt
  
-  //def queue(): Array[String] = q.toStrings
-
   def slots(): Array[String] = s.toStrings
 
   @throws(classOf[IOException])

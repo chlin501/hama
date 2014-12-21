@@ -85,6 +85,8 @@ protected[groom] final class TaskFailure extends Writable {
   
 }
 
+// TODO: replaced by placing an actor at container that pings when it's started up.
+/*
 protected[groom] class SlotListener(setting: Setting) extends Curator 
                                                          with CommonLog {
 
@@ -111,6 +113,7 @@ protected[groom] class SlotListener(setting: Setting) extends Curator
     })
   }
 }
+*/
 
 object TaskCounsellor {
 
@@ -129,19 +132,14 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   type RetryCount = Int
 
   override val supervisorStrategy =
-    OneForOneStrategy(maxNrOfRetries = 1, withinTimeRange = 1 minute) {
+    OneForOneStrategy() {
       case ee: ExecutorException => {
         unwatchContainerWith(ee.slotSeq)
         Stop
       }
-      case _: Exception => { // TODO: deloy container instead of creating one in remeoting 
-        // TODO: check if it's container
-        //       report master with task id  
-        Restart
-      }
     }
 
-  protected val slotListener = new SlotListener(setting)
+  //protected val slotListener = new SlotListener(setting)
 
   /**
    * The max size of slots can't exceed configured maxTasks.
@@ -176,28 +174,29 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * Initialize slots with default slots value to 3, which comes from maxTasks,
    * or "bsp.tasks.maximum".
    * @param constraint of the slots can be created.
-   */
   protected def initializeSlots(constraint: Int = 3) {
     for(seq <- 1 to constraint) {
       slots ++= Set(Slot(seq, None, "", None, None))
     }
     LOG.info("{} GroomServer slots are initialied.", constraint)
   }
-
+   */
 
   override def initializeServices = {
     if(requestTask) tick(self, TaskRequest)
-    initializeSlots(defaultMaxTasks)
-    slotListener.initialize
+    //initializeSlots(defaultMaxTasks)
+/*
+    slotListener.initialize // TODO: remove 
     slotListener.reactWith({ childPath => {
       val registeredSeq = childPath diff (slotListener.containerZkPath + "/")
       Try(registeredSeq.toInt) match {
-        case Success(seq) => deployContainer(seq)  
+        case Success(seq) => deployContainer(seq) // when receiving ping, do deploy
         case Failure(cause) => 
           LOG.error("Invalid registered slot seq {} due to {} ", registeredSeq,
                     cause)
       }
     }})
+*/
   }
 
   protected def deployContainer(seq: Int) { 
@@ -438,23 +437,14 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   override def offline(from: ActorRef) = from.path.name match {
     case name if name.contains("_executor_") => from.path.name.split("_") match{
       case ary if (ary.size == 3) => extractSeq(ary(2), { seq => 
-        matchSlot(seq, { slot => whenSlotFound(slot, { slot => 
-          checkIfRetry(slot, { seq => newExecutor(seq) })
-        })}) 
+        matchSlot(seq, { slot => checkIfRetry(slot, { seq => 
+          newExecutor(seq) })
+        }) 
       })
       case _ => LOG.error("Invalid executor name", from.path.name)
     }
    // TODO: clean up matched slot. if no task running, new executor; otherwise update slot, report to master
-    case name if name.contains("Container") => /*{
-      val seq = from.path.name.replace("Container", "") 
-      seq forall Character.isDigit {
-        case true => extratSeq(seq, { seq => matchSlot(seq, { slot => 
-           whenSlotFound(slot, { slot => checkIfRetry(slot => { seq => })}) 
-         }) 
-        })
-        case false => LOG.error("Invalid Container name: {}", name)
-      }
-    }*/
+    case name if name.contains("Container") =>     
     case _ => LOG.warning("Unknown supervisee {} offline!", from.path.name)
   }
 
@@ -465,38 +455,40 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       slots += newSlot
   }}
 
-  /**
-   * WhenSlotFound function already reports task failure event. This function
-   * only deals with retry action.
-   */ 
   protected def checkIfRetry(old: Slot, 
                              f:(Int) => Unit) = retries.get(old.seq) match {
-    case Some(retryCount) if (retryCount < maxRetries) => {
-      cleanupSlot(old)
-      f(old.seq) 
-      val v = retryCount + 1
-      retries ++= Map(old.seq -> v)
+      case Some(retryCount) if (retryCount < maxRetries) => { // need retry
+         // TODO: 
+         // if task attempt id != none, 
+         //    report task failure with id and latest groom stats to master  
+         //    retry
+         // else retry
+/*
+            cleanupSlot(old)
+            f(old.seq) 
+            val v = retryCount + 1
+            retries ++= Map(old.seq -> v)
+*/
+      }
+      case Some(retryCount) if (retryCount >= maxRetries) => { // report
+        slots -= old 
+        retries = retries.updated(old.seq, 0)   
+        // TODO: report groom stats to master 
+        //       black list?
+        //       when slots.size == 0, notify groom to halt/ shutdown itself because no slot to run task? 
+      }
+      case None => { // 0 // need retry 
+        cleanupSlot(old)
+        f(old.seq)
+        retries ++= Map(old.seq -> 1)
+      }
     }
-    case Some(retryCount) if (retryCount >= maxRetries) => {
-      slots -= old 
-      retries = retries.updated(old.seq, 0)   
-      // TODO: report groom stats to master 
-      //       black list?
-      //       when slots.size == 0, notify groom to halt/ shutdown itself because no slot to run task? 
-    }
-    case None => { // 0
-      cleanupSlot(old)
-      f(old.seq)
-      retries ++= Map(old.seq -> 1)
-    }
-  }
 
   /**
    * If a task attempt id is found in slot, denoting a task running at that
    * container fails, task counsellor notify schedule that a task fails; 
    * otherwise respawning executor.
-   */
-  protected def whenSlotFound(slot: Slot, 
+  protected def whenSlotFound(slot: Slot,
                               retry:(Slot) => Unit) = slot.taskAttemptId match {
     case Some(runningTaskId) => { 
       groom ! TaskFailure(runningTaskId)
@@ -504,6 +496,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
     case None => retry(slot) // whether directives in queue or not, restart execturor
   }
+   */
 
   protected def matchSlot(seq: Int, 
                           matched: (Slot) => Unit): Unit = 

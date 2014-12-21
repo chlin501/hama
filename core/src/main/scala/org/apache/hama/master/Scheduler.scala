@@ -232,8 +232,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
       processingQueue = processingQueue.enqueue(ticket) 
     }
 
-  //       when receving task failure, update corresponded groom stats max 
-  //       tasks by minus 1
   // TODO: reschedule/ reassign tasks
   //       if it's the target grooms that fail 
   //          if other target grooms has free slots, then reschdule

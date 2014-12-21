@@ -18,12 +18,6 @@
 package org.apache.hama.util
 
 import org.apache.hama.HamaConfiguration
-/*
-import org.apache.hama.monitor.master.JvmStatsTracker
-import org.apache.hama.monitor.master.GroomsTracker
-import org.apache.hama.monitor.master.JobTasksTracker
-import org.apache.hama.master.Scheduler
-*/
 import org.apache.hama.groom.GroomServer
 import org.apache.hama.groom.TaskCounsellor
 import org.apache.hama.ProxyInfo
@@ -59,100 +53,11 @@ trait ActorLocator {
 
 }
 
-// TODO: remove? 
-/*
-final case class MasterLocator(info: ProxyInfo)
-final case class JvmStatsTrackerLocator(conf: HamaConfiguration)
-final case class GroomsTrackerLocator(conf: HamaConfiguration)
-final case class JobTasksTrackerLocator(conf: HamaConfiguration)
-final case class SchedulerLocator(conf: HamaConfiguration)
-final case class ExecutorLocator(conf: HamaConfiguration)
-*/
 final case class TaskCounsellorLocator(conf: HamaConfiguration)
 
 object ActorPathMagnet {
 
   import scala.language.implicitConversions 
-
-/*
-  implicit def locateMaster(locator: MasterLocator) = new ActorPathMagnet {
-    type Path = String
-    def apply(): Path = locator.info.getPath
-  }
-
-  // TODO: need refactor for retrieving path 
-  implicit def locateSmr(locator: JvmStatsTrackerLocator) = 
-      new ActorPathMagnet {
-    type Path = String
-    def apply(): Path = {
-      new ProxyInfo.MasterBuilder("sysMetricsTracker", locator.conf).
-                    createActorPath.
-                    appendRootPath("bspmaster"). // TODO: from setting
-                    appendChildPath("monitor").
-                    appendChildPath("JvmStatsTracker").
-                    build.
-                    getPath
-    }
-  }
-
-  implicit def locateGtt(locator: GroomsTrackerLocator) = 
-      new ActorPathMagnet {
-    type Path = String
-    def apply(): Path = {
-      new ProxyInfo.MasterBuilder("groomTasksTracker", locator.conf).
-                    createActorPath.
-                    appendRootPath("bspmaster"). // TODO: from setting
-                    appendChildPath("monitor").
-                    appendChildPath("GroomsTracker").
-                    build.
-                    getPath
-    }
-  }
-
-  implicit def locateJtt(locator: JobTasksTrackerLocator) = 
-      new ActorPathMagnet {
-    type Path = String
-    def apply(): Path = {
-      new ProxyInfo.MasterBuilder("jobTasksTracker", locator.conf).
-                    createActorPath.
-                    appendRootPath("bspmaster"). // TODO: from setting
-                    appendChildPath("monitor").
-                    appendChildPath("JobTasksTracker").
-                    build.
-                    getPath
-    }
-  }
- 
-  implicit def locateSched(locator: SchedulerLocator) = 
-      new ActorPathMagnet {
-    type Path = String
-    def apply(): Path = {
-      new ProxyInfo.MasterBuilder("sched", locator.conf).
-                    createActorPath.
-                    appendRootPath("bspmaster").
-                    appendChildPath("sched").
-                    build.
-                    getPath
-    }
-  }
-
-  implicit def locateExecutor(locator: ExecutorLocator) = 
-      new ActorPathMagnet {
-    type Path = String
-    def apply(): Path = {
-       val groomName = locator.conf.get("bsp.groom.name", "groomServer")
-       val slotSeq = locator.conf.getInt("bsp.child.slot.seq", 1)
-       val executorName = groomName+"_executor_"+slotSeq
-       new ProxyInfo.GroomBuilder(executorName, locator.conf). 
-                     createActorPath.
-                     appendRootPath(groomName).
-                     appendChildPath("taskCounsellor").
-                     appendChildPath(executorName).
-                     build.
-                     getPath
-    }
-  }
-*/
 
   implicit def locateTaskCounsellor(locator: TaskCounsellorLocator) = 
       new ActorPathMagnet {
