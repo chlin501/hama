@@ -85,36 +85,6 @@ protected[groom] final class TaskFailure extends Writable {
   
 }
 
-// TODO: replaced by placing an actor at container that pings when it's started up.
-/*
-protected[groom] class SlotListener(setting: Setting) extends Curator 
-                                                         with CommonLog {
-
-  protected var herald: Option[PathChildrenCache] = None
-
-  protected[groom] def containerZkPath(): String = 
-    "/container/%s:%s".format(setting.host, setting.port)
-
-  protected[groom] def initialize() = herald = 
-    initializeCurator(setting.hama).map { curator => 
-      val h = new PathChildrenCache(curator, containerZkPath, false)
-      h.start 
-      h
-    }
-
-  protected[groom] def reactWith(callback: (String) => Unit) = herald.map { h =>
-    h.getListenable.addListener(new PathChildrenCacheListener() {
-      override def childEvent(curator: CuratorFramework, 
-                              event: PathChildrenCacheEvent) = 
-        event.getType match {
-          case CHILD_ADDED => callback(event.getData.getPath)
-          case rest@_ => LOG.debug("Event {} gets called!", rest)
-        }
-    })
-  }
-}
-*/
-
 object TaskCounsellor {
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
@@ -139,12 +109,14 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       }
     }
 
+  protected val slotManager = SlotManager(defaultMaxTasks)
+
   //protected val slotListener = new SlotListener(setting)
 
   /**
    * The max size of slots can't exceed configured maxTasks.
    */
-  protected var slots = Set.empty[Slot]
+  protected var slots = Set.empty[Slot] //  TODO: REMOVE
 
   protected var retries = Map.empty[SlotId, RetryCount]
 
@@ -156,48 +128,18 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   //protected var directiveQueue = Queue.empty[SlotToDirective]
   protected var directiveQueue = Queue.empty[Directive]
 
-
-  protected def unwatchContainerWith(seq: Int) = slots.find( slot => 
-    (slot.seq == seq)).map { slot => slot.container.map { container => 
-    context unwatch container 
-  }}
+  protected def unwatchContainerWith(seq: Int) = 
+    slotManager.findThenMap({ slot => (slot.seq == seq)})({ found => 
+      found.container.map { container => context unwatch container }
+    }) 
 
   protected def defaultMaxTasks(): Int = 
     setting.hama.getInt("bsp.tasks.maximum", 3)
 
-  protected def maxTasksAllowed(): Int = slots.size // no black list at the moment
-
   protected def maxRetries(): Int = 
     setting.hama.getInt("groom.executor.max_retries", 3)
 
-  /**
-   * Initialize slots with default slots value to 3, which comes from maxTasks,
-   * or "bsp.tasks.maximum".
-   * @param constraint of the slots can be created.
-  protected def initializeSlots(constraint: Int = 3) {
-    for(seq <- 1 to constraint) {
-      slots ++= Set(Slot(seq, None, "", None, None))
-    }
-    LOG.info("{} GroomServer slots are initialied.", constraint)
-  }
-   */
-
-  override def initializeServices = {
-    if(requestTask) tick(self, TaskRequest)
-    //initializeSlots(defaultMaxTasks)
-/*
-    slotListener.initialize // TODO: remove 
-    slotListener.reactWith({ childPath => {
-      val registeredSeq = childPath diff (slotListener.containerZkPath + "/")
-      Try(registeredSeq.toInt) match {
-        case Success(seq) => deployContainer(seq) // when receiving ping, do deploy
-        case Failure(cause) => 
-          LOG.error("Invalid registered slot seq {} due to {} ", registeredSeq,
-                    cause)
-      }
-    }})
-*/
-  }
+  override def initializeServices = if(requestTask) tick(self, TaskRequest)
 
   protected def deployContainer(seq: Int) { 
     setting.hama.setInt("container.slot.seq", seq) 
@@ -210,10 +152,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
                     Container.simpleName(setting.hama))
   }  
 
-  protected def numSlotsOccupied(): Int = slots.count( slot => 
-    !None.equals(slot.taskAttemptId)
-  ) 
-
   protected def requestTask(): Boolean = 
     setting.hama.getBoolean("groom.request.task", true) 
 
@@ -223,7 +161,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   override def ticked(msg: Tick): Unit = msg match {
     case TaskRequest => 
-      if((directiveQueue.size + numSlotsOccupied) < maxTasksAllowed) 
+      if((directiveQueue.size + slotManager.numSlotsOccupied) < 
+          slotManager.maxTasksAllowed) 
         groom ! RequestTask(currentGroomStats) 
     case _ => 
   }
@@ -238,11 +177,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     val name = setting.name
     val host = setting.host
     val port = setting.port
-    val slotIds = list(slots) 
-    val maxTasksNow = maxTasksAllowed
+    val slotIds = list(slots)  // TODO: change to slot stats, defunct slots, etc
+    val maxTasksAllowed = slotManager.maxTasksAllowed
     LOG.debug("Current groom stats: name {}, host {}, port {}, maxTasks {}, "+
-              "slots ids {}", name, host, port, maxTasksNow, slotIds)
-    GroomStats(name, host, port, maxTasksNow, slotIds)
+              "slots ids {}", name, host, port, maxTasksAllowed, slotIds)
+    GroomStats(name, host, port, maxTasksAllowed, slotIds)
   } 
 
   /**
@@ -251,18 +190,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @return Option[ActorRef] contains {@link Executor} if matched; otherwise
    *                          None is returned.
    */
-  protected def findSlot(task: Task): Option[Slot] = slots.find( slot => 
-    slot.taskAttemptId match {
-      case Some(taskAttemptId) => taskAttemptId.equals(task.getId)
-      case None => false
-    }
-  ) 
+  protected def findSlot(task: Task): Option[Slot] = 
+    slotManager.findSlotBy(Option(task.getId))
 
   protected def whenExecutorNotFound(oldSlot: Slot, d: Directive) {
-    val newSlot = Slot(oldSlot.seq, None, d.master, 
+    slotManager.update(oldSlot.seq, None, d.master, 
                        Option(newExecutor(oldSlot.seq)), None)
-    slots -= oldSlot
-    slots += newSlot
     //directiveQueue = directiveQueue.enqueue(SlotToDirective(oldSlot.seq, d))
     directiveQueue = directiveQueue.enqueue(d)
   }
@@ -270,31 +203,28 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def dispatch(d: Directive)(slot: Slot) = d.action match {
     case Launch => slot.container.map { container => 
       container ! new LaunchTask(d.task) 
-      book(slot.seq, d.task.getId, container) 
+      slotManager.book(slot.seq, d.task.getId, container) 
     }
     case Resume => slot.executor.map { container => 
       container ! new ResumeTask(d.task) 
-      book(slot.seq, d.task.getId, container)
+      slotManager.book(slot.seq, d.task.getId, container)
     }
     case Kill => // won't be here
   }
 
-  protected def whenExecutorExists(d: Directive) = slots.find( slot => 
-    !None.equals(slot.container)
-  ) match {
-    case Some(foundSlot) => dispatch(d)(foundSlot)
-    case None => directiveQueue = directiveQueue.enqueue(d) 
-  }
+  protected def whenExecutorExists(d: Directive): Unit = 
+    slotManager.find[Unit]({ slot => !None.equals(slot.container) })({
+      found => dispatch(d)(found)
+    })({ directiveQueue = directiveQueue.enqueue(d) })
 
   /**
    * Fork a process by executor if required; otherwise dispatch directive to 
    * the container that has no task being executed.
    */
   protected def initializeOrDispatch(d: Directive) = 
-    slots.find( slot => None.equals(slot.executor)) match {
-      case Some(foundSlot) => whenExecutorNotFound(foundSlot, d)
-      case None => whenExecutorExists(d)
-    }
+    slotManager.find[Unit]({ slot => None.equals(slot.executor) })({
+      found => whenExecutorNotFound(found, d)
+    })({ whenExecutorExists(d) })
 
   // TODO: when a task finishes, coordinator in container sends finishes msg 
   //       to task counsellor, then task counsellor updates slot taskAttemptId 
@@ -343,34 +273,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     case _ => LOG.warning("Unknown directive {}", d)
   }
 
-  protected def slotNotOccupied(slot: Slot, taskAttemptId: TaskAttemptID,
-                                container: ActorRef) {
-    val newSlot = Slot(slot.seq, Option(taskAttemptId), slot.master, 
-                       slot.executor, Option(container))
-    slots -= slot 
-    slots += newSlot
-  }
-
-  /**
-   * Book the slot with corresponded {@link Task} and {@link Executor}.
-   * @param slotSeq indicates the <i>N</i>th slot.
-   * @param task is the task being executed
-   * @param container runs a task on a separated process.
-   */
-  protected def book(slotSeq: Int, taskAttemptId: TaskAttemptID, 
-                     container: ActorRef) = slots.find( slot => 
-    (slotSeq == slot.seq)
-  ) match {
-    case Some(slot) => slot.taskAttemptId match {
-      case None => slotNotOccupied(slot, taskAttemptId, container)
-      case Some(id) => 
-        LOG.error("Task {} can't be booked at slot {} for other task {} "+
-                  "exists!", taskAttemptId, slotSeq, id)
-    }
-    case None => LOG.error("Slot with seq {} not found for task {}", slotSeq,
-                           taskAttemptId)
-  }
-
   /**
    * Executor ack for Kill action.
    * Verify corresponded task is with Kill action and correct taskAttemptId.
@@ -417,12 +319,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def pullForLaunch(seq: Int, directive: Directive, from: ActorRef) {
     from ! new LaunchTask(directive.task)
-    book(seq, directive.task.getId, from)
+    slotManager.book(seq, directive.task.getId, from)
   }
 
   protected def pullForResume(seq: Int, directive: Directive, from: ActorRef) {
     sender ! new ResumeTask(directive.task)
-    book(seq, directive.task.getId, from)
+    slotManager.book(seq, directive.task.getId, from)
   }
 
   protected def messageFromCollector: Receive = { 

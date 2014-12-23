@@ -129,12 +129,31 @@ class SlotManager extends CommonLog {
    * or "bsp.tasks.maximum".
    * @param constraint of the slots can be created.
    */
-  protected[groom] def initialize(constraint: Int = 3) {
+  private def initialize(constraint: Int = 3) {
     for(seq <- 1 to constraint) {
       slots ++= Set(emptySlot(seq))
     }
     LOG.info("{} GroomServer slots are initialied.", constraint)
   }
+
+  /**
+   * Book slot with corresponded container and task attempt id. This function is
+   * executed after executor is ready, so executor comes from that in old slot.
+   */
+  protected[groom] def book(slotSeq: Int, taskAttemptId: TaskAttemptID, 
+                            container: ActorRef) = findThenMap[Unit]({ slot => 
+    (slotSeq == slot.seq) })({ slot => slot.taskAttemptId match {
+      case None => slotNotOccupied(slot, taskAttemptId, container)
+      case Some(id) => 
+        LOG.error("Task {} can't be booked at slot {} for other task {} "+
+                  "exists!", taskAttemptId, slotSeq, id)
+    }
+  })
+
+  protected def slotNotOccupied(old: Slot, taskAttemptId: TaskAttemptID,
+                                container: ActorRef) =  
+    update(old.seq, Option(taskAttemptId), old.master, old.executor, 
+           Option(container))
 
   protected[groom] def update(seq: Int, taskAttemptId: Option[TaskAttemptID],
                               master: String, executor: Option[ActorRef],
@@ -161,12 +180,18 @@ class SlotManager extends CommonLog {
    */
   protected[groom] def maxTasksAllowed(): Int = slots.size 
 
+  protected[groom] def findSlotBy(taskAttemptId: Option[TaskAttemptID]): 
+    Option[Slot] = find({ slot => slot.taskAttemptId.equals(taskAttemptId) })
+
+  protected[groom] def find(cond: (Slot) => Boolean): Option[Slot] = 
+    slots.find( slot => cond(slot))
+
   protected[groom] def find[A <: Any](cond: (Slot) => Boolean)
-                                     (action: (Slot) => Option[A])
-                                     (f: () => Option[A]): Option[A] =
+                                     (action: (Slot) => A)
+                                     (f: => A): A =
     slots.find( slot => cond(slot)) match {
       case Some(found) => action(found)
-      case None => f()
+      case None => f
     }
 
   protected[groom] def findThenMap[A <: Any](cond: (Slot) => Boolean)
@@ -184,6 +209,12 @@ class SlotManager extends CommonLog {
     case Some(found) => found.isInstanceOf[Broken]
     case None => throw new RuntimeException("No matched slot seq: "+seq) 
   }
+
+  protected[groom] def numSlotsOccupied(): Int = slots.count( slot => 
+    !None.equals(slot.taskAttemptId)
+  )
+
+
 
 }
 
