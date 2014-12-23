@@ -138,7 +138,8 @@ class SlotManager extends CommonLog {
 
   /**
    * Book slot with corresponded container and task attempt id. This function is
-   * executed after executor is ready, so executor comes from that in old slot.
+   * executed after executor is ready, so executor comes from slot having the.
+   * same seq.
    */
   protected[groom] def book(slotSeq: Int, taskAttemptId: TaskAttemptID, 
                             container: ActorRef) = findThenMap[Unit]({ slot => 
@@ -160,20 +161,30 @@ class SlotManager extends CommonLog {
                               container: Option[ActorRef]) = 
     findThenMap({ slot => slot.seq == seq})({ found => 
       slots -= found
-      val newSlot = Slot(seq, taskAttemptId, found.master, executor, container)
+      val newSlot = Slot(seq, taskAttemptId, master, executor, container)
       slots += newSlot
     })
 
   protected[groom] def clear(seq: Int) = slots.find( slot =>  
     (slot.seq == seq)
   ) match {
-    case Some(found) => {
-      slots -= found
-      val newSlot = Slot(found.seq, None, found.master, None, None)
-      slots += newSlot
-    }
+    case Some(found) => update(found.seq, None, found.master, None, None)
     case None => throw new RuntimeException("No matched slot for seq "+seq)
   }
+
+  protected def removeTaskFromSlot(old: Slot) = 
+    update(old.seq, None, old.master, old.executor, old.container) 
+
+  /**
+   * Clear slot with corresponded slot seq and task attempt id values specified.
+   */
+  protected[groom] def clearSlotBy(seq: Int, taskAttemptId: TaskAttemptID) = 
+    find[Unit]({ slot => 
+      (slot.seq == seq) && slot.taskAttemptId.equals(Option(taskAttemptId))
+    })({ found => removeTaskFromSlot(found) })({ 
+      LOG.error("No matched slot found for seq {} and task attempt id {}", seq, 
+                taskAttemptId) 
+    })
 
   /**
    * The number of tasks allowed.
@@ -207,14 +218,15 @@ class SlotManager extends CommonLog {
   protected[groom] def isSlotDefunct(seq: Int): Boolean = slots.find( slot => 
     (slot.seq == seq)) match {
     case Some(found) => found.isInstanceOf[Broken]
-    case None => throw new RuntimeException("No matched slot seq: "+seq) 
+    case None => { 
+      LOG.error("No matched seq {} for defunct slot!", seq) 
+      false
+    }
   }
 
   protected[groom] def numSlotsOccupied(): Int = slots.count( slot => 
     !None.equals(slot.taskAttemptId)
   )
-
-
 
 }
 

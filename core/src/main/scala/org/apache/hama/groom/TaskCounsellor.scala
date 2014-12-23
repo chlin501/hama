@@ -297,25 +297,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @param action is the KillAck that contains {@link TaskAttemptID} and slot
    *               seq. 
    */
-  protected def doKillAck(action: KillAck) = slots.find( slot => {
-    val seqEquals = (slot.seq == action.slotSeq)  
-    val idEquals = slot.taskAttemptId match {
-      case Some(found) => found.equals(action.taskAttemptId)
-      case None => false
-    }
-    seqEquals && idEquals
-  }) match {
-    case Some(oldSlot) => removeTaskAttemptIdFromSlot(oldSlot) // TODO: also inform reporter!!
-    case None => LOG.error("Killed task {} not found for slot seq {}. "+
-                           "Slots currently contain {}", action.taskAttemptId,
-                           action.slotSeq, slots)
-  }
-
-  protected def removeTaskAttemptIdFromSlot(old: Slot) {
-    val newSlot = Slot(old.seq, None, old.master, old.executor, old.container)
-    slots -= old 
-    slots += newSlot
-  }
+  protected def doKillAck(action: KillAck) = 
+    slotManager.clearSlotBy(action.slotSeq, action.taskAttemptId)
 
   protected def pullForLaunch(seq: Int, directive: Directive, from: ActorRef) {
     from ! new LaunchTask(directive.task)
@@ -350,13 +333,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     case _ => LOG.warning("Unknown supervisee {} offline!", from.path.name)
   }
 
-  protected def cleanupSlot(old: Slot) = slots.map { slot => 
-    if(slot.seq == old.seq) {
-      slots -= slot
-      val newSlot = Slot(old.seq, None, old.master, None, None)
-      slots += newSlot
-  }}
-
   protected def checkIfRetry(old: Slot, 
                              f:(Int) => Unit) = retries.get(old.seq) match {
       case Some(retryCount) if (retryCount < maxRetries) => { // need retry
@@ -366,21 +342,21 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
          //    retry
          // else retry
 /*
-            cleanupSlot(old)
+            slotManager.clear(old.seq)
             f(old.seq) 
             val v = retryCount + 1
             retries ++= Map(old.seq -> v)
 */
       }
       case Some(retryCount) if (retryCount >= maxRetries) => { // report
-        slots -= old 
+        //slots -= old 
         retries = retries.updated(old.seq, 0)   
         // TODO: report groom stats to master 
         //       black list?
         //       when slots.size == 0, notify groom to halt/ shutdown itself because no slot to run task? 
       }
       case None => { // 0 // need retry 
-        cleanupSlot(old)
+        slotManager.clear(old.seq)
         f(old.seq)
         retries ++= Map(old.seq -> 1)
       }
@@ -406,14 +382,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       LOG.error("No slot matched to seq {}", seq) 
     })
 
-  protected def matchSlot(seq: Int, 
-                          matched: (Slot) => Unit, 
-                          notMatched: => Unit) = slots.find( slot => 
-    (slot.seq == seq) 
-  ) match {
-    case Some(found) => matched(found)
-    case None => notMatched
-  }
+  protected def matchSlot(seq: Int, matched: (Slot) => Unit, 
+                          notMatched: => Unit) = 
+    slotManager.find[Unit]({ slot => (slot.seq == seq) })({
+      found => matched(found)
+    })({ notMatched })
 
   protected def extractSeq(seq: String, f:(Int) => Unit) = 
     Try(seq.toInt) match {
