@@ -179,7 +179,6 @@ final class GroomStats extends Writable with ProbeMessages {
     Text.writeString(out, host)
     out.writeInt(port)
     out.writeInt(maxTasks)
-    //q.write(out)
     s.write(out)
   }
 
@@ -189,8 +188,6 @@ final class GroomStats extends Writable with ProbeMessages {
     h = Text.readString(in)
     p = in.readInt
     mt = in.readInt
-    //q = defaultQueue
-    //q.readFields(in)
     s = defaultSlots(mt)
     s.readFields(in)
   }
@@ -272,15 +269,36 @@ final class SlotStats extends Writable with ProbeMessages {
   
   @throws(classOf[IOException])
   override def write(out: DataOutput) {
-   // TODO: 
+    ss.write(out)
+    cc.write(out)
+    out.writeInt(mr)
   }
 
   @throws(classOf[IOException])
   override def readFields(in: DataInput) {
-    // TODO:
+    ss.readFields(in)
+    cc.readFields(in)
+    mr = in.readInt
   }
 
-  override def equals(o: Any): Boolean = true // TODO: 
+  private def mapEquals(target: Map[Int, Int]): Boolean = {
+    val source = crashCount
+    (source.size == target.takeWhile { e => 
+      e._2 == source.getOrElse(e._1, -1) 
+    }.size)
+  } 
+
+  private def slotsEquals(target: Array[String]): Boolean = {
+    val source = slots
+    target.takeWhile { e => source.contains(e) }.size == source.size
+  }
+
+  override def equals(o: Any): Boolean = o match {
+    case that: SlotStats => that.isInstanceOf[SlotStats] &&
+      slotsEquals(that.slots) && mapEquals(that.crashCount) && 
+      (that.maxRetries == maxRetries) 
+    case _ => false
+  }
 
   override def hashCode(): Int = -1 // TODO:
 
