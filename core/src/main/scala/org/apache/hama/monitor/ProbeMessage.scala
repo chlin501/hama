@@ -202,7 +202,6 @@ final class GroomStats extends Writable with ProbeMessages {
   
   override def hashCode(): Int = 
     41 * ( 
-      //41 * ( 
         41 * ( 
           41 * (
             41 * (
@@ -210,7 +209,6 @@ final class GroomStats extends Writable with ProbeMessages {
             ) + h.toString.hashCode
           ) + p
         ) + mt
-      //) + q.toStrings.hashCode
     ) + s.toStrings.hashCode
 }
 
@@ -300,7 +298,12 @@ final class SlotStats extends Writable with ProbeMessages {
     case _ => false
   }
 
-  override def hashCode(): Int = -1 // TODO:
+  override def hashCode(): Int = 
+    41 * (
+      41 * (
+        41 + slots.map { e => e.hashCode }.sum
+      ) + crashCount.hashCode
+    ) + maxRetries
 
 }
 
