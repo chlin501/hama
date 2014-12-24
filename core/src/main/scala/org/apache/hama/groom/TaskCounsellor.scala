@@ -328,8 +328,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       })
       case _ => LOG.error("Invalid executor name", from.path.name)
     }
-   // TODO: clean up matched slot. if no task running, new executor; otherwise update slot, report to master
-    case name if name.contains("Container") =>     
+    case name if name.contains("Container") => // TODO: clean up matched slot. if no task running, new executor; otherwise update slot, report to master
     case _ => LOG.warning("Unknown supervisee {} offline!", from.path.name)
   }
 

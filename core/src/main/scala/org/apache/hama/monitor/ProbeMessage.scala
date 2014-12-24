@@ -23,6 +23,8 @@ import java.io.IOException
 import java.net.InetAddress
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.ArrayWritable
+import org.apache.hadoop.io.IntWritable
+import org.apache.hadoop.io.MapWritable
 import org.apache.hadoop.io.ObjectWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
@@ -157,7 +159,7 @@ final class GroomStats extends Writable with ProbeMessages {
   protected[monitor] var mt: Int = 3
 
   /* slots */
-  protected[monitor] var s = defaultSlots(mt) // TODO: change to SlotStats { status [task attemptid | none] (option), crash count (int), isInBlacklist (boolean) 
+  protected[monitor] var s = defaultSlots(mt) // TODO: change to SlotStats { status [ taskattemptId | none | broken ], crash count by slot seq (int), max retries 
   
   def name(): String = n 
 
@@ -213,6 +215,68 @@ final class GroomStats extends Writable with ProbeMessages {
         ) + mt
       //) + q.toStrings.hashCode
     ) + s.toStrings.hashCode
+}
+
+object SlotStats {
+
+  val broken = "broken"
+
+  def apply(slots: Array[String], crashCount: Map[Int, Int], 
+            maxRetries: Int): SlotStats = {
+    val stats = new SlotStats
+    stats.ss = toSlots(slots)
+    stats.cc = toCrashCount(crashCount)
+    stats.mr = maxRetries
+    stats
+  }
+
+  def toSlots(ss: Array[String]): ArrayWritable = {
+    val w = new ArrayWritable(classOf[Text])
+    w.set(ss.map{ v => new Text(v)}.asInstanceOf[Array[Writable]])
+    w
+  }
+
+  def toCrashCount(cc: Map[Int, Int]): MapWritable = {
+    val w = new MapWritable
+    cc.foreach { case (k, v) => w.put(new IntWritable(k), new IntWritable(v))}  
+    w
+  }
+
+}
+
+final class SlotStats extends Writable with ProbeMessages {
+
+  import SlotStats._
+
+  /* in 3 state task attempt id, "", and broken */
+  protected[monitor] var ss = new ArrayWritable(classOf[Text])
+
+  /* crash count by slot seq */
+  protected[monitor] var cc = new MapWritable() // TODO: performance? 
+
+  /* max retries per slot seq */
+  protected[monitor] var mr: Int = 3
+
+  //def slots(): Array[String] = ss.get.
+
+  //def isBroken(seq: Int): Boolean = if(seq < slots.size) 
+    //broken.equals(slots(seq)) else 
+    //throw new RuntimeException("Invalid slot seq: "+seq+"!")
+  
+  @throws(classOf[IOException])
+  override def write(out: DataOutput) {
+   // TODO: 
+  }
+
+  @throws(classOf[IOException])
+  override def readFields(in: DataInput) {
+    // TODO:
+  }
+
+  override def equals(o: Any): Boolean = true // TODO: 
+
+  override def hashCode(): Int = -1 // TODO:
+
 }
 
 final case class Inform(service: String, result: ProbeMessages) 
