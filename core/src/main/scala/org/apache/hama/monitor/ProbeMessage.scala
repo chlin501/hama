@@ -266,9 +266,9 @@ final class SlotStats extends Writable with ProbeMessages {
 
   def maxRetries(): Int = mr
 
-  //def isBroken(seq: Int): Boolean = if(seq < slots.size) 
-    //broken.equals(slots(seq)) else 
-    //throw new RuntimeException("Invalid slot seq: "+seq+"!")
+  def isBroken(seq: Int): Boolean = if(seq < slots.size) 
+    broken.equals(slots()(seq)) else 
+    throw new ArrayIndexOutOfBoundsException("Invalid slot seq: "+seq+"!")
   
   @throws(classOf[IOException])
   override def write(out: DataOutput) {
