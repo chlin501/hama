@@ -257,7 +257,14 @@ final class SlotStats extends Writable with ProbeMessages {
   /* max retries per slot seq */
   protected[monitor] var mr: Int = 3
 
-  //def slots(): Array[String] = ss.get.
+  def slots(): Array[String] = ss.toStrings
+
+  def crashCount(): Map[Int, Int] = cc.entrySet.toArray.map { o => {
+    val e = o.asInstanceOf[java.util.Map.Entry[IntWritable, IntWritable]]
+    (e.getKey.get -> e.getValue.get)
+  }}.toMap[Int, Int]
+
+  def maxRetries(): Int = mr
 
   //def isBroken(seq: Int): Boolean = if(seq < slots.size) 
     //broken.equals(slots(seq)) else 
