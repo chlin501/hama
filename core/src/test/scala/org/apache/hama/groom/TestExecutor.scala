@@ -49,15 +49,15 @@ class MockTaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef,
                          tester: ActorRef) 
       extends TaskCounsellor(setting, groom, reporter) {
 
-  override def pullForLaunch(seq: Int, directive: Directive, from: ActorRef) {
-    super.pullForLaunch(seq, directive, from)
+  override def pushToLaunch(seq: Int, directive: Directive, from: ActorRef) {
+    super.pushToLaunch(seq, directive, from)
     val id = directive.task.getId.toString
     LOG.info("When pulling for launching task, id is {} ...", id)
     tester ! id 
   }
 
-  override def pullForResume(seq: Int, directive: Directive, from: ActorRef) {
-    super.pullForResume(seq, directive, from)
+  override def pushToResume(seq: Int, directive: Directive, from: ActorRef) {
+    super.pushToResume(seq, directive, from)
     val id = directive.task.getId.toString
     LOG.info("When pulling for resuming task, id is {} ...", id)
     tester ! id 

@@ -23,11 +23,6 @@ import org.apache.hama.bsp.v2.Task
 
 sealed trait GroomMessage
 
-/**
- * Singnify Container actor is ready.
-private[groom] final case class ContainerReady(seq: Int) extends GroomMessage
- */
-
 private[groom] final case class ProcessReady(seq: Int) extends GroomMessage
 
 private[groom] final case class PullForExecution(

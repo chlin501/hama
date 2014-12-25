@@ -146,7 +146,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def deployContainer(seq: Int): Option[ActorRef] = { 
     setting.hama.setInt("container.slot.seq", seq) 
     val info = setting.info
-    // TODO: move to Deployable#deploy(name, class, addr, setting)
+    // TODO: move to trait ProcessManager#deploy(name, class, addr, setting)
     val addr = Address(info.getProtocol.toString, info.getActorSystemName, 
                        info.getHost, info.getPort)
     Option(context.actorOf(Props(classOf[Container], setting, seq, self).
@@ -186,15 +186,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     GroomStats(name, host, port, maxTasksAllowed, slotIds)
   } 
 
-  /**
-   * Find if there is corresponded task running on a slot.
-   * @param task is the target task to be killed.
-   * @return Option[ActorRef] contains {@link Executor} if matched; otherwise
-   *                          None is returned.
-   */
-  protected def findSlot(task: Task): Option[Slot] = 
-    slotManager.findSlotBy(Option(task.getId))
-
   protected def whenExecutorNotFound(oldSlot: Slot, d: Directive) {
     slotManager.update(oldSlot.seq, None, d.master, 
                        Option(newExecutor(oldSlot.seq)), None)
@@ -232,6 +223,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   //       to task counsellor, then task counsellor updates slot taskAttemptId 
   //       to None
 
+  // TODO: move to ProcessManager trait?
   protected def newExecutor(slotSeq: Int): ActorRef = { 
     val executorConf = new HamaConfiguration(setting.hama)
     executorConf.setInt("groom.executor.slot.seq", slotSeq)
@@ -263,14 +255,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected def directiveReceived(d: Directive) = d.action match {
     case Launch | Resume => initializeOrDispatch(d) 
-    case Kill => findSlot(d.task) match {
-      case Some(slot) => slot.container match { 
+    case Kill => slotManager.findSlotBy(d.task.getId).map { slot =>
+      slot.container match { 
         case Some(container) => container ! new KillTask(d.task.getId)  
         case None => LOG.error("No container is running for task {}!", 
                                d.task.getId)
       }
-      case None => LOG.warning("Ask to Kill task {}, but no corresponded "+
-                               "slot found!", d.task.getId)
     }
     case _ => LOG.warning("Unknown directive {}", d)
   }
@@ -302,12 +292,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def doKillAck(action: KillAck) = 
     slotManager.clearSlotBy(action.slotSeq, action.taskAttemptId)
 
-  protected def pullForLaunch(seq: Int, directive: Directive, from: ActorRef) {
+  protected def pushToLaunch(seq: Int, directive: Directive, from: ActorRef) {
     from ! new LaunchTask(directive.task)
     slotManager.book(seq, directive.task.getId, from)
   }
 
-  protected def pullForResume(seq: Int, directive: Directive, from: ActorRef) {
+  protected def pushToResume(seq: Int, directive: Directive, from: ActorRef) {
     sender ! new ResumeTask(directive.task)
     slotManager.book(seq, directive.task.getId, from)
   }
@@ -321,6 +311,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * be observed on offline; when only container fails (no executor), offline 
    * will notify accordingly.  
    */
+  // TODO: move to ProcessManager trait?
   override def offline(from: ActorRef) = from.path.name match {
     case name if name.contains("_executor_") => name.split("_") match{
       case ary if (ary.size == 3) => extractSeq(ary(2), { seq => 
@@ -343,6 +334,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     case _ => LOG.warning("Unknown supervisee {} offline!", from.path.name)
   }
 
+  // TODO: move to ProcessManager trait?
   protected def redeploy(slot: Slot) {
     slotManager.clear(slot.seq)
     slotManager.update(slot.seq, slot.taskAttemptId, slot.master, slot.executor,
@@ -405,42 +397,42 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
 
   /**
-   * Container replies when it's ready.
+   * Process replies when it's ready. Then following actions are executed:
+   * - Deploy container to the process.
+   * - Update slot with corresponded container. 
+   * - Dispatch to container.
    * @return Receive is partial function.
    */
   protected def processReady: Receive = {  
-    case ProcessReady(seq) => {
-// TODO:  deploy container, update slot with container, dispatch directive in directive queue to container
-      deployContainer(seq).map { container => 
-        // slotManager.update()
-        //dispatchDirective(container)
+    case ProcessReady(seq) => deployContainer(seq).map { container => 
+      slotManager.findSlotBy(seq).map { slot => 
+        slotManager.update(seq, slot.taskAttemptId, slot.master, slot.executor,
+                           Option(container)) 
       }
+      dispatchDirective(seq, container)
     }
   }
 
-/*
-  protected def dispatchDirective(target: ActorRef) {
-      if(!directiveQueue.isEmpty) {
-        LOG.info("{} is asking for task execution...", container.path.name)
-        val (d, rest) = directiveQueue.dequeue
-        d.action match {
-          case Launch => {
-            LOG.info("{} requests for LaunchTask.", container.path.name)
-            pullForLaunch(seq, d, container)  
-          }
-          case Kill => LOG.error("Container {} shouldn't request kill ",
-                                 "action!", container.path.name)
-          case Resume => {
-            LOG.info("{} requests for ResumeTask.", container.path.name)
-            pullForResume(seq, d, container)
-          }
-          case _ => LOG.warning("Unknown action {} for task {} from {}", 
-                                d.action, d.task.getId, d.master)
+  protected def dispatchDirective(seq: Int, container: ActorRef) = 
+    if(!directiveQueue.isEmpty) {
+      LOG.info("{} is asking for task execution...", container.path.name)
+      val (d, rest) = directiveQueue.dequeue
+      d.action match {
+        case Launch => {
+          LOG.info("{} requests for LaunchTask.", container.path.name)
+          pushToLaunch(seq, d, container)  
         }
-        directiveQueue = rest
+        case Kill => LOG.error("Container {} shouldn't request kill ",
+                               "action!", container.path.name)
+        case Resume => {
+          LOG.info("{} requests for ResumeTask.", container.path.name)
+          pushToResume(seq, d, container)
+        }
+        case _ => LOG.warning("Unknown action {} for task {} from {}", 
+                              d.action, d.task.getId, d.master)
       }
-  }
-*/
+      directiveQueue = rest
+    }
 
   override def receive = processReady orElse tickMessage orElse messageFromCollector orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
 

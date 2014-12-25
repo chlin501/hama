@@ -191,8 +191,12 @@ class SlotManager extends CommonLog {
    */
   protected[groom] def maxTasksAllowed(): Int = slots.size 
 
-  protected[groom] def findSlotBy(taskAttemptId: Option[TaskAttemptID]): 
-    Option[Slot] = find({ slot => slot.taskAttemptId.equals(taskAttemptId) })
+  protected[groom] def findSlotBy(seq: Int): Option[Slot] = find({ slot =>
+    slot.seq == seq
+  })
+
+  protected[groom] def findSlotBy(taskAttemptId: TaskAttemptID): Option[Slot] =
+    find({ slot => slot.taskAttemptId.equals(Option(taskAttemptId)) })
 
   protected[groom] def find(cond: (Slot) => Boolean): Option[Slot] = 
     slots.find( slot => cond(slot))
