@@ -114,13 +114,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected val slotManager = SlotManager(defaultMaxTasks)
 
-  //protected val slotListener = new SlotListener(setting)
-
-  /**
-   * The max size of slots can't exceed configured maxTasks.
-   */
-  protected var slots = Set.empty[Slot] //  TODO: REMOVE
-
   protected var retries = Map.empty[SlotId, RetryCount]
 
   /**
@@ -188,8 +181,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   } 
 
   protected def currentSlotStats(): SlotStats = {
+    //val ids = slotsManager.taskAttemptIdStrings
+    //val crashCount = retries 
+    //maxRetries 
+    //SlotStats(ids, crashCount, maxRetries)
     SlotStats.defaultSlotStats(setting)
-    // TODO: 
+    // TODO: collect the most recent slots stats data
   }
 
   protected def whenExecutorNotFound(oldSlot: Slot, d: Directive) {
