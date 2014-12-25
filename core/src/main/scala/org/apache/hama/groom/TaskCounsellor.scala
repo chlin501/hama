@@ -29,11 +29,6 @@ import java.io.DataInput
 import java.io.DataOutput
 import java.io.IOException
 import org.apache.hadoop.io.Writable
-import org.apache.curator.framework.CuratorFramework
-import org.apache.curator.framework.recipes.cache.PathChildrenCache
-import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent
-import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent.Type._
-import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Periodically
 import org.apache.hama.Service
@@ -49,7 +44,6 @@ import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.GroomStats._
-import org.apache.hama.util.Curator
 import scala.collection.immutable.Queue
 import scala.util.Failure
 import scala.util.Success
@@ -59,7 +53,7 @@ import scala.concurrent.duration.FiniteDuration
 
 object TaskFailure {
 
-  def apply(id: TaskAttemptID): TaskFailure = {
+  def apply(id: TaskAttemptID, stats: GroomStats): TaskFailure = {
     val fault = new TaskFailure
     fault.id = Option(id)
     fault
@@ -71,18 +65,27 @@ protected[groom] final class TaskFailure extends Writable {
 
   protected[groom] var id: Option[TaskAttemptID] = None
 
+  protected[groom] var s: Option[GroomStats] = None
+
   def taskAttemptId(): Option[TaskAttemptID] = id
 
+  def stats(): Option[GroomStats] = s
+
   @throws(classOf[IOException])
-  override def write(out: DataOutput) = id.map { v => v.write(out) } 
+  override def write(out: DataOutput) = {
+    id.map { v => v.write(out) } 
+    s.map { v => v.write(out) }
+  }
 
   @throws(classOf[IOException])
   override def readFields(in: DataInput) {
     val v = new TaskAttemptID
     v.readFields(in)
     id = Option(v)
+    val gs = new GroomStats
+    gs.readFields(in)
+    s = Option(gs)
   }
-  
 }
 
 object TaskCounsellor {
@@ -101,13 +104,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   type RetryCount = Int
 
-  override val supervisorStrategy =
-    OneForOneStrategy() {
-      case ee: ExecutorException => {
-        unwatchContainerWith(ee.slotSeq)
-        Stop
-      }
+  override val supervisorStrategy = OneForOneStrategy() {
+    case ee: ExecutorException => {
+      unwatchContainerWith(ee.slotSeq)
+      Stop
     }
+  }
 
   protected val slotManager = SlotManager(defaultMaxTasks)
 
@@ -141,15 +143,15 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   override def initializeServices = if(requestTask) tick(self, TaskRequest)
 
-  protected def deployContainer(seq: Int) { 
+  protected def deployContainer(seq: Int): Option[ActorRef] = { 
     setting.hama.setInt("container.slot.seq", seq) 
     val info = setting.info
     // TODO: move to Deployable#deploy(name, class, addr, setting)
     val addr = Address(info.getProtocol.toString, info.getActorSystemName, 
                        info.getHost, info.getPort)
-    context.actorOf(Props(classOf[Container], setting, seq).
-                      withDeploy(Deploy(scope = RemoteScope(addr))),
-                    Container.simpleName(setting.hama))
+    Option(context.actorOf(Props(classOf[Container], setting, seq, self).
+                             withDeploy(Deploy(scope = RemoteScope(addr))),
+                           Container.simpleName(setting.hama)))
   }  
 
   protected def requestTask(): Boolean = 
@@ -320,7 +322,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * will notify accordingly.  
    */
   override def offline(from: ActorRef) = from.path.name match {
-    case name if name.contains("_executor_") => from.path.name.split("_") match{
+    case name if name.contains("_executor_") => name.split("_") match{
       case ary if (ary.size == 3) => extractSeq(ary(2), { seq => 
         matchSlot(seq, { slot => checkIfRetry(slot, { seq => 
           newExecutor(seq) })
@@ -328,13 +330,35 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       })
       case _ => LOG.error("Invalid executor name", from.path.name)
     }
-    case name if name.contains("Container") => // TODO: clean up matched slot. if no task running, new executor; otherwise update slot, report to master
+    case name if name.contains("Container") => 
+      name.replace("Container", "") match {
+        case s if s forall Character.isDigit => extractSeq(s, { seq =>
+          matchSlot(seq, { slot => 
+            slot.taskAttemptId.map { found => /* TODO: report to master */ }
+            redeploy(slot)
+          })
+        })
+        case s@_ => LOG.error("Invalid container {} offline!", name)
+    }
     case _ => LOG.warning("Unknown supervisee {} offline!", from.path.name)
+  }
+
+  protected def redeploy(slot: Slot) {
+    slotManager.clear(slot.seq)
+    slotManager.update(slot.seq, slot.taskAttemptId, slot.master, slot.executor,
+                       deployContainer(slot.seq))
   }
 
   protected def checkIfRetry(old: Slot, 
                              f:(Int) => Unit) = retries.get(old.seq) match {
       case Some(retryCount) if (retryCount < maxRetries) => { // need retry
+         None.equals(old.taskAttemptId) match {
+           case false => {
+              // TODO: report to master
+         
+           }
+           case true =>
+         }
          // TODO: 
          // if task attempt id != none, 
          //    report task failure with id and latest groom stats to master  
@@ -361,20 +385,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       }
     }
 
-  /**
-   * If a task attempt id is found in slot, denoting a task running at that
-   * container fails, task counsellor notify schedule that a task fails; 
-   * otherwise respawning executor.
-  protected def whenSlotFound(slot: Slot,
-                              retry:(Slot) => Unit) = slot.taskAttemptId match {
-    case Some(runningTaskId) => { 
-      groom ! TaskFailure(runningTaskId)
-      retry(slot)
-    }
-    case None => retry(slot) // whether directives in queue or not, restart execturor
-  }
-   */
-
   protected def matchSlot(seq: Int, 
                           matched: (Slot) => Unit): Unit = 
     matchSlot(seq, { slot => matched(slot) }, { 
@@ -398,10 +408,18 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * Container replies when it's ready.
    * @return Receive is partial function.
    */
-  protected def containerReady: Receive = {  
-    case ContainerReady(seq) => {
-      val container = sender
-      context watch container
+  protected def processReady: Receive = {  
+    case ProcessReady(seq) => {
+// TODO:  deploy container, update slot with container, dispatch directive in directive queue to container
+      deployContainer(seq).map { container => 
+        // slotManager.update()
+        //dispatchDirective(container)
+      }
+    }
+  }
+
+/*
+  protected def dispatchDirective(target: ActorRef) {
       if(!directiveQueue.isEmpty) {
         LOG.info("{} is asking for task execution...", container.path.name)
         val (d, rest) = directiveQueue.dequeue
@@ -421,9 +439,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
         }
         directiveQueue = rest
       }
-    }
   }
+*/
 
-  override def receive = containerReady orElse tickMessage orElse messageFromCollector orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
+  override def receive = processReady orElse tickMessage orElse messageFromCollector orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
 
 }

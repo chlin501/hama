@@ -27,6 +27,7 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import java.net.InetAddress
 import org.apache.hadoop.io.Writable
+import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
@@ -45,36 +46,10 @@ import org.apache.hama.sync.CuratorBarrier
 import org.apache.hama.sync.CuratorRegistrator
 import org.apache.hama.sync.PeerClient
 import org.apache.hama.util.ActorLocator
-import org.apache.hama.util.Curator
 import org.apache.hama.util.TaskCounsellorLocator
 import org.apache.zookeeper.CreateMode
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
-
-object SlotRegister {
-
-  def apply(setting: Setting): SlotRegister = 
-    new SlotRegister(setting)
-
-}
-
-class SlotRegister(setting: Setting) extends Curator {
-
-  initializeCurator(setting.hama)
-
-  def seq(): Int = setting.hama.getInt("container.slot.seq", -1)
-
-  def mkPath(): String = "/container/%s:%s/%s".format(setting.host, 
-                                                      setting.port, 
-                                                      seq)
-
-  def register() {
-    val path = mkPath
-    LOG.debug("Record slot seq at {}", path)
-    create(path, CreateMode.EPHEMERAL)
-  }
-
-}
 
 object Container extends CommonLog {
 
@@ -95,10 +70,11 @@ object Container extends CommonLog {
     setting
   }
 
+
   def initialize(args: Array[String]) {
     val setting = customize(Setting.container, args)
-    ActorSystem(setting.sys, setting.config)
-    SlotRegister(setting).register
+    val sys = ActorSystem(setting.sys, setting.config)
+    sys.actorOf(Props(classOf[Pinger], setting), "pinger")
   }
 
   @throws(classOf[Throwable])
@@ -119,14 +95,37 @@ object Container extends CommonLog {
 
 }
 
+protected[groom] class Pinger(setting: Setting) extends RemoteService  
+                                                   with ActorLocator {
+
+  protected val TaskCounsellorName = TaskCounsellor.simpleName(setting.hama)
+
+  val seq: Int = setting.hama.getInt("container.slot.seq", -1)
+
+  override def initializeServices =
+    lookup(TaskCounsellorName, locate(TaskCounsellorLocator(setting.hama)))
+
+  override def afterLinked(proxy: ActorRef) = proxy.path.name match {
+    case `TaskCounsellorName` => {
+      proxy ! ProcessReady(seq)
+      LOG.info("Process with slot seq {} replies ready to {}!", seq, 
+               proxy.path.name)
+      context stop self
+    } 
+    case _ => LOG.warning("Unknown target {} is linked!", proxy.path.name)
+  }
+
+  override def receive = unknown
+
+}
+
 /**
  * Launched BSP actor in forked process.
  * @param conf contains common setting for the forked process instead of tasks
  *             to be executed later on.
  */
-class Container(setting: Setting, slotSeq: Int) extends LocalService 
-                                                with RemoteService 
-                                                with ActorLocator {
+class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef) 
+      extends LocalService with RemoteService {
 
   import Container._
  
@@ -143,8 +142,6 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
        }
     }
 
-  protected var taskCounsellor: Option[ActorRef] = None
-
   protected var coordinator: Option[ActorRef] = None
 
   protected val TaskCounsellorName = TaskCounsellor.simpleName(setting.hama)
@@ -159,19 +156,6 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
     // syncer
   }
  
-  override def initializeServices =
-    lookup(TaskCounsellorName, locate(TaskCounsellorLocator(setting.hama)))
-    //lookup(ExecutorName, locate(ExecutorLocator(setting.hama)))
-
-  override def afterLinked(proxy: ActorRef) = proxy.path.name match {
-    case `TaskCounsellorName` => {
-      taskCounsellor = Option(proxy)
-      proxy ! ContainerReady(slotSeq)
-      LOG.info("Container with slot seq {} replies ready to {}!", slotSeq, 
-               proxy.path.name)
-    } 
-    case _ => LOG.warning("Unknown taget {} is linked!", proxy.path.name)
-  }
 
   /**
    * Check if the task worker is running. true if a worker is running; false 
@@ -290,7 +274,7 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
    */
   def shutdownContainer: Receive = {
     case ShutdownContainer => {
-      taskCounsellor.map { found => context.unwatch(found) }
+      context.unwatch(taskCounsellor) 
       LOG.info("Call context.system.shutdown ...")
       context.system.shutdown
     }
@@ -313,9 +297,7 @@ class Container(setting: Setting, slotSeq: Int) extends LocalService
     }
   }
 
-  def reportToTaskCounsellor(task: Task) = taskCounsellor.map { (e) => 
-    e ! new Report(task) 
-  }
+  def reportToTaskCounsellor(task: Task) = taskCounsellor ! new Report(task) 
 */
 
   override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse actorReply orElse timeout orElse superviseeOffline orElse /*report orElse*/ unknown

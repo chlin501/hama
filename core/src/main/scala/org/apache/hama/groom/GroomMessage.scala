@@ -25,8 +25,10 @@ sealed trait GroomMessage
 
 /**
  * Singnify Container actor is ready.
- */
 private[groom] final case class ContainerReady(seq: Int) extends GroomMessage
+ */
+
+private[groom] final case class ProcessReady(seq: Int) extends GroomMessage
 
 private[groom] final case class PullForExecution(
   slotSeq: Int

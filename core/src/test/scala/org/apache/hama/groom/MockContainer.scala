@@ -26,10 +26,10 @@ final case class MockTaskCounsellorLocator(conf: HamaConfiguration)
 
 /**
  * For TestExecutor
- */
-class MockContainer(setting: Setting, slotSeq: Int) 
-      extends Container(setting, slotSeq) with ActorLocator {
+class MockContainer(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef) 
+      extends Container(setting, slotSeq, taskCounsellor: ActorRef) {
 
+//
   import scala.language.implicitConversions
 
   implicit def locateMockTaskCounsellor(mock: MockTaskCounsellorLocator) = 
@@ -49,9 +49,12 @@ class MockContainer(setting: Setting, slotSeq: Int)
     }
   }
 
-  override def initializeServices {
-    lookup(TaskCounsellorName, locate(MockTaskCounsellorLocator(setting.hama)))
-  }
+//  override def initializeServices {
+    //lookup(TaskCounsellorName, locate(MockTaskCounsellorLocator(setting.hama)))
+//  }
+//
  
   override def receive = super.receive
 }
+ */
+
