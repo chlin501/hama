@@ -30,6 +30,7 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.groom.GroomServer
 import org.apache.hama.groom.Slot
+import org.apache.hama.conf.Setting
 import org.apache.hama.util.Utils._
 import scala.collection.immutable.Queue
 
@@ -93,13 +94,13 @@ class Stats(d: String, v: Writable) extends Writable with ProbeMessages {
 object GroomStats {  
 
   def apply(name: String, host: String, port: Int, maxTasks: Int,
-            slots: Array[String]): GroomStats = {
+            slotStats: SlotStats): GroomStats = {
     val stats = new GroomStats
     stats.n = name
     stats.h = host
     stats.p = port
     stats.mt = maxTasks
-    stats.s = toWritable(slots) 
+    stats.s = slotStats
     stats
   }
 
@@ -110,36 +111,10 @@ object GroomStats {
     stats.h = host
     stats.p = port
     stats.mt = maxTasks
-    stats.s = defaultSlots(maxTasks)
+    stats.s = SlotStats.defaultSlotStats(Setting.groom)
     stats
   }
 
-  def list(slots: Set[Slot]): Array[String] = 
-    slots.map { s => s.taskAttemptId match {
-      case None => nullString
-      case Some(taskAttemptId) => taskAttemptId.toString
-    }}.toArray
-
-  final def toWritable(strings: Array[String]): ArrayWritable = {
-    val w = new ArrayWritable(classOf[Text])
-    w.set(strings.map { e => new Text(e) })
-    w
-  }
-
-  final def defaultSlots(maxTasks: Int): ArrayWritable = {
-    val w = new ArrayWritable(classOf[Text])
-    val max = mkSlotsString(maxTasks) 
-    w.set(max.asInstanceOf[Array[Writable]])
-    w
-  }
-
-  final def mkSlotsString(maxTasks: Int): Array[Text] = {
-    val max = new Array[Text](maxTasks) 
-    for(pos <- 0 until max.length) {
-      max(pos) = new Text(nullString)
-    }
-    max
-  }
 }
 
 final class GroomStats extends Writable with ProbeMessages {
@@ -159,7 +134,8 @@ final class GroomStats extends Writable with ProbeMessages {
   protected[monitor] var mt: Int = 3
 
   /* slots */
-  protected[monitor] var s = defaultSlots(mt) // TODO: change to SlotStats { status [ taskattemptId | none | broken ], crash count by slot seq (int), max retries 
+  protected[monitor] var s: SlotStats = 
+    SlotStats.defaultSlotStats(Setting.groom)
   
   def name(): String = n 
 
@@ -171,7 +147,7 @@ final class GroomStats extends Writable with ProbeMessages {
   
   def maxTasks(): Int = mt
  
-  def slots(): Array[String] = s.toStrings
+  def slots(): SlotStats = s
 
   @throws(classOf[IOException])
   override def write(out: DataOutput) {
@@ -188,15 +164,14 @@ final class GroomStats extends Writable with ProbeMessages {
     h = Text.readString(in)
     p = in.readInt
     mt = in.readInt
-    s = defaultSlots(mt)
+    s = SlotStats.defaultSlotStats(Setting.groom)
     s.readFields(in)
   }
 
   override def equals(o: Any): Boolean = o match {
     case that: GroomStats => that.isInstanceOf[GroomStats] &&
       that.n.equals(n) && that.h.equals(h) && (that.p == p) && 
-      (that.mt == mt) /*&& that.q.toStrings.equals(q.toStrings)*/ &&
-      that.s.toStrings.equals(s.toStrings) 
+      (that.mt == mt) && that.s.equals(s) 
     case _ => false
   }
   
@@ -209,12 +184,21 @@ final class GroomStats extends Writable with ProbeMessages {
             ) + h.toString.hashCode
           ) + p
         ) + mt
-    ) + s.toStrings.hashCode
+    ) + s.hashCode
 }
 
 object SlotStats {
 
   val broken = "broken"
+  val none = "none"
+
+  def defaultSlotStats(setting: Setting): SlotStats = {
+    val nrOfSlots = setting.hama.getInt("bsp.tasks.maximum", 3)
+    val slots = (for(seq <- 1 to nrOfSlots) yield "none").toArray
+    val crashCount = (for(seq <- 1 to nrOfSlots) yield (seq, 0)).toMap
+    val maxRetries = setting.hama.getInt("groom.executor.max_retries", 3)
+    SlotStats(slots, crashCount, maxRetries)
+  }
 
   def apply(slots: Array[String], crashCount: Map[Int, Int], 
             maxRetries: Int): SlotStats = {

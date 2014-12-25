@@ -44,6 +44,7 @@ import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.GroomStats._
+import org.apache.hama.monitor.SlotStats
 import scala.collection.immutable.Queue
 import scala.util.Failure
 import scala.util.Success
@@ -179,12 +180,17 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     val name = setting.name
     val host = setting.host
     val port = setting.port
-    val slotIds = list(slots)  // TODO: change to slot stats, defunct slots, etc
     val maxTasksAllowed = slotManager.maxTasksAllowed
+    val slotStats = currentSlotStats
     LOG.debug("Current groom stats: name {}, host {}, port {}, maxTasks {}, "+
-              "slots ids {}", name, host, port, maxTasksAllowed, slotIds)
-    GroomStats(name, host, port, maxTasksAllowed, slotIds)
+              "slot stats {}", name, host, port, maxTasksAllowed, slotStats)
+    GroomStats(name, host, port, maxTasksAllowed, slotStats)
   } 
+
+  protected def currentSlotStats(): SlotStats = {
+    SlotStats.defaultSlotStats(setting)
+    // TODO: 
+  }
 
   protected def whenExecutorNotFound(oldSlot: Slot, d: Directive) {
     slotManager.update(oldSlot.seq, None, d.master, 
@@ -397,7 +403,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
 
   /**
-   * Process replies when it's ready. Then following actions are executed:
+   * Process, not <b>container</b>, replies when it's ready. Then following 
+   * actions are executed:
    * - Deploy container to the process.
    * - Update slot with corresponded container. 
    * - Dispatch to container.

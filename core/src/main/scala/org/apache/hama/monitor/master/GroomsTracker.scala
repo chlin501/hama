@@ -21,6 +21,7 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.monitor.Tracker
 import org.apache.hama.monitor.ProbeMessages
 import org.apache.hama.monitor.GroomStats
+import org.apache.hama.monitor.SlotStats
 import org.apache.hama.util.Utils._
 
 final case class GetMaxTasks(jobId: String) extends ProbeMessages
@@ -37,7 +38,6 @@ final class GroomsTracker extends Tracker {
   type FreeSlots = Int
 
   private var allStats = Set.empty[GroomStats]
-  private val NULL = nullString
 
   /* total tasks of all groom servers */
   private var totalMaxTasks: Int = 0
@@ -66,11 +66,10 @@ final class GroomsTracker extends Tracker {
    * @param stats is groom stats to be calculated.
    * @return sum up free slots of a groom currently has.
    */ 
-  private def freeSlots(stats: GroomStats): Int = 
-    stats.slots.map { slot => slot match {  
-      case NULL => 1 
-      case _ => 0 
-    }}.sum
+  private def freeSlots(stats: GroomStats): Int = stats.slots.slots.map {  
+    case SlotStats.none => 1 
+    case _ => 0 
+  }.sum
 
   override def groomLeaves(name: String, host: String, port: Int) = 
     allStats.find( stats => 

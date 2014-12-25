@@ -130,9 +130,8 @@ class SlotManager extends CommonLog {
    * @param constraint of the slots can be created.
    */
   private def initialize(constraint: Int = 3) {
-    for(seq <- 1 to constraint) {
-      slots ++= Set(emptySlot(seq))
-    }
+    slots = (for(seq <- 1 to constraint) yield Set(emptySlot(seq))).flatten.
+            toSet
     LOG.info("{} GroomServer slots are initialied.", constraint)
   }
 
