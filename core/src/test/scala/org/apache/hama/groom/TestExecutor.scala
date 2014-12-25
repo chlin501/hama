@@ -64,22 +64,9 @@ class MockTaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef,
   }
 
   override def postKillAck(ack: KillAck) {
-    LOG.debug("<KillAck> {} receives {} with current slots {}", 
-              name, ack, slots)
+    LOG.debug("<KillAck> {} receives {}", name, ack)
     tester ! ack.taskAttemptId.toString
   }
-
-/*
-  override def postContainerStopped(executor: ActorRef) {
-    LOG.info("Executor {} is stopped with current slots {}", 
-              executor.path.name, slots)
-    tester ! executor.path.name
-    decrement
-    if(isZero) slots.foreach( slot => 
-      tester ! slot.taskAttemptId
-    )
-  }
-*/
 
 } 
 
