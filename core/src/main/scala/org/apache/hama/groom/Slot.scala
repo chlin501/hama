@@ -20,6 +20,7 @@ package org.apache.hama.groom
 import akka.actor.ActorRef
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.logging.CommonLog
+import org.apache.hama.monitor.SlotStats
 
 object Slot {
 
@@ -134,6 +135,15 @@ class SlotManager extends CommonLog {
             toSet
     LOG.info("{} GroomServer slots are initialied.", constraint)
   }
+
+  protected[groom] def taskAttemptIdStrings(): Array[String] = 
+    slots.map { slot => isSlotDefunct(slot.seq) match {
+      case true => SlotStats.broken
+      case false => slot.taskAttemptId match {
+        case Some(taskAttemptId) => taskAttemptId.toString
+        case None => SlotStats.none
+      }
+    }}.toArray
 
   /**
    * Book slot with corresponded container and task attempt id. This function is

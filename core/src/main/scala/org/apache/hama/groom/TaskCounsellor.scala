@@ -180,14 +180,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     GroomStats(name, host, port, maxTasksAllowed, slotStats)
   } 
 
-  protected def currentSlotStats(): SlotStats = {
-    //val ids = slotsManager.taskAttemptIdStrings
-    //val crashCount = retries 
-    //maxRetries 
-    //SlotStats(ids, crashCount, maxRetries)
-    SlotStats.defaultSlotStats(setting)
-    // TODO: collect the most recent slots stats data
-  }
+  protected def currentSlotStats(): SlotStats = 
+    SlotStats(slotManager.taskAttemptIdStrings, retries, maxRetries)
 
   protected def whenExecutorNotFound(oldSlot: Slot, d: Directive) {
     slotManager.update(oldSlot.seq, None, d.master, 
@@ -370,7 +364,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
         //slots -= old 
         retries = retries.updated(old.seq, 0)   
         // TODO: report groom stats to master 
-        //       black list?
+        //       replace original slot with Broken(seq) instance
         //       when slots.size == 0, notify groom to halt/ shutdown itself because no slot to run task? 
       }
       case None => { // 0 // need retry 
