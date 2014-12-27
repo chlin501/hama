@@ -291,8 +291,8 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
     case _ => LOG.warning("Unexpected actor {} is offline!", target.path.name)
   }
 
-  protected def whenTaskComplete() {
-    // TODO: taskCounsellor ! TaskCompleted(taskAttemptId)
+  protected def whenTaskComplete() { 
+// TODO: taskCounsellor ! TaskCompleted(taskAttemptId)
   }
 
 /* TODO: send the latest task to task counsellor and then to scheduler

@@ -184,10 +184,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def currentSlotStats(): SlotStats = 
     SlotStats(slotManager.taskAttemptIdStrings, retries, maxRetries)
 
-  protected def whenExecutorNotFound(oldSlot: Slot, d: Directive) {
-    slotManager.update(oldSlot.seq, None, d.master, 
-                       Option(newExecutor(oldSlot.seq)), None)
-    //directiveQueue = directiveQueue.enqueue(SlotToDirective(oldSlot.seq, d))
+  protected def whenExecutorNotFound(oldSlot: Slot, d: Directive) { 
+    slotManager.updateExecutor(oldSlot.seq, Option(newExecutor(oldSlot.seq)), 
+                               d.master)
     directiveQueue = directiveQueue.enqueue(d)
   }
 
@@ -218,8 +217,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     })({ whenExecutorExists(d) })
 
   // TODO: when a task finishes, coordinator in container sends finishes msg 
-  //       to task counsellor, then task counsellor updates slot taskAttemptId 
-  //       to None
+  //       to task counsellor
+  //       then task counsellor updates slot taskAttemptId to None
+  //       next report to master
 
   // TODO: move to ProcessManager trait?
   protected def newExecutor(slotSeq: Int): ActorRef = { 
@@ -278,7 +278,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def preKillAck(ack: KillAck) { }
 
-  protected def postKillAck(ack: KillAck) { }
+  protected def postKillAck(ack: KillAck) { 
+    // TODO: notify master a task is killed
+  }
 
   /**
    * - Find corresponded slot seq and task attempt id replied from 
@@ -290,14 +292,16 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def doKillAck(action: KillAck) = 
     slotManager.clearSlotBy(action.slotSeq, action.taskAttemptId)
 
-  protected def pushToLaunch(seq: Int, directive: Directive, from: ActorRef) {
-    from ! new LaunchTask(directive.task)
-    slotManager.book(seq, directive.task.getId, from)
+  protected def pushToLaunch(seq: Int, directive: Directive, 
+                             container: ActorRef) {
+    container ! new LaunchTask(directive.task)
+    slotManager.book(seq, directive.task.getId, container)
   }
 
-  protected def pushToResume(seq: Int, directive: Directive, from: ActorRef) {
-    sender ! new ResumeTask(directive.task)
-    slotManager.book(seq, directive.task.getId, from)
+  protected def pushToResume(seq: Int, directive: Directive, 
+                             container: ActorRef) {
+    container ! new ResumeTask(directive.task)
+    slotManager.book(seq, directive.task.getId, container)
   }
 
   protected def messageFromCollector: Receive = { 
@@ -335,12 +339,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   }
 
   // TODO: move to ProcessManager trait?
-  protected def redeploy(slot: Slot) {
-    slotManager.clear(slot.seq)
-    slotManager.update(slot.seq, slot.taskAttemptId, slot.master, slot.executor,
-                       deployContainer(slot.seq))
-  }
-
+  protected def redeploy(slot: Slot) = 
+    deployContainer(slot.seq).map { container =>
+      slotManager.updateContainer(slot.seq, Option(container))
+      dispatchDirective(slot.seq, container) 
+    }
+ 
   protected def checkIfRetry(old: Slot, 
                              f:(Int) => Unit) = retries.get(old.seq) match {
       case Some(retryCount) if (retryCount < maxRetries) => { 
@@ -395,10 +399,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected def processReady: Receive = {  
     case ProcessReady(seq) => deployContainer(seq).map { container => 
-      slotManager.findSlotBy(seq).map { slot => 
-        slotManager.update(seq, slot.taskAttemptId, slot.master, slot.executor,
-                           Option(container)) 
-      }
+      slotManager.updateContainer(seq, Option(container)) 
       dispatchDirective(seq, container)
     }
   }

@@ -174,6 +174,33 @@ class SlotManager extends CommonLog {
     update(old.seq, Option(taskAttemptId), old.master, old.executor, 
            Option(container))
 
+  /**
+   * Update container only. Leave other fields as usual.
+   */
+  protected[groom] def updateContainer(seq: Int,
+                                       container: Option[ActorRef]) = 
+    findThenMap({ slot => slot.seq == seq})({ found => 
+      slots -= found
+      val newSlot = Slot(seq, found.taskAttemptId, found.master, found.executor,
+                         container)
+      slots += newSlot
+    })
+
+  /**
+   * Update excutor only. Leave other fields as usual.
+   */
+  protected[groom] def updateExecutor(seq: Int,
+                                      executor: Option[ActorRef],
+                                      master: String) = 
+    findThenMap({ slot => slot.seq == seq})({ found => 
+      slots -= found
+      val newSlot = if(null == master || "".equals(master)) 
+        Slot(seq, found.taskAttemptId, found.master, executor, found.container)
+       else 
+        Slot(seq, found.taskAttemptId, master, executor, found.container)
+      slots += newSlot
+    })
+  
   protected[groom] def update(seq: Int, taskAttemptId: Option[TaskAttemptID],
                               master: String, executor: Option[ActorRef],
                               container: Option[ActorRef]) = 
