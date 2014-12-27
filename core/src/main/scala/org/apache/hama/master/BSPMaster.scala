@@ -27,6 +27,7 @@ import org.apache.hama.SystemInfo
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
 import org.apache.hama.groom.RequestTask
+import org.apache.hama.groom.TaskFailure
 import org.apache.hama.monitor.Inform
 import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.ServicesAvailable
@@ -184,6 +185,10 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     case req: RequestTask => inform(req, Scheduler.simpleName(setting.hama))
   }
 
-  override def receive = msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
+  protected def taskFailure: Receive = {
+    case fault: TaskFailure => inform(fault, Scheduler.simpleName(setting.hama))
+  }
+
+  override def receive = taskFailure orElse msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
   
 }

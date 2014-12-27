@@ -121,5 +121,9 @@ class GroomServer(setting: Setting, finder: MasterFinder)
     service.path.name 
   }.toArray
 
-  override def receive = dispatch orElse report orElse actorReply orElse retryResult orElse membership orElse unknown
+  protected def taskFailure: Receive = {
+    case fault: TaskFailure => forwardToMaster(fault)  
+  }
+
+  override def receive = taskFailure orElse dispatch orElse report orElse actorReply orElse retryResult orElse membership orElse unknown
 }

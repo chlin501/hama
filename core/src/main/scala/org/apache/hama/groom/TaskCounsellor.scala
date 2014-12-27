@@ -63,7 +63,7 @@ object TaskFailure {
 
 }
 
-protected[groom] final class TaskFailure extends Writable {
+final class TaskFailure extends Writable {
 
   protected[groom] var id: Option[TaskAttemptID] = None
 

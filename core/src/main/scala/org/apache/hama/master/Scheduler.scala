@@ -238,5 +238,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
   //          else fail job and notify client.
   //       else wait for other groom requesting for task.
 
-  override def receive = tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
+  protected def taskFailure: Receive = {
+    case fault: TaskFailure => // TODO: do reschedule task 
+  }
+
+  override def receive = taskFailure orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
 }
