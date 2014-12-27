@@ -425,6 +425,17 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       directiveQueue = rest
     }
 
+  // TODO: 1. report to master  2. update slot's task attempt id to none
+  //protected def taskFinished: Receive = {
+    //case finished: TaskFinished => 
+  //}
+
+  // this is sent from container so groom stats is null!
+  //protected def taskFailure: Receive = {
+    // case TaskFailure(id, stats) => 
+    // TODO: 1. report to master a task failure 2. update fail id in slot to none
+  //}
+
   override def receive = processReady orElse tickMessage orElse messageFromCollector orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
 
 }

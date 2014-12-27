@@ -31,6 +31,7 @@ import org.apache.hama.Close
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
+import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.fs.CacheService
 import org.apache.hama.fs.Operation
 import org.apache.hama.logging.Logging
@@ -83,8 +84,8 @@ final case object GetTaskAttemptId extends TaskStatMessage
 sealed trait CoordinatorMessage
 final case class Customize(task: Task) extends CoordinatorMessage
 final case object Execute extends CoordinatorMessage
-final case class InstantiationFailure(className: String, cause: Throwable)
-      extends CoordinatorMessage
+final case class InstantiationFailure(id: TaskAttemptID, cause: Throwable) 
+    extends RuntimeException(cause) with CoordinatorMessage
 final case class SuperstepNotFoundFailure(className: String) 
       extends CoordinatorMessage
 final case class CleanupFinished(superstepClassName: String)
@@ -99,11 +100,6 @@ final case class TaskFinished(taskAttemptId: String) extends CoordinatorMessage
  * - <strik>io</strike>
  * - sync
  */
-// TODO: report task stats through container
-//  - status
-//  - start time
-//  - finish time
-//  - progress, etc.
 class Coordinator(conf: HamaConfiguration,  // common conf
                   task: Task,
                   container: ActorRef, 
@@ -159,7 +155,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   // TODO: perhaps replace with forward func instead.
   protected var clients = Map.empty[ActorMessage, ActorRef]
-
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
@@ -269,7 +264,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
         }
         case Failure(cause) => {
           failedState
-          container ! InstantiationFailure(className, cause)
+          throw InstantiationFailure(task.getId, cause)  
         }
       } 
     })  
@@ -640,6 +635,9 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     case Send(peerName, msg) => messenger ! Send(peerName, msg)
   }
 
+  /**
+   * BSPPeerAdapter, on behalf of Superstep, asks for messages sent to it.
+   */
   protected def getCurrentMessage: Receive = {
     case GetCurrentMessage => { 
       clients ++= Map(GetCurrentMessage.toString -> sender)
@@ -648,7 +646,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   /**
-   * Reply client's (usually superstep) GetCurrentMessage.
+   * Reply client's - Superstep - GetCurrentMessage.
    */
   protected def currentMessage: Receive = {
     case CurrentMessage(msg) => reply(GetCurrentMessage.toString, msg) 

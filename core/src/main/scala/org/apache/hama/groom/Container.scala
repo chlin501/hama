@@ -33,6 +33,7 @@ import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Coordinator
+import org.apache.hama.bsp.v2.InstantiationFailure
 import org.apache.hama.bsp.v2.Execute
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.v2.TaskFinished
@@ -131,23 +132,37 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
       extends LocalService with RemoteService {
 
   import Container._
- 
-  /**
-   * Capture exceptions thrown by coordinator, etc.
-   * Report master and stop actors.
-   */
-  override val supervisorStrategy =
-    OneForOneStrategy(maxNrOfRetries = 1, withinTimeRange = 1 minute) {
-       case _: Exception => {  
-         stopAll
-         // TODO: report task counsellor with failed task id 
-         Stop 
-       }
-    }
 
   protected var coordinator: Option[ActorRef] = None
 
   protected val TaskCounsellorName = TaskCounsellor.simpleName(setting.hama)
+
+  protected var retries: Int = 0
+
+  protected var maxRetries: Int = 
+     (setting.hama.getInt("container.task.max.retries", 3) + 1)
+
+  /**
+   * Capture exceptions thrown by coordinator, etc.
+   * Report to master and stop actors when necessary.
+   */
+  override val supervisorStrategy = 
+    OneForOneStrategy(maxNrOfRetries = maxRetries, 
+                      withinTimeRange = 3 minutes) {
+      case e: InstantiationFailure => {
+        checkIfReport(e)
+        Restart
+      }
+      case _: Exception => {  
+        stopAll 
+        Stop 
+      }
+    }
+
+  protected def checkIfReport(e: InstantiationFailure) {
+    maxRetries -= 1
+    if(0 == maxRetries) taskCounsellor ! TaskFailure(e.id, null)
+  }
 
   /**
    * Stop all realted operations.
