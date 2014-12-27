@@ -24,12 +24,18 @@ import org.apache.hama.monitor.SlotStats
 
 object Slot {
 
+  /**
+   * Create a slot marked as broken.
+   */
   def apply(seq: Int): Slot = {
     val broken = new Broken
     broken.s = seq
     broken
   }
 
+  /**
+   * An initial state slot.   
+   */
   def emptySlot(seq: Int): Slot = Slot(seq, None, "", None, None)
 
   def apply(seq: Int, taskAttemptId: Option[TaskAttemptID], master: String,
@@ -136,6 +142,9 @@ class SlotManager extends CommonLog {
     LOG.info("{} GroomServer slots are initialied.", constraint)
   }
 
+  /**
+   * Translate task attempt id or broken slot into literal string.
+   */
   protected[groom] def taskAttemptIdStrings(): Array[String] = 
     slots.map { slot => isSlotDefunct(slot.seq) match {
       case true => SlotStats.broken
@@ -237,8 +246,20 @@ class SlotManager extends CommonLog {
     }
   }
 
+  protected[groom] def markAsBroken(seq: Int) = findSlotBy(seq) match {
+    case Some(found) => {
+      slots -= found
+      slots += Slot(seq) 
+    }
+    case None => LOG.error("No matched seq for slot {}!", seq)
+  }
+
   protected[groom] def numSlotsOccupied(): Int = slots.count( slot => 
     !None.equals(slot.taskAttemptId)
+  )
+
+  protected[groom] def nonBrokenSlotsOccupied(): Int = slots.count( slot => 
+    !isSlotDefunct(slot.seq) && !None.equals(slot.taskAttemptId) 
   )
 
 }

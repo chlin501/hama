@@ -124,6 +124,8 @@ protected[groom] class Pinger(setting: Setting) extends RemoteService
  * @param conf contains common setting for the forked process instead of tasks
  *             to be executed later on.
  */
+// TODO: when coordinator finishes its execution. notify task counsellor and
+//       update slot's task attempt id to none.
 class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef) 
       extends LocalService with RemoteService {
 
@@ -155,7 +157,6 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
     // TODO: messeenger
     // syncer
   }
- 
 
   /**
    * Check if the task worker is running. true if a worker is running; false 
@@ -288,6 +289,10 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
   override def offline(target: ActorRef) = target.path.name match {
     case `TaskCounsellorName` => self ! ShutdownContainer
     case _ => LOG.warning("Unexpected actor {} is offline!", target.path.name)
+  }
+
+  protected def whenTaskComplete() {
+    // TODO: taskCounsellor ! TaskCompleted(taskAttemptId)
   }
 
 /* TODO: send the latest task to task counsellor and then to scheduler

@@ -57,6 +57,7 @@ object TaskFailure {
   def apply(id: TaskAttemptID, stats: GroomStats): TaskFailure = {
     val fault = new TaskFailure
     fault.id = Option(id)
+    fault.s = Option(stats)
     fault
   }
 
@@ -156,8 +157,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * and no task in directive queue.
    */
   override def ticked(msg: Tick): Unit = msg match {
-    case TaskRequest => 
-      if((directiveQueue.size + slotManager.numSlotsOccupied) < 
+    case TaskRequest =>  
+      if((directiveQueue.size + slotManager.nonBrokenSlotsOccupied) < 
           slotManager.maxTasksAllowed) 
         groom ! RequestTask(currentGroomStats) 
     case _ => 
@@ -322,7 +323,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       name.replace("Container", "") match {
         case s if s forall Character.isDigit => extractSeq(s, { seq =>
           matchSlot(seq, { slot => 
-            slot.taskAttemptId.map { found => /* TODO: report to master */ }
+            slot.taskAttemptId.map { found => 
+              groom ! TaskFailure(found, currentGroomStats) 
+            }
             redeploy(slot)
           })
         })
@@ -340,34 +343,23 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def checkIfRetry(old: Slot, 
                              f:(Int) => Unit) = retries.get(old.seq) match {
-      case Some(retryCount) if (retryCount < maxRetries) => { // need retry
-         None.equals(old.taskAttemptId) match {
-           case false => {
-              // TODO: report to master
-         
-           }
-           case true =>
-         }
-         // TODO: 
-         // if task attempt id != none, 
-         //    report task failure with id and latest groom stats to master  
-         //    retry
-         // else retry
-/*
-            slotManager.clear(old.seq)
-            f(old.seq) 
-            val v = retryCount + 1
-            retries ++= Map(old.seq -> v)
-*/
+      case Some(retryCount) if (retryCount < maxRetries) => { 
+        if(!None.equals(old.taskAttemptId)) 
+          groom ! TaskFailure(old.taskAttemptId.getOrElse(null), 
+                              currentGroomStats)
+        slotManager.clear(old.seq)
+        f(old.seq) 
+        val v = retryCount + 1
+        retries ++= Map(old.seq -> v)
       }
       case Some(retryCount) if (retryCount >= maxRetries) => { // report
-        //slots -= old 
+        slotManager.markAsBroken(old.seq)
         retries = retries.updated(old.seq, 0)   
-        // TODO: report groom stats to master 
-        //       replace original slot with Broken(seq) instance
-        //       when slots.size == 0, notify groom to halt/ shutdown itself because no slot to run task? 
+        if(!None.equals(old.taskAttemptId)) 
+          groom ! TaskFailure(old.taskAttemptId.getOrElse(null), 
+                              currentGroomStats)
       }
-      case None => { // 0 // need retry 
+      case None => { // 0 
         slotManager.clear(old.seq)
         f(old.seq)
         retries ++= Map(old.seq -> 1)
