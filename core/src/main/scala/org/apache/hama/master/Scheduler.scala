@@ -28,6 +28,7 @@ import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.conf.Setting
 import org.apache.hama.groom.RequestTask
+import org.apache.hama.groom.TaskFailure
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action.Launch
 import org.apache.hama.master.Directive.Action.Kill
