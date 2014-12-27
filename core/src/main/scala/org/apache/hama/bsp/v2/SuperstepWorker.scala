@@ -57,7 +57,10 @@ class SuperstepWorker(superstep: Superstep, coordinator: ActorRef)
   }
 
   protected def cleanup: Receive = {
-    case Cleanup(peer) => superstep.cleanup(peer)
+    case Cleanup(peer) => {
+      superstep.cleanup(peer)
+      coordinator ! CleanupFinished(superstep.getClass.getName.toString)
+    }
   }
 
   protected def mapVarNextClass: Receive =  {

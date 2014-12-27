@@ -35,6 +35,7 @@ import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Coordinator
 import org.apache.hama.bsp.v2.Execute
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.bsp.v2.TaskFinished
 import org.apache.hama.conf.Setting
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.logging.TaskLogger
@@ -291,19 +292,14 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
     case _ => LOG.warning("Unexpected actor {} is offline!", target.path.name)
   }
 
-  protected def whenTaskComplete() { 
-// TODO: taskCounsellor ! TaskCompleted(taskAttemptId)
+  protected def taskFinsihed: Receive = {
+    case finished: TaskFinished => taskCounsellor ! finished 
   }
 
-/* TODO: send the latest task to task counsellor and then to scheduler
-  def report: Receive = {
-    case r: Report => {
-      reportToTaskCounsellor(r.getTask)
-    }
+  protected def report: Receive = {
+    case taskReport: Report => taskCounsellor ! taskReport 
   }
 
-  def reportToTaskCounsellor(task: Task) = taskCounsellor ! new Report(task) 
-*/
+  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse actorReply orElse timeout orElse superviseeOffline orElse report orElse unknown
 
-  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse actorReply orElse timeout orElse superviseeOffline orElse /*report orElse*/ unknown
 }

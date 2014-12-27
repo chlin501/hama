@@ -87,9 +87,10 @@ final case class InstantiationFailure(className: String, cause: Throwable)
       extends CoordinatorMessage
 final case class SuperstepNotFoundFailure(className: String) 
       extends CoordinatorMessage
-final case class FinishCleanup(superstepClassName: String)
+final case class CleanupFinished(superstepClassName: String)
       extends CoordinatorMessage 
 final case class Spawned(superstep: Superstep, actor: ActorRef)
+final case class TaskFinished(taskAttemptId: String) extends CoordinatorMessage
 
 /**
  * {@link Coordinator} is responsible for providing related services, 
@@ -289,8 +290,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    * @param peer is the coordinator wrapped by {@link BSPPeerAdapter}.
    * @param variables is a cached map data from previous superstep.
    */
-  protected def execute(className: String, // getClass.getName
-                        peer: BSPPeer, // adaptor
+  protected def execute(className: String, 
+                        peer: BSPPeer, 
                         variables: Map[String, Writable]): Option[ActorRef] = 
     supersteps.find(entry => isFirstSuperstep(className) match {
       case true => {
@@ -367,21 +368,26 @@ class Coordinator(conf: HamaConfiguration,  // common conf
              elapsed, (elapsed/1000d)) 
   }
 
+
   protected def whenCleanup(peer: BSPPeer) = supersteps.foreach { case (k, v)=> 
     v.actor ! Cleanup(peer)
   }
 
-  protected def finishCleanup: Receive = {
-    case FinishCleanup(superstepClassName) => {
-      cleanupCount += 1 
+  protected def cleanupFinished: Receive = {
+    case CleanupFinished(superstepClassName) => {
+      cleanupCount += 1   
       if(cleanupCount == supersteps.size) { 
         succeedState
         task.markTaskFinished
+        notifyContainer(task.getId.toString) 
         context.children foreach context.stop
         context.stop(self) 
       }
     }
   }
+
+  protected def notifyContainer(taskAttemptId: String) =
+    container ! TaskFinished(taskAttemptId) 
 
   protected def bspPeer(): BSPPeer = BSPPeerAdapter(task.getConfiguration, self)
 
@@ -795,7 +801,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     report
   }
 
-  //protected def report() = container ! new Report(new Task.Builder(task).build)
   protected def report() = container ! new Report(task.newTask)
 
   /**
@@ -803,6 +808,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   override def stopServices = close
 
-  override def receive = execute orElse enter orElse inBarrier orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse nextSuperstepClass orElse variables orElse unknown 
+  override def receive = execute orElse enter orElse inBarrier orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse nextSuperstepClass orElse variables orElse cleanupFinished orElse unknown 
   
 }
