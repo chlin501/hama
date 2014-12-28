@@ -33,8 +33,8 @@ import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Coordinator
-import org.apache.hama.bsp.v2.InstantiationFailure
 import org.apache.hama.bsp.v2.Execute
+import org.apache.hama.bsp.v2.InstantiationFailure 
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.v2.TaskFinished
 import org.apache.hama.conf.Setting
@@ -137,32 +137,22 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
 
   protected val TaskCounsellorName = TaskCounsellor.simpleName(setting.hama)
 
-  protected var retries: Int = 0
-
-  protected var maxRetries: Int = 
-     (setting.hama.getInt("container.task.max.retries", 3) + 1)
-
   /**
    * Capture exceptions thrown by coordinator, etc.
    * Report to master and stop actors when necessary.
+   *
+   * InstantiationFailure will be restarted thrice, and then stop coordinator. 
+   * Offline function will stop container, by which task counsellor will capture
+   * and report to master.
    */
   override val supervisorStrategy = 
-    OneForOneStrategy(maxNrOfRetries = maxRetries, 
-                      withinTimeRange = 3 minutes) {
-      case e: InstantiationFailure => {
-        checkIfReport(e)
-        Restart
-      }
+    OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 3 minutes) {
+      case e: InstantiationFailure => Restart
       case _: Exception => {  
         stopAll 
         Stop 
       }
     }
-
-  protected def checkIfReport(e: InstantiationFailure) {
-    maxRetries -= 1
-    if(0 == maxRetries) taskCounsellor ! TaskFailure(e.id, null)
-  }
 
   /**
    * Stop all realted operations.
@@ -304,6 +294,10 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
    */
   override def offline(target: ActorRef) = target.path.name match {
     case `TaskCounsellorName` => self ! ShutdownContainer
+    // TODO: check messenger, tasklog, syncer  
+    // case `TaskLog` => self ! ShutdownContainer
+    // case `Syncer` => self ! ShutdownContainer
+    // case `Messenger` => self ! ShutdownContainer
     case _ => LOG.warning("Unexpected actor {} is offline!", target.path.name)
   }
 

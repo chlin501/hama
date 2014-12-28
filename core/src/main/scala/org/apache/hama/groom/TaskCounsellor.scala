@@ -54,12 +54,17 @@ import scala.concurrent.duration.FiniteDuration
 
 object TaskFailure {
 
-  def apply(id: TaskAttemptID, stats: GroomStats): TaskFailure = {
+  def apply(id: TaskAttemptID, stats: GroomStats): TaskFailure = 
+    apply(Option(id), Option(stats))
+  
+
+  def apply(id: Option[TaskAttemptID], stats: Option[GroomStats]): 
+      TaskFailure = {
     val fault = new TaskFailure
-    fault.id = Option(id)
-    fault.s = Option(stats)
+    fault.id = id
+    fault.s = stats
     fault
-  }
+  } 
 
 }
 
@@ -349,8 +354,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
                              f:(Int) => Unit) = retries.get(old.seq) match {
       case Some(retryCount) if (retryCount < maxRetries) => { 
         if(!None.equals(old.taskAttemptId)) 
-          groom ! TaskFailure(old.taskAttemptId.getOrElse(null), 
-                              currentGroomStats)
+          groom ! TaskFailure(old.taskAttemptId, Option(currentGroomStats))
         slotManager.clear(old.seq)
         f(old.seq) 
         val v = retryCount + 1
@@ -428,12 +432,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   // TODO: 1. report to master  2. update slot's task attempt id to none
   //protected def taskFinished: Receive = {
     //case finished: TaskFinished => 
-  //}
-
-  // this is sent from container so groom stats is null!
-  //protected def taskFailure: Receive = {
-    // case TaskFailure(id, stats) => 
-    // TODO: 1. report to master a task failure 2. update fail id in slot to none
   //}
 
   override def receive = processReady orElse tickMessage orElse messageFromCollector orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
