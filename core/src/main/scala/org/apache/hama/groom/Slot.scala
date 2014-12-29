@@ -290,6 +290,9 @@ class SlotManager extends CommonLog {
     case None => LOG.error("No matched seq for slot {}!", seq)
   }
 
+  protected[groom] def hasFreeSlot(nrOfDirective: Int): Boolean = 
+    ((nrOfDirective + nonBrokenSlotsOccupied + brokenSlot) < maxTasksAllowed)
+
   protected[groom] def nonBrokenSlotsOccupied(): Int = slots.count( slot => 
     !isSlotDefunct(slot.seq) && !None.equals(slot.taskAttemptId) 
   )

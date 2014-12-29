@@ -96,6 +96,32 @@ final class TaskFailure extends Writable {
   }
 }
 
+object NoFreeSlot {
+
+  def apply(d: Directive): NoFreeSlot = {
+    val sign = new NoFreeSlot
+    sign.d = d
+    sign
+  }
+
+}
+
+final class NoFreeSlot extends Writable {
+
+  protected[groom] var d: Directive = new Directive 
+ 
+  def directive(): Directive = d
+
+  override def write(out: DataOutput) = d.write(out)
+
+  override def readFields(in: DataInput) = {
+    var d = new Directive
+    d.readFields(in) 
+    this.d = d
+  }
+
+}
+
 object TaskCounsellor {
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
@@ -163,10 +189,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * and no task in directive queue.
    */
   override def ticked(msg: Tick): Unit = msg match {
-    case TaskRequest =>  
-      if((directiveQueue.size + slotManager.nonBrokenSlotsOccupied +
-          slotManager.brokenSlot()) < slotManager.maxTasksAllowed) 
-        groom ! RequestTask(currentGroomStats) 
+    case TaskRequest => if(slotManager.hasFreeSlot(directiveQueue.size))
+      groom ! RequestTask(currentGroomStats) 
     case _ => 
   }
   
@@ -247,7 +271,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       case _ => {
         LOG.info("Receive directive for action: "+directive.action+" task: "+
                  directive.task.getId+" master: "+directive.master)
-        directiveReceived(directive) 
+        whenDirectiveReceived(directive) 
       }
     }
   }
@@ -257,17 +281,18 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * to child process directly.
    * When directive is kill, slot update will be done after ack is received.
    */
-  protected def directiveReceived(d: Directive) = d.action match {
-    case Launch | Resume => initializeOrDispatch(d) 
-    case Kill => slotManager.findSlotBy(d.task.getId).map { slot =>
-      slot.container match { 
-        case Some(container) => container ! new KillTask(d.task.getId)  
-        case None => LOG.error("No container is running for task {}!", 
-                               d.task.getId)
+  protected def whenDirectiveReceived(d: Directive) =
+    if(slotManager.hasFreeSlot(directiveQueue.size)) d.action match {
+      case Launch | Resume => initializeOrDispatch(d) 
+      case Kill => slotManager.findSlotBy(d.task.getId).map { slot =>
+        slot.container match { 
+          case Some(container) => container ! new KillTask(d.task.getId)  
+          case None => LOG.error("No container is running for task {}!", 
+                                 d.task.getId)
+        }
       }
-    }
-    case _ => LOG.warning("Unknown directive {}", d)
-  }
+      case _ => LOG.warning("Unknown directive {}", d)
+    } else sender ! NoFreeSlot(d)
 
   /**
    * Executor ack for Kill action.
