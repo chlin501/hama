@@ -62,12 +62,19 @@ final protected[message] case class MessageFrom(
   msg: BSPMessageBundle[_ <: Writable], from: ActorRef
 )
 
+object MessageExecutive {
+
+  def simpleName(conf: HamaConfiguration): String = 
+    "messenger-"+Peer.nameFrom(conf)
+}
+
 /**
  * Provide default functionality of {@link MessageExecutive}.
  * It realizes message communication by java object, and send messages through
  * actor via {@link akka.actor.TypedActor}.
  * @param conf is the common configuration, not specific for task.
  */
+// TODO: separate messenger logic from actor and move writable to messenger.
 class MessageExecutive[M <: Writable](conf: HamaConfiguration,
                                       slotSeq: Int,
                                       taskAttemptId: TaskAttemptID,

@@ -100,6 +100,7 @@ final case class TaskFinished(taskAttemptId: String) extends CoordinatorMessage
  * - <strik>io</strike>
  * - sync
  */
+// TODO: coordinator life cycle trait e.g. startExecute, whenFinished -> notify container?
 class Coordinator(conf: HamaConfiguration,  // common conf
                   task: Task,
                   container: ActorRef, 

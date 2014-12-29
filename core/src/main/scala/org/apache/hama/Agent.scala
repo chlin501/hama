@@ -37,6 +37,26 @@ trait Agent extends Actor with ActorLog with Spawnable with Retryable {
                               msg, name, sender.path.name)
   }
 
+  /**
+   * Stop all other (child) actors.
+   */
+  protected def stopAll(others: ActorRef*) = others.foreach { other =>
+    context stop other
+  }
+
+  /**
+   * Stop other (child) actor.
+   */
+  protected def stop(other: ActorRef) = context stop other
+
+  /**
+   * Stop the actor itself.
+   */
+  protected def stop() = context stop self
+
+  /**
+   * Shutdown the entire actor system.
+   */
   protected def shutdown() = context.system.shutdown
 
 }

@@ -111,13 +111,19 @@ protected[groom] class Pinger(setting: Setting) extends RemoteService
       proxy ! ProcessReady(seq)
       LOG.info("Process with slot seq {} replies ready to {}!", seq, 
                proxy.path.name)
-      context stop self
+      stop
     } 
     case _ => LOG.warning("Unknown target {} is linked!", proxy.path.name)
   }
 
-  override def receive = unknown
+  override def receive = actorReply orElse timeout orElse unknown
 
+}
+
+trait Computation extends LocalService {
+ // TODO: group tasklog, messenger, peer sync, coordinator for consistent 
+ //       management e.g. watch child actor, etc.
+ //       slotseq, hamaHome, task.
 }
 
 /**
@@ -128,13 +134,14 @@ protected[groom] class Pinger(setting: Setting) extends RemoteService
 // TODO: when coordinator finishes its execution. notify task counsellor and
 //       update slot's task attempt id to none.
 class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef) 
-      extends LocalService with RemoteService {
+      extends LocalService {
 
   import Container._
 
+  protected var tasklog: Option[ActorRef] = None
+  protected var messenger: Option[ActorRef] = None
+  protected var peer: Option[ActorRef] = None
   protected var coordinator: Option[ActorRef] = None
-
-  protected val TaskCounsellorName = TaskCounsellor.simpleName(setting.hama)
 
   /**
    * Capture exceptions thrown by coordinator, etc.
@@ -148,7 +155,7 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 3 minutes) {
       case e: InstantiationFailure => Restart
       case _: Exception => {  
-        stopAll 
+        stopChildren
         Stop 
       }
     }
@@ -156,11 +163,15 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
   /**
    * Stop all realted operations.
    */
-  protected def stopAll() {
-    coordinator.map { (c) => context.stop(c) }
+  protected def stopChildren() { // TODO: move to computation trait
+    tasklog.map { log => stop(log) }
+    tasklog = None
+    messenger.map { mgr => stop(mgr) }
+    messenger = None
+    peer.map { p => stop(p) }
+    peer = None
+    coordinator.map { c => stop(c) }
     coordinator = None
-    // TODO: messeenger
-    // syncer
   }
 
   /**
@@ -192,42 +203,30 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
    * @param task that is supplied to be executed.
    */
   def doLaunch(task: Task) { 
-    val tasklog = spawn("taskLogger%s".format(slotSeq),  
-                        classOf[TaskLogger], 
-                        hamaHome, 
-                        task.getId, 
-                        slotSeq)
-    context watch tasklog 
+    // TODO: group child actors together for management?
+    val log = spawn("taskLogger%s".format(slotSeq), classOf[TaskLogger], 
+                    hamaHome, task.getId, slotSeq)
+    context watch log 
+    tasklog = Option(log)
 
-    val messenger = spawn("messenger-"+Peer.nameFrom(setting.hama), 
-                          classOf[MessageExecutive[BSPMessageBundle[Writable]]],
-                          slotSeq, 
-                          task.getId,
-                          self, 
-                          tasklog)
-    context watch messenger
+    val mgr = spawn(MessageExecutive.simpleName(setting.hama), 
+                    classOf[MessageExecutive[BSPMessageBundle[Writable]]],
+                    slotSeq, task.getId, self, log)
+    context watch mgr 
+    messenger = Option(mgr)
 
-    val peer = spawn("syncer", 
-                     classOf[PeerClient], 
-                     setting.hama, 
-                     task.getId,
-                     CuratorBarrier(setting.hama, task.getId, task.getTotalBSPTasks),
-                     CuratorRegistrator(setting.hama),
-                     tasklog)
-    context watch peer
+    val p = spawn("syncer", classOf[PeerClient], setting.hama, task.getId,
+                  CuratorBarrier(setting.hama, task.getId, 
+                  task.getTotalBSPTasks),
+                  CuratorRegistrator(setting.hama), log)
+    context watch p 
+    peer = Option(p)
 
-/*
-    this.coordinator = Option(spawn("coordinator", 
-                                    classOf[Coordinator], 
-                                    setting.hama, 
-                                    task, 
-                                    self, 
-                                    messenger,
-                                    peer,
-                                    tasklog))
+    val c = spawn("coordinator", classOf[Coordinator], setting.hama, task, self,
+                  mgr, p, log)
 
-    this.coordinator.map { c => context watch c } 
-*/
+    context watch c 
+    coordinator = Option(c)
   }
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) {}
@@ -261,43 +260,45 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
     }
   }
 
-  def doKill(taskAttemptId: TaskAttemptID) = stopAll // TODO: any other operations?
+  def doKill(taskAttemptId: TaskAttemptID) = stopChildren // TODO: any other operations?
 
   def postKill(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = 
     from ! new KillAck(slotSeq, taskAttemptId)
 
   override def stopServices() {
-    stopAll
+    stopChildren
     super.postStop
   }
 
   /**
-   * Shutdown the system. The spawned process will be stopped as well.
-   * @return Receive is partial function.
+   * Shutdown the entire system. The spawned process will be stopped as well.
+   * @return Receive is a partial function.
    */
   def shutdownContainer: Receive = {
     case ShutdownContainer => {
       context.unwatch(taskCounsellor) 
-      LOG.info("Call context.system.shutdown ...")
-      context.system.shutdown
+      LOG.warning("Going to shutdown the entire system! ")
+      shutdown
     }
   }
+
+  protected def nameEquals(expected: Option[ActorRef], actual: ActorRef): 
+    Boolean = expected.map { e => actual.path.name.equals(e.path.name) }.
+                       getOrElse(false)
 
   /**
    * When {@link TaskCounsellor} is offline, {@link Container} will shutdown
    * itself.
-   * @param target actor is {@link Executor}
+   * @param target may be {@link TaskCounsellor}, {@link Coordinator}, etc.
    */
-  override def offline(target: ActorRef) = target.path.name match {
-    case `TaskCounsellorName` => self ! ShutdownContainer
-    // TODO: check messenger, tasklog, syncer  
-    // case `TaskLog` => self ! ShutdownContainer
-    // case `Syncer` => self ! ShutdownContainer
-    // case `Messenger` => self ! ShutdownContainer
-    case _ => LOG.warning("Unexpected actor {} is offline!", target.path.name)
-  }
+  override def offline(target: ActorRef) = 
+    if(nameEquals(Option(taskCounsellor), target) ||
+       nameEquals(tasklog, target) || nameEquals(messenger, target) ||
+       nameEquals(peer, target) || nameEquals(coordinator, target)) {
+      stop
+    } else LOG.warning("Unexpected actor {} is offline!", target.path.name)
 
-  protected def taskFinsihed: Receive = {
+  protected def taskFinished: Receive = {
     case finished: TaskFinished => taskCounsellor ! finished 
   }
 
@@ -305,6 +306,6 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
     case taskReport: Report => taskCounsellor ! taskReport 
   }
 
-  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse actorReply orElse timeout orElse superviseeOffline orElse report orElse unknown
+  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse superviseeOffline orElse taskFinished orElse report orElse unknown
 
 }
