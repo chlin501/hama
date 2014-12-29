@@ -56,8 +56,8 @@ class MockCoordinator(conf: HamaConfiguration,
                       tasklog: ActorRef, sequencer: ActorRef)
     extends Coordinator(conf, task, container, messenger, peer, tasklog) {
 
-  override def doExecute() {
-    super.doExecute
+  override def startExecute() {
+    super.startExecute
     currentSuperstep.map { (current) => {
       //LOG.info("[{}] Current superstep {}", task.getId, current.path.name)
       sequencer ! Store(current.path.name)
@@ -265,9 +265,6 @@ class TestCoordinator extends TestEnv("TestCoordinator")
 
     val sequencer2 = createWithArgs("seq-for-task2", classOf[Sequencer], taskAttemptId2.toString, tester)
     val coordinator2 = createWithArgs("coordinator2", classOf[MockCoordinator], testConfiguration, task2, container, messenger2, peer2, tasklog, sequencer2)
-   
-    coordinator1 ! Execute
-    coordinator2 ! Execute
 
     val t = 1*60*1000
     LOG.info("Waiting for {} secs before information collected ...", (t/1000d))

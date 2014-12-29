@@ -281,12 +281,12 @@ class SlotManager extends CommonLog {
     case None => LOG.error("No matched seq for slot {}!", seq)
   }
 
-  protected[groom] def numSlotsOccupied(): Int = slots.count( slot => 
-    !None.equals(slot.taskAttemptId)
-  )
-
   protected[groom] def nonBrokenSlotsOccupied(): Int = slots.count( slot => 
     !isSlotDefunct(slot.seq) && !None.equals(slot.taskAttemptId) 
+  )
+
+  protected[groom] def brokenSlot(): Int = slots.count( slot => 
+    isSlotDefunct(slot.seq)
   )
 
 }

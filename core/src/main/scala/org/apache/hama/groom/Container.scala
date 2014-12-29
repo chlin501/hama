@@ -33,7 +33,6 @@ import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Coordinator
-import org.apache.hama.bsp.v2.Execute
 import org.apache.hama.bsp.v2.InstantiationFailure 
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.v2.TaskFinished
@@ -227,10 +226,7 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
                                     peer,
                                     tasklog))
 
-    this.coordinator.map { c => 
-      c ! Execute 
-      context watch c
-    } // TODO: move Execute to initializeServices
+    this.coordinator.map { c => context watch c } 
 */
   }
 

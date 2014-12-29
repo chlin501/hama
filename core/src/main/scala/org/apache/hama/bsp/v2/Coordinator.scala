@@ -165,18 +165,12 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     settingFor(task)  
     firstSync(task)  
     configMessenger
+    startExecute
   }
 
   protected def configMessenger() = messenger ! SetCoordinator(self)
 
-  /**
-   * Entry point to start task computation. 
-   */
-  protected def execute: Receive = {
-    case Execute => doExecute
-  }
-
-  protected def doExecute() {  
+  protected def startExecute() {  
     start = System.currentTimeMillis 
     val s = System.currentTimeMillis 
     task.markTaskStarted
@@ -806,6 +800,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   override def stopServices = close
 
-  override def receive = execute orElse enter orElse inBarrier orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse nextSuperstepClass orElse variables orElse cleanupFinished orElse unknown 
+  override def receive = enter orElse inBarrier orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse nextSuperstepClass orElse variables orElse cleanupFinished orElse unknown 
   
 }

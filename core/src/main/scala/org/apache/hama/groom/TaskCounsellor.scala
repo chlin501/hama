@@ -163,8 +163,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   override def ticked(msg: Tick): Unit = msg match {
     case TaskRequest =>  
-      if((directiveQueue.size + slotManager.nonBrokenSlotsOccupied) < 
-          slotManager.maxTasksAllowed) 
+      if((directiveQueue.size + slotManager.nonBrokenSlotsOccupied +
+          slotManager.brokenSlot()) < slotManager.maxTasksAllowed) 
         groom ! RequestTask(currentGroomStats) 
     case _ => 
   }
