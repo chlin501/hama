@@ -321,28 +321,29 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   // TODO: move to ProcessManager trait?
   override def offline(from: ActorRef) = from.path.name match {
-    case name if name.contains("_executor_") => name.split("_") match{
-      case ary if (ary.size == 3) => extractSeq(ary(2), { seq => 
-        matchSlot(seq, { slot => checkIfRetry(slot, { seq => 
-          newExecutor(seq) })
-        }) 
-      })
-      case _ => LOG.error("Invalid executor name", from.path.name)
-    }
-    case name if name.contains("Container") => 
-      name.replace("Container", "") match {
-        case s if s forall Character.isDigit => extractSeq(s, { seq =>
-          matchSlot(seq, { slot => 
-            slot.taskAttemptId.map { found => 
-              groom ! TaskFailure(found, currentGroomStats) 
-            }
-            redeploy(slot)
-          })
-        })
-        case s@_ => LOG.error("Invalid container {} offline!", name)
-    }
+    case name if name.contains("_executor_") => whenExecutorOffline(name)
+    case name if name.contains("Container") => whenContainerOffline(name)
     case _ => LOG.warning("Unknown supervisee {} offline!", from.path.name)
   }
+
+  protected def whenExecutorOffline(name: String) = name.split("_") match {
+    case ary if (ary.size == 3) => extractSeq(ary(2), { seq => 
+      matchSlot(seq, { slot => checkIfRetry(slot, { seq => newExecutor(seq) })})
+    })
+    case _ => LOG.error("Invalid executor name", name)
+  }
+
+  protected def whenContainerOffline(name: String) = 
+    name.replace("Container", "") match {
+      case s if s forall Character.isDigit => extractSeq(s, { seq =>
+        matchSlot(seq, { slot => 
+          slot.taskAttemptId.map { found => 
+            groom ! TaskFailure(found, currentGroomStats) 
+          }
+          redeploy(slot)
+        })})
+      case s@_ => LOG.error("Invalid container {} offline!", name)
+    }
 
   // TODO: move to ProcessManager trait?
   protected def redeploy(slot: Slot) = 
