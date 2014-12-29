@@ -100,7 +100,7 @@ final case class TaskFinished(taskAttemptId: String) extends CoordinatorMessage
  * - <strik>io</strike>
  * - sync
  */
-// TODO: coordinator life cycle trait e.g. startExecute, whenFinished -> notify container?
+// TODO: coordinator life cycle trait e.g. startExecute, whenFinished -> notify container? etc.
 class Coordinator(conf: HamaConfiguration,  // common conf
                   task: Task,
                   container: ActorRef, 
@@ -158,8 +158,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected var clients = Map.empty[ActorMessage, ActorRef]
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
-
-  //override def configuration(): HamaConfiguration = conf
 
   override def initializeServices() {
     localize(conf)

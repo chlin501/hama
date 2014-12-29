@@ -34,8 +34,9 @@ import org.apache.hama.Periodically
 import org.apache.hama.Service
 import org.apache.hama.Spawnable
 import org.apache.hama.Tick
-import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.bsp.v2.Task
+import org.apache.hama.bsp.v2.TaskFinished
 import org.apache.hama.conf.Setting
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.master.Scheduler
@@ -429,10 +430,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       directiveQueue = rest
     }
 
-  // TODO: 1. report to master  2. update slot's task attempt id to none
-  //protected def taskFinished: Receive = {
-    //case finished: TaskFinished => 
-  //}
+  protected def taskFinished: Receive = {
+    case finished: TaskFinished => {
+      groom ! finished
+      slotManager.clearTaskAttemptId(finished.taskAttemptId)
+    }
+  }
 
   override def receive = processReady orElse tickMessage orElse messageFromCollector orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
 

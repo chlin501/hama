@@ -174,6 +174,15 @@ class SlotManager extends CommonLog {
     update(old.seq, Option(taskAttemptId), old.master, old.executor, 
            Option(container))
 
+  protected[groom] def clearTaskAttemptId(id: String) = 
+    findThenMap({ slot => 
+      slot.taskAttemptId.equals(Option(TaskAttemptID.forName(id))) 
+    })({ found => 
+      slots -= found
+      slots += Slot(found.seq, None, found.master, found.executor, 
+                    found.container)
+    })
+
   /**
    * Update container only. Leave other fields as usual.
    */

@@ -222,8 +222,8 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
     context watch p 
     peer = Option(p)
 
-    val c = spawn("coordinator", classOf[Coordinator], setting.hama, task, self,
-                  mgr, p, log)
+    val c = spawn("coordinator", classOf[Coordinator], setting.hama, slotSeq, 
+                  task, self, mgr, p, log)
 
     context watch c 
     coordinator = Option(c)

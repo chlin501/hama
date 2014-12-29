@@ -243,28 +243,44 @@ class TestCoordinator extends TestEnv("TestCoordinator")
     val taskAttemptId1 = task1.getId
     val taskAttemptId2 = task2.getId
 
-    val container = createWithArgs("container", classOf[Container], testConfiguration)
-    val tasklog = createWithArgs("tasklog", classOf[TaskLogger], "/tmp/hama/log", taskAttemptId1, true)
+    val container = createWithArgs("container", classOf[Container], 
+                                   testConfiguration)
+    val tasklog = createWithArgs("tasklog", classOf[TaskLogger], 
+                                 "/tmp/hama/log", taskAttemptId1, true)
 
     val messengerName1 = "messenger-BSPPeerSystem1"
-    val messenger1 = createWithArgs(messengerName1, classOf[MessageExecutive[Writable]], testConfiguration, 1, taskAttemptId1, container, tasklog)
+    val messenger1 = createWithArgs(messengerName1, 
+                                    classOf[MessageExecutive[Writable]], 
+                                    testConfiguration, 1, taskAttemptId1, 
+                                    container, tasklog)
 
     val messengerName2 = "messenger-BSPPeerSystem2"
-    val messenger2 = createWithArgs(messengerName2, classOf[MessageExecutive[Writable]], testConfiguration, 2, taskAttemptId2, container, tasklog)
+    val messenger2 = createWithArgs(messengerName2, 
+                                    classOf[MessageExecutive[Writable]], 
+                                    testConfiguration, 2, taskAttemptId2, 
+                                    container, tasklog)
 
     val syncer1 = CuratorBarrier(conf1, taskAttemptId1, numBSPTasks)
     val reg1 = CuratorRegistrator(conf1)
-    val peer1 = createWithArgs("peer1", classOf[PeerClient], conf1, taskAttemptId1, syncer1, reg1, tasklog) 
+    val peer1 = createWithArgs("peer1", classOf[PeerClient], conf1, 
+                               taskAttemptId1, syncer1, reg1, tasklog) 
 
     val syncer2 = CuratorBarrier(conf2, taskAttemptId2, numBSPTasks)
     val reg2 = CuratorRegistrator(conf2)
-    val peer2 = createWithArgs("peer2", classOf[PeerClient], conf2, taskAttemptId2, syncer2, reg2, tasklog) 
+    val peer2 = createWithArgs("peer2", classOf[PeerClient], conf2, 
+                               taskAttemptId2, syncer2, reg2, tasklog) 
 
-    val sequencer1 = createWithArgs("seq-for-task1", classOf[Sequencer], taskAttemptId1.toString, tester)
-    val coordinator1 = createWithArgs("coordinator1", classOf[MockCoordinator], testConfiguration, task1, container, messenger1, peer1, tasklog, sequencer1)
+    val sequencer1 = createWithArgs("seq-for-task1", classOf[Sequencer], 
+                                    taskAttemptId1.toString, tester)
+    val coordinator1 = createWithArgs("coordinator1", classOf[MockCoordinator],
+                                      testConfiguration, task1, container, 
+                                      messenger1, peer1, tasklog, sequencer1)
 
-    val sequencer2 = createWithArgs("seq-for-task2", classOf[Sequencer], taskAttemptId2.toString, tester)
-    val coordinator2 = createWithArgs("coordinator2", classOf[MockCoordinator], testConfiguration, task2, container, messenger2, peer2, tasklog, sequencer2)
+    val sequencer2 = createWithArgs("seq-for-task2", classOf[Sequencer], 
+                                    taskAttemptId2.toString, tester)
+    val coordinator2 = createWithArgs("coordinator2", classOf[MockCoordinator],
+                                      testConfiguration, task2, container, 
+                                      messenger2, peer2, tasklog, sequencer2)
 
     val t = 1*60*1000
     LOG.info("Waiting for {} secs before information collected ...", (t/1000d))
