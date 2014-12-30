@@ -42,7 +42,7 @@ final case class CollectorsAvailable(names: Array[String]) {
 object Reporter {
 
   val defaultCollectors = Seq(TaskStatsCollector.fullName,
-    classOf[GroomStatsCollector].getName, classOf[JvmStatsCollector].getName)
+    GroomStatsCollector.fullName, classOf[JvmStatsCollector].getName)
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
     "groom.reporter.name" ,
@@ -87,7 +87,7 @@ class Reporter(setting: Setting, groom: ActorRef) extends Ganglion
    */
   def report: Receive = {
     case stats: CollectedStats => findServiceBy(stats.dest).map { collector =>
-      collector forward stats // TODO: dispatch by category?
+      collector forward stats // TODO: dispatch dest by category?
     }
     case stats: Stats => groom forward stats  
     case ListService => groom forward ListService 

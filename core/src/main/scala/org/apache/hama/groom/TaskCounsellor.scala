@@ -48,6 +48,7 @@ import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.GroomStats._
 import org.apache.hama.monitor.Report
 import org.apache.hama.monitor.SlotStats
+import org.apache.hama.monitor.groom.GroomStatsCollector
 import org.apache.hama.monitor.groom.TaskStatsCollector
 import scala.collection.immutable.Queue
 import scala.util.Failure
@@ -336,8 +337,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     slotManager.book(seq, directive.task.getId, container)
   }
 
-  protected def messageFromCollector: Receive = { 
-    case GetGroomStats => sender ! currentGroomStats
+  // TODO: export in allowing collector to execute functions?
+  protected def messageFromCollector: Receive = {  
+    case GetGroomStats => sender ! CollectedStats(
+      GroomStatsCollector.fullName, currentGroomStats
+    )
   }
 
   /**
@@ -464,14 +468,13 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
   }
 
+  // TODO: change to specify dest by category?
   protected def dispatchToCollector: Receive = {
     case taskReport: Report => {
       val task = taskReport.getTask
-      reporter ! CollectedStats(TaskStatsCollector.fullName, // TODO: change to specify by category?
-                                task)
+      reporter ! CollectedStats(TaskStatsCollector.fullName, task)
     }
   }
-
 
   override def receive = dispatchToCollector orElse processReady orElse tickMessage orElse messageFromCollector orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
 

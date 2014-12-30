@@ -27,6 +27,11 @@ import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.master.GroomsTracker
 
+object GroomStatsCollector {
+
+  def fullName(): String = classOf[GroomStatsCollector].getName
+}
+
 /**
  * Report GroomServer information to GroomsTracker.
  * - free/ occupied task slots
@@ -49,7 +54,7 @@ final class GroomStatsCollector extends Collector {
 
   override def request() = retrieve(targetService, GetGroomStats)
 
-  override def statsCollected(s: Writable) = report(s)
+  override def statsCollected(stats: Writable) = report(stats)
 
   override def dest(): String = classOf[GroomsTracker].getName
 

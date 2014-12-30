@@ -70,7 +70,6 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
       cancellable = Option(tick(self, Ticker, delay = ms.millis)) 
     case CancelTick => cancellable.map { c => c.cancel } 
     case GetMetrics(service, command) => reporter ! GetMetrics(service, command)
-    case stats: GroomStats => collector.statsCollected(stats) // TODO: change GroomStats to use CollectedStats
     /** collector deleate for forwarding stats */
     case stats: Stats => reporter ! stats
     case stats: CollectedStats => collector.statsCollected(stats.data)
