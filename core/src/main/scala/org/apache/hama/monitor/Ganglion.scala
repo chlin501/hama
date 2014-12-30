@@ -70,9 +70,10 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
       cancellable = Option(tick(self, Ticker, delay = ms.millis)) 
     case CancelTick => cancellable.map { c => c.cancel } 
     case GetMetrics(service, command) => reporter ! GetMetrics(service, command)
-    case stats: GroomStats => collector.statsFound(stats)
+    case stats: GroomStats => collector.statsCollected(stats) // TODO: change GroomStats to use CollectedStats
     /** collector deleate for forwarding stats */
     case stats: Stats => reporter ! stats
+    case stats: CollectedStats => collector.statsCollected(stats.data)
   }
 
   override def receive = list orElse actions orElse tickMessage orElse unknown
@@ -221,7 +222,10 @@ trait Collector extends Probe {
     case None => throw new RuntimeException("WrappedCollector not found!")
   }
 
-  protected[monitor] def statsFound(stats: Writable) { }
+  // TODO: merge to statsCollected
+  //protected[monitor] def statsFound(stats: Writable) { }
+
+  protected[monitor] def statsCollected(stats: Writable) { }
 
   /**
    * Obtain metrics exported by a specific service.
@@ -248,8 +252,7 @@ trait Collector extends Probe {
   /**
    * Periodically perform some execution.
    */
-  protected[monitor] def request()
-
+  protected[monitor] def request() { }
 
 } 
 

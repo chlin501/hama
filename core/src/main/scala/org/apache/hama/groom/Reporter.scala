@@ -21,10 +21,11 @@ import akka.actor.ActorRef
 import org.apache.hama.LocalService
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.conf.Setting
+import org.apache.hama.monitor.CollectedStats
 import org.apache.hama.monitor.Ganglion
-import org.apache.hama.monitor.Stats
-import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.GetMetrics
+import org.apache.hama.monitor.ListService
+import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedCollector
 import org.apache.hama.monitor.groom.TaskStatsCollector
 import org.apache.hama.monitor.groom.GroomStatsCollector
@@ -40,7 +41,7 @@ final case class CollectorsAvailable(names: Array[String]) {
 
 object Reporter {
 
-  val defaultCollectors = Seq(classOf[TaskStatsCollector].getName,
+  val defaultCollectors = Seq(TaskStatsCollector.fullName,
     classOf[GroomStatsCollector].getName, classOf[JvmStatsCollector].getName)
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
@@ -79,11 +80,15 @@ class Reporter(setting: Setting, groom: ActorRef) extends Ganglion
 
   /**
    * Report functions 
+   * - forward stats collected by service to a specific collector.
    * - forward writable Stats to master.
    * - list groom server services available.
    * - request metrics from a particular service.
    */
   def report: Receive = {
+    case stats: CollectedStats => findServiceBy(stats.dest).map { collector =>
+      collector forward stats // TODO: dispatch by category?
+    }
     case stats: Stats => groom forward stats  
     case ListService => groom forward ListService 
     case request: GetMetrics => groom forward request

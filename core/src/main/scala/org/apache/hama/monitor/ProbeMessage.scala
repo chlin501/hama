@@ -28,6 +28,7 @@ import org.apache.hadoop.io.MapWritable
 import org.apache.hadoop.io.ObjectWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.bsp.v2.Task
 import org.apache.hama.groom.GroomServer
 import org.apache.hama.groom.Slot
 import org.apache.hama.conf.Setting
@@ -42,7 +43,52 @@ final case class ServicesAvailable(services: Array[String])
 final case class GetMetrics(service: String, command: Any)
       extends ProbeMessages
 final case object GetGroomStats extends ProbeMessages
-final case object GetTaskStats extends ProbeMessages
+
+object CollectedStats {
+
+  def apply(dest: String, data: Writable): CollectedStats = dest match {
+    case null | "" => 
+      throw new IllegalArgumentException("Destination (collector) is missing!")
+    case _ => data match {
+      case null => throw new IllegalArgumentException("CollectedStats is missing!")
+      case _ => new CollectedStats(dest, data)
+    }
+  }
+
+}
+
+/**
+ * CollectedStats contains statistics to be collected by a specific collector.
+ * @param d is the destination to which this stats will be sent.
+ * @param v is the stats collected.
+ */
+class CollectedStats(d: String, v: Writable) extends Writable 
+                                                with ProbeMessages {
+
+  /* collector name */
+  protected[monitor] var collector: Text = new Text(d)
+
+  /* stats data */
+  protected[monitor] var value: Writable = v
+
+  def dest(): String = collector.toString
+  def data(): Writable = value
+
+  override def readFields(in: DataInput) {
+    collector = new Text(Text.readString(in))
+    value = ObjectWritable.readObject(in, new HamaConfiguration).
+                           asInstanceOf[Writable]
+  }
+
+  override def write(out: DataOutput) {
+    collector.write(out)
+    value.write(out)
+  }
+
+  override def toString(): String = 
+    "CollectedStats("+ dest +","+ data.toString +")"
+
+}
 
 object Stats {
 
@@ -90,7 +136,6 @@ class Stats(d: String, v: Writable) extends Writable with ProbeMessages {
 
 }
 
-// TODO: change slot to slot stats with slot black list, etc.
 object GroomStats {  
 
   def apply(name: String, host: String, port: Int, maxTasks: Int,
@@ -288,6 +333,34 @@ final class SlotStats extends Writable with ProbeMessages {
         41 + slots.map { e => e.hashCode }.sum
       ) + crashCount.hashCode
     ) + maxRetries
+
+}
+
+object TaskStats {
+
+  def apply(task: Task): TaskStats = {
+    val stats = new TaskStats 
+    stats.t = task
+    stats
+  }
+  
+}
+
+final class TaskStats extends Writable with ProbeMessages {
+
+  protected[monitor] var t: Task = new Task
+
+  def task(): Task = t
+
+  @throws(classOf[IOException])
+  override def write(out: DataOutput) {
+    t.write(out)
+  }
+
+  @throws(classOf[IOException])
+  override def readFields(in: DataInput) {
+    t.readFields(in) 
+  } 
 
 }
 

@@ -24,7 +24,7 @@ import java.io.DataOutput;
 import org.apache.hadoop.io.Writable;
 import org.apache.hama.bsp.v2.Task;
 
-public class Report implements Writable { // TODO: remove?
+public class Report implements Writable { 
 
   protected Task task;
 

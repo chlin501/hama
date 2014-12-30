@@ -49,7 +49,7 @@ final class GroomStatsCollector extends Collector {
 
   override def request() = retrieve(targetService, GetGroomStats)
 
-  override def statsFound(s: Writable) = report(s)
+  override def statsCollected(s: Writable) = report(s)
 
   override def dest(): String = classOf[GroomsTracker].getName
 

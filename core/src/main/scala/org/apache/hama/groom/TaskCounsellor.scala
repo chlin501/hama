@@ -42,10 +42,13 @@ import org.apache.hama.logging.CommonLog
 import org.apache.hama.master.Scheduler
 import org.apache.hama.master.Directive
 import org.apache.hama.master.Directive.Action._
+import org.apache.hama.monitor.CollectedStats
 import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.GroomStats._
+import org.apache.hama.monitor.Report
 import org.apache.hama.monitor.SlotStats
+import org.apache.hama.monitor.groom.TaskStatsCollector
 import scala.collection.immutable.Queue
 import scala.util.Failure
 import scala.util.Success
@@ -138,6 +141,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   type RetryCount = Int
 
+  type TaskAttemptID = String
+
   override val supervisorStrategy = OneForOneStrategy() {
     case ee: ExecutorException => {
       unwatchContainerWith(ee.slotSeq)
@@ -196,8 +201,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   
   //TODO: get sysload from collector periodically.
 
+
   /** 
-   * Collect tasks information for report.
+   * Collect tasks information for reporting.
    * @return GroomServerStat contains the latest tasks statistics.
    */
   protected def currentGroomStats(): GroomStats = {
@@ -245,11 +251,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     slotManager.find[Unit]({ slot => None.equals(slot.executor) })({
       found => whenExecutorNotFound(found, d)
     })({ whenExecutorExists(d) })
-
-  // TODO: when a task finishes, coordinator in container sends finishes msg 
-  //       to task counsellor
-  //       then task counsellor updates slot taskAttemptId to None
-  //       next report to master
 
   // TODO: move to ProcessManager trait?
   protected def newExecutor(slotSeq: Int): ActorRef = { 
@@ -387,7 +388,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
         val v = retryCount + 1
         retries ++= Map(old.seq -> v)
       }
-      case Some(retryCount) if (retryCount >= maxRetries) => { // report
+      case Some(retryCount) if (retryCount >= maxRetries) => { 
         slotManager.markAsBroken(old.seq)
         retries = retries.updated(old.seq, 0)   
         if(!None.equals(old.taskAttemptId)) 
@@ -463,6 +464,15 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
   }
 
-  override def receive = processReady orElse tickMessage orElse messageFromCollector orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
+  protected def dispatchToCollector: Receive = {
+    case taskReport: Report => {
+      val task = taskReport.getTask
+      reporter ! CollectedStats(TaskStatsCollector.fullName, // TODO: change to specify by category?
+                                task)
+    }
+  }
+
+
+  override def receive = dispatchToCollector orElse processReady orElse tickMessage orElse messageFromCollector orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
 
 }
