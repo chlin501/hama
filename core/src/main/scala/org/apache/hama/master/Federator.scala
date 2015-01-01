@@ -19,14 +19,16 @@ package org.apache.hama.master
 
 import akka.actor.ActorRef
 import org.apache.hama.Agent
+import org.apache.hama.Event
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
+import org.apache.hama.ServiceEventListener
 import org.apache.hama.SubscribeEvent
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Ganglion
-//import org.apache.hama.monitor.Inform
 import org.apache.hama.monitor.ListService
+import org.apache.hama.monitor.Notification
 import org.apache.hama.monitor.ProbeMessages
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedTracker
@@ -66,7 +68,7 @@ object Federator {
 }
 
 class Federator(setting: Setting, master: ActorRef) 
-      extends Ganglion with LocalService {
+      extends Ganglion with LocalService with ServiceEventListener {
 
   import Federator._
 
@@ -144,7 +146,8 @@ class Federator(setting: Setting, master: ActorRef)
    * leaves.
    */
   protected def events: Receive = {
-    case event: GroomLeave => services.foreach( tracker => tracker ! event)
+    case groomLeave: GroomLeave => 
+      notify(GroomLeaveEvent)(Notification(groomLeave))
   } 
 
   // TODO: move validate related functions to trait JobValidator then extends it
@@ -267,6 +270,6 @@ class Federator(setting: Setting, master: ActorRef)
       case _ => e
     }}
 
-  override def receive = validate orElse events orElse dispatch orElse listTracker orElse unknown
+  override def receive = serviceEventListenerManagement orElse validate orElse events orElse dispatch orElse listTracker orElse unknown
 
 }

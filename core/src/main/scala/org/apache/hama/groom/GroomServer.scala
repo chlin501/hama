@@ -30,7 +30,6 @@ import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.ServicesAvailable
-import org.apache.hama.monitor.GetMetrics
 import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -116,22 +115,18 @@ class GroomServer(setting: Setting, finder: MasterFinder)
   protected def report: Receive = {
     case stats: Stats => forward(GroomStatsReportEvent)(stats) 
     case ListService => listServices(sender)
-    case GetMetrics(serviceName, command) => findServiceBy(serviceName).map { 
-      service => service forward command
-    }
   }
 
-  protected def dispatch: Receive = {
+  /**
+   * Forward request to master.
+   */
+  protected def escalate: Receive = {
     case req: RequestTask => forward(GroomRequestTaskEvent)(req) 
     case fault: TaskFailure => forward(GroomTaskFailureEvent)(fault)  
   }
   
   protected def listServices(from: ActorRef) = 
-    from ! ServicesAvailable(currentServices)
+    from ! ServicesAvailable(services.toArray)
 
-  protected def currentServices(): Array[String] = services.map { service => 
-    service.path.name 
-  }.toArray
-
-  override def receive = serviceEventListenerManagement orElse dispatch orElse report orElse actorReply orElse retryResult orElse membership orElse unknown
+  override def receive = serviceEventListenerManagement orElse escalate orElse report orElse actorReply orElse retryResult orElse membership orElse unknown
 }

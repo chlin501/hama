@@ -21,6 +21,8 @@ import akka.actor.ActorRef
 import akka.actor.Cancellable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Agent
+import org.apache.hama.Event
+import org.apache.hama.SubscribeEvent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Periodically
 import org.apache.hama.Tick
@@ -35,13 +37,20 @@ final case object CancelTick
 
 protected trait WrappedProbe extends Agent {
 
-  protected def listServices() { }
+  // following functions will be implemented by wrapper.
 
-  protected def servicesFound(services: Array[String]) { }
+  protected def listServices() 
 
-  protected def list: Receive = {
+  protected def servicesFound(services: Array[ActorRef]) 
+
+  protected def subscribe(events: Event*) 
+
+  // TODO: def findService(name: String)
+
+  protected def funcs: Receive = {
     case ListService => listServices()
     case ServicesAvailable(services) => servicesFound(services) 
+    case SubscribeTo(events) => subscribe(events)
   }
 
 }
@@ -62,20 +71,24 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
 
   override def listServices() = reporter ! ListService
 
-  override def servicesFound(services: Array[String]) = 
+  override def servicesFound(services: Array[ActorRef]) = 
     collector.servicesFound(services)
+
+  override def subscribe(events: Event*) = reporter ! SubscribeEvent(events:_*)
 
   def actions: Receive = {
     case StartTick(ms) => 
       cancellable = Option(tick(self, Ticker, delay = ms.millis)) 
     case CancelTick => cancellable.map { c => c.cancel } 
-    case GetMetrics(service, command) => reporter ! GetMetrics(service, command)
+    /* forward request to the target groom service. */
+    case GetMetrics(service, msg) => service forward msg 
+    /* target groom service replies stats according to GetMetrics msg. */
+    case stats: CollectedStats => collector.statsCollected(stats.data)
     /** collector deleate for forwarding stats */
     case stats: Stats => reporter ! stats
-    case stats: CollectedStats => collector.statsCollected(stats.data)
   }
 
-  override def receive = list orElse actions orElse tickMessage orElse unknown
+  override def receive = funcs orElse actions orElse tickMessage orElse unknown
 
 }
 
@@ -88,22 +101,18 @@ class WrappedTracker(federator: ActorRef, tracker: Tracker)
   }
   override def listServices() = federator ! ListService
 
-  override def servicesFound(services: Array[String]) = 
+  override def servicesFound(services: Array[ActorRef]) = 
     tracker.servicesFound(services)
 
-  def groomLeaves: Receive = {
-    case GroomLeave(name, host, port) => tracker.groomLeaves(name, host, port)
-  }
+  override def subscribe(events: Event*) = federator ! SubscribeEvent(events:_*)
 
-  def receiveStats: Receive = {
+  protected def actions: Receive = {
+    case Notification(event) => tracker.notified(event)
     case s: Stats => tracker.receive(s.data)
-  }
-
-  def askFor: Receive = {
     case action: Any => tracker.askFor(action, sender)
   }
 
-  override def receive = askFor orElse receiveStats orElse list orElse groomLeaves orElse unknown
+  override def receive = funcs orElse actions orElse unknown
 
 }
 
@@ -115,10 +124,15 @@ trait Probe extends CommonLog {
 
   protected[monitor] def listServices() = wrapper match { 
     case Some(found) => found ! ListService
-    case None => throw new RuntimeException("WrappedCollector not found!")
+    case None => throw new RuntimeException("Wrapper not found!")
   }
 
-  protected[monitor] def servicesFound(services: Array[String]) { }
+  protected[monitor] def servicesFound(services: Array[ActorRef]) { }
+
+  protected def subscribe(events: Event*) = wrapper match {
+    case Some(found) => found ! SubscribeTo(events:_*)
+    case None => throw new RuntimeException("Wrapper not found!")
+  }
 
   /**
    * The name of this probe.
@@ -144,8 +158,17 @@ trait Probe extends CommonLog {
    */
   def setConfiguration(conf: HamaConfiguration) = this.conf = conf
 
-  // TODO: close this probe?
-  // def close() 
+  /**
+   * A reference - either WrappedCollector or WrappedTracker - that wraps this
+   * probe object.
+   * @return ActorRef for this probe.  
+   */
+  protected def getSelf(): ActorRef = wrapper match {
+    case Some(found) => found 
+    case None => throw new RuntimeException("Wrapper not found!") 
+  }
+
+  // def close()  TODO: close this probe?  
 
 }
 
@@ -159,22 +182,19 @@ trait Tracker extends Probe {
    * @param action that asks tracker to perform.
    * @param from which service sends out this action.
    */
-  //protected[monitor] def askFor(action: Any, from: String) { }
   protected[monitor] def askFor(action: Any, from: ActorRef) { }
 
   /**
-   * Receive data, usually from colector.
+   * Receive data from colector.
    * @param data such as stats sent to this tracker.
    */
   protected[monitor] def receive(data: Writable) { }
 
   /**
-   * An event notifies a groom leaves the system.
-   * @param name of the groom server.
-   * @param host of the groom server.
-   * @param port used by the groom server.
+   * Notify an event happended.
+   * @param event subscribed happens.
    */
-  protected[monitor] def groomLeaves(name: String, host: String, port: Int) { }
+  protected[monitor] def notified(event: Any) { }
 
 }
 
@@ -193,7 +213,7 @@ trait Collector extends Probe {
 
   /**
    * Start periodically collect stats data.
-   */
+   */ 
   protected[monitor] def start(delay: Long = 3000) = wrapper match {  
     case Some(found) => found ! StartTick(delay)
     case None => throw new RuntimeException("WrappedCollector not found!")
@@ -212,11 +232,10 @@ trait Collector extends Probe {
   /**
    * Obtain metrics exported by a specific service.
    */
-  protected[monitor] def retrieve(service: String, command: Any) = 
-    wrapper match {
-      case Some(found) => found ! GetMetrics(service, command) 
-      case None => throw new RuntimeException("WrappedCollector not found!")
-    }
+  protected[monitor] def retrieve(service: ActorRef, msg: Any) = wrapper match {
+    case Some(found) => found ! GetMetrics(service, msg) 
+    case None => throw new RuntimeException("WrappedCollector not found!")
+  }
 
   protected[monitor] def report(value: Writable) = wrapper match {
     case Some(found) => dest match {

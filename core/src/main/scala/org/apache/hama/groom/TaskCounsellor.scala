@@ -337,11 +337,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     slotManager.book(seq, directive.task.getId, container)
   }
 
-  // TODO: export in allowing collector to execute functions?
+  // TODO: export as trait in allowing collector to execute functions?
   protected def messageFromCollector: Receive = {  
-    case GetGroomStats => sender ! CollectedStats(
-      GroomStatsCollector.fullName, currentGroomStats
-    )
+    case GetGroomStats => sender ! CollectedStats(currentGroomStats)
   }
 
   /**
@@ -469,11 +467,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   }
 
   // TODO: change to specify dest by category?
-  protected def dispatchToCollector: Receive = {
-    case taskReport: Report => {
-      val task = taskReport.getTask
-      reporter ! CollectedStats(TaskStatsCollector.fullName, task)
-    }
+  protected def dispatchToCollector: Receive = { 
+    case taskReport: Report => reporter ! taskReport
   }
 
   override def receive = dispatchToCollector orElse processReady orElse tickMessage orElse messageFromCollector orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown

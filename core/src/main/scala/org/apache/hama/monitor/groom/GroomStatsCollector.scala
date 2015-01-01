@@ -42,22 +42,25 @@ final class GroomStatsCollector extends Collector {
 
   import Collector._
 
-  private var targetService: String = ""
+  private var taskCounsellor: Option[ActorRef] = None
 
   override def initialize() = listServices
 
-  override def servicesFound(services: Array[String]) = services.find( s => 
-    s.equalsIgnoreCase(TaskCounsellor.simpleName(configuration))
+  override def servicesFound(services: Array[ActorRef]) = services.find( s => 
+    s.path.name.equalsIgnoreCase(TaskCounsellor.simpleName(configuration))
   ) match {
     case Some(found) => {
-      targetService = found
-      start() 
+      taskCounsellor = Option(found)
+      start()
     }
-    case None => LOG.warning("Service {} not available!", 
-                             TaskCounsellor.simpleName(configuration))
+    case None => LOG.error("Service {} not available!", 
+                           TaskCounsellor.simpleName(configuration))
   }
 
-  override def request() = retrieve(targetService, GetGroomStats)
+  // TODO: change to subscribe and task counsellor emit stats when things, e.g. slot update, change?
+  override def request() = taskCounsellor.map { ref => 
+    retrieve(ref, GetGroomStats) 
+  }
 
   /**
    * WrappedCollector will wrap the stats - GroomStats - into Stats object.

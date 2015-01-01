@@ -60,7 +60,7 @@ class MockGroom(setting: Setting, tester: ActorRef)
 
   override def listServices(from: ActorRef) = from.path.name match {
     case "deadLetters" => {
-      val available = currentServices
+      val available = services.toArray
       LOG.info("Request from {} asking current services available: {}", 
                from.path.name, available.mkString(", "))
       tester ! available.sorted.toSeq

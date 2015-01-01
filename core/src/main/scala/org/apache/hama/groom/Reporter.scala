@@ -18,18 +18,22 @@
 package org.apache.hama.groom
 
 import akka.actor.ActorRef
-import org.apache.hama.LocalService
+import org.apache.hama.Event
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
+import org.apache.hama.ServiceEventListener
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.CollectedStats
 import org.apache.hama.monitor.Ganglion
-import org.apache.hama.monitor.GetMetrics
 import org.apache.hama.monitor.ListService
+import org.apache.hama.monitor.Report
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedCollector
 import org.apache.hama.monitor.groom.TaskStatsCollector
 import org.apache.hama.monitor.groom.GroomStatsCollector
 import org.apache.hama.monitor.groom.JvmStatsCollector
+
+final case object TaskReportEvent extends Event
 
 final case object ListCollector
 final case class CollectorsAvailable(names: Array[String]) {
@@ -52,8 +56,8 @@ object Reporter {
 }
 
 // TODO: periodically reload probes from reporter.probe.classes?
-class Reporter(setting: Setting, groom: ActorRef) extends Ganglion 
-                                                     with LocalService {
+class Reporter(setting: Setting, groom: ActorRef) 
+      extends Ganglion with LocalService with ServiceEventListener {
 
   import Reporter._
 
@@ -80,21 +84,23 @@ class Reporter(setting: Setting, groom: ActorRef) extends Ganglion
 
   /**
    * Report functions 
-   * - forward stats collected by service to a specific collector.
    * - forward writable Stats to master.
    * - list groom server services available.
-   * - request metrics from a particular service.
    */
-  def report: Receive = {
-    case stats: CollectedStats => findServiceBy(stats.dest).map { collector =>
-      collector forward stats // TODO: dispatch dest by category?
-    }
+  protected def report: Receive = {
     case stats: Stats => groom forward stats  
     case ListService => groom forward ListService 
-    case request: GetMetrics => groom forward request
     case ListCollector => sender ! CollectorsAvailable(currentCollectors)
   }
 
-  def receive = report orElse unknown
+  /**
+   * Forward to wrapped collector.
+   */
+  protected def taskReport: Receive = {
+    case taskReport: Report => 
+      forward(TaskReportEvent)(CollectedStats(taskReport.getTask))
+  }
+
+  override def receive = serviceEventListenerManagement orElse report orElse unknown
 
 }

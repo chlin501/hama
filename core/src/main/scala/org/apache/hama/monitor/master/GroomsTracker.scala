@@ -19,6 +19,8 @@ package org.apache.hama.monitor.master
 
 import akka.actor.ActorRef
 import org.apache.hadoop.io.Writable
+import org.apache.hama.master.GroomLeave
+import org.apache.hama.master.GroomLeaveEvent
 import org.apache.hama.monitor.Tracker
 import org.apache.hama.monitor.ProbeMessages
 import org.apache.hama.monitor.GroomStats
@@ -50,7 +52,9 @@ final class GroomsTracker extends Tracker {
   /* free slots per groom */
   private var freeSlotsByGroom = Map.empty[Groom, FreeSlots] 
 
-  override def receive(stats: Writable) = stats match {
+  override def initialize() = subscribe(GroomLeaveEvent)
+
+  override def receive(stats: Writable) = stats match { 
     case stats: GroomStats => {
       update(stats)
       sumMaxTasks(stats)
@@ -76,8 +80,11 @@ final class GroomsTracker extends Tracker {
     case _ => 0 
   }.sum
 
-  override def groomLeaves(name: String, host: String, port: Int) = 
-    allStats.find( stats => 
+  /**
+   * Get notified when some events happended.
+   */
+  override def notified(event: Any) = event match {
+    case GroomLeave(name, host, port) => allStats.find( stats => 
       stats.name.equals(name) && stats.host.equals(host) && 
       stats.port.equals(port)
     ). map { stats => {
@@ -85,6 +92,8 @@ final class GroomsTracker extends Tracker {
       subMaxTasks(stats)
       subFreeSlots(stats)
     }}
+    case _ => LOG.warning("Unknown event {}!", event)
+  }
 
   private def remove(stats: GroomStats) = allStats -= stats 
 
@@ -95,6 +104,9 @@ final class GroomsTracker extends Tracker {
   private def key(stats: GroomStats): String = 
     stats.name+"_"+stats.host+"_"+stats.port
 
+  /**
+   * Response to request from servcies.
+   */
   override def askFor(action: Any, from: ActorRef) = action match {
     /**
      * Ask max task allowed of the entire groom servers.

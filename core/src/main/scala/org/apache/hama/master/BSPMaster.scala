@@ -139,11 +139,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
   }
 
   protected def listServices(from: ActorRef) = 
-    from ! ServicesAvailable(currentServices)
-
-  protected def currentServices(): Array[String] = services.map { service => 
-    service.path.name 
-  }.toArray
+    from ! ServicesAvailable(services.toArray)
 
   // TODO: move to membership director?
   protected def msgFromReceptionist: Receive = { 
