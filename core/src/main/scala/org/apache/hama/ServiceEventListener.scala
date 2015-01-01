@@ -16,39 +16,50 @@
  * limitations under the License.
  */
 package org.apache.hama
-/*
-import akka.actor.Actor
+
 import akka.actor.ActorRef
 
+/**
+ * A marker interface for event object.
+ */
+trait Event 
+
 sealed trait EventMessage
-case class SubscribeEvent(event: Event, ref: ActorRef) extends EventMessage
-case class UnsubscribeEvent(event: Event, ref: ActorRef) extends EventMessage
+/**
+ * Subscribe to listening to specific events.
+ */
+case class SubscribeEvent(events: Event*) extends EventMessage
+/**
+ * Unsubscribe to specific events.
+ */
+case class UnsubscribeEvent(events: Event*) extends EventMessage
 
-sealed trait Event
-case object ServiceReady extends Event
+trait ServiceEventListener { self: Agent => 
 
-trait ServiceEventListener { self: Actor => 
   protected var mapping = Map.empty[Event, Set[ActorRef]]
 
   protected def serviceEventListenerManagement: Receive = {
-    case SubscribeEvent(event, ref) => {
-      mapping = 
-        mapping.filter( p => event.equals(p._1)).mapValues { 
-          refs => refs + ref 
-        }
-    }
-    case UnsubscribeEvent(event, ref) => {
-      mapping =
-        mapping.filter( p => event.equals(p._1)).mapValues { 
-          refs => refs - ref 
-        }
-    }
+    case s: SubscribeEvent => s.events.foreach ( event => 
+      mapping = mapping.filter( p => event.equals(p._1)).
+                        mapValues { refs => refs + sender }
+    )
+    case us: UnsubscribeEvent => us.events.foreach( event => 
+      mapping = mapping.filter( p => event.equals(p._1)).
+                        mapValues { refs => refs - sender }
+    )
   }
 
-  protected def notify(event: Event)(message: Any): Unit = {
-    mapping.filter(p => event.equals(p._1)).values.flatten.foreach( ref => {
-      ref ! message
-    })
-  }
+  /**
+   * Notify listener with a specific message.
+   */
+  protected def notify(event: Event)(message: Any): Unit = mapping.filter( p =>
+    event.equals(p._1)).values.flatten.foreach( ref => ref ! message )
+
+  /**
+   * Forward message to a specific listener.
+   */
+  protected def forward(event: Event)(message: Any): Unit = mapping.filter( p =>
+    event.equals(p._1)).values.flatten.foreach( ref => ref forward message )
+
 }
-*/
+

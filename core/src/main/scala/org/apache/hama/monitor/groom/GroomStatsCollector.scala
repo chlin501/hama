@@ -30,6 +30,7 @@ import org.apache.hama.monitor.master.GroomsTracker
 object GroomStatsCollector {
 
   def fullName(): String = classOf[GroomStatsCollector].getName
+
 }
 
 /**
@@ -41,19 +42,26 @@ final class GroomStatsCollector extends Collector {
 
   import Collector._
 
-  val targetService = TaskCounsellor.simpleName(configuration)
+  private var targetService: String = ""
 
   override def initialize() = listServices
 
   override def servicesFound(services: Array[String]) = services.find( s => 
-    s.equalsIgnoreCase(targetService)
+    s.equalsIgnoreCase(TaskCounsellor.simpleName(configuration))
   ) match {
-    case Some(found) => start() 
-    case None => LOG.warning("Service {} not available!", targetService)
+    case Some(found) => {
+      targetService = found
+      start() 
+    }
+    case None => LOG.warning("Service {} not available!", 
+                             TaskCounsellor.simpleName(configuration))
   }
 
   override def request() = retrieve(targetService, GetGroomStats)
 
+  /**
+   * WrappedCollector will wrap the stats - GroomStats - into Stats object.
+   */
   override def statsCollected(stats: Writable) = report(stats)
 
   override def dest(): String = classOf[GroomsTracker].getName

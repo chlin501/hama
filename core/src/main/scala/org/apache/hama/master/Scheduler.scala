@@ -22,6 +22,7 @@ import akka.actor.Cancellable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.Periodically
+import org.apache.hama.SubscribeEvent
 import org.apache.hama.SystemInfo
 import org.apache.hama.Tick
 import org.apache.hama.bsp.v2.Job
@@ -82,7 +83,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
   // TODO: move the finished job to Federator's JobHistoryTracker, 
   //       where storing job's metadata e.g. setting
 
-  override def initializeServices = tick(self, NextPlease)
+  override def initializeServices = {
+    master ! SubscribeEvent(GroomLeaveEvent, RequestTaskEvent, 
+                            TaskFailureEvent)
+    LOG.debug("Listening to groom leave, request task, and task failure "+
+              "events!")
+    tick(self, NextPlease)
+  }
 
   /**
    * Check if task assign queue is empty.
@@ -188,6 +195,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
       LOG.debug("GroomServer form {} at {}:{} requests for assigning a task.", 
                 sender.path.name, req.stats.map { s => s.host}, 
                 req.stats.map { s=> s.port})
+      // TODO: make sure all active tasks are scheduled before passive assign begins
       passiveAssign(req.stats, sender)
     }
   } 
@@ -234,14 +242,19 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
     }
 
   // TODO: reschedule/ reassign tasks
-  //       if it's the target grooms that fail 
+  //       if it's the active target grooms that fail 
   //          if other target grooms has free slots, then reschdule
   //          else fail job and notify client.
   //       else wait for other groom requesting for task.
+  protected def events: Receive = {
+    case event: GroomLeave => // TODO: reschedule according to task's active grooms setting
+  }
 
   protected def taskFailure: Receive = {
-    case fault: TaskFailure => // TODO: do reschedule task 
+    case fault: TaskFailure => // TODO: reschedule the task by checking task's active groom setting.
   }
+
+  
 
   override def receive = taskFailure orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
 }

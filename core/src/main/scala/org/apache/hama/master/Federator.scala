@@ -21,10 +21,11 @@ import akka.actor.ActorRef
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
+import org.apache.hama.SubscribeEvent
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Ganglion
-import org.apache.hama.monitor.Inform
+//import org.apache.hama.monitor.Inform
 import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.ProbeMessages
 import org.apache.hama.monitor.Stats
@@ -39,6 +40,7 @@ final case class AskFor(recepiant: String, action: Any) extends ProbeMessages
 
 sealed trait FederatorMessages
 final case object ListTracker extends FederatorMessages
+
 /**
  * This tells how many trackers are currently up.
  * @param trackers are trackers loaded.
@@ -53,8 +55,8 @@ final case class TrackersAvailable(trackers: Array[String])
 
 object Federator {
 
-  val defaultTrackers = Seq(classOf[GroomsTracker].getName, 
-    classOf[JobTasksTracker].getName, classOf[JvmStatsTracker].getName)
+  val defaultTrackers = Seq(GroomsTracker.fullName, 
+    JobTasksTracker.fullName, JvmStatsTracker.fullName)
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
     "master.federator.name", 
@@ -74,6 +76,9 @@ class Federator(setting: Setting, master: ActorRef)
   protected var validation = Set.empty[Validate]
 
   override def initializeServices {
+    master ! SubscribeEvent(GroomLeaveEvent, StatsArrivalEvent)
+    LOG.debug("Listening to groom leave and stats arrival events!")
+
     val defaultClasses = defaultTrackers.mkString(",")
     load(setting.hama, defaultClasses).foreach( probe => { 
        LOG.debug("Default trakcer to be instantiated: {}", probe.name)
@@ -112,24 +117,33 @@ class Federator(setting: Setting, master: ActorRef)
     case stats: Stats => findServiceBy(stats.dest).map { tracker => 
        tracker forward stats
     }
+    /**
+     * List master services currently available.
+     */
     case ListService => master forward ListService
     /**
      * Inform master service with a particular result.
      * @param service of a master.
      * @param result to be sent to the master.
-     */
     case Inform(service, result) => inform(service, result)
+     */
   }
 
+/*
   protected def inform(service: String, result: ProbeMessages) = {
     LOG.debug("Will inform service {} with result {}", service, result)
     master forward Inform(service, result)
   }
+*/
 
   protected def askFor(recepiant: String, action: Any) =
     findServiceBy(recepiant).map { tracker => tracker forward action }
 
-  protected def groomLeaveEvent: Receive = {
+  /**
+   * Subscribe GroomLeaveEvent to BSPMaster will get notified when a groom
+   * leaves.
+   */
+  protected def events: Receive = {
     case event: GroomLeave => services.foreach( tracker => tracker ! event)
   } 
 
@@ -253,6 +267,6 @@ class Federator(setting: Setting, master: ActorRef)
       case _ => e
     }}
 
-  override def receive = validate orElse groomLeaveEvent orElse dispatch orElse listTracker orElse unknown
+  override def receive = validate orElse events orElse dispatch orElse listTracker orElse unknown
 
 }

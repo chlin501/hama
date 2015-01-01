@@ -23,6 +23,11 @@ import akka.actor.Cancellable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
 
+/**
+ * ServiceStateMachine calls for transition to next state.
+ */
+final case object Next
+
 sealed trait HamaServices
 private case class Cache(services: Set[ActorRef]) extends HamaServices
 

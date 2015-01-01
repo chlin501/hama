@@ -21,21 +21,9 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.monitor.Tracker
 import org.apache.hama.monitor.metrics.MetricsRecord
 
-final class JvmStatsTracker extends Tracker {
+object JvmStatsTracker {
 
-/*
-  type GroomName = String
-
-  private var sysMetricsStat = Set.empty[MetricsRecord]
- 
-  private def metricsRecord: Receive = {
-    case stat: MetricsRecord => {
-      sysMetricsStat ++= Set(stat)
-      LOG.debug("{} reports stat {}. Now there are {} records.", 
-                stat.getServerName, stat, sysMetricsStat.size)
-    }
-  }
-
-  override def receive = metricsRecord orElse unknown
-*/
+  def fullName(): String = classOf[JvmStatsTracker].getName
 }
+
+final class JvmStatsTracker extends Tracker 

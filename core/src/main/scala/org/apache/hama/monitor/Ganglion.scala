@@ -96,18 +96,14 @@ class WrappedTracker(federator: ActorRef, tracker: Tracker)
   }
 
   def receiveStats: Receive = {
-    case s: Stats => tracker.receive(s)
+    case s: Stats => tracker.receive(s.data)
   }
-  
+
   def askFor: Receive = {
-    case action: Any => tracker.askFor(action, sender.path.name)
+    case action: Any => tracker.askFor(action, sender)
   }
 
-  def inform: Receive = {
-    case Inform(service, result) => federator ! Inform(service, result)
-  }
-
-  override def receive = inform orElse askFor orElse receiveStats orElse list orElse groomLeaves orElse unknown
+  override def receive = askFor orElse receiveStats orElse list orElse groomLeaves orElse unknown
 
 }
 
@@ -157,24 +153,14 @@ trait Probe extends CommonLog {
  * Track specific stats from grooms and react if necessary.
  */
 trait Tracker extends Probe {
- 
-  /**
-   * Inform original service with result supplied.
-   * @param service is the target to be informed.
-   * @param result is any data sent to target service.
-   */
-  protected[monitor] def inform(service: String, 
-                                result: ProbeMessages) = wrapper match {
-    case Some(found) => found ! Inform(service, result) 
-    case None => throw new RuntimeException("WrappedTracker not found!")
-  } 
 
   /**
    * Ask tracker to perform an action.
    * @param action that asks tracker to perform.
    * @param from which service sends out this action.
    */
-  protected[monitor] def askFor(action: Any, from: String) { }
+  //protected[monitor] def askFor(action: Any, from: String) { }
+  protected[monitor] def askFor(action: Any, from: ActorRef) { }
 
   /**
    * Receive data, usually from colector.
@@ -221,9 +207,6 @@ trait Collector extends Probe {
     case None => throw new RuntimeException("WrappedCollector not found!")
   }
 
-  // TODO: merge to statsCollected
-  //protected[monitor] def statsFound(stats: Writable) { }
-
   protected[monitor] def statsCollected(stats: Writable) { }
 
   /**
@@ -237,7 +220,7 @@ trait Collector extends Probe {
 
   protected[monitor] def report(value: Writable) = wrapper match {
     case Some(found) => dest match {
-     case null | "" =>
+     case null | "" => LOG.warning("The dest of stats is unknown!")
      case _ => found ! Stats(dest, value)
     }
     case None => throw new RuntimeException("WrappedCollector not found!")

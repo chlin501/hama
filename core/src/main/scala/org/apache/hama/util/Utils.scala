@@ -27,6 +27,7 @@ import akka.util.Timeout
 import org.apache.hadoop.io.NullWritable
 import org.apache.hama.ProxyInfo
 import org.apache.hama.SystemInfo
+import org.apache.hama.logging.CommonLog
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration.DurationInt
@@ -37,7 +38,7 @@ import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 
-object Utils {
+object Utils extends CommonLog {
 
   def await[R <: Any: ClassTag](caller: ActorRef, message: Any, 
                                 defaultTimeout: FiniteDuration = 10.seconds,
@@ -77,6 +78,16 @@ object Utils {
   def nullString(): String = NullWritable.get.toString
 
   def isNullString(compared: String): Boolean = nullString.equals(compared)
+
+  def time[R](f: => R, name: String = ""): R = {
+    val start = System.nanoTime
+    val result = f
+    val end = System.nanoTime
+    val elapsed = end - start
+    LOG.debug("Execute function {} took {} secs: start from {} ended at {}.", 
+              name, (elapsed/1000000000d), start, end)
+    result
+  }
 
 }
 

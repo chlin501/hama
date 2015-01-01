@@ -17,6 +17,7 @@
  */
 package org.apache.hama.monitor.master
 
+import akka.actor.ActorRef
 import org.apache.hadoop.io.Writable
 import org.apache.hama.monitor.Tracker
 import org.apache.hama.monitor.ProbeMessages
@@ -29,8 +30,12 @@ final case class GetGroomCapacity(host: String, port: Int) extends ProbeMessages
 final case class GroomCapacity(host: String, port: Int, freeSlots: Int) 
       extends ProbeMessages
 final case class TotalMaxTasks(jobId: String, allowed: Int) 
-     
-       extends ProbeMessages
+      extends ProbeMessages
+
+object GroomsTracker {
+
+  def fullName(): String = classOf[GroomsTracker].getName
+}
 
 final class GroomsTracker extends Tracker {
 
@@ -90,11 +95,11 @@ final class GroomsTracker extends Tracker {
   private def key(stats: GroomStats): String = 
     stats.name+"_"+stats.host+"_"+stats.port
 
-  override def askFor(action: Any, from: String) = action match {
+  override def askFor(action: Any, from: ActorRef) = action match {
     /**
      * Ask max task allowed of the entire groom servers.
      */
-    case GetMaxTasks(jobId) => inform(from, TotalMaxTasks(jobId, totalMaxTasks))
+    case GetMaxTasks(jobId) => from ! TotalMaxTasks(jobId, totalMaxTasks) 
     /**
      * Check free slot capacity of a particular groom, based on host and port.  
      * @param host is the target groom server name.
@@ -103,9 +108,9 @@ final class GroomsTracker extends Tracker {
     case GetGroomCapacity(host, port) => allStats.find( stats => 
       host.equals(stats.host) && (port == stats.port)
     ) match {
-      case Some(stats) => inform(from, GroomCapacity(host, port, 
-        freeSlotsByGroom.get(key(stats)).getOrElse(0)))
-      case None => inform(from, GroomCapacity(host, port, 0))
+      case Some(stats) => from ! GroomCapacity(host, port, 
+        freeSlotsByGroom.get(key(stats)).getOrElse(0))
+      case None => from ! GroomCapacity(host, port, 0) 
     }
     case _ => LOG.warning("Unknown action {} from {}!", action, from)
   }

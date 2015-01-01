@@ -42,7 +42,7 @@ final case class CollectorsAvailable(names: Array[String]) {
 object Reporter {
 
   val defaultCollectors = Seq(TaskStatsCollector.fullName,
-    GroomStatsCollector.fullName, classOf[JvmStatsCollector].getName)
+    GroomStatsCollector.fullName, JvmStatsCollector.fullName)
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
     "groom.reporter.name" ,

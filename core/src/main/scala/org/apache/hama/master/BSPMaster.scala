@@ -21,14 +21,16 @@ import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Address
 import akka.actor.Props
+import org.apache.hama.Event
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
+import org.apache.hama.ServiceEventListener
 import org.apache.hama.SystemInfo
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
 import org.apache.hama.groom.RequestTask
 import org.apache.hama.groom.TaskFailure
-import org.apache.hama.monitor.Inform
+//import org.apache.hama.monitor.Inform
 import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.ServicesAvailable
 import org.apache.hama.monitor.Stats
@@ -38,6 +40,23 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.collection.immutable.IndexedSeq
 import scala.collection.immutable.Vector
+
+/**
+ * An event signifies that a groom is offline.
+ */
+final case object GroomLeaveEvent extends Event
+/**
+ * An event signifies that stats data from a groom server arrives.
+ */
+final case object StatsArrivalEvent extends Event
+/**
+ * An event from a groom server requesting for assigning a new task.
+ */
+final case object RequestTaskEvent extends Event
+/**
+ * An event shows that a task running on the target groom server fails.
+ */
+final case object TaskFailureEvent extends Event
 
 final case class CheckGroomsExist(jobId: BSPJobID, targetGrooms: Array[String])
 final case class AllGroomsExist(jobId: BSPJobID)
@@ -86,11 +105,11 @@ object BSPMaster {
 // TODO: - refactor FSM (perhaps remove it)
 //       - update internal stats to tracker
 class BSPMaster(setting: Setting, registrator: Registrator) 
-      extends LocalService with MembershipDirector { 
+      extends LocalService with MembershipDirector with ServiceEventListener { 
 
   import BSPMaster._
 
-  // TODO: use strategy and shutdown if any exceptions are thrown
+  // TODO: use strategy and shutdown if any exceptions are thrown?
 
   override def initializeServices {
     registrator.register
@@ -110,19 +129,12 @@ class BSPMaster(setting: Setting, registrator: Registrator)
 
   def seedNodes(): IndexedSeq[SystemInfo] = Vector(setting.info)
 
-  override def groomLeave(name: String, host: String, port: Int) = 
-    inform(GroomLeave(name, host, port), Federator.simpleName(setting.hama), 
-           Scheduler.simpleName(setting.hama))
-
-  protected def inform(message: Any, names: String*) = names.foreach( name => {
-    LOG.debug("Going to inform service {} with result {}", names.mkString(","), 
-             message)
-    findServiceBy(name).map { service => service forward message }
-  })
+  override def groomLeave(name: String, host: String, port: Int) =  
+    forward(GroomLeaveEvent)(GroomLeave(name, host, port))
 
   protected def dispatch: Receive = {
-    case Inform(service, result) => inform(result, service)
-    case stats: Stats => inform(stats, Federator.simpleName(setting.hama))
+    /* Dispatch stats, from collector, to Federator */
+    case stats: Stats => forward(StatsArrivalEvent)(stats) 
     case ListService => listServices(sender)
   }
 
@@ -181,13 +193,10 @@ class BSPMaster(setting: Setting, registrator: Registrator)
   }
 
   protected def msgFromGroom: Receive = {
-    case req: RequestTask => inform(req, Scheduler.simpleName(setting.hama))
+    case req: RequestTask => forward(RequestTaskEvent)(req) 
+    case fault: TaskFailure => forward(TaskFailureEvent)(fault)
   }
 
-  protected def taskFailure: Receive = {
-    case fault: TaskFailure => inform(fault, Scheduler.simpleName(setting.hama))
-  }
-
-  override def receive = taskFailure orElse msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
+  override def receive = serviceEventListenerManagement orElse msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
   
 }

@@ -93,6 +93,11 @@ final case class CleanupFinished(superstepClassName: String)
 final case class Spawned(superstep: Superstep, actor: ActorRef)
 final case class TaskFinished(taskAttemptId: String) extends CoordinatorMessage
 
+object Coordinator {
+
+  val emptyVariables = Map.empty[String, Writable]
+}
+
 /**
  * {@link Coordinator} is responsible for providing related services, 
  * including:
@@ -107,6 +112,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
                   messenger: ActorRef, 
                   syncClient: ActorRef,
                   tasklog: ActorRef) extends LocalService with TaskLog {
+
+  import Coordinator._
 
   type ProxyAndBundleIt = Iterator[Entry[ProxyInfo, BSPMessageBundle[Writable]]]
 
@@ -131,25 +138,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    * This is applied for check if all supersteps finish cleanup phase.
    */
   protected[v2] var cleanupCount = 0
-
-  // TODO: move to Utils.time() function
-  var start: Long = 0 
-  var start_superstep: Long = 0 
-  var finished_superstep: Long = 0 
-  var elapsed_superstep: Long = 0 
-
-  var start_enter: Long = 0
-  var finished_enter: Long = 0
-  var elapsed_enter: Long = 0
-
-  var start_in: Long = 0
-  var finished_in: Long = 0
-  var elapsed_in: Long = 0
-
-  var start_leave: Long = 0
-  var finished_leave: Long = 0
-  var elapsed_leave: Long = 0
-
+  
   /**
    * This holds messge to the asker's actor reference.
    * Once the target replies, find in cache and reply to the original target.
@@ -164,14 +153,12 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     settingFor(task)  
     firstSync(task)  
     configMessenger
-    startExecute
+    // startExecute // TODO: container will restored data from ckpt. then coordinator will be inited with restored data supplied. then coordinator will start executeFrom (superstep, variables) left in the last checkpoint.
   }
 
   protected def configMessenger() = messenger ! SetCoordinator(self)
 
   protected def startExecute() {  
-    start = System.currentTimeMillis 
-    val s = System.currentTimeMillis 
     task.markTaskStarted
     val taskConf = task.getConfiguration
     val taskAttemptId = task.getId.toString
@@ -181,11 +168,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     setupSupersteps(taskConf)
     currentSuperstep = startSuperstep
     LOG.debug("Start executing superstep {} for task {}", 
-             currentSuperstep.getOrElse(null), taskAttemptId)
-    val f = System.currentTimeMillis
-    val e = f - s
-    LOG.debug("[{}] Execute time -> Finished: {}, start: {}, elapsed: {}, "+
-             "{} secs", task.getId, f, s, e, (e/1000d) ) 
+              currentSuperstep.getOrElse(null), taskAttemptId)
   }
 
   /**
@@ -262,6 +245,14 @@ class Coordinator(conf: HamaConfiguration,  // common conf
       } 
     })  
   }
+
+  /**
+   * Execute computation logic from a specific superstep.
+   */
+  protected def executeFrom(superstepName: String,
+                            variables: Map[String, Writable] = emptyVariables): 
+    Option[ActorRef] = execute(superstepName, bspPeer, variables)
+
   protected def startSuperstep(): Option[ActorRef] =  
     execute(classOf[FirstSuperstep].getName, bspPeer, 
             Map.empty[String, Writable])
@@ -336,8 +327,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
         eventually(bspPeer) 
       }
       case clazz@_ => {
-        start_superstep = System.currentTimeMillis
-        start_enter = System.currentTimeMillis
         nextSuperstep = Option(clazz) 
         self ! Enter(task.getCurrentSuperstep) 
       }
@@ -349,11 +338,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   def cleanup(peer: BSPPeer) {  
     cleanupPhase
     whenCleanup(peer)
-    val finished = System.currentTimeMillis
-    val elapsed = finished - start
-    LOG.info("Total time spent for executing task {} => Finished: {}, "+
-             "start: {}, elapsed: {}, {} secs", task.getId, finished, start, 
-             elapsed, (elapsed/1000d)) 
   }
 
 
@@ -458,14 +442,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
 
   protected def withinBarrier(task: Task) = {
     withinBarrierPhase
-    finished_enter = System.currentTimeMillis
-    elapsed_enter = finished_enter - start_enter
-    LOG.debug("Time spent in Enter for task {} => Finished: {}, start: {}, "+
-              "elapsed: {}, {} secs", task.getId, finished_enter, start_enter, 
-              elapsed_enter, (elapsed_enter/1000d))
-    start_in = System.currentTimeMillis
     transfer
-    //getBundles()
   }
 
   /**
@@ -503,13 +480,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
  
   protected def leave: Receive = {
     case Leave(superstep) => {
-      finished_in = System.currentTimeMillis
-      elapsed_in = finished_in - start_in 
-      LOG.debug("Time spent in WithinBarrier for task {} => finished: {}, "+
-                "start: {}, elapsed: {}, {} secs", task.getId, finished_in, 
-                start_in, elapsed_in, (elapsed_in/1000d))
       barrierLeavePhase
-      start_leave = System.currentTimeMillis 
       syncClient ! Leave(superstep)
     } 
   }
@@ -522,11 +493,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def exitBarrier: Receive = {
     case ExitBarrier => {
       exitBarrierPhase
-      finished_leave = System.currentTimeMillis
-      elapsed_leave = finished_leave - start_leave
-      LOG.debug("Time spent in Leave for task {} => finished: {}, start: {},"+
-                "elapsed: {}, {} secs", task.getId, finished_leave, start_leave,
-                elapsed_leave, (elapsed_leave/1000d))
       checkpoint
       beforeNextSuperstep
     }
@@ -581,12 +547,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected def variables: Receive = {
     case Variables(variables) => nextSuperstep.map { (next) => 
-      finished_superstep = System.currentTimeMillis
-      elapsed_superstep = finished_superstep - start_superstep
-      LOG.debug("Time spent in single superstep for task {} => finished: {}, "+
-               "start: {}, elapsed: {}, {} secs", task.getId, 
-               finished_superstep, start_superstep, elapsed_superstep, 
-               (elapsed_superstep/1000d))
       beforeExecuteNext(next)
       currentSuperstep = execute(next.getName, bspPeer, variables)
       afterExecuteNext(next)

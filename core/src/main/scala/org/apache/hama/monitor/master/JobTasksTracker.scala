@@ -17,11 +17,28 @@
  */
 package org.apache.hama.monitor.master
 
+import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.monitor.Tracker
 
+object JobTasksTracker {
+
+  def fullName(): String = classOf[JobTasksTracker].getName
+
+}
+
 // TODO: notify to scheduler for each task update 
 //       or merge to scheduler?
-final class JobTasksTracker extends Tracker 
+final class JobTasksTracker extends Tracker {
+
+  private var tasks = Set.empty[Task]
+
+  override def receive(stats: Writable) = stats match {
+    case task: Task => {
+      tasks += task
+    }
+    case other@_ => LOG.warning("Unknown task stats received: {}", other) 
+  }
+
+}

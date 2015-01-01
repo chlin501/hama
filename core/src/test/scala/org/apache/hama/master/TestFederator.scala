@@ -60,6 +60,7 @@ class MockFederator(setting: Setting, master: ActorRef, tester: ActorRef)
     r
   }
 
+/*
   override def inform(service: String, result: ProbeMessages) = {
     if(result.toString.contains("TotalMaxTasks")) {
       val r = result.asInstanceOf[TotalMaxTasks]
@@ -68,6 +69,7 @@ class MockFederator(setting: Setting, master: ActorRef, tester: ActorRef)
     } else super.inform(service, result)
 
   }
+*/
 
   def getValidation: Receive = {
     case GetValidation => {

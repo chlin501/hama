@@ -47,6 +47,7 @@ object JvmStatsCollector {
 
   val M: Long = 1024*1024
 
+  def fullName(): String = classOf[JvmStatsCollector].getName
 }
 
 /**
@@ -55,7 +56,6 @@ object JvmStatsCollector {
 final class JvmStatsCollector extends Collector {
 
   import JvmStatsCollector._
-
 
   override def initialize() = start() 
 
