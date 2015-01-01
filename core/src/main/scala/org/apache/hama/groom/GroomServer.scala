@@ -20,11 +20,12 @@ package org.apache.hama.groom
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
-import akka.cluster.Member
+import org.apache.hama.Event
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
+import org.apache.hama.ServiceEventListener
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.ListService
@@ -33,6 +34,19 @@ import org.apache.hama.monitor.GetMetrics
 import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
+
+/**
+ * A groom event reporting groom stats to master.
+ */
+final case object GroomStatsReportEvent extends Event
+/**
+ * A groom event requesting a new task to master.  
+ */
+final case object GroomRequestTaskEvent extends Event
+/**
+ * A groom event reporting a task failure.
+ */
+final case object GroomTaskFailureEvent extends Event
 
 object MasterFinder {
 
@@ -84,7 +98,8 @@ object GroomServer {
 
 // TODO: service may have metrics exportable (e.g. trait Exportable#getMetrics)
 class GroomServer(setting: Setting, finder: MasterFinder) 
-      extends LocalService with RemoteService with MembershipParticipant { 
+      extends LocalService with RemoteService with MembershipParticipant 
+      with ServiceEventListener { 
 
   override def initializeServices {
     retry("lookupMaster", 10, lookupMaster)
@@ -99,19 +114,16 @@ class GroomServer(setting: Setting, finder: MasterFinder)
   override def masterFinder(): MasterFinder = finder 
 
   protected def report: Receive = {
-    case stats: Stats => forwardToMaster(stats)
+    case stats: Stats => forward(GroomStatsReportEvent)(stats) 
     case ListService => listServices(sender)
     case GetMetrics(serviceName, command) => findServiceBy(serviceName).map { 
       service => service forward command
     }
   }
 
-  protected def forwardToMaster(msg: Any): Unit = master.map { m => 
-    findProxyBy(m.getActorName).map { proxy => proxy forward msg }
-  }
-
   protected def dispatch: Receive = {
-    case req: RequestTask => forwardToMaster(req)
+    case req: RequestTask => forward(GroomRequestTaskEvent)(req) 
+    case fault: TaskFailure => forward(GroomTaskFailureEvent)(fault)  
   }
   
   protected def listServices(from: ActorRef) = 
@@ -121,9 +133,5 @@ class GroomServer(setting: Setting, finder: MasterFinder)
     service.path.name 
   }.toArray
 
-  protected def taskFailure: Receive = {
-    case fault: TaskFailure => forwardToMaster(fault)  
-  }
-
-  override def receive = taskFailure orElse dispatch orElse report orElse actorReply orElse retryResult orElse membership orElse unknown
+  override def receive = serviceEventListenerManagement orElse dispatch orElse report orElse actorReply orElse retryResult orElse membership orElse unknown
 }

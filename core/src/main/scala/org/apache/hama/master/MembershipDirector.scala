@@ -26,8 +26,12 @@ import akka.cluster.ClusterEvent.MemberRemoved
 import akka.cluster.ClusterEvent.MemberEvent
 import org.apache.hama.Agent
 import org.apache.hama.Membership
+import org.apache.hama.SubscribeEvent
 import org.apache.hama.SystemInfo
+import org.apache.hama.groom.GroomStatsReportEvent
 import org.apache.hama.groom.GroomRegistration
+import org.apache.hama.groom.GroomRequestTaskEvent
+import org.apache.hama.groom.GroomTaskFailureEvent
 import org.apache.hama.util.Utils._
 import scala.collection.immutable.IndexedSeq
 
@@ -41,10 +45,9 @@ trait MembershipDirector extends Membership with Agent {
   protected var grooms = Set.empty[ActorRef]
 
   override def join(nodes: IndexedSeq[SystemInfo]) = cluster.joinSeedNodes(
-    nodes.map { (info) => {
-      Address(info.getProtocol.toString, info.getActorSystemName, info.getHost,
-              info.getPort)
-    }}
+    nodes.map { info => Address(info.getProtocol.toString, 
+                                info.getActorSystemName, info.getHost, 
+                                info.getPort) }
   )
 
   override def subscribe(stakeholder: ActorRef) =
@@ -60,13 +63,20 @@ trait MembershipDirector extends Membership with Agent {
     case event: MemberEvent => memberEvent(event)
   }
 
+  /**
+   * A groom server enrolls.
+   */
   protected def enroll(participant: ActorRef) = {
-    LOG.info("{} enrolls!", participant.path.name)
     val groomName = participant.path.name
     val groomHost = participant.path.address.host.getOrElse(null)
     val groomPort = participant.path.address.port.getOrElse(-1)
     groomJoin(groomName, groomHost, groomPort) 
-    grooms ++= Set(participant)
+    grooms += participant
+    LOG.info("Groom server {} enrolls!", participant.path.name)
+    participant ! SubscribeEvent(GroomStatsReportEvent, GroomRequestTaskEvent,
+                                 GroomTaskFailureEvent)
+    LOG.debug("Listening to groom stats report, groom request task, and "+
+              "groom task failure events!") 
   }
 
   protected def groomJoin(name: String, host: String, port: Int) { }

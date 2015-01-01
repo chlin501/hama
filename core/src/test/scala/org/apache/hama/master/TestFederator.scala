@@ -60,7 +60,7 @@ class MockFederator(setting: Setting, master: ActorRef, tester: ActorRef)
     r
   }
 
-/*
+/* TODO: this func is replaced by service event listener.
   override def inform(service: String, result: ProbeMessages) = {
     if(result.toString.contains("TotalMaxTasks")) {
       val r = result.asInstanceOf[TotalMaxTasks]

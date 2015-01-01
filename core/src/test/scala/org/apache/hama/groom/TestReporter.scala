@@ -76,6 +76,7 @@ class MockGroom(setting: Setting, tester: ActorRef)
       }
   }
 
+/* TODO: this func is replaced by service event listener 
   override def forwardToMaster(msg: Any): Unit = msg match {
     case stats: Stats => stats.dest match {
       case GTracker => stats.data.toString match {
@@ -91,6 +92,7 @@ class MockGroom(setting: Setting, tester: ActorRef)
     }
     case _ => super.forwardToMaster(msg)
   }
+*/
 
   def forwardStatsData: Receive = {
     case ForwardStats(stats) => 
