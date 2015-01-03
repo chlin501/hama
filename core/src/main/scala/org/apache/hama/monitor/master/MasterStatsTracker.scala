@@ -26,5 +26,5 @@ final class MasterStatsTracker extends Tracker
 final class JobHistoryTracker extends Tracker
 
 // TODO: checkpoint integrity of a job.
-final class CheckpointTracker extends Tracker
+final class CheckpointIntergrator extends Tracker
 

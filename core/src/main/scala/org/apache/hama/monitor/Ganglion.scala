@@ -112,6 +112,7 @@ class WrappedTracker(federator: ActorRef, tracker: Tracker)
     tracker.wrapper = Option(self)
     tracker.initialize
   }
+
   override def listServices() = federator ! ListService
 
   override def servicesFound(services: Array[ActorRef]) = 

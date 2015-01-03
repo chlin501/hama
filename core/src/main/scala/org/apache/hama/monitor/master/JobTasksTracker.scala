@@ -34,11 +34,22 @@ final class JobTasksTracker extends Tracker {
 
   private var tasks = Set.empty[Task]
 
+  private var currentSuperstep = 0
+
   override def receive(stats: Writable) = stats match {
     case task: Task => {
       tasks += task
+      val totalTasks = task.getTotalBSPTasks
+      if(totalTasks == tasks.size && isNextSuperstep(totalTasks)) {
+        currentSuperstep += 1
+        //publish(SuperspteIncrementEvent,  TODO: add publish functions
+                //SupestepIncrement(task.getId, task.getCurrentSuperstep))
+      }
     }
     case other@_ => LOG.warning("Unknown task stats received: {}", other) 
   }
+
+  private def isNextSuperstep(totalTasks: Int): Boolean = tasks.count { t => 
+    t.getCurrentSuperstep == (currentSuperstep + 1) } == totalTasks
 
 }
