@@ -122,6 +122,7 @@ object SlotManager {
   }
 }
 
+// TODO: cleanup for simpler api? 
 class SlotManager extends CommonLog {
 
   import Slot._

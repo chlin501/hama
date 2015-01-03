@@ -55,7 +55,7 @@ import org.apache.hama.message.TransferredState
 import org.apache.hama.monitor.Checkpointer
 import org.apache.hama.monitor.GetLocalQueueMsgs
 import org.apache.hama.monitor.GetMapVarNextClass
-import org.apache.hama.monitor.Report
+import org.apache.hama.monitor.Publish
 import org.apache.hama.sync.AllPeerNames
 import org.apache.hama.sync.PeerClientMessage
 import org.apache.hama.sync.Enter
@@ -693,66 +693,66 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   // task phase switch
   protected def setupPhase() = {
     task.setupPhase
-    report
+    publish
   }
 
   protected def computePhase() = {
     task.computePhase
-    report
+    publish
   }
 
   protected def barrierEnterPhase() = {
     task.barrierEnterPhase
-    report
+    publish
   }
 
   protected def withinBarrierPhase() = {
     task.withinBarrierPhase
-    report
+    publish
   }
 
   protected def barrierLeavePhase() = {
     task.barrierLeavePhase
-    report
+    publish
   }
 
   protected def exitBarrierPhase() = {
     task.exitBarrierPhase
-    report
+    publish
   }
 
   protected def cleanupPhase() = {
     task.cleanupPhase
-    report
+    publish
   }
 
   // task state
   protected def waitingState() = {
     task.waitingState
-    report
+    publish
   }
 
   protected def runningState() = {
     task.runningState
-    report
+    publish
   }
 
   protected def succeedState() = {
     task.succeedState
-    report
+    publish
   }
 
   protected def failedState() = {
     task.failedState
-    report
+    publish
   }
 
   protected def cancelledState() = {
     task.cancelledState
-    report
+    publish
   }
 
-  protected def report() = container ! new Report(task.newTask)
+  protected def publish() = container ! Publish(task.newTask)
 
   /**
    * Close all services after this actor is stopped.

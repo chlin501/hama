@@ -46,7 +46,7 @@ import org.apache.hama.monitor.CollectedStats
 import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.GroomStats._
-import org.apache.hama.monitor.Report
+import org.apache.hama.monitor.Publish
 import org.apache.hama.monitor.SlotStats
 import org.apache.hama.monitor.groom.GroomStatsCollector
 import org.apache.hama.monitor.groom.TaskStatsCollector
@@ -338,7 +338,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   }
 
   // TODO: export as trait in allowing collector to execute functions?
-  protected def messageFromCollector: Receive = {  
+  protected def collectorMsgs: Receive = {  
+    case pub: Publish => reporter ! pub 
     case GetGroomStats => sender ! CollectedStats(currentGroomStats)
   }
 
@@ -459,18 +460,13 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       directiveQueue = rest
     }
 
-  protected def taskFinished: Receive = {
+  protected def escalate: Receive = {
     case finished: TaskFinished => {
       groom ! finished
       slotManager.clearTaskAttemptId(finished.taskAttemptId)
     }
   }
 
-  // TODO: change to specify dest by category?
-  protected def dispatchToCollector: Receive = { 
-    case taskReport: Report => reporter ! taskReport
-  }
-
-  override def receive = dispatchToCollector orElse processReady orElse tickMessage orElse messageFromCollector orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
+  override def receive = escalate orElse collectorMsgs orElse processReady orElse tickMessage orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
 
 }

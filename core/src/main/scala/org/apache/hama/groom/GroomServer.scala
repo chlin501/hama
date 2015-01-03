@@ -30,6 +30,8 @@ import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.ServicesAvailable
+import org.apache.hama.monitor.FindServiceBy
+import org.apache.hama.monitor.ServiceAvailable
 import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -115,6 +117,7 @@ class GroomServer(setting: Setting, finder: MasterFinder)
   protected def report: Receive = {
     case stats: Stats => forward(GroomStatsReportEvent)(stats) 
     case ListService => listServices(sender)
+    case FindServiceBy(name) => sender ! ServiceAvailable(findServiceBy(name))
   }
 
   /**

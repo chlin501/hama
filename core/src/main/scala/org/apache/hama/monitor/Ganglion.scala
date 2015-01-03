@@ -43,14 +43,21 @@ protected trait WrappedProbe extends Agent {
 
   protected def servicesFound(services: Array[ActorRef]) 
 
-  protected def subscribe(events: Event*) 
+  protected def findServiceBy(name: String)
 
-  // TODO: def findService(name: String)
+  protected def serviceFound(service: ActorRef) 
+
+  protected def subscribe(events: Event*) 
+  
+  protected def notified(result: Any) 
 
   protected def funcs: Receive = {
     case ListService => listServices()
     case ServicesAvailable(services) => servicesFound(services) 
+    case FindServiceBy(name) => findServiceBy(name)
+    case ServiceAvailable(service) => serviceFound(service.getOrElse(null)) 
     case SubscribeTo(events) => subscribe(events)
+    case Notification(result) => notified(result)
   }
 
 }
@@ -74,7 +81,13 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
   override def servicesFound(services: Array[ActorRef]) = 
     collector.servicesFound(services)
 
+  override def findServiceBy(name: String) = reporter ! FindServiceBy(name)
+
+  override def serviceFound(service: ActorRef) = collector.serviceFound(service)
+
   override def subscribe(events: Event*) = reporter ! SubscribeEvent(events:_*)
+
+  override def notified(result: Any) = collector.notified(result) 
 
   def actions: Receive = {
     case StartTick(ms) => 
@@ -83,8 +96,8 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
     /* forward request to the target groom service. */
     case GetMetrics(service, msg) => service forward msg 
     /* target groom service replies stats according to GetMetrics msg. */
-    case stats: CollectedStats => collector.statsCollected(stats.data)
-    /** collector deleate for forwarding stats */
+    case stats: CollectedStats => collector.statsCollected(stats.data) 
+    /** collector delegate for forwarding stats */
     case stats: Stats => reporter ! stats
   }
 
@@ -104,10 +117,15 @@ class WrappedTracker(federator: ActorRef, tracker: Tracker)
   override def servicesFound(services: Array[ActorRef]) = 
     tracker.servicesFound(services)
 
+  override def findServiceBy(name: String) = federator ! FindServiceBy(name)
+
+  override def serviceFound(service: ActorRef) = tracker.serviceFound(service)
+
   override def subscribe(events: Event*) = federator ! SubscribeEvent(events:_*)
 
+  override def notified(result: Any) = tracker.notified(result) 
+
   protected def actions: Receive = {
-    case Notification(event) => tracker.notified(event)
     case s: Stats => tracker.receive(s.data)
     case action: Any => tracker.askFor(action, sender)
   }
@@ -129,10 +147,23 @@ trait Probe extends CommonLog {
 
   protected[monitor] def servicesFound(services: Array[ActorRef]) { }
 
-  protected def subscribe(events: Event*) = wrapper match {
+  protected[monitor] def findServiceBy(name: String) = wrapper match { 
+    case Some(found) => found ! FindServiceBy(name)
+    case None => throw new RuntimeException("Wrapper not found!")
+  }
+
+  protected[monitor] def serviceFound(service: ActorRef) { }
+
+  protected[monitor] def subscribe(events: Event*) = wrapper match {
     case Some(found) => found ! SubscribeTo(events:_*)
     case None => throw new RuntimeException("Wrapper not found!")
   }
+
+  /**
+   * Notify when the event subscribed happens.
+   * @param result being notified
+   */
+  protected[monitor] def notified(result: Any) { } 
 
   /**
    * The name of this probe.
@@ -156,7 +187,8 @@ trait Probe extends CommonLog {
    * @param conf is common configuration updating one held by this probe
    *             during instantiation. 
    */
-  def setConfiguration(conf: HamaConfiguration) = this.conf = conf
+  protected[monitor] def setConfiguration(conf: HamaConfiguration) = 
+    this.conf = conf
 
   /**
    * A reference - either WrappedCollector or WrappedTracker - that wraps this
@@ -190,11 +222,6 @@ trait Tracker extends Probe {
    */
   protected[monitor] def receive(data: Writable) { }
 
-  /**
-   * Notify an event happended.
-   * @param event subscribed happens.
-   */
-  protected[monitor] def notified(event: Any) { }
 
 }
 

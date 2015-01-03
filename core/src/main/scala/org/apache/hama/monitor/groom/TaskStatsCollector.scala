@@ -18,8 +18,8 @@
 package org.apache.hama.monitor.groom
 
 import org.apache.hadoop.io.Writable
-import org.apache.hama.HamaConfiguration
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.groom.PublishEvent
 import org.apache.hama.monitor.Collector
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.master.JobTasksTracker
@@ -39,13 +39,15 @@ final class TaskStatsCollector extends Collector {
 
   private var tasks = Set.empty[Task] 
 
-  override def statsCollected(w: Writable) = w match {
+  override def initialize() = subscribe(PublishEvent)
+
+  override def notified(w: Any) = w match {
     case task: Task => {
       tasks += task
       report(Stats(dest, task))
     }
-    case _ => LOG.info("Unknokwn stats {} collected!", w)
+    case _ => LOG.warning("Unknokwn stats {} collected!", w)
   }
 
-  override def dest(): String = classOf[JobTasksTracker].getName
+  override def dest(): String = JobTasksTracker.fullName
 }

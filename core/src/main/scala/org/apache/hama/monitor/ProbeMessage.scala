@@ -38,10 +38,13 @@ import org.apache.hama.util.Utils._
 import scala.collection.immutable.Queue
 
 trait ProbeMessages
-final case class Notification(event: Any) extends ProbeMessages
+final case class Notification(result: Any) extends ProbeMessages
 final case object EmptyProbeMessages extends ProbeMessages
 final case object ListService extends ProbeMessages
 final case class ServicesAvailable(services: Array[ActorRef])
+      extends ProbeMessages
+final case class FindServiceBy(name: String) extends ProbeMessages
+final case class ServiceAvailable(service: Option[ActorRef]) 
       extends ProbeMessages
 final case class SubscribeTo(events: Event*) extends ProbeMessages
 final case class GetMetrics(service: ActorRef, msg: Any) extends ProbeMessages
@@ -355,5 +358,30 @@ final class TaskStats extends Writable with ProbeMessages {
 
 }
 
-final case class Inform(service: String, result: ProbeMessages) 
-      extends ProbeMessages
+object Publish {
+
+  def apply(task: Task): Publish = {
+    val pub = new Publish 
+    pub.t = task
+    pub
+  }
+  
+}
+
+final class Publish extends Writable with ProbeMessages {
+
+  protected[monitor] var t: Task = new Task
+
+  def task(): Task = t
+
+  @throws(classOf[IOException])
+  override def write(out: DataOutput) {
+    t.write(out)
+  }
+
+  @throws(classOf[IOException])
+  override def readFields(in: DataInput) {
+    t.readFields(in) 
+  } 
+
+}

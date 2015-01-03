@@ -24,16 +24,18 @@ import org.apache.hama.LocalService
 import org.apache.hama.ServiceEventListener
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.CollectedStats
+import org.apache.hama.monitor.FindServiceBy
 import org.apache.hama.monitor.Ganglion
 import org.apache.hama.monitor.ListService
-import org.apache.hama.monitor.Report
+import org.apache.hama.monitor.Notification
+import org.apache.hama.monitor.Publish
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedCollector
 import org.apache.hama.monitor.groom.TaskStatsCollector
 import org.apache.hama.monitor.groom.GroomStatsCollector
 import org.apache.hama.monitor.groom.JvmStatsCollector
 
-final case object TaskReportEvent extends Event
+final case object PublishEvent extends Event
 
 final case object ListCollector
 final case class CollectorsAvailable(names: Array[String]) {
@@ -90,17 +92,17 @@ class Reporter(setting: Setting, groom: ActorRef)
   protected def report: Receive = {
     case stats: Stats => groom forward stats  
     case ListService => groom forward ListService 
+    case req: FindServiceBy => groom forward req 
     case ListCollector => sender ! CollectorsAvailable(currentCollectors)
   }
 
   /**
    * Forward to wrapped collector.
    */
-  protected def taskReport: Receive = {
-    case taskReport: Report => 
-      forward(TaskReportEvent)(CollectedStats(taskReport.getTask))
+  protected def publish: Receive = {
+    case pub: Publish => forward(PublishEvent)(Notification(pub.task))
   }
 
-  override def receive = serviceEventListenerManagement orElse report orElse unknown
+  override def receive = serviceEventListenerManagement orElse publish orElse report orElse unknown
 
 }

@@ -40,7 +40,6 @@ import org.apache.hama.Service
 import org.apache.hama.Spawnable
 import org.apache.hama.conf.Setting
 import org.apache.hama.fs.Operation
-import org.apache.hama.monitor.Report
 import org.apache.hama.util.BSPNetUtils
 import scala.collection.immutable.Queue
 import scala.collection.JavaConversions._

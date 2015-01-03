@@ -30,8 +30,9 @@ import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
 import org.apache.hama.groom.RequestTask
 import org.apache.hama.groom.TaskFailure
-//import org.apache.hama.monitor.Inform
+import org.apache.hama.monitor.FindServiceBy
 import org.apache.hama.monitor.ListService
+import org.apache.hama.monitor.ServiceAvailable
 import org.apache.hama.monitor.ServicesAvailable
 import org.apache.hama.monitor.Stats
 import org.apache.hama.util.Curator
@@ -136,6 +137,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     /* Dispatch stats, from collector, to Federator */
     case stats: Stats => forward(StatsArrivalEvent)(stats) 
     case ListService => listServices(sender)
+    case FindServiceBy(name) => sender ! ServiceAvailable(findServiceBy(name))
   }
 
   protected def listServices(from: ActorRef) = 

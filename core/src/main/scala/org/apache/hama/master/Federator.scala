@@ -26,6 +26,7 @@ import org.apache.hama.ServiceEventListener
 import org.apache.hama.SubscribeEvent
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
+import org.apache.hama.monitor.FindServiceBy
 import org.apache.hama.monitor.Ganglion
 import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.Notification
@@ -123,20 +124,8 @@ class Federator(setting: Setting, master: ActorRef)
      * List master services currently available.
      */
     case ListService => master forward ListService
-    /**
-     * Inform master service with a particular result.
-     * @param service of a master.
-     * @param result to be sent to the master.
-    case Inform(service, result) => inform(service, result)
-     */
+    case req: FindServiceBy => master forward req 
   }
-
-/*
-  protected def inform(service: String, result: ProbeMessages) = {
-    LOG.debug("Will inform service {} with result {}", service, result)
-    master forward Inform(service, result)
-  }
-*/
 
   protected def askFor(recepiant: String, action: Any) =
     findServiceBy(recepiant).map { tracker => tracker forward action }
