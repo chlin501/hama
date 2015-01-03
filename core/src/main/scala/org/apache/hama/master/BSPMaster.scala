@@ -24,7 +24,7 @@ import akka.actor.Props
 import org.apache.hama.Event
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
-import org.apache.hama.ServiceEventListener
+import org.apache.hama.EventListener
 import org.apache.hama.SystemInfo
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
@@ -106,7 +106,7 @@ object BSPMaster {
 // TODO: - refactor FSM (perhaps remove it)
 //       - update internal stats to tracker
 class BSPMaster(setting: Setting, registrator: Registrator) 
-      extends LocalService with MembershipDirector with ServiceEventListener { 
+      extends LocalService with MembershipDirector with EventListener { 
 
   import BSPMaster._
 
@@ -195,6 +195,6 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     case fault: TaskFailure => forward(TaskFailureEvent)(fault)
   }
 
-  override def receive = serviceEventListenerManagement orElse msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
+  override def receive = eventListenerManagement orElse msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
   
 }

@@ -21,7 +21,7 @@ import akka.actor.ActorRef
 import org.apache.hama.Event
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
-import org.apache.hama.ServiceEventListener
+import org.apache.hama.EventListener
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.CollectedStats
 import org.apache.hama.monitor.FindServiceBy
@@ -59,7 +59,7 @@ object Reporter {
 
 // TODO: periodically reload probes from reporter.probe.classes?
 class Reporter(setting: Setting, groom: ActorRef) 
-      extends Ganglion with LocalService with ServiceEventListener {
+      extends Ganglion with LocalService with EventListener {
 
   import Reporter._
 
@@ -103,6 +103,6 @@ class Reporter(setting: Setting, groom: ActorRef)
     case pub: Publish => forward(PublishEvent)(Notification(pub.task))
   }
 
-  override def receive = serviceEventListenerManagement orElse publish orElse report orElse unknown
+  override def receive = eventListenerManagement orElse publish orElse report orElse unknown
 
 }

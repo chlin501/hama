@@ -25,7 +25,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
-import org.apache.hama.ServiceEventListener
+import org.apache.hama.EventListener
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.ListService
@@ -100,7 +100,7 @@ object GroomServer {
 // TODO: service may have metrics exportable (e.g. trait Exportable#getMetrics)
 class GroomServer(setting: Setting, finder: MasterFinder) 
       extends LocalService with RemoteService with MembershipParticipant 
-      with ServiceEventListener { 
+      with EventListener { 
 
   override def initializeServices {
     retry("lookupMaster", 10, lookupMaster)
@@ -131,5 +131,5 @@ class GroomServer(setting: Setting, finder: MasterFinder)
   protected def listServices(from: ActorRef) = 
     from ! ServicesAvailable(services.toArray)
 
-  override def receive = serviceEventListenerManagement orElse escalate orElse report orElse actorReply orElse retryResult orElse membership orElse unknown
+  override def receive = eventListenerManagement orElse escalate orElse report orElse actorReply orElse retryResult orElse membership orElse unknown
 }

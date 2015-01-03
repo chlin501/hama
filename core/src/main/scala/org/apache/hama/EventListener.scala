@@ -34,11 +34,11 @@ case class SubscribeEvent(events: Event*) extends EventMessage
  */
 case class UnsubscribeEvent(events: Event*) extends EventMessage
 
-trait ServiceEventListener { self: Agent => 
+trait EventListener { self: Agent => 
 
   protected var mapping = Map.empty[Event, Set[ActorRef]]
 
-  protected def serviceEventListenerManagement: Receive = {
+  protected def eventListenerManagement: Receive = {
     case s: SubscribeEvent => s.events.foreach ( event => 
       mapping = mapping.filter( p => event.equals(p._1)).
                         mapValues { refs => refs + sender }

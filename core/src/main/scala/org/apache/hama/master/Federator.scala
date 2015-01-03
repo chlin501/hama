@@ -22,7 +22,7 @@ import org.apache.hama.Agent
 import org.apache.hama.Event
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
-import org.apache.hama.ServiceEventListener
+import org.apache.hama.EventListener
 import org.apache.hama.SubscribeEvent
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
@@ -69,7 +69,7 @@ object Federator {
 }
 
 class Federator(setting: Setting, master: ActorRef) 
-      extends Ganglion with LocalService with ServiceEventListener {
+      extends Ganglion with LocalService with EventListener {
 
   import Federator._
 
@@ -259,6 +259,6 @@ class Federator(setting: Setting, master: ActorRef)
       case _ => e
     }}
 
-  override def receive = serviceEventListenerManagement orElse validate orElse events orElse dispatch orElse listTracker orElse unknown
+  override def receive = eventListenerManagement orElse validate orElse events orElse dispatch orElse listTracker orElse unknown
 
 }
