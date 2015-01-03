@@ -42,7 +42,7 @@ import org.apache.hama.logging.TaskLogger
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.MessageExecutive
 import org.apache.hama.message.Peer
-import org.apache.hama.monitor.Publish
+import org.apache.hama.monitor.TaskReport
 import org.apache.hama.sync.CuratorBarrier
 import org.apache.hama.sync.CuratorRegistrator
 import org.apache.hama.sync.PeerClient
@@ -302,10 +302,10 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
     case finished: TaskFinished => taskCounsellor ! finished 
   }
 
-  protected def report: Receive = {
-    case pub: Publish => taskCounsellor ! pub 
+  protected def taskReport: Receive = {
+    case taskReport: TaskReport => taskCounsellor ! taskReport 
   }
 
-  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse superviseeOffline orElse taskFinished orElse report orElse unknown
+  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse superviseeOffline orElse taskFinished orElse taskReport orElse unknown
 
 }

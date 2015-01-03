@@ -358,17 +358,17 @@ final class TaskStats extends Writable with ProbeMessages {
 
 }
 
-object Publish {
+object TaskReport {
 
-  def apply(task: Task): Publish = {
-    val pub = new Publish 
-    pub.t = task
-    pub
+  def apply(task: Task): TaskReport = {
+    val taskReport = new TaskReport 
+    taskReport.t = task
+    taskReport
   }
   
 }
 
-final class Publish extends Writable with ProbeMessages {
+final class TaskReport extends Writable with ProbeMessages {
 
   protected[monitor] var t: Task = new Task
 

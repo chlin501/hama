@@ -19,7 +19,7 @@ package org.apache.hama.monitor.groom
 
 import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.groom.PublishEvent
+import org.apache.hama.groom.TaskReportEvent
 import org.apache.hama.monitor.Collector
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.master.JobTasksTracker
@@ -39,7 +39,7 @@ final class TaskStatsCollector extends Collector {
 
   private var tasks = Set.empty[Task] 
 
-  override def initialize() = subscribe(PublishEvent)
+  override def initialize() = subscribe(TaskReportEvent)
 
   override def notified(w: Any) = w match {
     case task: Task => {

@@ -46,7 +46,7 @@ import org.apache.hama.monitor.CollectedStats
 import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.GroomStats._
-import org.apache.hama.monitor.Publish
+import org.apache.hama.monitor.TaskReport
 import org.apache.hama.monitor.SlotStats
 import org.apache.hama.monitor.groom.GroomStatsCollector
 import org.apache.hama.monitor.groom.TaskStatsCollector
@@ -339,7 +339,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   // TODO: export as trait in allowing collector to execute functions?
   protected def collectorMsgs: Receive = {  
-    case pub: Publish => reporter ! pub 
+    case taskReport: TaskReport => reporter ! taskReport 
     case GetGroomStats => sender ! CollectedStats(currentGroomStats)
   }
 
