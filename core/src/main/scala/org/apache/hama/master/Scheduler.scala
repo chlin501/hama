@@ -37,13 +37,13 @@ import org.apache.hama.master.Directive.Action.Resume
 import org.apache.hama.monitor.GroomStats
 import scala.collection.immutable.Queue
 
-sealed trait SchedulerMessages
-final case object NextPlease extends SchedulerMessages with Tick
+sealed trait SchedulerMessage
+final case object NextPlease extends SchedulerMessage with Tick
 final case class GetTargetRefs(infos: Array[SystemInfo]) 
-      extends SchedulerMessages
-final case class TargetRefs(refs: Array[ActorRef]) extends SchedulerMessages
+      extends SchedulerMessage
+final case class TargetRefs(refs: Array[ActorRef]) extends SchedulerMessage
 final case class SomeMatched(matched: Array[ActorRef],
-                             unmatched: Array[String]) extends SchedulerMessages
+                             unmatched: Array[String]) extends SchedulerMessage
 
 object Scheduler {
 

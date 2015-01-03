@@ -49,9 +49,16 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
-trait ExecutorMessages
+sealed trait ExecutorMessage
 final case class Instances(process: Process, stdout: ActorRef, 
-                           stderr: ActorRef) extends ExecutorMessages
+                           stderr: ActorRef) extends ExecutorMessage
+
+/**
+ * {@link TaskCounsellor} notifies {@link Executor} to stop
+ * {@link Container}.
+private[groom] final case object StopProcess extends ExecutorMessage
+ */
+
 
 sealed trait ExecutorException extends RuntimeException {
 

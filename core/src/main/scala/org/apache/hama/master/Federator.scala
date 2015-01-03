@@ -42,15 +42,15 @@ import org.apache.hama.monitor.master.TotalMaxTasks
 
 final case class AskFor(recepiant: String, action: Any) extends ProbeMessage
 
-sealed trait FederatorMessages
-final case object ListTracker extends FederatorMessages
+sealed trait FederatorMessage
+final case object ListTracker extends FederatorMessage
 
 /**
  * This tells how many trackers are currently up.
  * @param trackers are trackers loaded.
  */
 final case class TrackersAvailable(trackers: Array[String]) 
-      extends FederatorMessages {
+      extends FederatorMessage {
  
   override def toString(): String = 
     "TrackersAvailable("+trackers.mkString(",")+")"

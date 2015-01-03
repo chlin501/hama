@@ -24,9 +24,9 @@ import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 
-sealed trait RetryMessages
+sealed trait RetryMessage
 final case class Retry[R](name: String, count: Int, f:() => R) 
-      extends RetryMessages
+      extends RetryMessage
 
 trait Retryable { this: Agent => 
 

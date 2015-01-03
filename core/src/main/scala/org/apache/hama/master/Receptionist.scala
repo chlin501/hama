@@ -47,10 +47,10 @@ final case object NotVerified extends Validation
 final case object Valid extends Validation
 final case class Invalid(reason: String) extends Validation
 
-sealed trait ReceptionistMessages
+sealed trait ReceptionistMessage
 
 final case class Ticket(client: ActorRef, job: Job)
-      extends ReceptionistMessages 
+      extends ReceptionistMessage
 
 /**
  * Validate job configuration, sent from a particular client, matched to a 
@@ -64,7 +64,7 @@ final case class Validate(jobId: BSPJobID,
                           client: ActorRef, 
                           receptionist: ActorRef, 
                           actions: Map[Any, Validation]) 
-extends ReceptionistMessages {
+extends ReceptionistMessage {
 
   def validated(): Validated = Validated(jobId, jobConf, client, actions)
 
@@ -74,7 +74,7 @@ final case class Validated(jobId: BSPJobID,
                            jobConf: HamaConfiguration,
                            client: ActorRef, 
                            actions: Map[Any, Validation]) 
-extends ReceptionistMessages 
+extends ReceptionistMessage
 
 final case object CheckMaxTasksAllowed
 final case object IfTargetGroomsExist
@@ -92,7 +92,7 @@ object Reject {
 /**
  * Reject is used to notify the remote client's job configuration is not valid.
  */
-final class Reject extends Writable with ReceptionistMessages {
+final class Reject extends Writable with ReceptionistMessage {
 
   private var r = ""
 
