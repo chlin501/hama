@@ -19,23 +19,24 @@ package org.apache.hama.groom
 
 import akka.actor.ActorRef
 import org.apache.hama.Event
+import org.apache.hama.EventListener
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
-import org.apache.hama.EventListener
+import org.apache.hama.PublishEvent
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.CollectedStats
 import org.apache.hama.monitor.FindServiceBy
 import org.apache.hama.monitor.Ganglion
 import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.Notification
-import org.apache.hama.monitor.TaskReport
+import org.apache.hama.monitor.PublishMessage
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedCollector
 import org.apache.hama.monitor.groom.TaskStatsCollector
 import org.apache.hama.monitor.groom.GroomStatsCollector
 import org.apache.hama.monitor.groom.JvmStatsCollector
 
-final case object TaskReportEvent extends Event 
+final case object TaskReportEvent extends PublishEvent 
 
 final case object ListCollector
 final case class CollectorsAvailable(names: Array[String]) {
@@ -97,10 +98,11 @@ class Reporter(setting: Setting, groom: ActorRef)
   }
 
   /**
-   * Forward to wrapped collector.
+   * Receive a publish messsage. Reporter notifies to participant who is 
+   * interested.
    */
   protected def publish: Receive = {
-    case pub: TaskReport => forward(TaskReportEvent)(Notification(pub.task))
+    case pub: PublishMessage => forward(pub.event)(Notification(pub.msg))
   }
 
   override def receive = eventListenerManagement orElse publish orElse report orElse unknown

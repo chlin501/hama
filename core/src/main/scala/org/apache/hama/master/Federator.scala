@@ -30,7 +30,8 @@ import org.apache.hama.monitor.FindServiceBy
 import org.apache.hama.monitor.Ganglion
 import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.Notification
-import org.apache.hama.monitor.ProbeMessages
+import org.apache.hama.monitor.ProbeMessage
+import org.apache.hama.monitor.PublishMessage
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedTracker
 import org.apache.hama.monitor.master.GetMaxTasks
@@ -39,7 +40,7 @@ import org.apache.hama.monitor.master.JobTasksTracker
 import org.apache.hama.monitor.master.JvmStatsTracker
 import org.apache.hama.monitor.master.TotalMaxTasks
 
-final case class AskFor(recepiant: String, action: Any) extends ProbeMessages
+final case class AskFor(recepiant: String, action: Any) extends ProbeMessage
 
 sealed trait FederatorMessages
 final case object ListTracker extends FederatorMessages
@@ -259,6 +260,10 @@ class Federator(setting: Setting, master: ActorRef)
       case _ => e
     }}
 
-  override def receive = eventListenerManagement orElse validate orElse events orElse dispatch orElse listTracker orElse unknown
+  protected def publish: Receive = {
+    case pub: PublishMessage => forward(pub.event)(Notification(pub.msg))
+  }
+
+  override def receive = eventListenerManagement orElse publish orElse validate orElse events orElse dispatch orElse listTracker orElse unknown
 
 }

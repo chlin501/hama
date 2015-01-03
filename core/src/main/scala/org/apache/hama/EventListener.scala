@@ -24,6 +24,11 @@ import akka.actor.ActorRef
  */
 trait Event 
 
+/**
+ * Event for publishing data.
+ */
+trait PublishEvent extends Event
+
 sealed trait EventMessage
 /**
  * Subscribe to listening to specific events.

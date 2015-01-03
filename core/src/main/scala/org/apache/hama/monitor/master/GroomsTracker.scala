@@ -22,17 +22,17 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.master.GroomLeave
 import org.apache.hama.master.GroomLeaveEvent
 import org.apache.hama.monitor.Tracker
-import org.apache.hama.monitor.ProbeMessages
+import org.apache.hama.monitor.ProbeMessage
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.SlotStats
 import org.apache.hama.util.Utils._
 
-final case class GetMaxTasks(jobId: String) extends ProbeMessages
-final case class GetGroomCapacity(host: String, port: Int) extends ProbeMessages
+final case class GetMaxTasks(jobId: String) extends ProbeMessage
+final case class GetGroomCapacity(host: String, port: Int) extends ProbeMessage
 final case class GroomCapacity(host: String, port: Int, freeSlots: Int) 
-      extends ProbeMessages
+      extends ProbeMessage
 final case class TotalMaxTasks(jobId: String, allowed: Int) 
-      extends ProbeMessages
+      extends ProbeMessage
 
 object GroomsTracker {
 

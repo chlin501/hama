@@ -29,26 +29,37 @@ import org.apache.hadoop.io.MapWritable
 import org.apache.hadoop.io.ObjectWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Event
+import org.apache.hama.PublishEvent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.conf.Setting
 import org.apache.hama.groom.GroomServer
+import org.apache.hama.groom.TaskReportEvent
 import org.apache.hama.groom.Slot
 import org.apache.hama.util.Utils._
 import scala.collection.immutable.Queue
 
-trait ProbeMessages
-final case class Notification(result: Any) extends ProbeMessages
-final case object EmptyProbeMessages extends ProbeMessages
-final case object ListService extends ProbeMessages
+trait ProbeMessage
+
+trait PublishMessage extends ProbeMessage {
+
+  def event(): PublishEvent
+
+  def msg(): Any
+
+}
+
+final case class Notification(result: Any) extends ProbeMessage
+final case object EmptyProbeMessage extends ProbeMessage
+final case object ListService extends ProbeMessage
 final case class ServicesAvailable(services: Array[ActorRef])
-      extends ProbeMessages
-final case class FindServiceBy(name: String) extends ProbeMessages
+      extends ProbeMessage
+final case class FindServiceBy(name: String) extends ProbeMessage
 final case class ServiceAvailable(service: Option[ActorRef]) 
-      extends ProbeMessages
-final case class SubscribeTo(events: Event*) extends ProbeMessages
-final case class GetMetrics(service: ActorRef, msg: Any) extends ProbeMessages
-final case object GetGroomStats extends ProbeMessages
+      extends ProbeMessage
+final case class SubscribeTo(events: Event*) extends ProbeMessage
+final case class GetMetrics(service: ActorRef, msg: Any) extends ProbeMessage
+final case object GetGroomStats extends ProbeMessage
 
 object CollectedStats {
 
@@ -63,7 +74,7 @@ object CollectedStats {
  * CollectedStats contains statistics to be collected by a specific collector.
  * @param v is the stats collected.
  */
-class CollectedStats(v: Writable) extends Writable with ProbeMessages {
+class CollectedStats(v: Writable) extends Writable with ProbeMessage {
 
   /* stats data */
   protected[monitor] var value: Writable = v
@@ -104,7 +115,7 @@ object Stats {
  * @param d is the destination to which this stats will be sent.
  * @param v is the stats collected.
  */
-class Stats(d: String, v: Writable) extends Writable with ProbeMessages {
+class Stats(d: String, v: Writable) extends Writable with ProbeMessage {
 
   /* tracker name */
   protected[monitor] var tracker: Text = new Text(d)
@@ -156,7 +167,7 @@ object GroomStats {
 
 }
 
-final class GroomStats extends Writable with ProbeMessages {
+final class GroomStats extends Writable with ProbeMessage {
 
   import GroomStats._
 
@@ -262,7 +273,7 @@ object SlotStats {
 
 }
 
-final class SlotStats extends Writable with ProbeMessages {
+final class SlotStats extends Writable with ProbeMessage {
 
   import SlotStats._
 
@@ -340,7 +351,7 @@ object TaskStats {
   
 }
 
-final class TaskStats extends Writable with ProbeMessages {
+final class TaskStats extends Writable with ProbeMessage {
 
   protected[monitor] var t: Task = new Task
 
@@ -368,11 +379,13 @@ object TaskReport {
   
 }
 
-final class TaskReport extends Writable with ProbeMessages {
+final class TaskReport extends Writable with PublishMessage {
 
   protected[monitor] var t: Task = new Task
 
-  def task(): Task = t
+  def event(): PublishEvent = TaskReportEvent
+
+  def msg(): Task = t
 
   @throws(classOf[IOException])
   override def write(out: DataOutput) {

@@ -25,7 +25,7 @@ import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
 import org.apache.hama.logging.ActorLog
 import org.apache.hama.monitor.ListService
-import org.apache.hama.monitor.ProbeMessages
+//import org.apache.hama.monitor.ProbeMessage
 import org.apache.hama.monitor.master.TotalMaxTasks
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
@@ -61,7 +61,7 @@ class MockFederator(setting: Setting, master: ActorRef, tester: ActorRef)
   }
 
 /* TODO: this func is replaced by service event listener.
-  override def inform(service: String, result: ProbeMessages) = {
+  override def inform(service: String, result: ProbeMessage) = {
     if(result.toString.contains("TotalMaxTasks")) {
       val r = result.asInstanceOf[TotalMaxTasks]
       LOG.info("Rewrite service {} result {} tasks to 1024 ..", service, result)
