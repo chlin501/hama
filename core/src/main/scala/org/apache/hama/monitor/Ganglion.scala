@@ -52,6 +52,8 @@ protected trait WrappedProbe extends Agent {
   
   protected def notified(result: Any) 
 
+  // TODO: def unsubscribe(events: Event*) rmeove itself from event listener
+
   protected def publish(event: PublishEvent, msg: Any) 
 
   protected def funcs: Receive = {

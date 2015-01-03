@@ -17,12 +17,43 @@
  */
 package org.apache.hama.monitor.master
 
+import org.apache.hama.Agent
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.fs.Operation
+import org.apache.hama.util.Curator
 import org.apache.hama.monitor.Tracker
+
+final class Checker(conf: HamaConfiguration, 
+                    jobId: BPSJobID,
+                    superstep: Int, 
+                    totalTasks: Int) extends Agent with Curator {
+
+  val operation = Operation.get(conf)
+  
+  override def preStart() = {
+    initializeCurator(conf)
+    // TODO: 1. create checkpoint path in hdfs. 
+    //       2. check integrity in hdfs.
+    //       3. if all checkpoints (equals to total tasks) exist and every 
+    //          checkpoint has complete images such as msgs, superstep, 
+    //          then write ok to zk with cooresponded path 
+    //          e.g. jobid/superstep.ok
+  }
+
+  override def receive = unknown
+
+}
 
 final class CheckpointIntegrator extends Tracker {
 
-  override def initialize() {
-    //subscribe() // TODO: checkpoint increment event
+  override def initialize() = subscribe(SuperstepIncrementEvent) 
+
+  override def notified(msg: Any) = msg match {
+    case LatestSuperstep(jobId, superstep, totalTasks) => {
+      // TODO: probe provides def spawn(name, class, any*): ActorRef
+    } 
+    case _ => LOG.warning("Unknown message {}!", msg)
   }
 }
 
