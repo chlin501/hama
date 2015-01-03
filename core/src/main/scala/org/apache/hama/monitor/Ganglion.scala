@@ -22,6 +22,7 @@ import akka.actor.Cancellable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Agent
 import org.apache.hama.Event
+import org.apache.hama.EventListener
 import org.apache.hama.SubscribeEvent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Periodically
@@ -51,6 +52,8 @@ protected trait WrappedProbe extends Agent {
   
   protected def notified(result: Any) 
 
+  protected def publish(event: PublishEvent, msg: Any) 
+
   protected def funcs: Receive = {
     case ListService => listServices()
     case ServicesAvailable(services) => servicesFound(services) 
@@ -58,6 +61,7 @@ protected trait WrappedProbe extends Agent {
     case ServiceAvailable(service) => serviceFound(service.getOrElse(null)) 
     case SubscribeTo(events) => subscribe(events)
     case Notification(result) => notified(result)
+    case Publish(event, msg) => publish(event, msg)
   }
 
 }
@@ -88,6 +92,12 @@ final class WrappedCollector(reporter: ActorRef, collector: Collector)
   override def subscribe(events: Event*) = reporter ! SubscribeEvent(events:_*)
 
   override def notified(result: Any) = collector.notified(result) 
+
+  override def publish(event: PublishEvent, msg: Any) = 
+    reporter ! new PublishMessage {
+      def event(): PublishEvent = ProbeEvent
+      def msg(): Any = msg
+    }
 
   def actions: Receive = {
     case StartTick(ms) => 
@@ -125,6 +135,12 @@ class WrappedTracker(federator: ActorRef, tracker: Tracker)
   override def subscribe(events: Event*) = federator ! SubscribeEvent(events:_*)
 
   override def notified(result: Any) = tracker.notified(result) 
+
+  override def publish(event: PublishEvent, msg: Any) = 
+    federator ! new PublishMessage {
+      def event(): PublishEvent = ProbeEvent
+      def msg(): Any = msg
+    }
 
   protected def actions: Receive = {
     case s: Stats => tracker.receive(s.data)
@@ -165,6 +181,11 @@ trait Probe extends CommonLog {
    * @param result being notified
    */
   protected[monitor] def notified(result: Any) { } 
+
+  protected[monitor] def publish(event: PublishEvent, msg: Any) = wrapper match{
+    case Some(found) => found ! Publish(event, msg)
+    case None => throw new RuntimeException("Wrapper not found!")
+  }
 
   /**
    * The name of this probe.
@@ -313,3 +334,14 @@ trait Ganglion {
 
 }
 
+trait Publisher extends EventListener { self: Agent => 
+
+  /**
+   * Receive a publish messsage. Publisher notifies participants who are
+   * interested.
+   */
+  protected def publish: Receive = {
+    case pub: PublishMessage => forward(pub.event)(Notification(pub.msg))
+  }
+
+}

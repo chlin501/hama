@@ -18,9 +18,13 @@
 package org.apache.hama.monitor.master
 
 import org.apache.hadoop.io.Writable
-import org.apache.hama.HamaConfiguration
+import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.monitor.PublishEvent
 import org.apache.hama.monitor.Tracker
+
+final case object SuperstepIncrementEvent extends PublishEvent
+final case class LatestSuperstep(jobId: BSPJobID, value: Int)
 
 object JobTasksTracker {
 
@@ -28,8 +32,7 @@ object JobTasksTracker {
 
 }
 
-// TODO: notify to scheduler for each task update 
-//       or merge to scheduler?
+// TODO: notify scheduler for each task update 
 final class JobTasksTracker extends Tracker {
 
   private var tasks = Set.empty[Task]
@@ -40,10 +43,11 @@ final class JobTasksTracker extends Tracker {
     case task: Task => {
       tasks += task
       val totalTasks = task.getTotalBSPTasks
+      //publish(TaskArrival, task)
       if(totalTasks == tasks.size && isNextSuperstep(totalTasks)) {
         currentSuperstep += 1
-        //publish(SuperspteIncrementEvent,  TODO: add publish functions
-                //SupestepIncrement(task.getId, task.getCurrentSuperstep))
+        publish(SuperstepIncrementEvent,  
+                LatestSuperstep(task.getId.getJobID, task.getCurrentSuperstep))
       }
     }
     case other@_ => LOG.warning("Unknown task stats received: {}", other) 

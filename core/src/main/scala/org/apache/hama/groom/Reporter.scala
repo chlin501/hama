@@ -19,16 +19,16 @@ package org.apache.hama.groom
 
 import akka.actor.ActorRef
 import org.apache.hama.Event
-import org.apache.hama.EventListener
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
-import org.apache.hama.PublishEvent
 import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.CollectedStats
 import org.apache.hama.monitor.FindServiceBy
 import org.apache.hama.monitor.Ganglion
 import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.Notification
+import org.apache.hama.monitor.Publisher
+import org.apache.hama.monitor.PublishEvent
 import org.apache.hama.monitor.PublishMessage
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedCollector
@@ -60,7 +60,7 @@ object Reporter {
 
 // TODO: periodically reload probes from reporter.probe.classes?
 class Reporter(setting: Setting, groom: ActorRef) 
-      extends Ganglion with LocalService with EventListener {
+      extends Ganglion with LocalService with Publisher {
 
   import Reporter._
 
@@ -100,10 +100,10 @@ class Reporter(setting: Setting, groom: ActorRef)
   /**
    * Receive a publish messsage. Reporter notifies to participant who is 
    * interested.
-   */
   protected def publish: Receive = {
     case pub: PublishMessage => forward(pub.event)(Notification(pub.msg))
   }
+   */
 
   override def receive = eventListenerManagement orElse publish orElse report orElse unknown
 

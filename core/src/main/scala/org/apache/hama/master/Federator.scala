@@ -22,7 +22,6 @@ import org.apache.hama.Agent
 import org.apache.hama.Event
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
-import org.apache.hama.EventListener
 import org.apache.hama.SubscribeEvent
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
@@ -31,6 +30,7 @@ import org.apache.hama.monitor.Ganglion
 import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.Notification
 import org.apache.hama.monitor.ProbeMessage
+import org.apache.hama.monitor.Publisher
 import org.apache.hama.monitor.PublishMessage
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.WrappedTracker
@@ -70,7 +70,7 @@ object Federator {
 }
 
 class Federator(setting: Setting, master: ActorRef) 
-      extends Ganglion with LocalService with EventListener {
+      extends Ganglion with LocalService with Publisher {
 
   import Federator._
 
@@ -259,10 +259,6 @@ class Federator(setting: Setting, master: ActorRef)
                                old.receptionist, updated)
       case _ => e
     }}
-
-  protected def publish: Receive = {
-    case pub: PublishMessage => forward(pub.event)(Notification(pub.msg))
-  }
 
   override def receive = eventListenerManagement orElse publish orElse validate orElse events orElse dispatch orElse listTracker orElse unknown
 

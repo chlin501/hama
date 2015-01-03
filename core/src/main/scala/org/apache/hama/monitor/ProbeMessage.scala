@@ -29,7 +29,6 @@ import org.apache.hadoop.io.MapWritable
 import org.apache.hadoop.io.ObjectWritable
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Event
-import org.apache.hama.PublishEvent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.conf.Setting
@@ -38,6 +37,11 @@ import org.apache.hama.groom.TaskReportEvent
 import org.apache.hama.groom.Slot
 import org.apache.hama.util.Utils._
 import scala.collection.immutable.Queue
+
+/**
+ * Event for publishing data.
+ */
+trait PublishEvent extends Event
 
 trait ProbeMessage
 
@@ -58,6 +62,7 @@ final case class FindServiceBy(name: String) extends ProbeMessage
 final case class ServiceAvailable(service: Option[ActorRef]) 
       extends ProbeMessage
 final case class SubscribeTo(events: Event*) extends ProbeMessage
+final case class Publish(event: PublishEvent, msg: Any) extends ProbeMessage
 final case class GetMetrics(service: ActorRef, msg: Any) extends ProbeMessage
 final case object GetGroomStats extends ProbeMessage
 
@@ -398,3 +403,5 @@ final class TaskReport extends Writable with PublishMessage {
   } 
 
 }
+
+final case object ProbeEvent extends PublishEvent
