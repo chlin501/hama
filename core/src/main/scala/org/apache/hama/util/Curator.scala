@@ -108,6 +108,14 @@ trait Curator extends Conversion with CommonLog {
       case None => throw new RuntimeException("Curator not initialized!")
     }
 
+  protected def exist(znode: String): Boolean = curatorFramework match {
+    case Some(client) => client.checkExists.forPath(znode) match {
+      case _: Stat => true
+      case _ => false
+    }
+    case None => throw new RuntimeException("Curator not initialized!") 
+  }
+
   /**
    * Recursively create znode without value being set.
    * The znode must be an absolute path.
@@ -133,9 +141,8 @@ trait Curator extends Conversion with CommonLog {
       if(null == znode || znode.isEmpty || !znode.startsWith("/"))
         throw new IllegalArgumentException("Znode is not started from '/', " +
                                            "empty or null value: "+znode)
-      exist({ (client) => 
-        client.create.creatingParentsIfNeeded.withMode(m).forPath(znode) 
-      })
+      exist({ client => client.create.creatingParentsIfNeeded.withMode(m).
+                               forPath(znode) })
     }
   }
 

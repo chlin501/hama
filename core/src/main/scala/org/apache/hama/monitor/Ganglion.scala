@@ -20,6 +20,8 @@ package org.apache.hama.monitor
 import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Cancellable
+import akka.actor.OneForOneStrategy
+import akka.actor.SupervisorStrategy._
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Agent
 import org.apache.hama.Event
@@ -41,6 +43,13 @@ final case object CancelTick
 final case class Spawn[A <: Actor](name: String, clazz: Class[A], args: Any*)
 
 protected trait WrappedProbe extends Agent with Spawnable {
+
+  override val supervisorStrategy = OneForOneStrategy() {
+    case e: Exception => {
+      LOG.warning("Exception is thrown by probe {} due to {}", name, e)
+      Stop 
+    }
+  }
 
   // following functions will be implemented by wrapper.
 
@@ -68,7 +77,11 @@ protected trait WrappedProbe extends Agent with Spawnable {
     case SubscribeTo(events) => subscribe(events)
     case Notification(result) => notified(result)
     case Publish(event, msg) => publish(event, msg)
-    case Spawn(name, clazz, args) => sender ! spawn(name, clazz, args)
+    case Spawn(name, clazz, args) => {
+      val ref = spawn(name, clazz, args)
+      context watch ref
+      sender ! ref
+    }
   }
 
 }

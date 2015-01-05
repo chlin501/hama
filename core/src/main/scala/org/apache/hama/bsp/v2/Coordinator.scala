@@ -404,9 +404,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     } 
   }
 
-  //protected def configSyncClient(task: Task) =  
-    //syncClient ! SetTaskAttemptId(task.getId)  
-
   /**
    * Internal sync to ensure all peers is registered/ ready.
    * @param superstep indicate the curent superstep value.

@@ -37,15 +37,17 @@ final class JobTasksTracker extends Tracker {
 
   private var tasks = Set.empty[Task]
 
-  private var currentSuperstep = 0
+  private var currentSuperstep = 0 
 
+  // TODO: subscribe to sched's Job Finished event and clean up tasks set.
   override def receive(stats: Writable) = stats match {
     case task: Task => {
+      if(tasks.isEmpty) currentSuperstep = task.getCurrentSuperstep
       tasks += task
       val totalTasks = task.getTotalBSPTasks
-      // TODO: notify scheduler for each task update 
-      //publish(TaskArrival, task) TODO: sched subscribe for notification 
-      if(totalTasks == tasks.size && isNextSuperstep(totalTasks)) {
+      // TODO: publish task arrival event and sched subscribe for notification
+      //       publish(TaskArrival, task) 
+      if(totalTasks == tasks.size && goToNextSuperstep(totalTasks)) {
         currentSuperstep += 1
         publish(SuperstepIncrementEvent,  
                 LatestSuperstep(task.getId.getJobID, task.getCurrentSuperstep,
@@ -55,7 +57,7 @@ final class JobTasksTracker extends Tracker {
     case other@_ => LOG.warning("Unknown task stats received: {}", other) 
   }
 
-  private def isNextSuperstep(totalTasks: Int): Boolean = tasks.count { t => 
+  private def goToNextSuperstep(totalTasks: Int): Boolean = tasks.count { t => 
     t.getCurrentSuperstep == (currentSuperstep + 1) } == totalTasks
 
 }

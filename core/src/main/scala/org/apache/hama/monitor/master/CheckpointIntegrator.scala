@@ -18,30 +18,54 @@
 package org.apache.hama.monitor.master
 
 import akka.actor.ActorRef
+import org.apache.commons.io.FilenameUtils
+import org.apache.hadoop.fs.FileStatus
+import org.apache.hadoop.fs.Path
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.fs.Operation
 import org.apache.hama.util.Curator
 import org.apache.hama.monitor.Tracker
+import org.apache.hama.monitor.Checkpointer
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 final class Checker(conf: HamaConfiguration,  // common conf
                     jobId: BSPJobID,
                     superstep: Int, 
                     totalTasks: Int) extends Agent with Curator {
 
+  import Checkpointer._
+
   val operation = Operation.get(conf)
-  
-  override def preStart() = {
-    initializeCurator(conf)
-    // TODO: 1. mk checkpoint path in hdfs. 
-    //       2. check integrity in hdfs.
-    //       3. if all checkpoints (equals to total tasks) exist and every 
-    //          checkpoint has complete images such as msgs, superstep, 
-    //          then write ok to zk with cooresponded path 
-    //          e.g. jobid/superstep.ok
-    //       4. once finishing, call stop
+
+  protected def verifiedPath(conf: HamaConfiguration): String = 
+    "%s/%s".format(root(conf), 
+                   conf.get("bsp.checkpoint.verified.path", "verified"))
+
+  protected def verifiedPath(conf: HamaConfiguration, 
+                                      jobId: String, 
+                                      superstep: Long): String = 
+    "%s/%s/%s".format(verifiedPath(conf), jobId, superstep)
+
+  override def preStart() = verifyCheckpoint(totalTasks) match {
+    case Success(successful) => if(successful) 
+      create(verifiedPath(conf, jobId.toString, superstep)) else close
+    case Failure(e) => close
   }
+
+  protected def verifyCheckpoint(totalTasks: Int): Try[Boolean] = try {
+    initializeCurator(conf)
+    val parent = dir(root(conf), jobId.toString, superstep)
+    val result = list(parent).count( znode => znode.split("\\"+dot) match {
+      case ary: Array[String] if ary.length == 2 => if(ary(1).equals("ok"))
+        true else false 
+      case _ => throw new RuntimeException("Malformed znode found at "+znode)
+    }) == totalTasks
+    Success(result)
+  } catch { case e: Exception => Failure(e) }
 
   private def close() = stop
 

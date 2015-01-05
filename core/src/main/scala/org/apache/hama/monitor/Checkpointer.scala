@@ -40,6 +40,12 @@ import scala.collection.JavaConversions._
 
 object Checkpointer {
 
+  val msgSuffix = "msg"
+
+  val supSuffix = "sup"
+
+  val dot = "."
+
   /**
    * Root path to external storage.
    * @param conf is task configuration.
@@ -55,15 +61,15 @@ object Checkpointer {
 
   /**
    * Checkpoint path with suffix supplied.
-   * @param conf is task configuration.
+   * @param commConf is common configuration.
    * @param superstep is current superstep value for checkpointing.
    * @param id is task attempt id.
    * @param suffix denotes either its message or superstep data.
    */
-  def ckptPath(conf: HamaConfiguration, superstep: Long, id: TaskAttemptID, 
+  def ckptPath(commConf: HamaConfiguration, superstep: Long, id: TaskAttemptID, 
                suffix: String): String = 
-    "%s/%s.%s".format(dir(root(conf), jobId(id), superstep), 
-                      id.toString, suffix)
+    "%s/%s%s%s".format(dir(root(commConf), jobId(id), superstep), 
+                      id.toString, dot, suffix)
 
 }
 
@@ -172,17 +178,18 @@ class Checkpointer(commConf: HamaConfiguration,
     }
   }
 
-  def dest(): String = "%s/%s".format(dir(root(taskConf), jobId(taskAttemptId),
-                                          superstepCount), 
-                                      taskAttemptId.toString)
+  def dest(commConf: HamaConfiguration, superstep: Long, 
+           taskAttemptId: TaskAttemptID, ext: String): String = 
+    "%s/%s%s%s".format(dir(root(commConf), jobId(taskAttemptId), 
+                       superstepCount), taskAttemptId.toString, dot, ext)
 
   /**
-   * Write to znode denoting the checkpoint process is completed!
+   * Write znode denoting the checkpoint process is completed!
    */
   protected def markIfFinish(): Boolean = if(msgsReceived && mapNextReceived) { 
     (msgsStatus && mapNextStatus) match {  // decide fail or success
-      case true => create(dest + ".ok") 
-      case false => create(dest + ".fail") 
+      case true => create(dest(commConf, superstepCount, taskAttemptId, "ok"))
+      case false => create(dest(commConf, superstepCount, taskAttemptId,"fail"))
     }
     true
   } else false
@@ -212,7 +219,7 @@ class Checkpointer(commConf: HamaConfiguration,
   }
 
   protected def pathToMsg(): Path = 
-    new Path(ckptPath(taskConf, superstepCount, taskAttemptId, "msg")) 
+    new Path(ckptPath(commConf, superstepCount, taskAttemptId, msgSuffix)) 
 
   protected def writeMessages(messages: List[Writable]): Boolean = 
     write(pathToMsg(), (out) => { 
@@ -263,9 +270,8 @@ class Checkpointer(commConf: HamaConfiguration,
     }
   }
 
-  protected def pathToSuperstep(): Path = {
-    new Path(ckptPath(taskConf, superstepCount, taskAttemptId, "sup"))
-  }
+  protected def pathToSuperstep(): Path = 
+    new Path(ckptPath(commConf, superstepCount, taskAttemptId, supSuffix))
 
   protected def writeMapNext(map: Map[String, Writable], next: Class[_]): 
     Boolean = write(pathToSuperstep(), (out) => { 
