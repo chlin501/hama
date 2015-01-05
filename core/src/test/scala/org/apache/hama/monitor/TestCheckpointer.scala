@@ -67,11 +67,13 @@ class MockCheckpointer(commConf: HamaConfiguration,
 
   import MockCheckpointer._
 
-  override def getRootPath(taskConf: HamaConfiguration): String = {
+/*
+  override def root(taskConf: HamaConfiguration): String = {
     val path = taskConf.get("bsp.checkpoint.root.path", tmpRootPath) 
     LOG.info("Checkpoint file will be writtent to {} directory.", path)
     path 
   }
+*/
 
   override def markIfFinish(): Boolean = {
     val finishOrNot = super.markIfFinish 
@@ -101,7 +103,11 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
   val superstepCount: Long = 1654
   val threshold = BSPMessageCompressor.threshold(Option(testConfiguration))
   val commConf = testConfiguration
-  val taskConf = testConfiguration
+  val taskConf = {
+    val conf = new HamaConfiguration
+    conf.set("bsp.checkpoint.root.path", MockCheckpointer.tmpRootPath) 
+    conf
+  }
   val taskAttemptId = createTaskAttemptId("test", 9, 3, 2)
 
   val mapVar = Map("superstepCount" -> new LongWritable(superstepCount))

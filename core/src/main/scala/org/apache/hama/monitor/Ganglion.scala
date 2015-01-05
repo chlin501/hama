@@ -17,6 +17,7 @@
  */
 package org.apache.hama.monitor
 
+import akka.actor.Actor
 import akka.actor.ActorRef
 import akka.actor.Cancellable
 import org.apache.hadoop.io.Writable
@@ -26,17 +27,20 @@ import org.apache.hama.EventListener
 import org.apache.hama.SubscribeEvent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Periodically
+import org.apache.hama.Spawnable
 import org.apache.hama.Tick
 import org.apache.hama.Ticker
 import org.apache.hama.master.GroomLeave
 import org.apache.hama.logging.CommonLog
+import org.apache.hama.util.Utils._
 import scala.concurrent.duration.DurationLong
 import scala.concurrent.duration.FiniteDuration
 
 final case class StartTick(ms: Long)
 final case object CancelTick
+final case class Spawn[A <: Actor](name: String, clazz: Class[A], args: Any*)
 
-protected trait WrappedProbe extends Agent {
+protected trait WrappedProbe extends Agent with Spawnable {
 
   // following functions will be implemented by wrapper.
 
@@ -64,6 +68,7 @@ protected trait WrappedProbe extends Agent {
     case SubscribeTo(events) => subscribe(events)
     case Notification(result) => notified(result)
     case Publish(event, msg) => publish(event, msg)
+    case Spawn(name, clazz, args) => sender ! spawn(name, clazz, args)
   }
 
 }
@@ -143,7 +148,7 @@ class WrappedTracker(federator: ActorRef, tracker: Tracker)
       def event(): PublishEvent = ProbeEvent
       def msg(): Any = msg
     }
-
+ 
   protected def actions: Receive = {
     case s: Stats => tracker.receive(s.data)
     case action: Any => tracker.askFor(action, sender)
@@ -188,6 +193,13 @@ trait Probe extends CommonLog {
     case Some(found) => found ! Publish(event, msg)
     case None => throw new RuntimeException("Wrapper not found!")
   }
+
+  protected[monitor] def spawn[A <: Actor](name: String, clazz: Class[A], 
+                                           args: Any*): ActorRef = 
+    wrapper match {
+      case Some(found) => await[ActorRef](found, Spawn(name, clazz, args:_*))
+      case None => throw new RuntimeException("Wrapper not found!")
+    }
 
   /**
    * The name of this probe.

@@ -38,6 +38,35 @@ import scala.util.Success
 import scala.util.Try
 import scala.collection.JavaConversions._
 
+object Checkpointer {
+
+  /**
+   * Root path to external storage.
+   * @param conf is task configuration.
+   */
+  def root(conf: HamaConfiguration): String = 
+    conf.get("bsp.checkpoint.root.path", "/checkpoint") 
+
+  def jobId(taskAttemptId: TaskAttemptID): String = 
+    taskAttemptId.getJobID.toString
+
+  def dir(root: String, jobId: String, superstep: Long): String = 
+    "%s/%s/%s".format(root, jobId, superstep)
+
+  /**
+   * Checkpoint path with suffix supplied.
+   * @param conf is task configuration.
+   * @param superstep is current superstep value for checkpointing.
+   * @param id is task attempt id.
+   * @param suffix denotes either its message or superstep data.
+   */
+  def ckptPath(conf: HamaConfiguration, superstep: Long, id: TaskAttemptID, 
+               suffix: String): String = 
+    "%s/%s.%s".format(dir(root(conf), jobId(id), superstep), 
+                      id.toString, suffix)
+
+}
+
 /**
  * Checkpoint related superstep data to external storage.
  * This class is created corresponded to a particular task attempt id, so 
@@ -61,6 +90,8 @@ class Checkpointer(commConf: HamaConfiguration,
                    messenger: ActorRef,
                    superstepWorker: ActorRef) 
       extends LocalService with Curator {
+
+  import Checkpointer._
 
   // TODO: may need to use more neutral interface for saving data to different
   //       storage.
@@ -88,15 +119,6 @@ class Checkpointer(commConf: HamaConfiguration,
 
   override def initializeServices = initializeCurator(commConf)
 
-  /**
-   * Root path to external storage.
-   */
-  protected def getRootPath(taskConf: HamaConfiguration): String = 
-    taskConf.get("bsp.checkpoint.root.path", "/checkpoint") 
-
-  protected def mkDir(rootPath: String, superstepCount: Long): String = 
-    "%s/%s/%s".format(rootPath, taskAttemptId.getJobID.toString, superstepCount)
-
   // TODO: we may need to divide <superstep> into sub category because 
   //       more than 10k znodes may lead to performance slow down for zk 
   //       at the final step marking with ok znode.
@@ -108,19 +130,19 @@ class Checkpointer(commConf: HamaConfiguration,
   /**
    * Write data to the output stream, and close the stream when finishing 
    * writing.
-   * @param ckptPath points to the dest where data to be written.
+   * @param path points to the dest where data to be written.
    * @param writeTo data output stream.
    * @return Boolean denotes if writing successes or not.
    */
-  protected def write(ckptPath: Path, writeTo: (DataOutputStream) => Boolean): 
-      Boolean = Try(createOrAppend(ckptPath)) match {
+  protected def write(path: Path, writeTo: (DataOutputStream) => Boolean): 
+      Boolean = Try(createOrAppend(path)) match {
     case Success(out) => { 
       var flag = false 
       try { 
         flag = writeTo(out) 
       } catch { 
         case e: Exception => {
-          LOG.error("Exception is thrown when writing to "+ckptPath, e)
+          LOG.error("Exception is thrown when writing to "+path, e)
           flag = false  
         }
       } finally { 
@@ -129,7 +151,7 @@ class Checkpointer(commConf: HamaConfiguration,
       flag
     }
     case Failure(cause) => {
-      LOG.error("Fail to creat or to append data at {} for {}", ckptPath, cause)
+      LOG.error("Fail to creat or to append data at {} for {}", path, cause)
       false
     }
   }
@@ -150,12 +172,14 @@ class Checkpointer(commConf: HamaConfiguration,
     }
   }
 
+  def dest(): String = "%s/%s".format(dir(root(taskConf), jobId(taskAttemptId),
+                                          superstepCount), 
+                                      taskAttemptId.toString)
+
   /**
    * Write to znode denoting the checkpoint process is completed!
-   * @param destPath denotes the path at zk and checkpoint process is completed.
    */
   protected def markIfFinish(): Boolean = if(msgsReceived && mapNextReceived) { 
-    val dest = ckptDir + "/" + taskAttemptId  
     (msgsStatus && mapNextStatus) match {  // decide fail or success
       case true => create(dest + ".ok") 
       case false => create(dest + ".fail") 
@@ -187,16 +211,11 @@ class Checkpointer(commConf: HamaConfiguration,
     }
   }
 
-  protected def ckptDir(): String = mkDir(getRootPath(taskConf), superstepCount)
-
-  /**
-   * Checkpoint path with suffix supplied.
-   */
-  protected def ckptPath(suffix: String): String = ckptDir + "/"+ 
-    taskAttemptId + "." + suffix
+  protected def pathToMsg(): Path = 
+    new Path(ckptPath(taskConf, superstepCount, taskAttemptId, "msg")) 
 
   protected def writeMessages(messages: List[Writable]): Boolean = 
-    write(new Path(ckptPath("msg")), (out) => { 
+    write(pathToMsg(), (out) => { 
       toBundle(messages) match {
         case Some(bundle) => { bundle.write(out); true }
         case None => {
@@ -244,8 +263,12 @@ class Checkpointer(commConf: HamaConfiguration,
     }
   }
 
+  protected def pathToSuperstep(): Path = {
+    new Path(ckptPath(taskConf, superstepCount, taskAttemptId, "sup"))
+  }
+
   protected def writeMapNext(map: Map[String, Writable], next: Class[_]): 
-    Boolean = write(new Path(ckptPath("sup")), (out) => { 
+    Boolean = write(pathToSuperstep(), (out) => { 
       toMapWritable(map).write(out)
       writeText(next)(out)
       true
