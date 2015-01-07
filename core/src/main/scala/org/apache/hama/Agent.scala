@@ -32,10 +32,6 @@ trait Agent extends Actor with ActorLog with Spawnable with Retryable {
    */
   final def name(): String = self.path.name
 
-  protected def unknown: Receive = {
-    case msg@_ => LOG.warning("Unknown message {} for {} from {}.", 
-                              msg, name, sender.path.name)
-  }
 
   /**
    * Stop all other (child) actors.
@@ -58,5 +54,19 @@ trait Agent extends Actor with ActorLog with Spawnable with Retryable {
    * Shutdown the entire actor system.
    */
   protected def shutdown() = context.system.shutdown
+
+  protected def close: Receive = {
+    case Close => whenClose()
+  }
+
+  /**
+   * Default behaviour is to stop itself.
+   */
+  protected def whenClose() = stop
+
+  protected def unknown: Receive = {
+    case msg@_ => LOG.warning("Unknown message {} for {} from {}.", 
+                              msg, name, sender.path.name)
+  }
 
 }

@@ -155,15 +155,6 @@ class PeerClient(conf: HamaConfiguration,
 
   protected def exitBarrier(from: ActorRef) = from ! ExitBarrier
 
-  /**
-   * Perform some close operations and then stop the actor.
-   */
-  protected def close: Receive = {
-    case Close => {
-      context.stop(self) 
-    }
-  }
-
   override def receive = register orElse currentPeerName orElse peerNameByIndex orElse numPeers orElse allPeerNames orElse enter orElse leave orElse close orElse unknown
 
 }

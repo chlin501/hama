@@ -22,9 +22,12 @@ import org.apache.commons.io.FilenameUtils
 import org.apache.hadoop.fs.FileStatus
 import org.apache.hadoop.fs.Path
 import org.apache.hama.Agent
+import org.apache.hama.Close
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.fs.Operation
 import org.apache.hama.util.Curator
+import org.apache.hama.master.JobFinishedEvent
 import org.apache.hama.monitor.Tracker
 import org.apache.hama.monitor.Checkpointer
 import scala.util.Failure
@@ -66,9 +69,7 @@ final class Checker(conf: HamaConfiguration,  // common conf
     Success(result)
   } catch { case e: Exception => Failure(e) }
 
-  private def close() = stop
-
-  override def receive = unknown
+  override def receive = close orElse unknown
 
 }
 
@@ -82,16 +83,22 @@ final class CheckpointIntegrator extends Tracker {
 
   import CheckpointIntegrator._
 
-  // TODO: subscribe to JobFinishedEvent and cleanup when a job finished.
   private var children = Set.empty[ActorRef]
 
-  override def initialize() = subscribe(SuperstepIncrementEvent) 
+  override def initialize() {
+    subscribe(SuperstepIncrementEvent) 
+    subscribe(JobFinishedEvent) 
+  }
 
   override def notified(msg: Any) = msg match {
     case LatestSuperstep(jobId, n, totalTasks) => {
       children += spawn(superstepOf + n, classOf[Checker], 
                         configuration, jobId.toString, n, totalTasks)
     } 
+    case jobId: BSPJobID => {
+      children.foreach( child => child ! Close )
+      children = Set.empty[ActorRef] 
+    }
     case _ => LOG.warning("Unknown message {}!", msg)
   }
 }

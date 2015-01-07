@@ -197,14 +197,6 @@ class Checkpointer(commConf: HamaConfiguration,
   protected def ifClose() = if(msgsReceived && mapNextReceived) {
     self ! Close
   }
-
-  /**
-   * Close this checkpointer.
-   * @param Receive is a partial function.
-   */
-  protected def close: Receive = {
-    case Close => context.stop(self)
-  }
   
   /**
    * MessageExecutive replies with messages in localQueue for checkpoint.
@@ -309,7 +301,7 @@ class Checkpointer(commConf: HamaConfiguration,
     case NotViewableQueue => {
       LOG.error("LocalQueue is not an instance of Viewable for task {} "+
                 "at superstep {}!", taskAttemptId, superstepCount) 
-      close
+      self ! Close 
     }
   }
 

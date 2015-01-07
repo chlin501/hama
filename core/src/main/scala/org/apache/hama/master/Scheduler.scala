@@ -277,9 +277,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     case fault: TaskFailure => // TODO: reschedule the task by checking task's active groom setting.
   }
 
-  protected def whenJobFinished(jobId: BSPJobID) {
+  // TODO: call this function when the job is finished
+  protected def whenJobFinished(jobId: BSPJobID) =  
     federator ! JobFinishedMessage(jobId) 
-  }
 
   override def receive = tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
 }

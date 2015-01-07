@@ -80,7 +80,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
                                       taskAttemptId: TaskAttemptID,
                                       container: ActorRef,
                                       tasklog: ActorRef)
-      extends RemoteService with LocalService with TaskLog with MessageView {
+      extends LocalService with RemoteService with TaskLog with MessageView {
 
   protected val outgoingMessageManager = OutgoingMessageManager.get[M](conf)
   protected val localQueue = getReceiverQueue
@@ -95,7 +95,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
-  override def stopServices() = close
+  override def stopServices() = close 
 
   //override def configuration(): HamaConfiguration = conf
 
@@ -122,7 +122,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
     queue
   }
 
-  protected def close() { 
+  override def whenClose() { 
     outgoingMessageManager.clear
     localQueue.close  
   }

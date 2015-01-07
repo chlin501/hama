@@ -564,7 +564,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    //       cache, etc.
    //       collect combiner stats:  
    //         total msgs combined = total msgs sent - total msgs received
-  protected[v2] def close() = {
+  override def whenClose() = {
     clear 
     syncClient ! Close 
     messenger ! Close
@@ -754,7 +754,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   /**
    * Close all services after this actor is stopped.
    */
-  override def stopServices = close
+  override def stopServices = self ! Close
 
   override def receive = enter orElse inBarrier orElse transferredCompleted orElse transferredFailure orElse leave orElse exitBarrier orElse getSuperstepCount orElse peerIndex orElse taskAttemptId orElse send orElse getCurrentMessage orElse currentMessage orElse getNumCurrentMessages orElse numCurrentMessages orElse getPeerName orElse peerName orElse getPeerNameBy orElse peerNameByIndex orElse getNumPeers orElse numPeers orElse getAllPeerNames orElse allPeerNames orElse nextSuperstepClass orElse variables orElse cleanupFinished orElse unknown 
   
