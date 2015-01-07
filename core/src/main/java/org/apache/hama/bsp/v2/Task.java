@@ -628,8 +628,12 @@ public final class Task implements Writable {
    * Create a new task with the same content.
    * @return Task is a new one.
    */
-  public Task newTask() {
+  public Task copyTask() {
     return new Builder(this).build();
+  }
+
+  public Task withIdIncremented() {
+    return new Builder(this).setId(getId().next()).build();
   }
 
 }

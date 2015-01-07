@@ -20,6 +20,8 @@ package org.apache.hama.bsp.v2;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 import org.apache.commons.logging.Log;
@@ -204,6 +206,18 @@ public final class TaskTable implements Writable {
     final Task[] taskAttemptArray = get(row); 
     if(null == taskAttemptArray) return -1;
     return taskAttemptArray.length;
+  }
+
+  public Task[] findTasksBy(final String host, final int port) {
+    final List<Task> matched = new ArrayList<Task>();
+    for (int row = 0; row < rowLength(); row++) {
+      final Task task = latestTaskAt(row);
+      if(null == task) 
+        throw new NullPointerException("No task found at row "+row);
+      if(task.getAssignedHost().equals(host) && 
+         (port == task.getAssignedPort())) matched.add(task);
+    }
+    return (Task[]) matched.toArray(new Task[matched.size()]);
   }
 
   /**

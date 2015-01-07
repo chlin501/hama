@@ -53,6 +53,7 @@ object JvmStatsCollector {
 /**
  * Collector jvm metrics information.
  */
+// TODO: rename to groom sys stats collector.
 final class JvmStatsCollector extends Collector {
 
   import JvmStatsCollector._
@@ -64,7 +65,7 @@ final class JvmStatsCollector extends Collector {
   override def request() = report(sampling)
 
   def sampling(): MetricsRecord = { 
-    val record: MetricsRecord = 
+    val record: MetricsRecord = // TODO: change to stats object instead
       new MetricsRecord("<groom-name-read-from-conf>", "jvm", "Jvm metrics stats.")
     memory(record)
     gc(record)

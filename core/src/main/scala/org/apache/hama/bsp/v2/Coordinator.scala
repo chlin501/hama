@@ -749,7 +749,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     reportTask
   }
 
-  protected def reportTask() = container ! TaskReport(task.newTask)
+  protected def reportTask() = container ! TaskReport(task.copyTask)
 
   /**
    * Close all services after this actor is stopped.

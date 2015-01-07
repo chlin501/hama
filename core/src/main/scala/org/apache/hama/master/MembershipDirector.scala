@@ -95,6 +95,7 @@ trait MembershipDirector extends Membership with Agent {
     case None => 
   } 
 
+  // TODO: remove name because master services talk to groom through bsp master.
   protected def groomLeave(name: String, host: String, port: Int) { }
 
   protected def memberEvent(event: MemberEvent) { }

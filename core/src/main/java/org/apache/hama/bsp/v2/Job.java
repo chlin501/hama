@@ -393,10 +393,10 @@ public final class Job implements Writable {
     conf.setInt("bsp.peers.num", actualNumBSPTasks); 
     LOG.info("Align numBSPTasks to "+actualNumBSPTasks);
 
-    if(getNumBSPTasks() < getTargets().length) 
-      throw new RuntimeException("Target GroomServer "+getTargets().length +
-                                 " is larger than "+getNumBSPTasks() +
-                                 " tasks allowed to run.");
+    if(getNumBSPTasks() < targetGrooms().length) 
+      throw new RuntimeException("Target GroomServer "+
+                                 targetGrooms().length + " is larger than "+
+                                 getNumBSPTasks() + " tasks allowed to run.");
   }
 
   /**
@@ -507,6 +507,10 @@ public final class Job implements Writable {
     return this.taskTable;
   }
 
+  public Task[] findTasksBy(final String host, final int port) {
+    return getTasks().findTasksBy(host, port);
+  }
+
   /**
    * This function is mainly used by Scheduler for checking next available 
    * task. 
@@ -516,13 +520,13 @@ public final class Job implements Writable {
   }
 
   /**
-   * Return an array of GroomServers name.
+   * Return an array of GroomServers containing host and port values.
    * If it's array size is 0, indicating all tasks are passive assigning to 
    * GroomServers.
    * Note: target servers are not distincted/ grouped here because multiple 
    *       tasks may run on the same GroomServer.
    */
-  public String[] getTargets() {
+  public String[] targetGrooms() {
     return conf.getStrings("bsp.target.grooms", new String[]{});
   }
 
@@ -536,7 +540,7 @@ public final class Job implements Writable {
 
   public SystemInfo[] targetInfos() {
     final String sys = conf.get("bsp.actor-system.name", "BSPSystem");
-    final String[] targets = getTargets();
+    final String[] targets = targetGrooms();
     SystemInfo[] infos = new SystemInfo[0];
     if(null != targets && 0 != targets.length) {
       infos = new SystemInfo[targets.length];

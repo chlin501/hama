@@ -50,7 +50,7 @@ final class GroomsTracker extends Tracker {
   private var totalMaxTasks: Int = 0
   
   /* free slots per groom */
-  private var freeSlotsByGroom = Map.empty[Groom, FreeSlots] 
+  private var freeSlotsPerGroom = Map.empty[Groom, FreeSlots] 
 
   override def initialize() = subscribe(GroomLeaveEvent)
 
@@ -68,7 +68,7 @@ final class GroomsTracker extends Tracker {
   private def sumMaxTasks(stats: GroomStats) = totalMaxTasks += stats.maxTasks
 
   private def sumFreeSlots(stats: GroomStats) =  
-    freeSlotsByGroom ++= Map(key(stats) -> freeSlots(stats))
+    freeSlotsPerGroom ++= Map(key(stats) -> freeSlots(stats))
 
   /**
    * Sum up free slots of a particular GroomStats. 
@@ -99,7 +99,7 @@ final class GroomsTracker extends Tracker {
 
   private def subMaxTasks(stats: GroomStats) = totalMaxTasks -= stats.maxTasks
 
-  private def subFreeSlots(stats: GroomStats) = freeSlotsByGroom -= key(stats)
+  private def subFreeSlots(stats: GroomStats) = freeSlotsPerGroom -= key(stats)
 
   private def key(stats: GroomStats): String = 
     stats.name+"_"+stats.host+"_"+stats.port
@@ -121,7 +121,7 @@ final class GroomsTracker extends Tracker {
       host.equals(stats.host) && (port == stats.port)
     ) match {
       case Some(stats) => from ! GroomCapacity(host, port, 
-        freeSlotsByGroom.get(key(stats)).getOrElse(0))
+        freeSlotsPerGroom.get(key(stats)).getOrElse(0))
       case None => from ! GroomCapacity(host, port, 0) 
     }
     case _ => LOG.warning("Unknown action {} from {}!", action, from)

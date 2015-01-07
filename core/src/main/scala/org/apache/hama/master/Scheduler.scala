@@ -79,7 +79,7 @@ object Scheduler {
 
 }
 
-// TODO: - separate schedule functions from this concrete impl.
+// TODO: - separate schedule functions from concrete impl.
 //         e.g. class WrappedScheduler(setting: Setting, scheduler: Scheduler)
 //         trait scheduluer#assign // passive
 //         trait scheduluer#schedule // active
@@ -91,8 +91,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   type ProcessingQueue = Queue[Ticket]
 
   /**
-   * A queue that holds jobs with tasks left unassigning to GroomServers.
-   * N.B.: Jobs in this queue are processed sequentially. Only after a job 
+   * A queue that holds a job having tasks unassigned to GroomServers.
+   * It should contain one job only at current implementation .
+   * Note: The job in this queue are processed sequentially. Only after a job 
    *       with all tasks are dispatched to GroomServers and is moved to 
    *       processingQueue the next job will be processed. 
    */
@@ -160,9 +161,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * are not available.
    * @param job contains tasks to be scheduled.
    */
-  protected def activeSchedule(job: Job) = job.getTargets match {
+  protected def activeSchedule(job: Job) = job.targetGrooms match {
     case null => 
-    case _ => job.getTargets.length match { 
+    case _ => job.targetGrooms.length match { 
       case 0 =>
       case _ => schedule(job)
     }
@@ -220,7 +221,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       LOG.debug("GroomServer form {} at {}:{} requests for assigning a task.", 
                 sender.path.name, req.stats.map { s => s.host}, 
                 req.stats.map { s=> s.port})
-      // TODO: make sure all active tasks are scheduled before passive assign begins
+      // TODO: make sure all active tasks are scheduled before passive assign begins; before that, perhaps drop request
       passiveAssign(req.stats, sender)
     }
   } 
@@ -268,11 +269,31 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   // TODO: reschedule/ reassign tasks
   //       if it's the active target grooms that fail 
-  //          if other target grooms has free slots, then reschdule
+  //          if other target grooms has free slots, then reschdule (?)
   //          else fail job and notify client.
   //       else wait for other groom requesting for task.
   protected def events: Receive = {
-    case event: GroomLeave => // TODO: reschedule according to task's active grooms setting
+    case GroomLeave(name, host, port) => { 
+      val ticket = taskAssignQueue.head
+      val job = ticket.job
+      job.targetGrooms.filter(groom => groom.equals(host+":"+port)) match {
+        case matched: Array[String] if matched.isEmpty => 
+          job.findTasksBy(host, port).map { task => 
+            task.failedState
+            val newTask = task.withIdIncremented 
+            val oldId = task.getId
+            // TODO: replace old task with new one in job
+            //       job.replace(oldId, newTask)
+          }
+        case matched: Array[String] if !matched.isEmpty => {
+          ticket.client ! Reject("Target groom %s:%d fails!".format(host, port))
+          // TODO: mark job as failed 
+          //       move job to finished queue
+        }
+      }
+      // TODO: 
+      //       - otherwise create a new task and waiting for groom request.
+    }
     case latest: Task => // TODO: update task in queue.
     case fault: TaskFailure => // TODO: reschedule the task by checking task's active groom setting.
   }
@@ -282,4 +303,5 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     federator ! JobFinishedMessage(jobId) 
 
   override def receive = tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
+
 }

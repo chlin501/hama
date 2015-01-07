@@ -26,4 +26,6 @@ object JvmStatsTracker {
   def fullName(): String = classOf[JvmStatsTracker].getName
 }
 
+// TODO: collected grooms vm stats. 
+//       rename to groom sys stats.
 final class JvmStatsTracker extends Tracker 

@@ -52,6 +52,10 @@ public class TaskAttemptID extends ID {
     return taskId;
   }
 
+  public TaskAttemptID next() {
+    return new TaskAttemptID(getTaskID(), (getId()+1));
+  }
+
   @Override
   public boolean equals(Object o) {
     if (!super.equals(o))
