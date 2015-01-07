@@ -75,9 +75,9 @@ object TaskFailure {
 
 final class TaskFailure extends Writable {
 
-  protected[groom] var id: Option[TaskAttemptID] = None
+  protected[groom] var id: Option[TaskAttemptID] = None // TODO: remove option
 
-  protected[groom] var s: Option[GroomStats] = None
+  protected[groom] var s: Option[GroomStats] = None // TODO: remove option
 
   def taskAttemptId(): Option[TaskAttemptID] = id
 

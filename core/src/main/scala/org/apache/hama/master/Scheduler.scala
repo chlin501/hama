@@ -294,8 +294,27 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       // TODO: 
       //       - otherwise create a new task and waiting for groom request.
     }
-    case latest: Task => // TODO: update task in queue.
-    case fault: TaskFailure => // TODO: reschedule the task by checking task's active groom setting.
+    case latest: Task => {
+      // TODO: update task in queue.
+      //       check if all tasks are successful. if true, call whenJobFinished.
+    }
+    case fault: TaskFailure => {
+      // TODO: reschedule the task by checking task's active groom setting.
+      //       - search fault.taskAttemptId in queue's job.
+      //       - check if the task is active or passive:
+      //         if active, check if target grooms have free slots avail.
+      //            if free slots avail, 
+      //               a. clone a new task with (id + 1), 
+      //               b. update related task data, stats, etc.
+      //               c. sched to the free slot 
+      //            if no free slots avail, 
+      //               a. mark job as failed 
+      //               b. reject back to the client
+      //               c.  move the job to finished (history?) queue.
+      //         if passive
+      //            a. clone task with (id + 1)
+      //            b. add that task in the job. groom will request for exec
+    }
   }
 
   // TODO: call this function when the job is finished
