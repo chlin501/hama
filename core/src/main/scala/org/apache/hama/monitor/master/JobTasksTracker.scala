@@ -20,6 +20,7 @@ package org.apache.hama.monitor.master
 import org.apache.hadoop.io.Writable
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.master.JobFinishedEvent
 import org.apache.hama.monitor.PublishEvent
 import org.apache.hama.monitor.Tracker
 
@@ -40,13 +41,19 @@ final class JobTasksTracker extends Tracker {
 
   private var currentSuperstep = 0 
 
-  // TODO: subscribe to sched's Job Finished event and clean up tasks set.
+  override def initialize() = subscribe(JobFinishedEvent)
+
+  override def notified(msg: Any) = msg match {
+    case jobId: BSPJobID if null != jobId => if(jobId.equals(tasks.head.getId))
+      tasks = Set.empty[Task] else LOG.warning("Job id not matched {}", jobId)
+    case _ => LOG.warning("Unknown notification data {}", msg)
+  }
+
   override def receive(stats: Writable) = stats match {
     case task: Task => {
       if(tasks.isEmpty) currentSuperstep = task.getCurrentSuperstep
       tasks += task
       val totalTasks = task.getTotalBSPTasks
-      // TODO: publish task arrival event and sched subscribe for notification
       publish(TaskArrivalEvent, task) 
       if(totalTasks == tasks.size && goToNextSuperstep(totalTasks)) {
         currentSuperstep += 1

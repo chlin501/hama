@@ -361,6 +361,9 @@ trait Ganglion {
 
 }
 
+/**
+ * Publish an event on behalf of probes and external services.
+ */
 trait Publisher extends EventListener { self: Agent => 
 
   /**

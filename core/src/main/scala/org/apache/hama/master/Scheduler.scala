@@ -26,6 +26,7 @@ import org.apache.hama.Periodically
 import org.apache.hama.SubscribeEvent
 import org.apache.hama.SystemInfo
 import org.apache.hama.Tick
+import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.conf.Setting
@@ -37,6 +38,8 @@ import org.apache.hama.master.Directive.Action.Kill
 import org.apache.hama.master.Directive.Action.Resume
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.master.TaskArrivalEvent
+import org.apache.hama.monitor.PublishEvent
+import org.apache.hama.monitor.PublishMessage
 import scala.collection.immutable.Queue
 
 sealed trait SchedulerMessage
@@ -47,7 +50,25 @@ final case class TargetRefs(refs: Array[ActorRef]) extends SchedulerMessage
 final case class SomeMatched(matched: Array[ActorRef],
                              unmatched: Array[String]) extends SchedulerMessage
 
-final case object JobFinishedEvent extends Event
+final case object JobFinishedEvent extends PublishEvent
+
+object JobFinishedMessage {
+  def apply(id: BSPJobID): JobFinishedMessage = {
+    val msg = new JobFinishedMessage
+    msg.id = id 
+    msg
+  }
+}
+
+final class JobFinishedMessage extends PublishMessage {
+
+  protected[master] var id = new BSPJobID()
+
+  override def event(): PublishEvent = JobFinishedEvent
+
+  override def msg(): Any = id
+
+}
 
 object Scheduler {
 
@@ -254,6 +275,10 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     case event: GroomLeave => // TODO: reschedule according to task's active grooms setting
     case latest: Task => // TODO: update task in queue.
     case fault: TaskFailure => // TODO: reschedule the task by checking task's active groom setting.
+  }
+
+  protected def whenJobFinished(jobId: BSPJobID) {
+    federator ! JobFinishedMessage(jobId) 
   }
 
   override def receive = tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
