@@ -34,6 +34,10 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
+class MockF extends Agent {
+  override def receive = unknown
+}
+
 // client
 class MockC extends Agent {
   override def receive = unknown
@@ -135,8 +139,9 @@ class MockM(tester: ActorRef) extends Agent {
 }
 
 class MockScheduler(setting: Setting, master: ActorRef, 
-                    receptionist: ActorRef, tester: ActorRef) 
-    extends Scheduler(setting, master, receptionist) {
+                    receptionist: ActorRef, federator: ActorRef, 
+                    tester: ActorRef) 
+      extends Scheduler(setting, master, receptionist, federator) {
 
   var isActive = false
 
@@ -188,10 +193,12 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     val targets = Array("groom214:51144", "groom129:50002", "groom9:58249")
     val job = createJob("test", 3, "sched-active-passive", targets, 5)
     val c = createWithArgs("mockClient", classOf[MockC])
+    val f = createWithArgs("mockFederator", classOf[MockF])
     val m = createWithArgs("mockMaster", classOf[MockM], tester) 
     val r = createWithArgs("mockReceptionist", classOf[MockR], c, job) 
     val sched = createWithArgs(Scheduler.simpleName(setting.hama), 
-                               classOf[MockScheduler], setting, m, r, tester)  
+                               classOf[MockScheduler], setting, m, r, f,
+                               tester)  
 
     expectAnyOf(d1, d2, d3)
     expectAnyOf(d1, d2, d3)

@@ -122,7 +122,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     val receptionist = getOrCreate(Receptionist.simpleName(conf), 
                                    classOf[Receptionist], setting, federator) 
     getOrCreate(Scheduler.simpleName(conf), classOf[Scheduler], 
-                conf, self, receptionist) 
+                conf, self, receptionist, federator) 
     // TODO: change master state
   }
 

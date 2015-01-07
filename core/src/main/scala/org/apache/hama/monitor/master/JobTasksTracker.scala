@@ -23,6 +23,7 @@ import org.apache.hama.bsp.v2.Task
 import org.apache.hama.monitor.PublishEvent
 import org.apache.hama.monitor.Tracker
 
+final case object TaskArrivalEvent extends PublishEvent
 final case object SuperstepIncrementEvent extends PublishEvent
 final case class LatestSuperstep(jobId: BSPJobID, superstep: Int, 
                                  totalTasks: Int)
@@ -46,7 +47,7 @@ final class JobTasksTracker extends Tracker {
       tasks += task
       val totalTasks = task.getTotalBSPTasks
       // TODO: publish task arrival event and sched subscribe for notification
-      //       publish(TaskArrival, task) 
+      publish(TaskArrivalEvent, task) 
       if(totalTasks == tasks.size && goToNextSuperstep(totalTasks)) {
         currentSuperstep += 1
         publish(SuperstepIncrementEvent,  

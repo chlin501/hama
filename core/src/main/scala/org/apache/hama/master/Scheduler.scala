@@ -19,6 +19,7 @@ package org.apache.hama.master
 
 import akka.actor.ActorRef
 import akka.actor.Cancellable
+import org.apache.hama.Event
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.Periodically
@@ -35,6 +36,7 @@ import org.apache.hama.master.Directive.Action.Launch
 import org.apache.hama.master.Directive.Action.Kill
 import org.apache.hama.master.Directive.Action.Resume
 import org.apache.hama.monitor.GroomStats
+import org.apache.hama.monitor.master.TaskArrivalEvent
 import scala.collection.immutable.Queue
 
 sealed trait SchedulerMessage
@@ -44,6 +46,8 @@ final case class GetTargetRefs(infos: Array[SystemInfo])
 final case class TargetRefs(refs: Array[ActorRef]) extends SchedulerMessage
 final case class SomeMatched(matched: Array[ActorRef],
                              unmatched: Array[String]) extends SchedulerMessage
+
+final case object JobFinishedEvent extends Event
 
 object Scheduler {
 
@@ -59,8 +63,8 @@ object Scheduler {
 //         trait scheduluer#assign // passive
 //         trait scheduluer#schedule // active
 //       - update internal stats to related tracker
-class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef) 
-      extends LocalService with Periodically {
+class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
+                federator: ActorRef) extends LocalService with Periodically {
 
   type TaskAssignQueue = Queue[Ticket]
   type ProcessingQueue = Queue[Ticket]
@@ -84,8 +88,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
   //       where storing job's metadata e.g. setting
 
   override def initializeServices = {
-    master ! SubscribeEvent(GroomLeaveEvent, RequestTaskEvent, 
-                            TaskFailureEvent)
+    master ! SubscribeEvent(GroomLeaveEvent, RequestTaskEvent, TaskFailureEvent)
+    federator ! SubscribeEvent(TaskArrivalEvent) 
     LOG.debug("Listening to groom leave, request task, and task failure "+
               "events!")
     tick(self, NextPlease)
@@ -248,13 +252,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef)
   //       else wait for other groom requesting for task.
   protected def events: Receive = {
     case event: GroomLeave => // TODO: reschedule according to task's active grooms setting
-  }
-
-  protected def taskFailure: Receive = {
+    case latest: Task => // TODO: update task in queue.
     case fault: TaskFailure => // TODO: reschedule the task by checking task's active groom setting.
   }
 
-  
-
-  override def receive = taskFailure orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
+  override def receive = tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
 }
