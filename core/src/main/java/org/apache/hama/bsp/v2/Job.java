@@ -512,6 +512,18 @@ public final class Job implements Writable {
   }
 
   /**
+   * Tasktable:  
+   * - create a new task, with attempt id incremented, based on the old one.
+   * - append the new task to the end of corresponded column.
+   * - mark the old task as failure.
+   */
+  public void rearrange(final Task old) {
+    final Task newTask = old.withIdIncremented(); 
+    getTasks().add(newTask);
+    old.failedState();
+  }
+
+  /**
    * This function is mainly used by Scheduler for checking next available 
    * task. 
    */

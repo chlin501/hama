@@ -29,6 +29,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hama.bsp.BSPJobID;
+import org.apache.hama.bsp.TaskID;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.io.PartitionedSplit;
 
@@ -95,9 +96,9 @@ public final class TaskTable implements Writable {
                                           .getTaskAttemptIDBuilder()
                                           .withId(1) // TaskAttemptID's id
                                           .build()).
-                          setConfiguration(conf).
-                          setSplit(split).
-                          build()
+                           setConfiguration(conf).
+                           setSplit(split).
+                           build()
       }); 
     }
     LOG.info("TaskTable for "+jobId.toString()+" has "+numBSPTasks+
@@ -208,6 +209,12 @@ public final class TaskTable implements Writable {
     return taskAttemptArray.length;
   }
 
+  /**
+   * Find tasks matching to host, port supplied.
+   * Matched tasks denote tasks running on the node with host and port values
+   * given. 
+   * @param Task[] is an array of tasks matching to host and port values given.
+   */
   public Task[] findTasksBy(final String host, final int port) {
     final List<Task> matched = new ArrayList<Task>();
     for (int row = 0; row < rowLength(); row++) {
@@ -266,23 +273,60 @@ public final class TaskTable implements Writable {
   }
 
   /**
-   * Add a (restarted) task to the end of a designated row.
+   * Add a new task to the end of a designated row.
    * @param row of the task table. 
-   * @param task to be added.
+   * @param newTask to be added.
    */
-  public void add(final int row, final Task task) {
+  public void add(final int row, final Task newTask) {
     if(!isValidRow(row)) return;
     final Task[] taskAttemptArray = get(row);
-    if(null == taskAttemptArray) return;
+    if(null == taskAttemptArray) 
+      throw new NullPointerException("Attempt tasks at row "+row+" is empty!"); 
+    final int maxAttemptAllowed = getMaxTaskAttempts(); 
+    if(maxAttemptAllowed < taskAttemptArray.length) 
+      throw new ExceedMaxTaskAllowedException(newTask.getId().getJobID().
+      toString(), maxAttemptAllowed);
     final Task[] tmpTasks = new Task[taskAttemptArray.length+1];
     for(int idx = 0; idx < tmpTasks.length; idx++) {
       if(idx < (taskAttemptArray.length-1) ) {
         tmpTasks[idx] = taskAttemptArray[idx];
       } else {
-        tmpTasks[idx] = task;
+        tmpTasks[idx] = newTask;
       }
     }
     this.set(row, tmpTasks); 
+  }
+
+  /**
+   * Append the newest task to the end of the corresponded column, i.e. task id
+   * are equal, if not exceeding the max task attempt allowed.
+   */
+  public void add(final Task newTask) {
+    final TaskID id = newTask.getId().getTaskID();
+    for (int row = 0; row < rowLength(); row++) {
+      final Task old = latestTaskAt(row);
+      if(null == old) 
+        throw new NullPointerException("The latest task is empty at row "+row);
+      if(old.getId().getTaskID().equals(id)) {
+        final Task[] oldAttempts = get(row);    
+        if(null == oldAttempts) 
+          throw new NullPointerException("Attempt tasks at row " + row + 
+                                         "is empty!"); 
+        final int maxAttemptAllowed = getMaxTaskAttempts(); 
+        if(maxAttemptAllowed < oldAttempts.length) 
+          throw new ExceedMaxTaskAllowedException(newTask.getId().getJobID().
+          toString(), maxAttemptAllowed);
+        final Task[] tmpAttempts = new Task[oldAttempts.length+1];
+        for(int idx = 0; idx < tmpAttempts.length; idx++) {
+          if(idx < (oldAttempts.length-1) ) {
+            tmpAttempts[idx] = oldAttempts[idx];
+          } else {
+            tmpAttempts[idx] = newTask;
+          }
+        }
+        this.set(row, tmpAttempts);  
+      }
+    }
   }
 
   /**

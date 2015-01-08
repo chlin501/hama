@@ -27,6 +27,7 @@ import org.apache.hama.SubscribeEvent
 import org.apache.hama.SystemInfo
 import org.apache.hama.Tick
 import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.bsp.v2.ExceedMaxTaskAllowedException
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.conf.Setting
@@ -278,18 +279,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       val job = ticket.job
       job.targetGrooms.filter(groom => groom.equals(host+":"+port)) match {
         case matched: Array[String] if matched.isEmpty => 
-          job.findTasksBy(host, port).map { task => 
-            task.failedState
-            val newTask = task.withIdIncremented 
-            val oldId = task.getId
-            // TODO: replace old task with new one in job
-            //       job.replace(oldId, newTask)
-          }
-        case matched: Array[String] if !matched.isEmpty => {
-          ticket.client ! Reject("Target groom %s:%d fails!".format(host, port))
-          // TODO: mark job as failed 
-          //       move job to finished queue
-        }
+          passiveTask(host, port, ticket)
+        case matched: Array[String] if !matched.isEmpty => 
+          activeTask(host, port, ticket)
       }
       // TODO: 
       //       - otherwise create a new task and waiting for groom request.
@@ -315,6 +307,30 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       //            a. clone task with (id + 1)
       //            b. add that task in the job. groom will request for exec
     }
+  }
+
+  protected def passiveTask(host: String, port: Int, ticket: Ticket) = try {
+    ticket.job.findTasksBy(host, port).foreach { task => 
+      ticket.job.rearrange(task)
+    }
+  } catch {
+    case e: ExceedMaxTaskAllowedException => {
+      // TODO: clean up job (kill all tasks, move to finished queue, etc.)
+      //       once cleanup is done, reject back to client.
+      ticket.client ! Reject("Job %s exceeds max retry %s!".format(
+        e.getJobId, e.getMaxAttemptAllowed)
+      )
+    }
+    case e: Exception => {
+      LOG.error("Exception out of expectation {}!", e)
+      // TODO: fail job. do cleanup and reject back to client.
+    }
+  }
+
+  protected def activeTask(host: String, port: Int, ticket: Ticket) {
+    ticket.client ! Reject("Target groom %s:%d fails!".format(host, port))
+    // TODO: mark job as failed 
+    //       move job to finished queue
   }
 
   // TODO: call this function when the job is finished
