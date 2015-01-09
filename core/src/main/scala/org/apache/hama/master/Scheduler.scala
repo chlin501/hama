@@ -80,6 +80,9 @@ object Scheduler {
 
 }
 
+sealed trait Command
+final case class KillJob(reason: String) extends Command
+
 // TODO: - separate schedule functions from concrete impl.
 //         e.g. class WrappedScheduler(setting: Setting, scheduler: Scheduler)
 //         trait scheduluer#assign // passive
@@ -89,7 +92,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                 federator: ActorRef) extends LocalService with Periodically {
 
   type TaskAssignQueue = Queue[Ticket]
+
   type ProcessingQueue = Queue[Ticket]
+
+  type JobId = String
+
+  type Commands = Set[Command]
 
   /**
    * A queue that holds a job having tasks unassigned to GroomServers.
@@ -106,6 +114,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * events occurs.
    */
   protected var processingQueue = Queue[Ticket]()
+
+  protected var commands = Map.empty[JobId, Commands]
 
   // TODO: move the finished job to Federator's JobHistoryTracker, 
   //       where storing job's metadata e.g. setting
@@ -315,11 +325,25 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     }
   } catch {
     case e: ExceedMaxTaskAllowedException => {
-      // TODO: clean up job (kill all tasks, move to finished queue, etc.)
-      //       once cleanup is done, reject back to client.
-      ticket.client ! Reject("Job %s exceeds max retry %s!".format(
-        e.getJobId, e.getMaxAttemptAllowed)
-      )
+      val reason = "Job %s exceeds max retry %s!".format(e.getJobId, 
+                   e.getMaxAttemptAllowed)
+      val cmds: Commands = commands.get(e.getJobId) match {
+        case Some(set) => set + KillJob(reason)
+        case None => Set(KillJob(reason))
+      }
+      commands = Map(ticket.job.getId.toString -> cmds)
+      // - find groom refs (ask master) for tasks  
+      // add partial funcs for receiving matched groom refs 
+      // - issue kill to all tasks e.g. groom ! new Directive(Kill...)
+      // add partial funcs for receiving Kill ack from groom
+      //     mark the received ack task as killed.
+      //     each time in Receive, check if all tasks are killed.
+      //     if all tasks are killed, 
+      //        a. mark the job failed e.g. val job = Job.newWithState(Failed)
+      //        b. call whenJobFinished 
+      //        c. move to finished queue or directly move to job history(?)
+      //        d. issue ticket.client ! Reject (killjob.reason)
+      //     else do nothing
     }
     case e: Exception => {
       LOG.error("Exception out of expectation {}!", e)

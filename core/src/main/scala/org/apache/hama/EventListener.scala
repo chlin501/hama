@@ -39,10 +39,11 @@ trait EventListener { self: Agent =>
   protected var mapping = Map.empty[Event, Set[ActorRef]]
 
   protected def eventListenerManagement: Receive = {
-    case s: SubscribeEvent => s.events.foreach ( event => 
-      mapping = mapping.filter( p => event.equals(p._1)).
-                        mapValues { refs => refs + sender }
-    )
+    case s: SubscribeEvent => s.events.foreach ( event => if(!mapping.isEmpty) {
+      mapping = mapping.filter( p => event.equals(p._1)).mapValues { refs => 
+        refs + sender 
+      }
+    } else mapping ++= Map(event -> Set.empty[ActorRef]))
     case us: UnsubscribeEvent => us.events.foreach( event => 
       mapping = mapping.filter( p => event.equals(p._1)).
                         mapValues { refs => refs - sender }

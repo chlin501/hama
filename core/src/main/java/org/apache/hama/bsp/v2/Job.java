@@ -474,6 +474,10 @@ public final class Job implements Writable {
   public State getState() {
     return this.state;
   }
+  
+  public Job newWithState(final State newState) {
+    return new Builder(this).setState(newState).build();
+  }
 
   public long getProgress() {
     return this.progress.get();

@@ -49,8 +49,7 @@ final case class Invalid(reason: String) extends Validation
 
 sealed trait ReceptionistMessage
 
-final case class Ticket(client: ActorRef, job: Job)
-      extends ReceptionistMessage
+final case class Ticket(client: ActorRef, job: Job) extends ReceptionistMessage 
 
 /**
  * Validate job configuration, sent from a particular client, matched to a 
