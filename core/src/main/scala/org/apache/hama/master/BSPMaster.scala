@@ -183,11 +183,14 @@ class BSPMaster(setting: Setting, registrator: Registrator)
         case Some(ref) => matched ++= Array(ref)
         case None => unmatched ++= Array(info.getHost+":"+info.getPort)
       })
-      unmatched.length match {
-        case 0 => sender ! TargetRefs(matched)
-        case _ => sender ! SomeMatched(matched, unmatched)
+      unmatched.isEmpty match {
+        case true => sender ! TargetRefs(matched)
+        case false => sender ! SomeMatched(matched, unmatched)
       } 
     } 
+    //case FindMatchedGrooms(infos) => {
+      
+    //}
   }
 
   protected def msgFromGroom: Receive = {

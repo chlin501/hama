@@ -42,6 +42,7 @@ import org.apache.hama.monitor.master.TaskArrivalEvent
 import org.apache.hama.monitor.PublishEvent
 import org.apache.hama.monitor.PublishMessage
 import scala.collection.immutable.Queue
+import scala.collection.JavaConversions._
 
 sealed trait SchedulerMessage
 final case object NextPlease extends SchedulerMessage with Tick
@@ -332,6 +333,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case None => Set(KillJob(reason))
       }
       commands = Map(ticket.job.getId.toString -> cmds)
+      // val grooms = ticket.job.grooms 
+      // master ! FindGrooms(grooms)
       // - find groom refs (ask master) for tasks  
       // add partial funcs for receiving matched groom refs 
       // - issue kill to all tasks e.g. groom ! new Directive(Kill...)

@@ -21,13 +21,17 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
+import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.ArrayWritable;
 import org.apache.hadoop.io.Writable;
+import org.apache.hama.SystemInfo;
 import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.bsp.TaskID;
 import org.apache.hama.HamaConfiguration;
@@ -158,7 +162,7 @@ public final class TaskTable implements Writable {
    * @param row denotes the N-th row, started from 0, in the task table. 
    * @return int denotes the max value of a task retry.
    */
-  public int columnLength(final int row) {
+  int columnLength(final int row) {
     return sizeAt(row);
   }
 
@@ -172,7 +176,7 @@ public final class TaskTable implements Writable {
    * @return Task[] with length at least set to 1; otherwise null if invalid 
    *                row parameter is passed in.
    */ 
-  public Task[] get(final int row) {
+  Task[] get(final int row) {
     if(0 > row || rowLength() <= row) 
       throw new IllegalArgumentException("Invalid row value: "+row +". Total "+
                                          "row length is "+rowLength());
@@ -184,14 +188,14 @@ public final class TaskTable implements Writable {
    * @param row denotes the i-th row, started from 0, of the table.
    * @param tasks are the entire tasks to be retried, including the init task.
    */
-  public void set(final int row, final Task[] tasks) {
+  void set(final int row, final Task[] tasks) {
     if(0 > row || rowLength() <= row) 
       throw new IllegalArgumentException("Invalid row value: "+row +". Total "+
                                          "row length is "+rowLength());
     this.tasks[row].set(tasks);
   }
 
-  public void set(final int row, final int column, final Task task) {
+  void set(final int row, final int column, final Task task) {
     if(0 > row || rowLength() <= row) 
       throw new IllegalArgumentException("Invalid row value: "+row +". Total "+
                                          "row length is "+rowLength());
@@ -203,7 +207,7 @@ public final class TaskTable implements Writable {
    * Tell the size of tasks at N-th row.
    * @param row dentoes the N-th row, started from 0, in the task table.
    */
-  public int sizeAt(final int row) {
+  int sizeAt(final int row) {
     final Task[] taskAttemptArray = get(row); 
     if(null == taskAttemptArray) return -1;
     return taskAttemptArray.length;
@@ -215,7 +219,7 @@ public final class TaskTable implements Writable {
    * given. 
    * @param Task[] is an array of tasks matching to host and port values given.
    */
-  public Task[] findTasksBy(final String host, final int port) {
+  List<Task> findTasksBy(final String host, final int port) {
     final List<Task> matched = new ArrayList<Task>();
     for (int row = 0; row < rowLength(); row++) {
       final Task task = latestTaskAt(row);
@@ -224,17 +228,37 @@ public final class TaskTable implements Writable {
       if(task.getAssignedHost().equals(host) && 
          (port == task.getAssignedPort())) matched.add(task);
     }
-    return (Task[]) matched.toArray(new Task[matched.size()]);
+    return Collections.unmodifiableList(matched);
   }
 
   /**
    * Retrieve the latest task at the N-th row.
    * @param row dentoes the N-th row, started from 0, in the task table.
    */
-  public Task latestTaskAt(final int row) {
+  Task latestTaskAt(final int row) {
     final Task[] taskAttemptArray = get(row); 
     if(null == taskAttemptArray) return null;
     return taskAttemptArray[taskAttemptArray.length-1];
+  }
+
+  /**
+   * Return the latest tasks that is currently running.
+   */
+  List<Task> latestTasks() {
+    final List<Task> latestTasks = new ArrayList<Task>();
+    for (int row = 0; row < rowLength(); row++) {
+      final Task latest = latestTaskAt(row);
+      latestTasks.add(latest);  
+    } 
+    return Collections.unmodifiableList(latestTasks);
+  }
+
+  Set<SystemInfo> grooms() {
+    final Set<SystemInfo> infos = new HashSet<SystemInfo>();
+    for(final Task latest: latestTasks()) {
+      infos.add(latest.runsAt());
+    }
+    return Collections.unmodifiableSet(infos);
   }
 
   /**
@@ -243,7 +267,7 @@ public final class TaskTable implements Writable {
    *             value.
    */
   // TODO: refactor 
-  public Map<String, Integer> group() {
+  Map<String, Integer> group() {
     final Map<String, Integer> cache = new HashMap<String, Integer>();
     for(int row=0;row<rowLength(); row++) {
       final Task task = latestTaskAt(row);
@@ -265,7 +289,7 @@ public final class TaskTable implements Writable {
    * @param row is the numBSPTasks
    * @param column is the maxTaskAttempts.
    */
-  public Task get(final int row, final int column) {
+  Task get(final int row, final int column) {
     if(!isValidPosition(row, column)) return null;
     final Task[] taskAttemptArray= get(row);
     if(null == taskAttemptArray) return null;
@@ -277,7 +301,7 @@ public final class TaskTable implements Writable {
    * @param row of the task table. 
    * @param newTask to be added.
    */
-  public void add(final int row, final Task newTask) {
+  void add(final int row, final Task newTask) {
     if(!isValidRow(row)) return;
     final Task[] taskAttemptArray = get(row);
     if(null == taskAttemptArray) 
@@ -301,7 +325,7 @@ public final class TaskTable implements Writable {
    * Append the newest task to the end of the corresponded column, i.e. task id
    * are equal, if not exceeding the max task attempt allowed.
    */
-  public void add(final Task newTask) {
+  void add(final Task newTask) {
     final TaskID id = newTask.getId().getTaskID();
     for (int row = 0; row < rowLength(); row++) {
       final Task old = latestTaskAt(row);
@@ -333,7 +357,7 @@ public final class TaskTable implements Writable {
    * Remove the latest task from a designed row.
    * @param row at which the latest task will be removed.
    */
-  public void remove(final int row) {
+  void remove(final int row) {
     if(!isValidRow(row)) return;
     final Task[] taskAttemptArray = get(row);
     final Task[] tmpTasks = new Task[taskAttemptArray.length-1];
@@ -348,7 +372,7 @@ public final class TaskTable implements Writable {
    * @return Task that is not yet assigned to a GroomServer; null if all tasks
    *              are already assigned to GroomServers.
    */
-  public Task nextUnassignedTask() {
+  Task nextUnassignedTask() {
     for(int row = 0; row < rowLength(); row++) {
       final int lastTaskPos = (columnLength(row) - 1);
       final Task task = get(row, lastTaskPos); 
@@ -360,7 +384,7 @@ public final class TaskTable implements Writable {
   }
 
 /*
-  public boolean areAllTasksAssigned() {
+  boolean areAllTasksAssigned() {
     int count = 0;
     for(int idx = 0; idx < rowLength(); idx++) {
       final int lastTaskPos = (columnLength(row) - 1);

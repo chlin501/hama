@@ -516,6 +516,11 @@ public final class Task implements Writable {
     return getAssignedHost() + ":" + getAssignedPort();
   }
 
+  public SystemInfo runsAt() {
+    final String sys = configuration.get("bsp.actor-system.name", "BSPSystem");
+    return new SystemInfo(sys, getAssignedHost(), getAssignedPort()); 
+  }
+
   /**
    * Mark this is an action that actively schedules a task to a particular 
    * target groom server.

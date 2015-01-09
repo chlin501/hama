@@ -22,6 +22,8 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.Path;
@@ -511,7 +513,7 @@ public final class Job implements Writable {
     return this.taskTable;
   }
 
-  public Task[] findTasksBy(final String host, final int port) {
+  public List<Task> findTasksBy(final String host, final int port) {
     return getTasks().findTasksBy(host, port);
   }
 
@@ -547,7 +549,7 @@ public final class Job implements Writable {
   }
 
   /**
-   * Obtain tasks in a form of string.
+   * Obtain target grooms in the form of string.
    * @return String of all target GroomServers, delimited by comma(,).
    */
   String getTargetStrings() {
@@ -576,6 +578,15 @@ public final class Job implements Writable {
       }
     } 
     return infos;
+  }
+
+  /**
+   * Return groom servers on which tasks are running. 
+   * Multiple tasks may run on the same groom server, but only one info will be
+   * returned by this function. 
+   */
+  public Set<SystemInfo> tasksRunAt() {
+    return getTasks().grooms(); 
   }
 
 /*
