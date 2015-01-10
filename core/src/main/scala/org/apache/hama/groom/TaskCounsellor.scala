@@ -32,7 +32,9 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Periodically
 import org.apache.hama.Service
+import org.apache.hama.SubscribeEvent
 import org.apache.hama.Spawnable
+import org.apache.hama.UnsubscribeEvent
 import org.apache.hama.Tick
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Task
@@ -160,7 +162,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * are not yet initialized. Once the container is initialized, directives 
    * will be dispatched to container directly.
    */
-  //protected var directiveQueue = Queue.empty[SlotToDirective]
   protected var directiveQueue = Queue.empty[Directive]
 
   protected def unwatchContainerWith(seq: Int) = 
@@ -174,7 +175,10 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def maxRetries(): Int = 
     setting.hama.getInt("groom.executor.max_retries", 3)
 
-  override def initializeServices = if(requestTask) tick(self, TaskRequest)
+  override def initializeServices = {
+    groom ! SubscribeEvent(DirectiveArrivalEvent)// TODO: unsubscriveEvent(...)
+    if(requestTask) tick(self, TaskRequest)
+  }
 
   protected def deployContainer(seq: Int): Option[ActorRef] = { 
     setting.hama.setInt("container.slot.seq", seq) 
@@ -229,14 +233,15 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def dispatch(d: Directive)(slot: Slot) = d.action match {
     case Launch => slot.container.map { container => 
-      container ! new LaunchTask(d.task) 
+      container forward new LaunchTask(d.task) 
       slotManager.book(slot.seq, d.task.getId, container) 
     }
     case Resume => slot.executor.map { container => 
-      container ! new ResumeTask(d.task) 
+      container forward new ResumeTask(d.task) 
       slotManager.book(slot.seq, d.task.getId, container)
     }
-    case Kill => // won't be here
+    case Kill => LOG.error("Action Kill by {} shouldn't be here for slot {}!", 
+                           d, slot.seq)
   }
 
   protected def whenExecutorExists(d: Directive): Unit = 

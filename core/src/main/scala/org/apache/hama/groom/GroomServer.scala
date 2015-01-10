@@ -27,6 +27,7 @@ import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.EventListener
 import org.apache.hama.conf.Setting
+import org.apache.hama.master.Directive
 import org.apache.hama.monitor.Stats
 import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.ServicesAvailable
@@ -48,6 +49,10 @@ final case object GroomRequestTaskEvent extends Event
  * A groom event reporting a task failure.
  */
 final case object GroomTaskFailureEvent extends Event
+/**
+ * Directive issued by Scheduler.
+ */
+final case object DirectiveArrivalEvent extends Event
 
 object MasterFinder {
 
@@ -131,5 +136,12 @@ class GroomServer(setting: Setting, finder: MasterFinder)
   protected def listServices(from: ActorRef) = 
     from ! ServicesAvailable(services.toArray)
 
-  override def receive = eventListenerManagement orElse escalate orElse report orElse actorReply orElse retryResult orElse membership orElse unknown
+  /**
+   * Dispatch messages to cooresponded receiver. 
+   */
+  protected def dispatch: Receive = {
+    case directive: Directive => forward(DirectiveArrivalEvent)(directive)
+  }  
+
+  override def receive = eventListenerManagement orElse dispatch orElse escalate orElse report orElse actorReply orElse retryResult orElse membership orElse unknown
 }

@@ -70,6 +70,9 @@ trait MembershipDirector extends Membership with Agent {
     val groomName = participant.path.name
     val groomHost = participant.path.address.host.getOrElse(null)
     val groomPort = participant.path.address.port.getOrElse(-1)
+    if(null == groomHost || -1 == groomPort)
+      throw new RuntimeException("Groom "+groomName+" shouldn't come from "+
+                                 groomHost+":"+groomPort+"!")
     groomJoin(groomName, groomHost, groomPort) 
     grooms += participant
     LOG.info("Groom server {} enrolls!", participant.path.name)

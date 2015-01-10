@@ -56,6 +56,7 @@ final case class FindGroomsToKillTasks(infos: Set[SystemInfo])
       extends SchedulerMessage
 final case class GroomsFound(matched: Set[ActorRef], unmatched: Set[String])
       extends SchedulerMessage
+final case class TaskKilled(taskAttemptId: String) extends SchedulerMessage
 
 final case object JobFinishedEvent extends PublishEvent
 
@@ -217,7 +218,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     case SomeMatched(matched, unmatched) => taskAssignQueue.dequeue match { 
       case tuple: (Ticket, Queue[Ticket]) => {
         tuple._1.client ! Reject("Grooms "+unmatched.mkString(", ")+
-                                 " are missing!")
+                                 " do not exist!")
       }
       case _ =>
     }
@@ -340,16 +341,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       commands = Map(ticket.job.getId.toString -> cmds)
       val grooms = ticket.job.tasksRunAt 
       master ! FindGroomsToKillTasks(asScalaSet(grooms).toSet)
-      // TODO: 
-      // add partial funcs for receiving Kill ack from groom
-      //     mark the received ack task as killed.
-      //     each time in Receive, check if all tasks are killed.
-      //     if all tasks are killed, 
-      //        a. mark the job failed e.g. val job = Job.newWithState(Failed)
-      //        b. call whenJobFinished 
-      //        c. move to finished queue or directly move to job history(?)
-      //        d. issue ticket.client ! Reject (killjob.reason)
-      //     else do nothing
     }
     case e: Exception => {
       LOG.error("Exception out of expectation {}!", e)
@@ -374,6 +365,20 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     })
   }
 
+  protected def taskKilled: Receive = {  
+    case TaskKilled(taskAttemptId) => {
+      // TODO: 
+      //     mark the received ack task as killed.
+      //     each time in Receive, check if all tasks are killed.
+      //     if all tasks are killed, 
+      //        a. mark the job failed e.g. val job = Job.newWithState(Failed)
+      //        b. call whenJobFinished 
+      //        c. move to finished queue or directly move to job history(?)
+      //        d. issue ticket.client ! Reject (killjob.reason)
+      //     else do nothing
+    }
+  }
+
   protected def activeTask(host: String, port: Int, ticket: Ticket) {
     ticket.client ! Reject("Target groom %s:%d fails!".format(host, port))
     // TODO: mark job as failed 
@@ -384,6 +389,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def whenJobFinished(jobId: BSPJobID) =  
     federator ! JobFinishedMessage(jobId) 
 
-  override def receive = groomsFound orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
+  override def receive = taskKilled orElse groomsFound orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
 
 }
