@@ -183,14 +183,23 @@ class BSPMaster(setting: Setting, registrator: Registrator)
         case Some(ref) => matched ++= Array(ref)
         case None => unmatched ++= Array(info.getHost+":"+info.getPort)
       })
-      unmatched.isEmpty match {
+      unmatched.isEmpty match { // TODO: merge TargetRefs and SomeMatched into one e.g. sender ! TargetRefsFound(matched, unmatched)
         case true => sender ! TargetRefs(matched)
         case false => sender ! SomeMatched(matched, unmatched)
       } 
     } 
-    //case FindMatchedGrooms(infos) => {
-      
-    //}
+    case FindGroomsToKillTasks(infos) => {
+      var matched = Set.empty[ActorRef] 
+      var unmatched = Set.empty[String] 
+      infos.foreach( info => grooms.find( groom => 
+        groom.path.address.host.equals(Option(info.getHost)) &&
+        groom.path.address.port.equals(Option(info.getPort))
+      ) match {
+        case Some(ref) => matched += ref
+        case None => unmatched += info.getHost+":"+info.getPort
+      }) 
+      sender ! GroomsFound(matched, unmatched)
+    } 
   }
 
   protected def msgFromGroom: Receive = {

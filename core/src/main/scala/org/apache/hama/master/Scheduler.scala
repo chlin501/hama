@@ -48,12 +48,13 @@ sealed trait SchedulerMessage
 final case object NextPlease extends SchedulerMessage with Tick
 final case class GetTargetRefs(infos: Array[SystemInfo]) 
       extends SchedulerMessage
+// TODO: merge TargetRefs and SomeMatched into e.g. TargetRefsFound?
 final case class TargetRefs(refs: Array[ActorRef]) extends SchedulerMessage
 final case class SomeMatched(matched: Array[ActorRef],
                              unmatched: Array[String]) extends SchedulerMessage
 final case class FindGroomsToKillTasks(infos: Set[SystemInfo]) 
       extends SchedulerMessage
-final case class GroomsFound(matched: Array[ActorRef], unmatched: Array[String])
+final case class GroomsFound(matched: Set[ActorRef], unmatched: Set[String])
       extends SchedulerMessage
 
 final case object JobFinishedEvent extends PublishEvent
@@ -368,7 +369,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       val port = ref.path.address.port.getOrElse(-1)
       taskAssignQueue.head.job.findTasksBy(host, port).foreach ( task =>
         ref !  new Directive(Kill, task, setting.hama.get("master.name", 
-                             setting.name))
+                             setting.name)) // TODO: deal with exception thrown?
       )
     })
   }
