@@ -339,7 +339,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       commands = Map(ticket.job.getId.toString -> cmds)
       val grooms = ticket.job.tasksRunAt 
       master ! FindGroomsToKillTasks(asScalaSet(grooms).toSet)
-      // - issue kill to all tasks e.g. groom ! new Directive(Kill...)
+      // TODO: 
       // add partial funcs for receiving Kill ack from groom
       //     mark the received ack task as killed.
       //     each time in Receive, check if all tasks are killed.
@@ -357,11 +357,20 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   }
 
   /**
-   * In ExceedMaxTaskAllowedException sched asks master the grooms ref to kill
-   * task.
+   * In ExceedMaxTaskAllowedException sched asks master for grooms references
+   * where tasks are running.
+   * Once receiving grooms references, issue kill command to groom servers.
    */
-  protected def groomsFound: Receive = {
-    case GroomsFound(matched, unmatched) => 
+  protected def groomsFound: Receive = { 
+    case GroomsFound(matched, unmatched) => if(unmatched.isEmpty) 
+    matched.foreach( ref => {
+      val host = ref.path.address.host.getOrElse(null)
+      val port = ref.path.address.port.getOrElse(-1)
+      taskAssignQueue.head.job.findTasksBy(host, port).foreach ( task =>
+        ref !  new Directive(Kill, task, setting.hama.get("master.name", 
+                             setting.name))
+      )
+    })
   }
 
   protected def activeTask(host: String, port: Int, ticket: Ticket) {
