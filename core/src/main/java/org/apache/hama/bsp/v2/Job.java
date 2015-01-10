@@ -433,6 +433,10 @@ public final class Job implements Writable {
     return this.lastCheckpoint.get();
   }
 
+  public Job newWithLastCheckpoint(final int lastCheckpoint) {
+    return new Builder(this).setLastCheckpoint(lastCheckpoint).build(); 
+  }
+
   /**
    * Get the number of BSP tasks to run; default set to 1.
    * @return int denotes the tasks will be executed.
@@ -485,28 +489,56 @@ public final class Job implements Writable {
     return this.progress.get();
   }
 
+  public Job newWithProgress(final long progress) {
+    return new Builder(this).setProgress(progress).build();
+  }
+
   public long getSetupProgress() {
     return this.setupProgress.get();
+  }
+
+  public Job newWithSetupProgress(final long setupProgress) {
+    return new Builder(this).setSetupProgress(setupProgress).build();
   }
 
   public long getCleanupProgress() {
     return this.cleanupProgress.get();
   }
 
+  public Job newWithCleanupProgress(final long cleanupProgress) {
+    return new Builder(this).setCleanupProgress(cleanupProgress).build();
+  }
+
   public long getStartTime() {
     return this.startTime.get();
+  }
+
+  public Job newWithStartTime(final long startTime) {
+    return new Builder(this).setStartTime(startTime).build();
   }
 
   public long getFinishTime() {
     return this.finishTime.get();
   }
 
+  public Job newWithFinishTime(final long finishTime) {
+    return new Builder(this).setFinishTime(finishTime).build();
+  }
+
   public long getSuperstepCount() {
     return this.superstepCount.get();
   }
 
+  public Job newWithSuperstepCount(final long superstepCount) {
+    return new Builder(this).setSuperstepCount(superstepCount).build();
+  }
+
   public HamaConfiguration getConfiguration() {
     return this.conf;
+  }
+
+  public Job newWithConfiguation(final HamaConfiguration conf) {
+    return new Builder(this).setConf(conf).build(); 
   }
 
   protected TaskTable getTasks() { 

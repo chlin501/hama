@@ -51,6 +51,10 @@ final case class GetTargetRefs(infos: Array[SystemInfo])
 final case class TargetRefs(refs: Array[ActorRef]) extends SchedulerMessage
 final case class SomeMatched(matched: Array[ActorRef],
                              unmatched: Array[String]) extends SchedulerMessage
+final case class FindGroomsToKillTasks(infos: Set[SystemInfo]) 
+      extends SchedulerMessage
+final case class GroomsFound(matched: Array[ActorRef], unmatched: Array[String])
+      extends SchedulerMessage
 
 final case object JobFinishedEvent extends PublishEvent
 
@@ -333,10 +337,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case None => Set(KillJob(reason))
       }
       commands = Map(ticket.job.getId.toString -> cmds)
-      // val grooms = ticket.job.grooms 
-      // master ! FindGrooms(grooms)
-      // - find groom refs (ask master) for tasks  
-      // add partial funcs for receiving matched groom refs 
+      val grooms = ticket.job.tasksRunAt 
+      master ! FindGroomsToKillTasks(asScalaSet(grooms).toSet)
       // - issue kill to all tasks e.g. groom ! new Directive(Kill...)
       // add partial funcs for receiving Kill ack from groom
       //     mark the received ack task as killed.
@@ -354,6 +356,14 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     }
   }
 
+  /**
+   * In ExceedMaxTaskAllowedException sched asks master the grooms ref to kill
+   * task.
+   */
+  protected def groomsFound: Receive = {
+    case GroomsFound(matched, unmatched) => 
+  }
+
   protected def activeTask(host: String, port: Int, ticket: Ticket) {
     ticket.client ! Reject("Target groom %s:%d fails!".format(host, port))
     // TODO: mark job as failed 
@@ -364,6 +374,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def whenJobFinished(jobId: BSPJobID) =  
     federator ! JobFinishedMessage(jobId) 
 
-  override def receive = tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
+  override def receive = groomsFound orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
 
 }
