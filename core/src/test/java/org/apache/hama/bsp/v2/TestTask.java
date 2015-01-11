@@ -149,7 +149,7 @@ public class TestTask extends TestCase {
     assertTrue("Old task phase should be different from new task 1 phase.", 
                !oldPhase.equals(newTask1Phase));
 
-    newTask1.succeedState();
+    newTask1.succeededState();
     final Task.State newTask1State = newTask1.getState();
     LOG.info("Change new task 1 state to ..."+newTask1State);
     final Task.State oldState = old.getState();

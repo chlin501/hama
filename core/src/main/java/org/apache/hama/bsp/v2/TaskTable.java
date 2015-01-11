@@ -34,6 +34,7 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hama.SystemInfo;
 import org.apache.hama.bsp.BSPJobID;
 import org.apache.hama.bsp.TaskID;
+import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.io.PartitionedSplit;
 
@@ -266,7 +267,7 @@ public final class TaskTable implements Writable {
    * @return Map contains GroomServer name as key, and GroomServer count as
    *             value.
    */
-  // TODO: refactor 
+  // TODO: performance?
   Map<String, Integer> group() {
     final Map<String, Integer> cache = new HashMap<String, Integer>();
     for(int row=0;row<rowLength(); row++) {
@@ -302,7 +303,8 @@ public final class TaskTable implements Writable {
    * @param newTask to be added.
    */
   void add(final int row, final Task newTask) {
-    if(!isValidRow(row)) return;
+    if(!isValidRow(row)) 
+      throw new IllegalArgumentException("Invalid row number "+row);
     final Task[] taskAttemptArray = get(row);
     if(null == taskAttemptArray) 
       throw new NullPointerException("Attempt tasks at row "+row+" is empty!"); 
@@ -351,6 +353,32 @@ public final class TaskTable implements Writable {
         this.set(row, tmpAttempts);  
       }
     }
+  }
+
+  boolean markAsCancelled(final TaskAttemptID taskAttemptId) {
+    boolean flag = false;
+    for (int row = 0; row < rowLength(); row++) {
+      final Task latest = latestTaskAt(row);
+      if(null == latest) 
+        throw new NullPointerException("Task at row "+row+" is null!");
+      if(latest.getId().equals(taskAttemptId)) {
+        latest.cancelledState();
+        flag = true;
+        break;
+      }
+    }
+    return flag;
+  }
+
+  boolean areTasksAllStopped() {
+    int count = 0;
+    for (int row = 0; row < rowLength(); row++) {
+      final Task latest = latestTaskAt(row);
+      if(null == latest) 
+        throw new NullPointerException("Task at row "+row+" is null!");
+      if(latest.isCancelled() || latest.isFailed()) count += 1;
+    }
+    return ((count + 1) == rowLength());
   }
 
   /**

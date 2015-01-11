@@ -735,7 +735,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   protected def succeedState() = {
-    task.succeedState
+    task.succeededState
     reportTask
   }
 

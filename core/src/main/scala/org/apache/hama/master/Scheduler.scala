@@ -56,7 +56,7 @@ final case class FindGroomsToKillTasks(infos: Set[SystemInfo])
       extends SchedulerMessage
 final case class GroomsFound(matched: Set[ActorRef], unmatched: Set[String])
       extends SchedulerMessage
-final case class TaskKilled(taskAttemptId: String) extends SchedulerMessage
+final case class TaskCancelled(taskAttemptId: String) extends SchedulerMessage
 
 final case object JobFinishedEvent extends PublishEvent
 
@@ -113,7 +113,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    *       with all tasks are dispatched to GroomServers and is moved to 
    *       processingQueue the next job will be processed. 
    */
-  protected var taskAssignQueue = Queue[Ticket]()
+  // TODO: change to map (job id -> ticket) ?
+  protected var taskAssignQueue = Queue[Ticket]() 
 
   /**
    * A queue that holds jobs having tasks assigned to GroomServers.
@@ -291,8 +292,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   //          else fail job and notify client.
   //       else wait for other groom requesting for task.
   protected def events: Receive = {
-    case GroomLeave(name, host, port) => { 
-      val ticket = taskAssignQueue.head
+    case GroomLeave(name, host, port) => if(!processingQueue.isEmpty) { 
+      val ticket = processingQueue.head
       val job = ticket.job
       job.targetGrooms.filter(groom => groom.equals(host+":"+port)) match {
         case matched: Array[String] if matched.isEmpty => 
@@ -302,7 +303,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       }
       // TODO: 
       //       - otherwise create a new task and waiting for groom request.
-    }
+    } else if(!taskAssignQueue.isEmpty) {
+      // TODO: check tasks if assigned to offline groom
+      //       if true, check if it's active 
+      //         if it's active, reject  
+      //       if it's passive, remove marker and 
+    } 
     case latest: Task => {
       // TODO: update task in queue.
       //       check if all tasks are successful. if true, call whenJobFinished.
@@ -330,6 +336,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     ticket.job.findTasksBy(host, port).foreach { task => 
       ticket.job.rearrange(task)
     }
+    // TODO: move ticket from processing queue back to task assign queue
   } catch {
     case e: ExceedMaxTaskAllowedException => {
       val reason = "Job %s exceeds max retry %s!".format(e.getJobId, 
@@ -358,7 +365,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     matched.foreach( ref => {
       val host = ref.path.address.host.getOrElse(null)
       val port = ref.path.address.port.getOrElse(-1)
-      taskAssignQueue.head.job.findTasksBy(host, port).foreach ( task =>
+      processingQueue.head.job.findTasksBy(host, port).foreach ( task =>
         ref !  new Directive(Kill, task, setting.hama.get("master.name", 
                              setting.name)) // TODO: deal with exception thrown?
       )
@@ -366,16 +373,25 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   }
 
   protected def taskKilled: Receive = {  
-    case TaskKilled(taskAttemptId) => {
+    case TaskCancelled(taskAttemptId) => {
+      val (ticket, rest) = processingQueue.dequeue  
+      val job = ticket.job
+      val client = ticket.client
+      job.markAsCancelled(taskAttemptId) match {
+        case true => if(job.areTasksAllStopped) {
+          processingQueue = rest.enqueue(Ticket(client, job.newWithFailedState))
+          whenJobFinished(taskAssignQueue.head.job.getId) 
+          // TODO: moveToFinishedQueue 
       // TODO: 
-      //     mark the received ack task as killed.
-      //     each time in Receive, check if all tasks are killed.
       //     if all tasks are killed, 
       //        a. mark the job failed e.g. val job = Job.newWithState(Failed)
       //        b. call whenJobFinished 
       //        c. move to finished queue or directly move to job history(?)
       //        d. issue ticket.client ! Reject (killjob.reason)
       //     else do nothing
+        }
+        case false => LOG.error("Unable to mark task {} killed!", taskAttemptId)
+      }
     }
   }
 

@@ -425,20 +425,40 @@ public final class Task implements Writable {
     return this.state;
   }
 
+  public boolean isWaiting() {
+    return State.WAITING.equals(getState());
+  }
+
   public void waitingState() {
     this.state = State.WAITING; 
   } 
+
+  public boolean isRunning() {
+    return State.RUNNING.equals(getState());
+  }
 
   public void runningState() {
     this.state = State.RUNNING;
   }
 
-  public void succeedState() {
+  public boolean isSucceeded() {
+    return State.SUCCEEDED.equals(getState());
+  }
+
+  public void succeededState() {
     this.state = State.SUCCEEDED;
+  }
+
+  public boolean isFailed() {
+    return State.FAILED.equals(getState());
   }
 
   public void failedState() {
     this.state = State.FAILED;
+  }
+
+  public boolean isCancelled() {
+    return State.CANCELLED.equals(getState());
   }
 
   public void cancelledState() {

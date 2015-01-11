@@ -36,6 +36,7 @@ import org.apache.hadoop.io.WritableUtils;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.SystemInfo;
 import org.apache.hama.bsp.BSPJobID;
+import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.io.PartitionedSplit;
 
 /**
@@ -485,6 +486,26 @@ public final class Job implements Writable {
     return new Builder(this).setState(newState).build();
   }
 
+  public Job newWithPrepState() { 
+    return newWithState(State.PREP); 
+  }
+
+  public Job newWithRunningState() { 
+    return newWithState(State.RUNNING); 
+  }
+
+  public Job newWithSucceededState() { 
+    return newWithState(State.SUCCEEDED); 
+  }
+
+  public Job newWithFailedState() {
+    return newWithState(State.FAILED); 
+  }
+
+  public Job newWithCancelledState() { 
+    return newWithState(State.CANCELLED); 
+  }
+
   public long getProgress() {
     return this.progress.get();
   }
@@ -543,6 +564,18 @@ public final class Job implements Writable {
 
   protected TaskTable getTasks() { 
     return this.taskTable;
+  }
+
+  public boolean markAsCancelled(final String taskAttemptId) {
+    return getTasks().markAsCancelled(TaskAttemptID.forName(taskAttemptId));
+  }
+
+  public boolean markAsCancelled(final TaskAttemptID taskAttemptId) {
+    return getTasks().markAsCancelled(taskAttemptId); 
+  }
+
+  public boolean areTasksAllStopped() {
+    return getTasks().areTasksAllStopped();
   }
 
   public List<Task> findTasksBy(final String host, final int port) {
@@ -620,12 +653,6 @@ public final class Job implements Writable {
   public Set<SystemInfo> tasksRunAt() {
     return getTasks().grooms(); 
   }
-
-/*
-  public boolean areAllTasksAssigned() {
-    return this.taskTable.areAllTasksAssigned();
-  }
-*/
 
   /**
    * Find the current task assignment count according to the GroomServer name.

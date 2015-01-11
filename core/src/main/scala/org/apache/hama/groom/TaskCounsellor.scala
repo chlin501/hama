@@ -233,11 +233,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def dispatch(d: Directive)(slot: Slot) = d.action match {
     case Launch => slot.container.map { container => 
-      container forward new LaunchTask(d.task) 
+      container ! new LaunchTask(d.task) 
       slotManager.book(slot.seq, d.task.getId, container) 
     }
     case Resume => slot.executor.map { container => 
-      container forward new ResumeTask(d.task) 
+      container ! new ResumeTask(d.task) 
       slotManager.book(slot.seq, d.task.getId, container)
     }
     case Kill => LOG.error("Action Kill by {} shouldn't be here for slot {}!", 
@@ -344,7 +344,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   // TODO: export as trait in allowing collector to execute functions?
   protected def collectorMsgs: Receive = {  
-    case pub: PublishMessage => reporter ! pub 
+    case msg: PublishMessage => reporter ! msg 
     case GetGroomStats => sender ! CollectedStats(currentGroomStats)
   }
 
