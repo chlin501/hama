@@ -96,7 +96,7 @@ final case class KillJob(reason: String) extends Command
 //         trait scheduluer#schedule // active
 //       - update internal stats to related tracker
 //       - job manager dealing with moving job between different states (task 
-//         assign, processing, finished, etc.)
+//         assign, processing, finished, etc.) refactor for better structure.
 class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                 federator: ActorRef) extends LocalService with Periodically {
 
@@ -201,34 +201,45 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     master ! GetTargetRefs(targetGrooms)
   }
  
-  protected def targetRefsFound(refs: Array[ActorRef]) {
-    val (ticket, rest) = taskAssignQueue.dequeue
-    refs.foreach( ref => ticket.job.nextUnassignedTask match {
-      case null => moveToProcessingQueue(ticket, rest)
-      case task@_ => {
-        val (host, port) = getTargetHostPort(ref)
-        LOG.debug("Task {} is scheduled to target host {} port {}", 
-                 task.getId, host, port)
-        task.scheduleTo(host, port)
-        ref ! new Directive(Launch, task, setting.hama.get("master.name", 
-                                                           setting.name))
-      }
-    })
-    activeFinished = true
-  }
+  protected def targetRefsFound(refs: Array[ActorRef]) = 
+    if(!taskAssignQueue.isEmpty) {
+      val (ticket, rest) = taskAssignQueue.dequeue
+      refs.foreach( ref => ticket.job.nextUnassignedTask match {
+        case null => moveToProcessingQueue(ticket, rest)
+        case task@_ => {
+          val (host, port) = getTargetHostPort(ref)
+          LOG.debug("Task {} is scheduled to target host {} port {}", 
+                   task.getId, host, port)
+          task.scheduleTo(host, port)
+          ref ! new Directive(Launch, task, setting.hama.get("master.name", 
+                                                             setting.name))
+        }
+      })
+      activeFinished = true
+    }
 
   /**
    * Master replies after scheduler asks for groom references.
    */
   protected def targetsResult: Receive = {
     case TargetRefs(refs) => targetRefsFound(refs)
-    case SomeMatched(matched, nomatched) => taskAssignQueue.dequeue match { 
-      case tuple: (Ticket, Queue[Ticket]) => {
-        tuple._1.client ! Reject("Grooms "+nomatched.mkString(", ")+
-                                 " do not exist!")
+    case SomeMatched(matched, nomatched) => if(!taskAssignQueue.isEmpty) {
+      taskAssignQueue.dequeue match { 
+        case tuple: (Ticket, Queue[Ticket]) => {
+          tuple._1.client ! Reject("Grooms "+nomatched.mkString(", ")+
+                                   " do not exist!")
+          fromTaskAssignToFinished
+        }
+        case _ =>
       }
-      case _ =>
-    }
+    } else LOG.error("Can't schedule tasks because TaskAssign queue is empty!")
+  }
+
+  protected def fromTaskAssignToFinished() = if(!taskAssignQueue.isEmpty) {
+    val (ticket, rest) = taskAssignQueue.dequeue
+    finishedQueue = finishedQueue.enqueue(ticket)
+    whenJobFinished(ticket.job.getId)
+    taskAssignQueue = rest 
   }
 
   protected def getTargetHostPort(ref: ActorRef): (String, Int) = {
@@ -293,9 +304,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     }
 
   // TODO: reschedule/ reassign tasks
-  //       if it's the active target grooms that fail 
-  //          if other target grooms has free slots, then reschdule (?)
-  //          else fail job and notify client.
+  //       if it's the active target grooms that fail, 
+  //         kill tasks, fail job and notify client.
   //       else wait for other groom requesting for task.
   protected def events: Receive = {
     case GroomLeave(name, host, port) => if(!processingQueue.isEmpty) { 
@@ -308,10 +318,18 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           activeTask(host, port, ticket)
       }
     } else if(!taskAssignQueue.isEmpty) {
+/*
+      job.targetGrooms.filter(groom => groom.equals(host+":"+port)) match {
+        case matched: Array[String] if matched.isEmpty => 
+          passiveTask(host, port, ticket)
+        case matched: Array[String] if !matched.isEmpty => 
+          activeTask(host, port, ticket)
+      } 
+*/
       // TODO: check if any tasks are assigned to offline groom
       //       if true, check if it's active 
-      //         if it's active, reject  
-      //       if it's passive, remove marker and 
+      //         if it's active, fin all sched tasks and kill, then reject  
+      //       if it's passive, remove marker is enough
     } 
     case latest: Task => {
       // TODO: update task in queue.
@@ -336,6 +354,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     }
   }
 
+  /**
+   * Move ticket from processing queue to task assign queue.
+   */
   protected def fromProcessingToTaskAssign() = if(!processingQueue.isEmpty) {
     val (ticket, rest) = processingQueue.dequeue
     taskAssignQueue.enqueue(ticket)
@@ -365,14 +386,14 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       ))
     }
     case e: Exception => {
-      LOG.warning("Throw exception: {}!", e)
+      LOG.warning("Unexpected exception is thrown: {}!", e)
       // TODO: fail job. do cleanup and reject back to client.
     }
   }
 
   /**
-   * In ExceedMaxTaskAllowedException sched asks master for grooms references
-   * where tasks are running.
+   * Scheduler asks master for grooms references where tasks are running by 
+   * issuing FindGroomsToKillTasks.
    * Once receiving grooms references, issue kill command to groom servers.
    */
   protected def groomsFound: Receive = { 
@@ -384,7 +405,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         ref !  new Directive(Kill, task, setting.hama.get("master.name", 
                              setting.name)) // TODO: deal with exception thrown?
       )
-    }) else LOG.error("Some groom {} not found!", nomatched.mkString(",")) 
+    }) else LOG.error("Some grooms {} not found!", nomatched.mkString(",")) 
   }
 
   /**
@@ -445,6 +466,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def fromProcessingToFinished() = if(!processingQueue.isEmpty) {
     val (ticket, rest) = processingQueue.dequeue
     finishedQueue = finishedQueue.enqueue(ticket) // TODO: move to job history?
+    whenJobFinished(ticket.job.getId)
     processingQueue = rest 
   }
 
