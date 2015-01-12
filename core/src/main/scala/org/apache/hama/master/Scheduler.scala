@@ -95,6 +95,8 @@ final case class KillJob(reason: String) extends Command
 //         trait scheduluer#assign // passive
 //         trait scheduluer#schedule // active
 //       - update internal stats to related tracker
+//       - job manager dealing with moving job between different states (task 
+//         assign, processing, finished, etc.)
 class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                 federator: ActorRef) extends LocalService with Periodically {
 
@@ -103,8 +105,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   type ProcessingQueue = Queue[Ticket]
 
   type JobId = String
-
-  type Commands = Set[Command]
 
   /**
    * A queue that holds a job having tasks unassigned to GroomServers.
@@ -125,7 +125,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   protected var finishedQueue = Queue[Ticket]()
 
-  protected var commands = Map.empty[JobId, Commands]
+  protected var command = Map.empty[JobId, Command]
 
   protected var activeFinished = false 
 
@@ -341,15 +341,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       ticket.job.rearrange(task)
     }
     // TODO: move ticket from processing queue back to task assign queue
+    // fromProcessingToTaskAssign
   } catch {
     case e: ExceedMaxTaskAllowedException => {
       val reason = "Job %s exceeds max retry %s!".format(e.getJobId, 
                    e.getMaxAttemptAllowed)
-      val cmds: Commands = commands.get(e.getJobId) match {
-        case Some(set) => set + KillJob(reason)
-        case None => Set(KillJob(reason))
-      }
-      commands = Map(ticket.job.getId.toString -> cmds)
+      command = Map(ticket.job.getId.toString -> KillJob(reason))
       val grooms = ticket.job.tasksRunAt 
       master ! FindGroomsToKillTasks(asScalaSet(grooms).toSet)
     }
@@ -376,17 +373,36 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     })
   }
 
-  protected def taskCancelled: Receive = {  
+  /**
+   * - Mark task as cancelled.
+   * - Check if all tasks in the job are stopped, either cancelled or failed.
+   * If all tasks are marked as stopped:
+   *  - Issue job finished event.
+   *  - Move job from processing queue to finished queue.
+   *  - Notify client.
+   */
+  protected def taskCancelled: Receive = {   // TODO: need refactor
     case TaskCancelled(taskAttemptId) => {
       val (ticket, rest) = processingQueue.dequeue  
       val job = ticket.job
       val client = ticket.client
       job.markAsCancelled(taskAttemptId) match {
         case true => if(job.allTasksStopped) {
-          processingQueue = processingQueue.updated(0, Ticket(client, job.newWithFailedState))
-          whenJobFinished(taskAssignQueue.head.job.getId) 
+          processingQueue = processingQueue.updated(0, 
+                            Ticket(client, job.newWithFailedState))
+          val jobId = taskAssignQueue.head.job.getId
+          whenJobFinished(jobId) 
           fromProcessingToFinished 
-      // TODO: issue ticket.client ! Reject (killjob.reason) from commands
+          command.get(jobId.toString) match {  
+            case Some(found) if found.isInstanceOf[KillJob] => 
+              client ! Reject(found.asInstanceOf[KillJob].reason)  
+            case Some(found) if !found.isInstanceOf[KillJob] => 
+              LOG.warning("Unknown command {} to react for job {}", found, 
+                          jobId)
+            case None => 
+              LOG.warning("No command in reacting to task cancelled event!")
+          }
+          command -= jobId.toString 
         }
         case false => LOG.error("Unable to mark task {} killed!", taskAttemptId)
       }
@@ -399,13 +415,18 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     //       move job to finished queue
   }
 
+  /**
+   * Move the job from processing queue to finished queue.
+   */
   protected def fromProcessingToFinished() = if(!processingQueue.isEmpty) {
     val (ticket, rest) = processingQueue.dequeue
     finishedQueue = finishedQueue.enqueue(ticket) // TODO: move to job history?
     processingQueue = rest 
   }
 
-  // TODO: call this function when the job is finished
+  /**
+   * This function is called when a job if finished its execution.
+   */
   protected def whenJobFinished(jobId: BSPJobID) =  
     federator ! JobFinishedMessage(jobId) 
 
