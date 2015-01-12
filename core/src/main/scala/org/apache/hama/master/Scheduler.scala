@@ -108,7 +108,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   /**
    * A queue that holds a job having tasks unassigned to GroomServers.
-   * It should contain one job only at current implementation .
+   * It should cntain one job only at current implementation .
    * Note: The job in this queue are processed sequentially. Only after a job 
    *       with all tasks are dispatched to GroomServers and is moved to 
    *       processingQueue the next job will be processed. 
@@ -123,7 +123,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    */
   protected var processingQueue = Queue[Ticket]()
 
+  protected var finishedQueue = Queue[Ticket]()
+
   protected var commands = Map.empty[JobId, Commands]
+
+  protected var activeFinished = false 
 
   // TODO: move the finished job to Federator's JobHistoryTracker, 
   //       where storing job's metadata e.g. setting
@@ -170,6 +174,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def dispense: Receive = {
     case Dispense(ticket) => { 
       taskAssignQueue = taskAssignQueue.enqueue(ticket)
+      activeFinished = false 
       activeSchedule(ticket.job) 
     }
   }
@@ -209,6 +214,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                                                            setting.name))
       }
     })
+    activeFinished = true
   }
 
   /**
@@ -241,7 +247,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                 sender.path.name, req.stats.map { s => s.host}, 
                 req.stats.map { s=> s.port})
       // TODO: make sure all active tasks are scheduled before passive assign begins; before that, perhaps drop request
-      passiveAssign(req.stats, sender)
+      if(activeFinished) passiveAssign(req.stats, sender)
     }
   } 
 
@@ -301,10 +307,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case matched: Array[String] if !matched.isEmpty => 
           activeTask(host, port, ticket)
       }
-      // TODO: 
-      //       - otherwise create a new task and waiting for groom request.
     } else if(!taskAssignQueue.isEmpty) {
-      // TODO: check tasks if assigned to offline groom
+      // TODO: check if any tasks are assigned to offline groom
       //       if true, check if it's active 
       //         if it's active, reject  
       //       if it's passive, remove marker and 
@@ -350,7 +354,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       master ! FindGroomsToKillTasks(asScalaSet(grooms).toSet)
     }
     case e: Exception => {
-      LOG.error("Exception out of expectation {}!", e)
+      LOG.warning("Throw exception: {}!", e)
       // TODO: fail job. do cleanup and reject back to client.
     }
   }
@@ -372,23 +376,17 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     })
   }
 
-  protected def taskKilled: Receive = {  
+  protected def taskCancelled: Receive = {  
     case TaskCancelled(taskAttemptId) => {
       val (ticket, rest) = processingQueue.dequeue  
       val job = ticket.job
       val client = ticket.client
       job.markAsCancelled(taskAttemptId) match {
-        case true => if(job.areTasksAllStopped) {
-          processingQueue = rest.enqueue(Ticket(client, job.newWithFailedState))
+        case true => if(job.allTasksStopped) {
+          processingQueue = processingQueue.updated(0, Ticket(client, job.newWithFailedState))
           whenJobFinished(taskAssignQueue.head.job.getId) 
-          // TODO: moveToFinishedQueue 
-      // TODO: 
-      //     if all tasks are killed, 
-      //        a. mark the job failed e.g. val job = Job.newWithState(Failed)
-      //        b. call whenJobFinished 
-      //        c. move to finished queue or directly move to job history(?)
-      //        d. issue ticket.client ! Reject (killjob.reason)
-      //     else do nothing
+          fromProcessingToFinished 
+      // TODO: issue ticket.client ! Reject (killjob.reason) from commands
         }
         case false => LOG.error("Unable to mark task {} killed!", taskAttemptId)
       }
@@ -401,10 +399,16 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     //       move job to finished queue
   }
 
+  protected def fromProcessingToFinished() = if(!processingQueue.isEmpty) {
+    val (ticket, rest) = processingQueue.dequeue
+    finishedQueue = finishedQueue.enqueue(ticket) // TODO: move to job history?
+    processingQueue = rest 
+  }
+
   // TODO: call this function when the job is finished
   protected def whenJobFinished(jobId: BSPJobID) =  
     federator ! JobFinishedMessage(jobId) 
 
-  override def receive = taskKilled orElse groomsFound orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
+  override def receive = taskCancelled orElse groomsFound orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
 
 }

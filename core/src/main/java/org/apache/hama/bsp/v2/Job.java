@@ -574,8 +574,8 @@ public final class Job implements Writable {
     return getTasks().markAsCancelled(taskAttemptId); 
   }
 
-  public boolean areTasksAllStopped() {
-    return getTasks().areTasksAllStopped();
+  public boolean allTasksStopped() {
+    return getTasks().allTasksStopped();
   }
 
   public List<Task> findTasksBy(final String host, final int port) {

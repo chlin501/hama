@@ -370,7 +370,7 @@ public final class TaskTable implements Writable {
     return flag;
   }
 
-  boolean areTasksAllStopped() {
+  boolean allTasksStopped() {
     int count = 0;
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
