@@ -175,31 +175,31 @@ class BSPMaster(setting: Setting, registrator: Registrator)
   protected def msgFromSched: Receive = {
     case GetTargetRefs(infos) => {
       var matched = Array.empty[ActorRef]  // Set.empty
-      var unmatched = Array.empty[String] // Set.empty
+      var nomatched = Array.empty[String] // Set.empty
       infos.foreach( info => grooms.find( groom => 
         groom.path.address.host.equals(Option(info.getHost)) &&
         groom.path.address.port.equals(Option(info.getPort))
       ) match {
         case Some(ref) => matched ++= Array(ref)
-        case None => unmatched ++= Array(info.getHost+":"+info.getPort)
+        case None => nomatched ++= Array(info.getHost+":"+info.getPort)
       })
-      // TODO: merge TargetRefs and SomeMatched into one e.g. sender ! TargetsFound(matched, unmatched)
-      unmatched.isEmpty match { 
+      // TODO: merge TargetRefs and SomeMatched into one e.g. sender ! TargetsFound(matched, nomatched)
+      nomatched.isEmpty match { 
         case true => sender ! TargetRefs(matched)
-        case false => sender ! SomeMatched(matched, unmatched)
+        case false => sender ! SomeMatched(matched, nomatched)
       } 
     } 
     case FindGroomsToKillTasks(infos) => {
       var matched = Set.empty[ActorRef] 
-      var unmatched = Set.empty[String] 
+      var nomatched = Set.empty[String] 
       infos.foreach( info => grooms.find( groom => 
         groom.path.address.host.equals(Option(info.getHost)) &&
         groom.path.address.port.equals(Option(info.getPort))
       ) match {
         case Some(ref) => matched += ref
-        case None => unmatched += info.getHost+":"+info.getPort
+        case None => nomatched += info.getHost+":"+info.getPort
       }) 
-      sender ! GroomsFound(matched, unmatched)
+      sender ! GroomsFound(matched, nomatched)
     } 
   }
 

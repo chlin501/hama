@@ -51,10 +51,10 @@ final case class GetTargetRefs(infos: Array[SystemInfo])
 // TODO: merge TargetRefs and SomeMatched into e.g. TargetRefsFound?
 final case class TargetRefs(refs: Array[ActorRef]) extends SchedulerMessage
 final case class SomeMatched(matched: Array[ActorRef],
-                             unmatched: Array[String]) extends SchedulerMessage
+                             nomatched: Array[String]) extends SchedulerMessage
 final case class FindGroomsToKillTasks(infos: Set[SystemInfo]) 
       extends SchedulerMessage
-final case class GroomsFound(matched: Set[ActorRef], unmatched: Set[String])
+final case class GroomsFound(matched: Set[ActorRef], nomatched: Set[String])
       extends SchedulerMessage
 final case class TaskCancelled(taskAttemptId: String) extends SchedulerMessage
 
@@ -222,9 +222,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    */
   protected def targetsResult: Receive = {
     case TargetRefs(refs) => targetRefsFound(refs)
-    case SomeMatched(matched, unmatched) => taskAssignQueue.dequeue match { 
+    case SomeMatched(matched, nomatched) => taskAssignQueue.dequeue match { 
       case tuple: (Ticket, Queue[Ticket]) => {
-        tuple._1.client ! Reject("Grooms "+unmatched.mkString(", ")+
+        tuple._1.client ! Reject("Grooms "+nomatched.mkString(", ")+
                                  " do not exist!")
       }
       case _ =>
@@ -336,19 +336,33 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     }
   }
 
+  protected def fromProcessingToTaskAssign() = if(!processingQueue.isEmpty) {
+    val (ticket, rest) = processingQueue.dequeue
+    taskAssignQueue.enqueue(ticket)
+    processingQueue = rest
+  }  
+
+  /**
+   * Add a new task to the end of corresponded column in task table.
+   * Move job from processing queue back to task assign queue.
+   * @param host is the host of the groom that leaves the system.
+   * @param port is the port of the groom that leaves the system.
+   * @param ticket contains client reference and corresponded job.
+   */
   protected def passiveTask(host: String, port: Int, ticket: Ticket) = try {
     ticket.job.findTasksBy(host, port).foreach { task => 
       ticket.job.rearrange(task)
-    }
-    // TODO: move ticket from processing queue back to task assign queue
-    // fromProcessingToTaskAssign
+    } 
+    fromProcessingToTaskAssign 
   } catch {
     case e: ExceedMaxTaskAllowedException => {
       val reason = "Job %s exceeds max retry %s!".format(e.getJobId, 
                    e.getMaxAttemptAllowed)
       command = Map(ticket.job.getId.toString -> KillJob(reason))
-      val grooms = ticket.job.tasksRunAt 
-      master ! FindGroomsToKillTasks(asScalaSet(grooms).toSet)
+      val grooms = ticket.job.tasksRunAt
+      master ! FindGroomsToKillTasks(asScalaSet(grooms).toSet.filter( groom =>
+        !(host.equals(groom.getHost) && (port == groom.getPort))
+      ))
     }
     case e: Exception => {
       LOG.warning("Throw exception: {}!", e)
@@ -362,7 +376,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * Once receiving grooms references, issue kill command to groom servers.
    */
   protected def groomsFound: Receive = { 
-    case GroomsFound(matched, unmatched) => if(unmatched.isEmpty) 
+    case GroomsFound(matched, nomatched) => if(nomatched.isEmpty) 
     matched.foreach( ref => {
       val host = ref.path.address.host.getOrElse(null)
       val port = ref.path.address.port.getOrElse(-1)
@@ -370,10 +384,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         ref !  new Directive(Kill, task, setting.hama.get("master.name", 
                              setting.name)) // TODO: deal with exception thrown?
       )
-    })
+    }) else LOG.error("Some groom {} not found!", nomatched.mkString(",")) 
   }
 
   /**
+   * In processing queue:
    * - Mark task as cancelled.
    * - Check if all tasks in the job are stopped, either cancelled or failed.
    * If all tasks are marked as stopped:
@@ -390,7 +405,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case true => if(job.allTasksStopped) {
           processingQueue = processingQueue.updated(0, 
                             Ticket(client, job.newWithFailedState))
-          val jobId = taskAssignQueue.head.job.getId
+          val jobId = processingQueue.head.job.getId
           whenJobFinished(jobId) 
           fromProcessingToFinished 
           command.get(jobId.toString) match {  
@@ -409,10 +424,19 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     }
   }
 
+  /**
+   * Update job to fail state.
+   * Reject back to client.
+   * Move ticket from processing to finsihed queue.
+   */
+  // TODO: merge same func in passiveTask
   protected def activeTask(host: String, port: Int, ticket: Ticket) {
-    ticket.client ! Reject("Target groom %s:%d fails!".format(host, port))
-    // TODO: mark job as failed 
-    //       move job to finished queue
+    val reason = "Active scheduled tasks at %s:%s fail!".format(host, port)
+    command = Map(ticket.job.getId.toString -> KillJob(reason))
+    val grooms = ticket.job.tasksRunAt
+    master ! FindGroomsToKillTasks(asScalaSet(grooms).toSet.filter( groom =>
+      !(host.equals(groom.getHost) && (port == groom.getPort))
+    ))
   }
 
   /**
