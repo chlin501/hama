@@ -582,6 +582,10 @@ public final class Job implements Writable {
     return getTasks().findTasksBy(host, port);
   }
 
+  public List<Task> findTasksNotIn(final String host, final int port) {
+    return getTasks().findTasksNotIn(host, port);
+  }
+
   /**
    * Tasktable:  
    * - create a new task, with attempt id incremented, based on the old one.

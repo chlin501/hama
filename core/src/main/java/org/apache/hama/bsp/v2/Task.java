@@ -98,16 +98,16 @@ public final class Task implements Writable {
      * Target groom server can't be the same actor system of master, so 
      * port value is needed.
      */
-    public Marker(final boolean isAssigned, final int portValue) {
+    Marker(final boolean isAssigned, final int portValue) {
       this(false, SystemInfo.Localhost, portValue);
     }
    
-    public Marker(final boolean isAssigned, final String hostName, 
+    Marker(final boolean isAssigned, final String hostName, 
                   final int portValue) {
       this(false, isAssigned, hostName, portValue);
     }
 
-    public Marker(final boolean isActive, final boolean isAssigned, 
+    Marker(final boolean isActive, final boolean isAssigned, 
                   final String hostName, final int portValue) {
       this.active = new BooleanWritable(isActive);
       this.assigned = new BooleanWritable(isAssigned); 

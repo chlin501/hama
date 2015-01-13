@@ -318,6 +318,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def postKillAck(ack: KillAck) { 
     // TODO: notify master a task is killed
+    // e.g. taskCounsellor ! TaskCancelled(ack.taskAttemptId.toString)
   }
 
   /**

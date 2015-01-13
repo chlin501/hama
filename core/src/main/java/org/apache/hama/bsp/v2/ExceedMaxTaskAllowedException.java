@@ -36,4 +36,10 @@ public final class ExceedMaxTaskAllowedException extends RuntimeException {
     return maxAttemptAllowed;
   }
 
+  @Override 
+  public String toString() {
+    return "Exceed "+getMaxAttemptAllowed()+" max tasks allowed "+
+           "for job "+getJobId();
+  }
+
 }

@@ -20,8 +20,9 @@ package org.apache.hama.groom
 import akka.actor.ActorRef
 import akka.actor.Address
 import akka.cluster.Cluster
-import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.ClusterEvent.MemberEvent
+import akka.cluster.ClusterEvent.MemberRemoved
+import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.ClusterEvent.CurrentClusterState
 import akka.cluster.Member
 import org.apache.hama.RemoteService
@@ -68,6 +69,8 @@ trait MembershipParticipant extends Membership with RemoteService {
 
   protected def membership: Receive = {
     case MemberUp(member) => whenMemberUp(member)
+    case MemberRemoved(member, prevStatus) => if(member.hasRole("master"))
+      shutdown
     case event: MemberEvent => memberEvent(event)
     case CurrentClusterState(members, unreachable, seenBy, leader, 
                              roleLeaderMap) => 

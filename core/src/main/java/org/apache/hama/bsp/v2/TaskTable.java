@@ -232,6 +232,18 @@ public final class TaskTable implements Writable {
     return Collections.unmodifiableList(matched);
   }
 
+  List<Task> findTasksNotIn(final String host, final int port) {
+    final List<Task> matched = new ArrayList<Task>();
+    for (int row = 0; row < rowLength(); row++) {
+      final Task task = latestTaskAt(row);
+      if(null == task) 
+        throw new NullPointerException("No task found at row "+row);
+      if(!task.getAssignedHost().equals(host) && 
+         (port != task.getAssignedPort())) matched.add(task);
+    }
+    return Collections.unmodifiableList(matched);
+  }
+
   /**
    * Retrieve the latest task at the N-th row.
    * @param row dentoes the N-th row, started from 0, in the task table.

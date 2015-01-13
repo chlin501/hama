@@ -21,9 +21,9 @@ import akka.actor.ActorRef
 import akka.actor.Address
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.InitialStateAsEvents 
-import akka.cluster.ClusterEvent.MemberUp
-import akka.cluster.ClusterEvent.MemberRemoved
 import akka.cluster.ClusterEvent.MemberEvent
+import akka.cluster.ClusterEvent.MemberRemoved
+import akka.cluster.ClusterEvent.MemberUp
 import org.apache.hama.Agent
 import org.apache.hama.Membership
 import org.apache.hama.SubscribeEvent
