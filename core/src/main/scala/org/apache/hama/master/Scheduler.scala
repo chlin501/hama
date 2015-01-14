@@ -50,7 +50,7 @@ sealed trait SchedulerMessage
 final case object NextPlease extends SchedulerMessage with Tick
 final case class GetTargetRefs(infos: Array[SystemInfo]) 
       extends SchedulerMessage
-// TODO: merge TargetRefs and SomeMatched into e.g. TargetRefsFound?
+// TODO: merge TargetRefs and SomeMatched into e.g. TargetRefsFound
 final case class TargetRefs(refs: Array[ActorRef]) extends SchedulerMessage
 final case class SomeMatched(matched: Array[ActorRef],
                              nomatched: Array[String]) extends SchedulerMessage
@@ -373,8 +373,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    */
   protected def targetRefsFound(refs: Array[ActorRef]) = 
     if(!jobManager.isEmpty(TaskAssign)) {
-      jobManager.headOf(TaskAssign).map { ticket => refs.foreach( ref => 
-        ticket.job.nextUnassignedTask match { 
+      jobManager.headOf(TaskAssign).map { ticket => {
+        val expected = ticket.job.targetInfos.size
+        val actual = refs.size
+        if(expected != actual)
+          throw new RuntimeException(expected+" target grooms expected, but "+
+                                     "only "+actual+" found!")
+        refs.foreach( ref => ticket.job.nextUnassignedTask match { 
           case null => jobManager.moveToNextStage(ticket.job.getId) match {
             case (true, _) => 
             case _ => LOG.error("Unable to move job {} to next stage!", 
@@ -389,7 +394,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             ref ! new Directive(Launch, task, setting.name)
           }
         })
-      }
+      }}
       activeFinished = true
     }
 

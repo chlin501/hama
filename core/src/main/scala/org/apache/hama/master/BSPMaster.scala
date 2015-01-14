@@ -174,8 +174,11 @@ class BSPMaster(setting: Setting, registrator: Registrator)
 
   protected def msgFromSched: Receive = {
     case GetTargetRefs(infos) => {
-      var matched = Array.empty[ActorRef]  // Set.empty
-      var nomatched = Array.empty[String] // Set.empty
+      // Note: infos may contain duplicate groom information, so don't change 
+      //       matched and unmatched to Set, unless it's sure duplication can
+      //       be preserved.
+      var matched = Array.empty[ActorRef] 
+      var nomatched = Array.empty[String] 
       infos.foreach( info => grooms.find( groom => 
         groom.path.address.host.equals(Option(info.getHost)) &&
         groom.path.address.port.equals(Option(info.getPort))
