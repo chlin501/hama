@@ -138,15 +138,19 @@ protected[master] class JobManager extends CommonLog {
     case Finished => finishedQueue = finishedQueue.enqueue(ticket)
   }
   
+  /**
+   * Tickets in Finished stage aren't removed at the moment, so it's not shown
+   * if any ticket existed at finished stage.
+   */
   protected[master] def ticketAt(): (Option[Stage], Option[Ticket]) = 
     headOf(TaskAssign) match {
       case Some(ticket) => (Option(TaskAssign), Option(ticket))
       case None => headOf(Processing) match {
         case Some(ticket) => (Option(Processing), Option(ticket))
-        case None => headOf(Finished) match {
+        case None => (None, None)/*headOf(Finished) match {
           case Some(ticket) => (Option(Finished), Option(ticket))
           case None => (None, None)
-        }
+        }*/
       }
     }
 
@@ -370,9 +374,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def targetRefsFound(refs: Array[ActorRef]) = 
     if(!jobManager.isEmpty(TaskAssign)) {
       jobManager.headOf(TaskAssign).map { ticket => refs.foreach( ref => 
-        ticket.job.nextUnassignedTask match {
+        ticket.job.nextUnassignedTask match { 
           case null => jobManager.moveToNextStage(ticket.job.getId) match {
-            case (true, _) => activeFinished = true
+            case (true, _) => 
             case _ => LOG.error("Unable to move job {} to next stage!", 
                                 ticket.job.getId)
           }
@@ -386,6 +390,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           }
         })
       }
+      activeFinished = true
     }
 
   /**
@@ -429,7 +434,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       jobManager.headOf(TaskAssign).map { ticket => stats.map { s => 
         assign(ticket, s, from) 
       }}
-    } else LOG.error("Task assign Queue is empty!")
+    } else LOG.debug("No job stays at task assign stage!")
 
   protected def assign(ticket: Ticket, stats: GroomStats, from: ActorRef) {
     val currentTasks = ticket.job.getTaskCountFor(stats.hostPort)
@@ -439,7 +444,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     (maxTasksAllowed >= (currentTasks+1)) match {
       case true => ticket.job.nextUnassignedTask match {
         case null => jobManager.moveToNextStage(ticket.job.getId) match {
-          case (true, _) => 
+          case (true, _) => if(jobManager.update(ticket.
+            newWithJob(ticket.job.newWithRunningState))) 
+            LOG.debug("Job is running!", ticket.job.getId) 
           case _ => LOG.error("Unable to move job {} to next stage!", 
                               ticket.job.getId)
         }
@@ -464,7 +471,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   //       else wait for other groom requesting for task.
   protected def events: Receive = {
     case GroomLeave(name, host, port) => {
-      // TODO: mark job as recovering.
+      // TODO: mark job as recovering ?
       //       if another groom leaves, check if any tasks runs on that groom.
       //         if true (some tasks run on that groom), check job if in recovering (denoting kill msg is issued)
       //           if true (in recovering), directly mark tasks as failure (for no ack will be received), and check if all tasks stopped.
@@ -472,37 +479,41 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
       jobManager.ticketAt match {
         case (stage: Some[Stage], ticket: Some[Ticket]) => {
+          // TODO: mark job as recovering?
           val job = ticket.get.job
           val failedTasks = job.findTasksBy(host, port)
-          if(0 == failedTasks.size) 
+          if(0 == failedTasks.size) {
             LOG.debug("No tasks run on failed groom {}:{}!", host, port)
-          else /* TODO: mark job as recovering */ failedTasks.exists( task => task.isActive) match { 
-            case true => { // contain active task, need to reject back to client
-              failedTasks.foreach( task => task.failedState)
-              jobManager.cacheCommand(job.getId.toString, KillJob(host, port)) 
-              val allGrooms = job.tasksRunAt
-              val groomsAlive = asScalaSet(allGrooms).toSet.filter( groom => 
-                !host.equals(groom.getHost) && (port != groom.getPort)
-              )  
-              master ! FindGroomsToKillTasks(groomsAlive)
-            }
-            case false => allPassiveTasks(stage.get, job, failedTasks) match {
-              case Success(result) => // TODO: mark job as running  
-              case Failure(ex) => ex match {
-                case e: ExceedMaxTaskAllowedException => { 
-                  jobManager.cacheCommand(job.getId.toString, KillJob(e))
-                  val allGrooms = job.tasksRunAt
-                  val grooms = asScalaSet(allGrooms).toSet.filter( groom => 
-                    !(host.equals(groom.getHost) && (port == groom.getPort))
-                  )
-                  master ! FindGroomsToKillTasks(grooms)  
-                }
-                case _ => LOG.error("Unexpected exception: {}", ex)
+          } else {
+            // TODO: mark job to recovering state!
+            failedTasks.exists( task => task.isActive) match { 
+              case true => { 
+                failedTasks.foreach( task => task.failedState)
+                jobManager.cacheCommand(job.getId.toString, KillJob(host, port))
+                val allGrooms = job.tasksRunAt
+                val groomsAlive = asScalaSet(allGrooms).toSet.filter( groom => 
+                  !host.equals(groom.getHost) && (port != groom.getPort)
+                )  
+                master ! FindGroomsToKillTasks(groomsAlive)
               }
-            }
-          } 
+              case false => allPassiveTasks(stage.get, job, failedTasks) match {
+                case Success(result) => // TODO: mark job as running!
+                case Failure(ex) => ex match {
+                  case e: ExceedMaxTaskAllowedException => { 
+                    jobManager.cacheCommand(job.getId.toString, KillJob(e))
+                    val allGrooms = job.tasksRunAt
+                    val grooms = asScalaSet(allGrooms).toSet.filter( groom => 
+                      !(host.equals(groom.getHost) && (port == groom.getPort))
+                    )
+                    master ! FindGroomsToKillTasks(grooms)  
+                  }
+                  case _ => LOG.error("Unexpected exception: {}", ex)
+                }
+              }
+            } 
+          }
         }
-        case _ => LOG.error("No job existed!")
+        case _ => LOG.warning("No job existed!")
       }
       // TODO: check if any tasks are assigned to offline groom
       //       if true, check if it's active 
@@ -594,7 +605,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             // Note: newjob is not in cancelled state because it's a groom leave
             //       event.
             val newJob = job.newWithFailedState 
-            jobManager.update(Ticket(client, newJob))
+            jobManager.update(ticket.get.newWithJob(newJob))
             val jobId = newJob.getId
             whenJobFinished(jobId) 
             jobManager.move(jobId)(Finished)

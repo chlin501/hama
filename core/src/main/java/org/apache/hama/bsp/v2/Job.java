@@ -154,20 +154,19 @@ public final class Job implements Writable {
       this.taskTable = old.getTasks();
     }
 
-    public Builder setId(final BSPJobID id) {
-      this.id = id;
+    public Builder setId(final BSPJobID id) { 
+      if(null == this.id) this.id = id; else 
+      LOG.warn("Job id "+this.id+" already exists!");
       return this;
     }
 
     public Builder setName(final String name) {
-      if(null != name && !name.isEmpty())
-        conf.set("bsp.job.name", name);
+      if(null != name && !name.isEmpty()) conf.set("bsp.job.name", name);
       return this;
     }
 
     public Builder setUser(final String user) {
-      if(null != user && !user.isEmpty())
-        conf.set("user.name", user);
+      if(null != user && !user.isEmpty()) conf.set("user.name", user);
       return this;
     }
 
@@ -189,8 +188,7 @@ public final class Job implements Writable {
     }
 
     public Builder setNumBSPTasks(final int numBSPTasks) {
-      if(1 < numBSPTasks)
-        conf.setInt("bsp.peers.num", numBSPTasks);
+      if(1 < numBSPTasks) conf.setInt("bsp.peers.num", numBSPTasks);
       adjustNumBSPTasks();
       return this;
     }
