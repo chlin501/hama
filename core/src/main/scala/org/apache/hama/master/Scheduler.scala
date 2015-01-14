@@ -111,6 +111,15 @@ protected[master] class JobManager extends CommonLog {
 
   protected var command = Map.empty[JobId, Command] 
 
+  protected[master] def cacheCommand(jobId: String, cmd: Command) = 
+    command += ((jobId, cmd))
+
+  protected[master] def getCommand(jobId: String): Option[Command] = {
+    val value = command.get(jobId)
+    command -= jobId
+    value
+  }
+
   protected[master] def readyForNext(): Boolean = if(isEmpty(TaskAssign) && 
     isEmpty(Processing)) true else false
 
@@ -266,7 +275,18 @@ object Scheduler {
 }
 
 sealed trait Command
-final case class KillJob(reason: String) extends Command
+
+object KillJob {
+
+  def apply(host: String, port: Int): KillJob = 
+    KillJob("Active scheduled tasks at %s:%s fail!".format(host, port))
+
+  def apply(cause: Throwable): KillJob =  
+    KillJob("Fail rearranging task: %s!".format(cause))
+
+}
+
+final case class KillJob(reason: String) extends Command 
 
 // TODO: - separate schedule functions from concrete impl.
 //         e.g. class WrappedScheduler(setting: Setting, scheduler: Scheduler)
@@ -279,8 +299,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   type JobId = String
 
   protected val jobManager = JobManager()
-
-  protected var command = Map.empty[JobId, Command] // TODO: jobManager
 
   /* a guard for checking if all active tasks are scheduled. */
   protected var activeFinished = false 
@@ -454,9 +472,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           else /* TODO: mark job as recovering */ failedTasks.exists( task => task.isActive) match { 
             case true => { // contain active task, need to reject back to client
               failedTasks.foreach( task => task.failedState)
-              val reason = "Active scheduled tasks at %s:%s fail!".
-                           format(host, port)
-              command = Map(job.getId.toString -> KillJob(reason))
+              jobManager.cacheCommand(job.getId.toString, KillJob(host, port)) 
               val allGrooms = job.tasksRunAt
               val groomsAlive = asScalaSet(allGrooms).toSet.filter( groom => 
                 !host.equals(groom.getHost) && (port != groom.getPort)
@@ -467,8 +483,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               case Success(result) => // TODO: mark job as running  
               case Failure(ex) => ex match {
                 case e: ExceedMaxTaskAllowedException => { 
-                  val reason = "Fail rearranging task: %s!".format(e)
-                  command = Map(job.getId.toString -> KillJob(reason))
+                  jobManager.cacheCommand(job.getId.toString, KillJob(e))
                   val allGrooms = job.tasksRunAt
                   val grooms = asScalaSet(allGrooms).toSet.filter( groom => 
                     !(host.equals(groom.getHost) && (port == groom.getPort))
@@ -569,25 +584,25 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         val client = ticket.get.client
         job.markAsCancelled(taskAttemptId) match {
           case true => if(job.allTasksStopped) {
-            // Note: newjob is not in cancelled state because of groom leave
+            // Note: newjob is not in cancelled state because it's a groom leave
+            //       event.
             val newJob = job.newWithFailedState 
             jobManager.update(Ticket(client, newJob))
             val jobId = newJob.getId
             whenJobFinished(jobId) 
             jobManager.move(jobId)(Finished)
-            command.get(jobId.toString) match {   // TODO: jobManager.cmd(jobId)
+            jobManager.getCommand(jobId.toString) match {
               case Some(found) if found.isInstanceOf[KillJob] => 
                 client ! Reject(found.asInstanceOf[KillJob].reason)  
               case Some(found) if !found.isInstanceOf[KillJob] => 
                 LOG.warning("Unknown command {} to react for job {}", found, 
                             jobId)
-              case None => 
-                LOG.warning("No command in reacting to task cancelled event!")
+              case None => LOG.warning("No matched command for job {} in "+
+                                       "reacting to cancelled event!", jobId)
             }
-            command -= jobId.toString 
           }
-          case false => 
-            LOG.error("Unable to mark task {} killed!", taskAttemptId)
+          case false => LOG.error("Unable to mark task {} killed!", 
+                                  taskAttemptId)
         }
       }
       case _ => LOG.error("No ticket found at any Stage!")
