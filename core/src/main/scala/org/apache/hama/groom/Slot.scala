@@ -122,7 +122,7 @@ object SlotManager {
   }
 }
 
-// TODO: cleanup for simpler api? 
+// TODO: refactor for compact api
 class SlotManager extends CommonLog {
 
   import Slot._

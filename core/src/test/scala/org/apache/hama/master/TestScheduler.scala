@@ -159,7 +159,7 @@ class MockScheduler(setting: Setting, master: ActorRef,
     isActive = false
   }
   
-  override def getTargetHostPort(ref: ActorRef): (String, Int) = 
+  override def targetHostPort(ref: ActorRef): (String, Int) = 
     if(isActive) {
       val host = hosts(aidx) 
       val port = ports(aidx) 

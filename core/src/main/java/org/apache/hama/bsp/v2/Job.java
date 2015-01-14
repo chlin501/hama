@@ -81,6 +81,7 @@ public final class Job implements Writable {
 
   public static enum State {
     PREP(1), RUNNING(2), SUCCEEDED(3), FAILED(4), CANCELLED(5);
+
     int s;
 
     State(int s) { this.s = s; }

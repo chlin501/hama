@@ -48,7 +48,6 @@ final case object Valid extends Validation
 final case class Invalid(reason: String) extends Validation
 
 sealed trait ReceptionistMessage
-
 final case class Ticket(client: ActorRef, job: Job) extends ReceptionistMessage 
 
 /**
