@@ -371,7 +371,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     if(!jobManager.isEmpty(TaskAssign)) {
       jobManager.headOf(TaskAssign).map { ticket => refs.foreach( ref => 
         ticket.job.nextUnassignedTask match {
-          case null => jobManager.moveToNextStage(ticket.job.getId)
+          case null => jobManager.moveToNextStage(ticket.job.getId) match {
+            case (true, _) => activeFinished = true
+            case _ => LOG.error("Unable to move job {} to next stage!", 
+                                ticket.job.getId)
+          }
           case task@_ => {
             val (host, port) = targetHostPort(ref)
             LOG.debug("Task {} is scheduled to target host {} port {}", 
@@ -382,7 +386,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           }
         })
       }
-      activeFinished = true
     }
 
   /**
@@ -435,7 +438,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
              currentTasks, stats.host, maxTasksAllowed)
     (maxTasksAllowed >= (currentTasks+1)) match {
       case true => ticket.job.nextUnassignedTask match {
-        case null => jobManager.moveToNextStage(ticket.job.getId)  
+        case null => jobManager.moveToNextStage(ticket.job.getId) match {
+          case (true, _) => 
+          case _ => LOG.error("Unable to move job {} to next stage!", 
+                              ticket.job.getId)
+        }
         case task@_ => {
           val (host, port) = targetHostPort(from)
           LOG.debug("Task {} is assigned with target host {} port {}", 
