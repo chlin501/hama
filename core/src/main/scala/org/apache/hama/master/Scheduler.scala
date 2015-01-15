@@ -101,8 +101,6 @@ protected[master] class JobManager extends CommonLog {
  
   type JobId = String 
 
-  protected var currentStage = stages(0)  
-
   protected var taskAssignQueue = Queue[Ticket]()  
   
   protected var processingQueue = Queue[Ticket]() 
@@ -191,7 +189,7 @@ protected[master] class JobManager extends CommonLog {
     } else None 
   }
 
-  protected def dequeue(stage: Stage, jobId: BSPJobID): Option[Ticket] = 
+  protected def dequeue(stage: Stage): Option[Ticket] = 
     stage match {
       case TaskAssign => if(!isEmpty(TaskAssign)) {
         val (ticket, rest) = taskAssignQueue.dequeue
@@ -215,7 +213,7 @@ protected[master] class JobManager extends CommonLog {
       case (s: Some[Stage], j: Some[Job]) => {
         val currentStage = s.get
         val nextStage = stages(stages.indexOf(currentStage) + 1)
-        if(nextStage.equals(target)) dequeue(currentStage, j.get.getId) match {
+        if(nextStage.equals(target)) dequeue(currentStage) match {
           case Some(ticket) => { enqueue(nextStage, ticket) ; true }
           case None => false
         } else false
@@ -227,11 +225,15 @@ protected[master] class JobManager extends CommonLog {
     (Boolean, Option[NextStage]) = findJobById(jobId) match {
       case (stage: Some[Stage], some: Some[Job]) => stage.get match {
         case TaskAssign => {
-          processingQueue = processingQueue.enqueue(taskAssignQueue.dequeue._1)
+          dequeue(TaskAssign).map { ticket =>
+            processingQueue = processingQueue.enqueue(ticket)
+          }
           (true, Option(Processing))
         }
         case Processing => {
-          finishedQueue = finishedQueue.enqueue(finishedQueue.dequeue._1)
+          dequeue(Processing).map { ticket => 
+            finishedQueue = finishedQueue.enqueue(ticket)
+          }
           (true, Option(Finished))
         }
         case Finished => (true, None)
@@ -243,24 +245,30 @@ protected[master] class JobManager extends CommonLog {
     findJobById(newTicket.job.getId) match {
       case (s: Some[Stage], j: Some[Job]) => s.get match {
         case TaskAssign => { 
-          val idx = taskAssignQueue.indexOf(j.get)
-          if(-1 != idx) {
-            taskAssignQueue = taskAssignQueue.updated(idx, newTicket)
+          val q = taskAssignQueue.zipWithIndex.collect { case (ticket, idx) => 
+            if(j.get.getId.equals(ticket.job.getId)) idx else -1
+          }.filter { p => p != -1 }
+          if(1 == q.size && -1 != q.head) {
+            taskAssignQueue = taskAssignQueue.updated(q.head, newTicket)
             true
           } else false 
         } 
-        case Processing => { 
-          val idx = processingQueue.indexOf(j.get)
-          if(-1 != idx) {
-            processingQueue = processingQueue.updated(idx, newTicket)
+        case Processing => {
+          val q = processingQueue.zipWithIndex.collect { case (ticket, idx) => 
+            if(j.get.getId.equals(ticket.job.getId)) idx else -1
+          }.filter { p => p != -1 }
+          if(1 == q.size && -1 != q.head) {
+            processingQueue = processingQueue.updated(q.head, newTicket)
             true
           } else false
         }
         case Finished => { 
           LOG.warning("Updating Job {} at Finished stage!", newTicket.job.getId)
-          val idx = finishedQueue.indexOf(j.get)
-          if(-1 != idx) {
-            finishedQueue = finishedQueue.updated(idx, newTicket)
+          val q = finishedQueue.zipWithIndex.collect { case (ticket, idx) =>
+            if(j.get.getId.equals(ticket.job.getId)) idx else -1
+          }.filter { p => p != -1 }
+          if(1 == q.size && -1 != q.head) {
+            finishedQueue = finishedQueue.updated(q.head, newTicket)
             true
           } else false
         }
