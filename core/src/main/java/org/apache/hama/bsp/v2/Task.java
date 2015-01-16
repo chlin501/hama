@@ -417,7 +417,7 @@ public final class Task implements Writable {
   /**
    * Increment the current superstep via 1.
    */
-  public void increatmentSuperstep() {
+  public void incrementSuperstep() {
     this.currentSuperstep = new IntWritable((getCurrentSuperstep()+1));
   }
 

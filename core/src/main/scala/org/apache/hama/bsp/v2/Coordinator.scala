@@ -102,7 +102,6 @@ object Coordinator {
  * {@link Coordinator} is responsible for providing related services, 
  * including:
  * - messenging
- * - <strik>io</strike>
  * - sync
  */
 // TODO: coordinator life cycle trait e.g. startExecute, whenFinished -> notify container? etc.
@@ -412,7 +411,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def firstSync(task: Task) {
     Utils.await[PeerClientMessage](syncClient, Enter(task.getCurrentSuperstep)) 
     Utils.await[PeerClientMessage](syncClient, Leave(task.getCurrentSuperstep)) 
-    task.increatmentSuperstep
+    task.incrementSuperstep
   }
 
   /**
@@ -483,6 +482,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   /**
+   * Sync client leaves barrier synchronization.
    * Spawn checkpointer.
    * Start checkpoint process.
    * Trigger next superstep.
@@ -688,63 +688,64 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   }
 
   // task phase switch
-  protected def setupPhase() = {
+  protected def setupPhase() {
     task.setupPhase
     reportTask
   }
 
-  protected def computePhase() = {
+  protected def computePhase() {
     task.computePhase
     reportTask
   }
 
-  protected def barrierEnterPhase() = {
+  protected def barrierEnterPhase() {
     task.barrierEnterPhase
     reportTask
   }
 
-  protected def withinBarrierPhase() = {
+  protected def withinBarrierPhase() {
     task.withinBarrierPhase
     reportTask
   }
 
-  protected def barrierLeavePhase() = {
+  protected def barrierLeavePhase() {
     task.barrierLeavePhase
     reportTask
   }
 
-  protected def exitBarrierPhase() = {
+  protected def exitBarrierPhase() {
     task.exitBarrierPhase
+    task.incrementSuperstep
     reportTask
   }
 
-  protected def cleanupPhase() = {
+  protected def cleanupPhase() {
     task.cleanupPhase
     reportTask
   }
 
   // task state
-  protected def waitingState() = {
+  protected def waitingState() {
     task.waitingState
     reportTask
   }
 
-  protected def runningState() = {
+  protected def runningState() {
     task.runningState
     reportTask
   }
 
-  protected def succeedState() = {
+  protected def succeedState() {
     task.succeededState
     reportTask
   }
 
-  protected def failedState() = {
+  protected def failedState() {
     task.failedState
     reportTask
   }
 
-  protected def cancelledState() = {
+  protected def cancelledState() {
     task.cancelledState
     reportTask
   }

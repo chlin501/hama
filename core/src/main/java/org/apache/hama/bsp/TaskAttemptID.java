@@ -52,6 +52,11 @@ public class TaskAttemptID extends ID {
     return taskId;
   }
 
+  /**
+   * Create a new task attempt id with id value incremented by 1.
+   * @return TaskAttemptID with it's id value ahead of current task attempt id
+   *                       by 1.
+   */
   public TaskAttemptID next() {
     return new TaskAttemptID(getTaskID(), (getId()+1));
   }

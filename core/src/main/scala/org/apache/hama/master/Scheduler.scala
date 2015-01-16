@@ -315,8 +315,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   /* a guard for checking if all active tasks are scheduled. */
   protected var activeFinished = false 
 
-  // TODO: move the finished job to Federator's JobHistoryTracker, 
-  //       where storing job's metadata e.g. setting
+  // TODO: move finished jobs to Federator's JobHistoryTracker(?)
+  //       store job's metadata e.g. setting, state, etc. only
 
   override def initializeServices = {
     master ! SubscribeEvent(GroomLeaveEvent, RequestTaskEvent, TaskFailureEvent)
@@ -398,8 +398,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             LOG.debug("Task {} is scheduled to target host {} port {}", 
                       task.getId, host, port)
             task.scheduleTo(host, port)
-// TODO: check if its task id is larger than 1. if true change to new Directive(Resume, task, setting.name). might not needed. because active schedule fails leads to reject.
-            ref ! new Directive(Launch, task, setting.name)
+            if(1 < task.getId.getId) {
+              ref ! new Directive(Resume, task, setting.name) // TODO: check if need to call resume or active schedule will simply reject?
+            } else {
+              ref ! new Directive(Launch, task, setting.name)
+            }
           }
         })
       }}
@@ -437,7 +440,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       LOG.debug("GroomServer form {} at {}:{} requests for assigning a task.", 
                 sender.path.name, req.stats.map { s => s.host}, 
                 req.stats.map { s=> s.port})
-      // TODO: make sure all active tasks are scheduled before passive assign begins; before that, perhaps drop request
       if(activeFinished) passiveAssign(req.stats, sender)
     }
   } 
@@ -468,14 +470,39 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           LOG.debug("Task {} is assigned with target host {} port {}", 
                    task.getId, host, port)
           task.assignedTo(host, port)
-// TODO: check if its task attempt id > 1. if true, change to from ! new Directive(Resume, task, setting.name)
-          from ! new Directive(Launch, task, setting.name)
+          if(1 < task.getId.getId) { 
+            from ! new Directive(Resume, task, setting.name) // TODO: check if passive assign will go to this route during recovery?
+          } else {
+            from ! new Directive(Launch, task, setting.name)
+          }
         }
       }
       case false => LOG.warning("Drop GroomServer {} requests for a new task "+ 
                                 "because the number of tasks exceeds {} "+
                                 "allowed!", stats.host, maxTasksAllowed) 
     }
+  }
+
+  /**
+   * The groom leave event happens, and some tasks run on the failed groom.
+   */
+  protected def whenActiveTasksFail(host: String, port: Int, job: Job,
+                                    failedTasks: java.util.List[Task]) {
+    failedTasks.foreach( task => task.failedState)
+    jobManager.cacheCommand(job.getId.toString, KillJob(host, port))
+    val groomsAlive = asScalaSet(job.tasksRunAt).toSet.filter( groom => 
+      !host.equals(groom.getHost) && (port != groom.getPort)
+    )  
+    master ! FindGroomsToKillTasks(groomsAlive)
+  } 
+
+  protected def taskExceedsMaxAttempt(host: String, port: Int, job: Job, 
+                                      e: Throwable) {
+    jobManager.cacheCommand(job.getId.toString, KillJob(e))
+    val grooms = asScalaSet(job.tasksRunAt).toSet.filter( groom => 
+      !(host.equals(groom.getHost) && (port == groom.getPort))
+    )
+    master ! FindGroomsToKillTasks(grooms) 
   }
 
   // TODO: reschedule/ reassign tasks
@@ -491,48 +518,26 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       //           else check if any tasks is active or not, then route as below
 
       jobManager.ticketAt match {
-        case (stage: Some[Stage], ticket: Some[Ticket]) => {
-          // TODO: mark job as recovering?
-          val job = ticket.get.job
+        case (s: Some[Stage], t: Some[Ticket]) => {
+          val job = t.get.job
           val failedTasks = job.findTasksBy(host, port)
-          if(0 == failedTasks.size) {
-            LOG.debug("No tasks run on failed groom {}:{}!", host, port)
-          } else {
-            // TODO: mark job to recovering state!
-            failedTasks.exists( task => task.isActive) match { 
-              case true => { 
-                failedTasks.foreach( task => task.failedState)
-                jobManager.cacheCommand(job.getId.toString, KillJob(host, port))
-                val allGrooms = job.tasksRunAt
-                val groomsAlive = asScalaSet(allGrooms).toSet.filter( groom => 
-                  !host.equals(groom.getHost) && (port != groom.getPort)
-                )  
-                master ! FindGroomsToKillTasks(groomsAlive)
-              }
-              case false => allPassiveTasks(stage.get, job, failedTasks) match {
+          failedTasks.size match {
+            case 0 => LOG.debug("No tasks on failed groom {}:{}!", host, port)
+            case _ => failedTasks.exists(task => task.isActive) match { // TODO: mark job to recovering state ?
+              case true => whenActiveTasksFail(host, port, job, failedTasks)
+              case false => allPassiveTasks(s.get, job, failedTasks) match {
                 case Success(result) => // TODO: mark job as running!
                 case Failure(ex) => ex match {
-                  case e: ExceedMaxTaskAllowedException => { 
-                    jobManager.cacheCommand(job.getId.toString, KillJob(e))
-                    val allGrooms = job.tasksRunAt
-                    val grooms = asScalaSet(allGrooms).toSet.filter( groom => 
-                      !(host.equals(groom.getHost) && (port == groom.getPort))
-                    )
-                    master ! FindGroomsToKillTasks(grooms)  
-                  }
+                  case e: ExceedMaxTaskAllowedException => 
+                    taskExceedsMaxAttempt(host, port, job, ex)
                   case _ => LOG.error("Unexpected exception: {}", ex)
                 }
               }
-            } 
+            }
           }
         }
         case _ => LOG.warning("No job existed!")
       }
-      // TODO: check if any tasks are assigned to offline groom
-      //       if true, check if it's active 
-      //         if it's active, fin all sched tasks and kill, then reject  
-      //       if it's passive, send kill to groom. when ack is received, 
-      //         remove marker.
     } 
     case latest: Task => {
       // TODO: update task in queue.
