@@ -412,7 +412,7 @@ public final class TaskTable implements Writable {
    * @return Task that is not yet assigned to a GroomServer; null if all tasks
    *              are already assigned to GroomServers.
    */
-  Task nextUnassignedTask() {
+  Task nextUnassignedTask() { 
     for(int row = 0; row < rowLength(); row++) {
       final int lastTaskPos = (columnLength(row) - 1);
       final Task task = get(row, lastTaskPos); 

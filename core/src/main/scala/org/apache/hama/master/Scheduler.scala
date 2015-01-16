@@ -58,7 +58,7 @@ final case class FindGroomsToKillTasks(infos: Set[SystemInfo])
       extends SchedulerMessage
 final case class GroomsFound(matched: Set[ActorRef], nomatched: Set[String])
       extends SchedulerMessage
-final case class TaskCancelled(taskAttemptId: String) extends SchedulerMessage
+final case class TaskKilled(taskAttemptId: String) extends SchedulerMessage
 
 final case object JobFinishedEvent extends PublishEvent
 
@@ -145,10 +145,7 @@ protected[master] class JobManager extends CommonLog {
       case Some(ticket) => (Option(TaskAssign), Option(ticket))
       case None => headOf(Processing) match {
         case Some(ticket) => (Option(Processing), Option(ticket))
-        case None => (None, None)/*headOf(Finished) match {
-          case Some(ticket) => (Option(Finished), Option(ticket))
-          case None => (None, None)
-        }*/
+        case None => (None, None)
       }
     }
 
@@ -378,31 +375,33 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   /**
    * In TaskAssign stage, target groom references found. Next step is to 
    * send the directive to target groom servers.
+   * Note that activeFinished flag must be marked as true once all directives
+   * are sent to grooms.
    */
   protected def targetRefsFound(refs: Array[ActorRef]) = 
     if(!jobManager.isEmpty(TaskAssign)) {
       jobManager.headOf(TaskAssign).map { ticket => {
-        val expected = ticket.job.targetInfos.size
+        val job = ticket.job
+        val expected = job.targetInfos.size
         val actual = refs.size
         if(expected != actual)
           throw new RuntimeException(expected+" target grooms expected, but "+
                                      "only "+actual+" found!")
-        refs.foreach( ref => ticket.job.nextUnassignedTask match { 
-          case null => jobManager.moveToNextStage(ticket.job.getId) match {
-            case (true, _) => 
+        refs.foreach( ref => job.nextUnassignedTask match { 
+          case null => jobManager.moveToNextStage(job.getId) match {
+            case (true, _) => jobManager.update(ticket.
+              newWithJob(job.newWithRunningState))
             case _ => LOG.error("Unable to move job {} to next stage!", 
-                                ticket.job.getId)
+                                job.getId)
           }
           case task@_ => {
             val (host, port) = targetHostPort(ref)
             LOG.debug("Task {} is scheduled to target host {} port {}", 
                       task.getId, host, port)
             task.scheduleTo(host, port)
-            if(1 < task.getId.getId) {
-              ref ! new Directive(Resume, task, setting.name) // TODO: check if need to call resume or active schedule will simply reject?
-            } else {
-              ref ! new Directive(Launch, task, setting.name)
-            }
+            if(1 < task.getId.getId) 
+              ref ! new Directive(Resume, task, setting.name) 
+            else ref ! new Directive(Launch, task, setting.name)
           }
         })
       }}
@@ -452,29 +451,26 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     } else LOG.debug("No job stays at task assign stage!")
 
   protected def assign(ticket: Ticket, stats: GroomStats, from: ActorRef) {
-    val currentTasks = ticket.job.getTaskCountFor(stats.hostPort)
+    val job = ticket.job
+    val currentTasks = job.getTaskCountFor(stats.hostPort)
     val maxTasksAllowed = stats.maxTasks
     LOG.debug("Currently there are {} tasks at {}, with max {} tasks allowed.", 
              currentTasks, stats.host, maxTasksAllowed)
     (maxTasksAllowed >= (currentTasks+1)) match {
-      case true => ticket.job.nextUnassignedTask match {
-        case null => jobManager.moveToNextStage(ticket.job.getId) match {
-          case (true, _) => if(jobManager.update(ticket.
-            newWithJob(ticket.job.newWithRunningState))) 
-            LOG.debug("Job is running!", ticket.job.getId) 
-          case _ => LOG.error("Unable to move job {} to next stage!", 
-                              ticket.job.getId)
+      case true => job.nextUnassignedTask match {
+        case null => jobManager.moveToNextStage(job.getId) match {
+          case (true, _) => if(jobManager.update(ticket.newWithJob(
+            job.newWithRunningState))) LOG.debug("Job is running!", job.getId) 
+          case _ => LOG.error("Unable to move job {} to next stage!", job.getId)
         }
         case task@_ => {
           val (host, port) = targetHostPort(from)
           LOG.debug("Task {} is assigned with target host {} port {}", 
                    task.getId, host, port)
           task.assignedTo(host, port)
-          if(1 < task.getId.getId) { 
-            from ! new Directive(Resume, task, setting.name) // TODO: check if passive assign will go to this route during recovery?
-          } else {
-            from ! new Directive(Launch, task, setting.name)
-          }
+          if(1 < task.getId.getId)  
+            from ! new Directive(Resume, task, setting.name) 
+          else from ! new Directive(Launch, task, setting.name)
         }
       }
       case false => LOG.warning("Drop GroomServer {} requests for a new task "+ 
@@ -511,7 +507,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   //       else wait for other groom requesting for task.
   protected def events: Receive = {
     case GroomLeave(name, host, port) => {
-      // TODO: mark job as recovering ?
+      // TODO: 
       //       if another groom leaves, check if any tasks runs on that groom.
       //         if true (some tasks run on that groom), check job if in recovering (denoting kill msg is issued)
       //           if true (in recovering), directly mark tasks as failure (for no ack will be received), and check if all tasks stopped.
@@ -519,18 +515,26 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
       jobManager.ticketAt match {
         case (s: Some[Stage], t: Some[Ticket]) => {
+          // TODO: check job's state if in recovering
+          //       if true, skip; otherwise, go as below.
           val job = t.get.job
           val failedTasks = job.findTasksBy(host, port)
           failedTasks.size match {
             case 0 => LOG.debug("No tasks on failed groom {}:{}!", host, port)
-            case _ => failedTasks.exists(task => task.isActive) match { // TODO: mark job to recovering state ?
-              case true => whenActiveTasksFail(host, port, job, failedTasks)
-              case false => allPassiveTasks(s.get, job, failedTasks) match {
-                case Success(result) => // TODO: mark job as running!
-                case Failure(ex) => ex match {
-                  case e: ExceedMaxTaskAllowedException => 
-                    taskExceedsMaxAttempt(host, port, job, ex)
-                  case _ => LOG.error("Unexpected exception: {}", ex)
+            case _ => {
+              val recovering = job.newWithRecoveringState
+              jobManager.update(t.get.newWithJob(recovering)) 
+              failedTasks.exists(task => task.isActive) match { 
+                case true => whenActiveTasksFail(host, port, recovering, 
+                                                 failedTasks)
+                case false => allPassiveTasks(s.get, recovering, 
+                                              failedTasks) match {
+                  case Success(result) => 
+                  case Failure(ex) => ex match {
+                    case e: ExceedMaxTaskAllowedException => 
+                      taskExceedsMaxAttempt(host, port, recovering, ex)
+                    case _ => LOG.error("Unexpected exception: {}", ex)
+                  }
                 }
               }
             }
@@ -551,7 +555,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       //            if free slots avail, 
       //               a. clone a new task with (id + 1), 
       //               b. update related task data, stats, etc.
-      //               c. sched to the free slot 
+      //               c. issue cancel action via directive 
+      //               d. when receiving task cancelled msg (in Receive func)
+      //                  check if all tasks stopped, if true:
+      //                    - move job to task assign stage and
+      //                    - call activeSchedule functions
       //            if no free slots avail, 
       //               a. mark job as failed 
       //               b. reject back to the client
@@ -593,11 +601,10 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         val host = ref.path.address.host.getOrElse(null)
         val port = ref.path.address.port.getOrElse(-1)
         jobManager.ticketAt match {
-          case (stage: Some[Stage], ticket: Some[Ticket]) => {
-            ticket.get.job.findTasksBy(host, port).foreach ( task => 
+          case (s: Some[Stage], t: Some[Ticket]) => 
+            t.get.job.findTasksBy(host, port).foreach ( task => 
               ref ! new Directive(Kill, task, setting.name) 
             )
-          }
           case _ => 
         }
       })
@@ -605,6 +612,10 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   }
 
   /**
+   * This happens when the groom leave event is triggered and where 
+   * FindGroomsToKillTask is issued with active tasks found or task exceedng 
+   * max attempt upper bound.
+   * 
    * In processing queue:
    * - Mark task as cancelled.
    * - Check if all tasks in the job are stopped, either cancelled or failed.
@@ -614,16 +625,16 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    *  - Notify client.
    */
   protected def taskCancelled: Receive = {   // TODO: need refactor
-    case TaskCancelled(taskAttemptId) => jobManager.ticketAt match {
-      case (stage: Some[Stage], ticket: Some[Ticket]) => { 
-        val job = ticket.get.job
-        val client = ticket.get.client
+    case TaskKilled(taskAttemptId) => jobManager.ticketAt match {
+      case (stage: Some[Stage], t: Some[Ticket]) => { 
+        val job = t.get.job
+        val client = t.get.client
         job.markAsCancelled(taskAttemptId) match {
           case true => if(job.allTasksStopped) {
             // Note: newjob is not in cancelled state because it's a groom leave
             //       event.
             val newJob = job.newWithFailedState 
-            jobManager.update(ticket.get.newWithJob(newJob))
+            jobManager.update(t.get.newWithJob(newJob))
             val jobId = newJob.getId
             whenJobFinished(jobId) 
             jobManager.move(jobId)(Finished)

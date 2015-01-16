@@ -80,7 +80,7 @@ public final class Job implements Writable {
   private TaskTable taskTable;
 
   public static enum State {
-    PREP(1), RUNNING(2), SUCCEEDED(3), FAILED(4), CANCELLED(5);
+    PREP(1), RUNNING(2), SUCCEEDED(3), RECOVERING(4), FAILED(5), CANCELLED(6);
 
     int s;
 
@@ -497,6 +497,10 @@ public final class Job implements Writable {
     return newWithState(State.SUCCEEDED); 
   }
 
+  public Job newWithRecoveringState() { 
+    return newWithState(State.RECOVERING); 
+  }
+
   public Job newWithFailedState() {
     return newWithState(State.FAILED); 
   }
@@ -602,7 +606,7 @@ public final class Job implements Writable {
    * task. 
    */
   public Task nextUnassignedTask() {
-    return this.taskTable.nextUnassignedTask();
+    return getTasks().nextUnassignedTask();
   }
 
   /**
@@ -663,7 +667,7 @@ public final class Job implements Writable {
    * @return int is the count of tasks assigned to the same GroomServer.
    */
   public int getTaskCountFor(final String groomServerName) {
-    final Integer count = this.taskTable.group().get(groomServerName);
+    final Integer count = getTasks().group().get(groomServerName);
     int cnt = 0;
     if(null != count) cnt = count.intValue();
     return cnt;
@@ -681,7 +685,7 @@ public final class Job implements Writable {
     finishTime.write(out);
     superstepCount.write(out);
     conf.write(out);
-    if(null != this.taskTable) {
+    if(null != getTasks()) {
       out.writeBoolean(true);
       taskTable.write(out);
     } else {
