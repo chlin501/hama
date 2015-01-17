@@ -557,6 +557,23 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case _ => LOG.warning("No job existed!")
     }
     case fault: TaskFailure => {
+      jobManager.findJobById(fault.taskAttemptId.getJobID) match {
+        case (s: Some[Stage], j: Some[Job]) => {
+          val job = j.get
+          job.findTaskBy(fault.taskAttemptId) match {
+            case null => LOG.error("No task matches {}", fault.taskAttemptId)
+            case task@_ => task.isActive match {
+              case true => {
+                val host = task.getAssignedHost   
+                val port = task.getAssignedPort
+                //federator ! FindCapacityIn(host, port, fault.taskAttmeptId)
+              }
+              case false =>
+            }
+          }
+        } 
+        case _ => LOG.error("No job matches {}", fault.taskAttemptId.getJobID)
+      }
       // TODO: reschedule the task by checking task's active groom setting.
       //       - search fault.taskAttemptId in queue's job.
       //       - check if the task is active or passive:
@@ -575,9 +592,14 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       //               c.  move the job to finished (history?) queue.
       //         if passive
       //            a. clone task with (id + 1)
-      //            b. add that task in the job. groom will request for exec
+      //            b. call job.rearrange(newTask). groom will request for exec
     }
   }
+
+  // TODO: FindGroomCapacty(host, port)
+  //protected def groomCacacity: Receive = {
+    //case GroomCapacity(freeSlots, failedTaskAttemptId) =>
+  //}
 
   /**
    * Add a new task to the end of corresponded column in task table.

@@ -61,12 +61,9 @@ import scala.concurrent.duration.FiniteDuration
 
 object TaskFailure {
 
-  def apply(id: TaskAttemptID, stats: GroomStats): TaskFailure = 
-    apply(Option(id), Option(stats))
-  
-
-  def apply(id: Option[TaskAttemptID], stats: Option[GroomStats]): 
-      TaskFailure = {
+  def apply(id: TaskAttemptID, stats: GroomStats): TaskFailure = {
+    require(null != id && null != stats , 
+            "TaskAttemptID or GroomStats is null!")
     val fault = new TaskFailure
     fault.id = id
     fault.s = stats
@@ -77,28 +74,26 @@ object TaskFailure {
 
 final class TaskFailure extends Writable {
 
-  protected[groom] var id: Option[TaskAttemptID] = None // TODO: remove option
+  protected[groom] var id: TaskAttemptID = new TaskAttemptID 
 
-  protected[groom] var s: Option[GroomStats] = None // TODO: remove option
+  protected[groom] var s: GroomStats = new GroomStats
 
-  def taskAttemptId(): Option[TaskAttemptID] = id
+  def taskAttemptId(): TaskAttemptID = id
 
-  def stats(): Option[GroomStats] = s
+  def stats(): GroomStats = s
 
   @throws(classOf[IOException])
   override def write(out: DataOutput) = {
-    id.map { v => v.write(out) } 
-    s.map { v => v.write(out) }
+    id.write(out) 
+    s.write(out)
   }
 
   @throws(classOf[IOException])
   override def readFields(in: DataInput) {
-    val v = new TaskAttemptID
-    v.readFields(in)
-    id = Option(v)
-    val gs = new GroomStats
-    gs.readFields(in)
-    s = Option(gs)
+    id = new TaskAttemptID
+    id.readFields(in)
+    s = new GroomStats
+    s.readFields(in)
   }
 }
 
@@ -391,7 +386,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
                              f:(Int) => Unit) = retries.get(old.seq) match {
       case Some(retryCount) if (retryCount < maxRetries) => { 
         if(!None.equals(old.taskAttemptId)) 
-          groom ! TaskFailure(old.taskAttemptId, Option(currentGroomStats))
+          groom ! TaskFailure(old.taskAttemptId.getOrElse(null), 
+                              currentGroomStats)
         slotManager.clear(old.seq)
         f(old.seq) 
         val v = retryCount + 1

@@ -605,6 +605,10 @@ public final class Job implements Writable {
     return getTasks().allTasksStopped();
   } 
 
+  public Task findTaskBy(final TaskAttemptID taskAttemptId) {
+    return getTasks().findTaskBy(taskAttemptId);
+  }
+
   public List<Task> findTasksBy(final String host, final int port) {
     return getTasks().findTasksBy(host, port);
   }

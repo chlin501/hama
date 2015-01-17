@@ -214,6 +214,16 @@ public final class TaskTable implements Writable {
     return taskAttemptArray.length;
   }
 
+  Task findTaskBy(final TaskAttemptID taskAttemptId) {
+    for (int row = 0; row < rowLength(); row++) {
+      final Task task = latestTaskAt(row);
+      if(null == task) 
+        throw new NullPointerException("No task found at row "+row);
+      if(task.getId().equals(taskAttemptId)) return task;
+    } 
+    return null;
+  }
+
   /**
    * Find tasks matching to host, port supplied.
    * Matched tasks denote tasks running on the node with host and port values
