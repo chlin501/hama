@@ -142,10 +142,10 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   type TaskAttemptID = String
 
   override val supervisorStrategy = OneForOneStrategy() {
-    case ee: ExecutorException => {
-      unwatchContainerWith(ee.slotSeq)
-      Stop
-    }
+    /**
+     * Executor throws exception.
+     */
+    case ee: ExecutorException => { unwatchContainerWith(ee.slotSeq); Stop }
   }
 
   protected val slotManager = SlotManager(defaultMaxTasks)
@@ -366,12 +366,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def whenContainerOffline(name: String) = 
     name.replace("Container", "") match {
       case s if s forall Character.isDigit => extractSeq(s, { seq =>
-        matchSlot(seq, { slot => 
+        matchSlot(seq, { slot => {
           slot.taskAttemptId.map { found => 
             groom ! TaskFailure(found, currentGroomStats) 
           }
           redeploy(slot)
-        })})
+        }})})
       case s@_ => LOG.error("Invalid container {} offline!", name)
     }
 

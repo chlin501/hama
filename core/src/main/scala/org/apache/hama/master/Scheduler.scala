@@ -27,6 +27,7 @@ import org.apache.hama.SubscribeEvent
 import org.apache.hama.SystemInfo
 import org.apache.hama.Tick
 import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.ExceedMaxTaskAllowedException
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
@@ -59,6 +60,10 @@ final case class FindGroomsToKillTasks(infos: Set[SystemInfo])
 final case class GroomsFound(matched: Set[ActorRef], nomatched: Set[String])
       extends SchedulerMessage
 final case class TaskKilled(taskAttemptId: String) extends SchedulerMessage
+final case class FindGroomRef(host: String, port: Int, task: Task)
+      extends SchedulerMessage
+final case class MatchedGroom(newTask: Task, ref: ActorRef)
+      extends SchedulerMessage
 
 final case object JobFinishedEvent extends PublishEvent
 
@@ -551,24 +556,39 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      */
     case newest: Task => jobManager.ticketAt match {
       case (s: Some[Stage], t: Some[Ticket]) => t.get.job.update(newest) match {
-        case true =>
+        case true => if(t.get.job.allTasksSucceeded) {
+          // TODO: set job as completed
+          //       call when job finished
+          //       move job to finished stage 
+        }
         case false => LOG.warning("Unable to update task {}!", newest.getId)
       }
       case _ => LOG.warning("No job existed!")
     }
+    /**
+     * Find task in corresponded stage.
+     * Check task is active or passive:
+     * - when the task is active
+     * 
+     * - when the task is passive
+     *   a. create a new task with id incremented.
+     *   b. rearrange task by job.rearrange function.
+     */
     case fault: TaskFailure => {
       jobManager.findJobById(fault.taskAttemptId.getJobID) match {
         case (s: Some[Stage], j: Some[Job]) => {
           val job = j.get
           job.findTaskBy(fault.taskAttemptId) match {
             case null => LOG.error("No task matches {}", fault.taskAttemptId)
-            case task@_ => task.isActive match {
-              case true => {
-                val host = task.getAssignedHost   
-                val port = task.getAssignedPort
-                //federator ! FindCapacityIn(host, port, fault.taskAttmeptId)
+            case old@_ => old.isActive match {
+              case true => { 
+                // TODO: restart task on the same groom
+                //       find groom actor reference 
+                val newTask = job.rearrange(old)
+                master ! FindGroomRef(old.getAssignedHost, old.getAssignedPort, 
+                                      newTask)
               }
-              case false =>
+              case false => // TODO: passive
             }
           }
         } 
@@ -581,11 +601,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       //            if free slots avail, 
       //               a. clone a new task with (id + 1), 
       //               b. update related task data, stats, etc.
-      //               c. issue cancel action via directive 
-      //               d. when receiving task cancelled msg (in Receive func)
-      //                  check if all tasks stopped, if true:
-      //                    - move job to task assign stage and
-      //                    - call activeSchedule functions
+      //               c. - issue resume directive to groom with new task
+      //                  - move job to task assign stage and
+      //                  - call activeSchedule functions
       //            if no free slots avail, 
       //               a. mark job as failed 
       //               b. reject back to the client
@@ -594,12 +612,10 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       //            a. clone task with (id + 1)
       //            b. call job.rearrange(newTask). groom will request for exec
     }
+    case MatchedGroom(newTask, ref) => { // TODO: 
+     ref ! new Directive(Resume, newTask, setting.name)
+    }
   }
-
-  // TODO: FindGroomCapacty(host, port)
-  //protected def groomCacacity: Receive = {
-    //case GroomCapacity(freeSlots, failedTaskAttemptId) =>
-  //}
 
   /**
    * Add a new task to the end of corresponded column in task table.

@@ -605,6 +605,10 @@ public final class Job implements Writable {
     return getTasks().allTasksStopped();
   } 
 
+  public boolean allTasksSucceeded() {
+    return getTasks().allTasksSucceeded();
+  }
+
   public Task findTaskBy(final TaskAttemptID taskAttemptId) {
     return getTasks().findTaskBy(taskAttemptId);
   }
@@ -623,10 +627,11 @@ public final class Job implements Writable {
    * - append the new task to the end of corresponded column.
    * - mark the old task as failure.
    */
-  public void rearrange(final Task old) {
+  public Task rearrange(final Task old) {
     final Task newTask = old.withIdIncremented(); 
     getTasks().add(newTask);
     old.failedState();
+    return newTask;
   }
 
   /**

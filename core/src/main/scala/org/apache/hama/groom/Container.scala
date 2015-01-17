@@ -147,9 +147,11 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
    * Capture exceptions thrown by coordinator, etc.
    * Report to master and stop actors when necessary.
    *
-   * InstantiationFailure will be restarted thrice, and then stop coordinator. 
-   * Offline function will stop container, by which task counsellor will capture
-   * and report to master.
+   * InstantiationFailure will be restarted thrice. Coordinator will be stopped
+   * if exceeds restart times. 
+   * 
+   * Offline function will stop container itself, and that will be captured by 
+   * task counsellor and will be reported to master.
    */
   override val supervisorStrategy = 
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 3 minutes) {
@@ -295,7 +297,8 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
     if(nameEquals(Option(taskCounsellor), target) ||
        nameEquals(tasklog, target) || nameEquals(messenger, target) ||
        nameEquals(peer, target) || nameEquals(coordinator, target)) {
-      stop
+      stopChildren
+      stop  // TODO: replaced by reporting task failure to task counsellor?
     } else LOG.warning("Unexpected actor {} is offline!", target.path.name)
 
   protected def taskFinished: Receive = {

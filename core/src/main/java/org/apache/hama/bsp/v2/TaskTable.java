@@ -419,6 +419,17 @@ public final class TaskTable implements Writable {
     return ((count + 1) == rowLength());
   }
 
+  boolean allTasksSucceeded() {
+    int count = 0;
+    for (int row = 0; row < rowLength(); row++) {
+      final Task latest = latestTaskAt(row);
+      if(null == latest) 
+        throw new NullPointerException("Task at row "+row+" is null!");
+      if(latest.isSucceeded()) count += 1;
+    }
+    return ((count + 1) == rowLength());
+  }
+
   /**
    * Remove the latest task from a designed row.
    * @param row at which the latest task will be removed.
