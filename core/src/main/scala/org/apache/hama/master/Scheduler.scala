@@ -92,7 +92,7 @@ object JobManager {
   def apply(): JobManager = new JobManager 
 
 }
-
+// TODO: refactor for more compact api?
 protected[master] class JobManager extends CommonLog {
 
   import JobManager._
@@ -375,7 +375,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   /**
    * In TaskAssign stage, target groom references found. Next step is to 
    * send the directive to target groom servers.
-   * Note that activeFinished flag must be marked as true once all directives
+   * 
+   * Note: active tasks may schedule to the same target groom servers when
+   * only a task fails instead of groom.
+   * 
+   * Note: activeFinished flag must be marked as true once all directives
    * are sent to grooms.
    */
   protected def targetRefsFound(refs: Array[ActorRef]) = 
@@ -501,51 +505,56 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     master ! FindGroomsToKillTasks(grooms) 
   }
 
+  protected def someTasksFailure(host: String, port: Int, ticket: Ticket, 
+                                 stage: Stage, 
+                                 failedTasks: java.util.List[Task]) {
+    val job = ticket.job
+    val recovering = job.newWithRecoveringState
+    jobManager.update(ticket.newWithJob(recovering)) 
+    failedTasks.exists(task => task.isActive) match { 
+      case true => whenActiveTasksFail(host, port, recovering, failedTasks)
+      case false => allPassiveTasks(stage, recovering, failedTasks) match {
+        case Success(result) => 
+        case Failure(ex) => ex match {
+          case e: ExceedMaxTaskAllowedException => 
+            taskExceedsMaxAttempt(host, port, recovering, ex)
+          case _ => LOG.error("Unexpected exception: {}", ex)
+        }
+      }
+    }
+  }
+
   // TODO: reschedule/ reassign tasks
   //       if it's the active target grooms that fail, 
   //         kill tasks, fail job and notify client.
   //       else wait for other groom requesting for task.
   protected def events: Receive = {
-    case GroomLeave(name, host, port) => {
-      // TODO: 
-      //       if another groom leaves, check if any tasks runs on that groom.
-      //         if true (some tasks run on that groom), check job if in recovering (denoting kill msg is issued)
-      //           if true (in recovering), directly mark tasks as failure (for no ack will be received), and check if all tasks stopped.
-      //           else check if any tasks is active or not, then route as below
-
-      jobManager.ticketAt match {
-        case (s: Some[Stage], t: Some[Ticket]) => {
-          // TODO: check job's state if in recovering
-          //       if true, skip; otherwise, go as below.
-          val job = t.get.job
-          val failedTasks = job.findTasksBy(host, port)
-          failedTasks.size match {
-            case 0 => LOG.debug("No tasks on failed groom {}:{}!", host, port)
-            case _ => {
-              val recovering = job.newWithRecoveringState
-              jobManager.update(t.get.newWithJob(recovering)) 
-              failedTasks.exists(task => task.isActive) match { 
-                case true => whenActiveTasksFail(host, port, recovering, 
-                                                 failedTasks)
-                case false => allPassiveTasks(s.get, recovering, 
-                                              failedTasks) match {
-                  case Success(result) => 
-                  case Failure(ex) => ex match {
-                    case e: ExceedMaxTaskAllowedException => 
-                      taskExceedsMaxAttempt(host, port, recovering, ex)
-                    case _ => LOG.error("Unexpected exception: {}", ex)
-                  }
-                }
-              }
-            }
-          }
+    /**
+     * Check if a job is in recovering state, and skip if true because all tasks
+     * should receive kill directive and then are rescheduled accordingly.
+     * 
+     * Then check if any tasks fail on the groom by tasks size found.
+     */
+    case GroomLeave(name, host, port) => jobManager.ticketAt match {
+      case (s: Some[Stage], t: Some[Ticket]) => if(!t.get.job.isRecovering) {
+        val failedTasks = t.get.job.findTasksBy(host, port)
+        failedTasks.size match {
+          case 0 => LOG.debug("No tasks run on failed groom {}:{}!", host, port)
+          case _ => someTasksFailure(host, port, t.get, s.get, failedTasks)
         }
-        case _ => LOG.warning("No job existed!")
       }
+      case _ => LOG.warning("No job existed!")
     } 
-    case latest: Task => {
-      // TODO: update task in queue.
-      //       check if all tasks are successful. if true, call whenJobFinished.
+    /**
+     * Update task in task table.
+     * Check if all tasks are successful; if true, call whenJobFinished.
+     */
+    case newest: Task => jobManager.ticketAt match {
+      case (s: Some[Stage], t: Some[Ticket]) => t.get.job.update(newest) match {
+        case true =>
+        case false => LOG.warning("Unable to update task {}!", newest.getId)
+      }
+      case _ => LOG.warning("No job existed!")
     }
     case fault: TaskFailure => {
       // TODO: reschedule the task by checking task's active groom setting.

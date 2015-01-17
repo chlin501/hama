@@ -485,24 +485,48 @@ public final class Job implements Writable {
     return new Builder(this).setState(newState).build();
   }
 
+  public boolean isPrep() {
+    return State.PREP.equals(getState());
+  }
+
   public Job newWithPrepState() { 
     return newWithState(State.PREP); 
+  }
+
+  public boolean isRunning() {
+    return State.RUNNING.equals(getState());
   }
 
   public Job newWithRunningState() { 
     return newWithState(State.RUNNING); 
   }
 
+  public boolean isSucceeded() {
+    return State.SUCCEEDED.equals(getState());
+  }
+
   public Job newWithSucceededState() { 
     return newWithState(State.SUCCEEDED); 
+  }
+
+  public boolean isRecovering() {
+    return State.RECOVERING.equals(getState());
   }
 
   public Job newWithRecoveringState() { 
     return newWithState(State.RECOVERING); 
   }
 
+  public boolean isFailed() {
+    return State.FAILED.equals(getState());
+  }
+
   public Job newWithFailedState() {
     return newWithState(State.FAILED); 
+  }
+
+  public boolean isCancelled() {
+    return State.CANCELLED.equals(getState());
   }
 
   public Job newWithCancelledState() { 
@@ -577,9 +601,9 @@ public final class Job implements Writable {
     return getTasks().markAsCancelled(taskAttemptId); 
   }
 
-  public boolean allTasksStopped() {
+  public boolean allTasksStopped() { // TODO: cancelled and fail. need change?
     return getTasks().allTasksStopped();
-  }
+  } 
 
   public List<Task> findTasksBy(final String host, final int port) {
     return getTasks().findTasksBy(host, port);
@@ -602,11 +626,16 @@ public final class Job implements Writable {
   }
 
   /**
-   * This function is mainly used by Scheduler for checking next available 
-   * task. 
+   * This function is mainly used for checking next task available. 
+   * @return Task contains the latest task attempt id for those share the same
+   *              task id.
    */
   public Task nextUnassignedTask() {
     return getTasks().nextUnassignedTask();
+  }
+
+  public boolean update(final Task newest) {
+    return getTasks().update(newest);
   }
 
   /**

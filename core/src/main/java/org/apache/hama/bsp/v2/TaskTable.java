@@ -254,6 +254,20 @@ public final class TaskTable implements Writable {
     return taskAttemptArray[taskAttemptArray.length-1];
   }
 
+  boolean update(final Task newest) {
+    boolean flag = false;
+    for (int row = 0; row < rowLength(); row++) {
+      final Task latest = latestTaskAt(row);
+      if(null == latest)  
+        throw new NullPointerException("No task found at row "+row);
+      if(latest.getId().equals(newest.getId())) {
+        set(row, columnLength(row), newest); 
+        flag = true; 
+      }
+    } 
+    return flag;
+  }
+
   /**
    * Return the latest tasks that is currently running.
    */
@@ -261,6 +275,8 @@ public final class TaskTable implements Writable {
     final List<Task> latestTasks = new ArrayList<Task>();
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
+      if(null == latest)  
+        throw new NullPointerException("No task found at row "+row);
       latestTasks.add(latest);  
     } 
     return Collections.unmodifiableList(latestTasks);
