@@ -623,12 +623,16 @@ public final class Job implements Writable {
 
   /**
    * Tasktable:  
-   * - create a new task, with attempt id incremented, based on the old one.
-   * - append the new task to the end of corresponded column.
-   * - mark the old task as failure.
+   * - Create a new task, with attempt id incremented, based on the old one.
+   * - Reset task to waiting state.
+   * - Revoke host port value from previously scheduled groom server.
+   * - Append the new task to the end of corresponded column.
+   * - Mark the old task as failure.
    */
   public Task rearrange(final Task old) {
     final Task newTask = old.withIdIncremented(); 
+    newTask.waitingState();
+    newTask.revoke();
     getTasks().add(newTask);
     old.failedState();
     return newTask;

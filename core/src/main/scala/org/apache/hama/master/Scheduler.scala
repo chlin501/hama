@@ -154,6 +154,9 @@ protected[master] class JobManager extends CommonLog {
       }
     }
 
+  /**
+   * Return the stored in the head of corresponded stage.
+   */
   protected[master] def headOf(stage: Stage): Option[Ticket] = stage match {
     case TaskAssign => if(!isEmpty(TaskAssign)) Option(taskAssignQueue.head)
       else None
@@ -582,13 +585,19 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             case null => LOG.error("No task matches {}", fault.taskAttemptId)
             case old@_ => old.isActive match {
               case true => { 
-                // TODO: restart task on the same groom
-                //       find groom actor reference 
+                markJobAsRecovering(s.get, job)  
                 val newTask = job.rearrange(old)
-                master ! FindGroomRef(old.getAssignedHost, old.getAssignedPort, 
+                master ! FindGroomRef(old.getAssignedHost, old.getAssignedPort,
                                       newTask)
               }
-              case false => // TODO: passive
+              case false => { 
+                markJobAsRecovering(s.get, job)  
+                // TODO: deail with failed task in passive operation
+                //       e.g. rearrange(task),move task back to task assign,etc
+                //       once task is finished assign (groom request will auto
+                //       call assign() func), sched mark job as running if
+                //       no more task needs to be assign()-ed.
+              }
             }
           }
         } 
@@ -597,25 +606,47 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       // TODO: reschedule the task by checking task's active groom setting.
       //       - search fault.taskAttemptId in queue's job.
       //       - check if the task is active or passive:
-      //         if active, check if target grooms have free slots avail.
-      //            if free slots avail, 
-      //               a. clone a new task with (id + 1), 
-      //               b. update related task data, stats, etc.
-      //               c. - issue resume directive to groom with new task
-      //                  - move job to task assign stage and
-      //                  - call activeSchedule functions
-      //            if no free slots avail, 
-      //               a. mark job as failed 
-      //               b. reject back to the client
-      //               c.  move the job to finished (history?) queue.
+      //         if active, restart at the same groom ref
+      //           a. clone a new task with (id + 1), 
+      //           b. rearrage task data, stats, etc.
+      //           c. - issue resume directive to groom with new task
+      //              - move job to task assign stage and
+      //              - call activeSchedule functions
       //         if passive
       //            a. clone task with (id + 1)
       //            b. call job.rearrange(newTask). groom will request for exec
     }
-    case MatchedGroom(newTask, ref) => { // TODO: 
-     ref ! new Directive(Resume, newTask, setting.name)
+    /**
+     * - BSPMaster replies groom reference where failed task (active schedule) 
+     *   ran. 
+     * - The groom reference is used for resuming the failed task. 
+     * - Mark the task with groom's host and port values.
+     * - Then move the job back to Processing stage. 
+     * - And mark the job as running.
+     */
+    case MatchedGroom(newTask, ref) => {
+      val jobId = newTask.getId.getJobID
+      val (host, port) = targetHostPort(ref) 
+      LOG.debug("Task {} is rescheduled to target {}:{}", jobId, host, port)
+      newTask.scheduleTo(host, port)
+      ref ! new Directive(Resume, newTask, setting.name)
+      jobManager.move(jobId)(Processing)
+      markJobAsRunning(jobId)
     }
   }
+
+  protected def markJobAsRecovering(stage: Stage, job: Job) =
+    jobManager.headOf(stage).map { ticket => 
+      jobManager.update(ticket.newWithJob(job.newWithRecoveringState))  
+    }
+
+  protected def markJobAsRunning(jobId: BSPJobID) = 
+    jobManager.findJobById(jobId) match {
+      case (s: Some[Stage], j: Some[Job]) => jobManager.headOf(s.get).map { t=>
+        jobManager.update(t.newWithJob(j.get.newWithRunningState))  
+      }
+      case _ => LOG.error("Fail to mark job {} as running!", jobId)
+    }
 
   /**
    * Add a new task to the end of corresponded column in task table.

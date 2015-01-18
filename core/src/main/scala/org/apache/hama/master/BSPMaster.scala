@@ -204,6 +204,7 @@ class BSPMaster(setting: Setting, registrator: Registrator)
       }) 
       sender ! GroomsFound(matched, nomatched)
     } 
+    case FindGroomRef(host, port, newTask) => // TODO: find corresponded groom actor based on host port and return with newTask.
   }
 
   protected def msgFromGroom: Receive = {
