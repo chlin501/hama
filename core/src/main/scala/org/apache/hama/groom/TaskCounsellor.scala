@@ -235,8 +235,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       container ! new ResumeTask(d.task) 
       slotManager.book(slot.seq, d.task.getId, container)
     }
-    case Kill => LOG.error("Action Kill by {} shouldn't be here for slot {}!", 
-                           d, slot.seq)
+    case Kill => LOG.error("Action Kill by {} shouldn't be here for slot {} "+
+                           "for container does not exist!", d, slot.seq)
   }
 
   protected def whenExecutorExists(d: Directive): Unit = 
@@ -289,7 +289,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       case Kill => slotManager.findSlotBy(d.task.getId).map { slot =>
         slot.container match { 
           case Some(container) => container ! new KillTask(d.task.getId)  
-          case None => LOG.error("No container is running for task {}!", 
+          case None => LOG.error("No container is up. Can't kill task {}!",
                                  d.task.getId)
         }
       }

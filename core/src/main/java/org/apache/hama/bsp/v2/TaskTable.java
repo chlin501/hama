@@ -399,7 +399,7 @@ public final class TaskTable implements Writable {
     }
   }
 
-  boolean markAsCancelled(final TaskAttemptID taskAttemptId) {
+  boolean markCancelledWith(final TaskAttemptID taskAttemptId) {
     boolean flag = false;
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
@@ -414,6 +414,11 @@ public final class TaskTable implements Writable {
     return flag;
   }
 
+  /**
+   * Check if all tasks are either cancelled or failed.
+   * @return boolean denotes if all tasks are stopped. if true, all tasks are 
+   *                 stopped; otherwise some tasks are still operated.
+   */
   boolean allTasksStopped() {
     int count = 0;
     for (int row = 0; row < rowLength(); row++) {

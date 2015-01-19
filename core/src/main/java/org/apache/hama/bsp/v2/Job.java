@@ -593,12 +593,12 @@ public final class Job implements Writable {
     return this.taskTable;
   }
 
-  public boolean markAsCancelled(final String taskAttemptId) {
-    return getTasks().markAsCancelled(TaskAttemptID.forName(taskAttemptId));
+  public boolean markCancelledWith(final String taskAttemptId) {
+    return getTasks().markCancelledWith(TaskAttemptID.forName(taskAttemptId));
   }
 
-  public boolean markAsCancelled(final TaskAttemptID taskAttemptId) {
-    return getTasks().markAsCancelled(taskAttemptId); 
+  public boolean markCancelledWith(final TaskAttemptID taskAttemptId) {
+    return getTasks().markCancelledWith(taskAttemptId); 
   }
 
   public boolean allTasksStopped() { // TODO: cancelled and fail. need change?

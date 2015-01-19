@@ -324,8 +324,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   override def initializeServices = {
     master ! SubscribeEvent(GroomLeaveEvent, RequestTaskEvent, TaskFailureEvent)
     federator ! SubscribeEvent(TaskArrivalEvent) 
-    LOG.debug("Listening to groom leave, request task, and task failure "+
-              "events!")
+    LOG.debug("Listening to groom leave, request task, and task failure, " +
+              "task arrival events!")
     tick(self, NextPlease)
   }
 
@@ -499,7 +499,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   }
 
   /**
-   * The groom leave event happens, and some tasks run on the failed groom.
+   * GroomLeave event happens and some tasks run on failed groom, so following
+   * actions are taken:
+   * - mark tasks running on the failed groom as failure.
+   * - note kill command for later reference.
+   * - find grooms where rest tasks are running.
+   * - rest operations are executed when GroomsFound.
    */
   protected def whenActiveTasksFail(host: String, port: Int, job: Job,
                                     failedTasks: java.util.List[Task]) {
@@ -533,16 +538,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case Failure(ex) => ex match {
           case e: ExceedMaxTaskAllowedException => 
             taskExceedsMaxAttempt(host, port, recovering, ex)
-          case _ => LOG.error("Unexpected exception: {}", ex)
+          case _ => LOG.error("Unexpected exception in dealing with passive "+
+                              "tasks fail: {}", ex)
         }
       }
     }
   }
 
-  // TODO: reschedule/ reassign tasks
-  //       if it's the active target grooms that fail, 
-  //         kill tasks, fail job and notify client.
-  //       else wait for other groom requesting for task.
   protected def events: Receive = {
     /**
      * Check if a job is in recovering state, and skip if true because all tasks
@@ -560,6 +562,66 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       }
       case _ => LOG.warning("No job existed!")
     } 
+    /**
+     * Scheduler asks master for grooms references where tasks are running by 
+     * issuing FindGroomsToKillTasks.
+     * Once receiving grooms references, issue kill command to groom servers.
+     */
+    case GroomsFound(matched, nomatched) => if(!nomatched.isEmpty) 
+      LOG.error("Some grooms {} not found!", nomatched.mkString(",")) 
+      else matched.foreach( ref => {
+        val host = ref.path.address.host.getOrElse(null)
+        val port = ref.path.address.port.getOrElse(-1)
+        jobManager.ticketAt match {
+          case (s: Some[Stage], t: Some[Ticket]) => 
+            t.get.job.findTasksBy(host, port).foreach ( task => 
+              ref ! new Directive(Kill, task, setting.name) 
+            )
+          case _ => 
+        }
+      })
+    /**
+     * This happens when the groom leave event is triggered and where 
+     * FindGroomsToKillTask is issued with active tasks found or task exceedng 
+     * max attempt upper bound.
+     * 
+     * In processing queue:
+     * - Mark task as cancelled.
+     * - Check if all tasks in the job are stopped, either cancelled or failed.
+     * If all tasks are marked as stopped:
+     *  - Issue job finished event.
+     *  - Move job from processing queue to finished queue.
+     *  - Notify client.
+     */
+    case TaskKilled(taskAttemptId) => jobManager.ticketAt match {
+      case (stage: Some[Stage], t: Some[Ticket]) => { 
+        val job = t.get.job
+        val client = t.get.client
+        job.markCancelledWith(taskAttemptId) match {
+          case true => if(job.allTasksStopped) {
+            // Note: newjob is not in cancelled state because it's a groom leave
+            //       event.
+            val newJob = job.newWithFailedState 
+            jobManager.update(t.get.newWithJob(newJob))
+            val jobId = newJob.getId
+            whenJobFinished(jobId) 
+            jobManager.move(jobId)(Finished)
+            jobManager.getCommand(jobId.toString) match {
+              case Some(found) if found.isInstanceOf[KillJob] => 
+                client ! Reject(found.asInstanceOf[KillJob].reason)  
+              case Some(found) if !found.isInstanceOf[KillJob] => 
+                LOG.warning("Unknown command {} to react for job {}", found, 
+                            jobId)
+              case None => LOG.warning("No matched command for job {} in "+
+                                       "reacting to cancelled event!", jobId)
+            }
+          }
+          case false => LOG.error("Unable to mark task {} killed!", 
+                                  taskAttemptId)
+        }
+      }
+      case _ => LOG.error("No ticket found at any Stage!")
+    }
     /**
      * Update task in task table.
      * Check if all tasks are successful
@@ -652,12 +714,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   /**
    * Add a new task to the end of corresponded column in task table.
-   * Move job from processing queue back to task assign queue.
+   * Failed tasks will also be marked as failure in rearrange function.
+   * Move job from processing stage back to task assign stage.
    */
   protected def allPassiveTasks(stage: Stage, job: Job, 
-                                fails: java.util.List[Task]): Try[Boolean] = 
+                                failed: java.util.List[Task]): Try[Boolean] = 
     try { 
-      fails.foreach { failedTask => job.rearrange(failedTask) } 
+      failed.foreach { failedTask => job.rearrange(failedTask) } 
       stage match { 
         case Processing => jobManager.move(job.getId)(TaskAssign)
         case _ => throw new RuntimeException("Job "+job.getId+" is not at "+
@@ -668,73 +731,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case e: Exception => Failure(e) 
     }
 
-  /**
-   * Scheduler asks master for grooms references where tasks are running by 
-   * issuing FindGroomsToKillTasks.
-   * Once receiving grooms references, issue kill command to groom servers.
-   */
-  protected def groomsFound: Receive = { 
-    case GroomsFound(matched, nomatched) => {
-      if(!nomatched.isEmpty) 
-        LOG.error("Some grooms {} not found!", nomatched.mkString(",")) 
-      matched.foreach( ref => {
-        val host = ref.path.address.host.getOrElse(null)
-        val port = ref.path.address.port.getOrElse(-1)
-        jobManager.ticketAt match {
-          case (s: Some[Stage], t: Some[Ticket]) => 
-            t.get.job.findTasksBy(host, port).foreach ( task => 
-              ref ! new Directive(Kill, task, setting.name) 
-            )
-          case _ => 
-        }
-      })
-    }
-  }
 
-  /**
-   * This happens when the groom leave event is triggered and where 
-   * FindGroomsToKillTask is issued with active tasks found or task exceedng 
-   * max attempt upper bound.
-   * 
-   * In processing queue:
-   * - Mark task as cancelled.
-   * - Check if all tasks in the job are stopped, either cancelled or failed.
-   * If all tasks are marked as stopped:
-   *  - Issue job finished event.
-   *  - Move job from processing queue to finished queue.
-   *  - Notify client.
-   */
-  protected def taskCancelled: Receive = {   // TODO: need refactor
-    case TaskKilled(taskAttemptId) => jobManager.ticketAt match {
-      case (stage: Some[Stage], t: Some[Ticket]) => { 
-        val job = t.get.job
-        val client = t.get.client
-        job.markAsCancelled(taskAttemptId) match {
-          case true => if(job.allTasksStopped) {
-            // Note: newjob is not in cancelled state because it's a groom leave
-            //       event.
-            val newJob = job.newWithFailedState 
-            jobManager.update(t.get.newWithJob(newJob))
-            val jobId = newJob.getId
-            whenJobFinished(jobId) 
-            jobManager.move(jobId)(Finished)
-            jobManager.getCommand(jobId.toString) match {
-              case Some(found) if found.isInstanceOf[KillJob] => 
-                client ! Reject(found.asInstanceOf[KillJob].reason)  
-              case Some(found) if !found.isInstanceOf[KillJob] => 
-                LOG.warning("Unknown command {} to react for job {}", found, 
-                            jobId)
-              case None => LOG.warning("No matched command for job {} in "+
-                                       "reacting to cancelled event!", jobId)
-            }
-          }
-          case false => LOG.error("Unable to mark task {} killed!", 
-                                  taskAttemptId)
-        }
-      }
-      case _ => LOG.error("No ticket found at any Stage!")
-    }
-  }
 
   /**
    * This function is called when a job if finished its execution.
@@ -742,6 +739,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def whenJobFinished(jobId: BSPJobID) =  
     federator ! JobFinishedMessage(jobId) 
 
-  override def receive = taskCancelled orElse groomsFound orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
+  override def receive = events orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
 
 }
