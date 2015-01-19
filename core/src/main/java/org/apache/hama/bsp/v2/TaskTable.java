@@ -69,7 +69,7 @@ public final class TaskTable implements Writable {
    * @pram BSPJobID indicates to which job this table belongs.
    * @param splits denotes the data splits to be consumed by each task.
    */ 
-  // TODO: perhaps use other data structure to record tasks for efficiency. 
+  // TODO: perhaps use other data structure to record tasks more efficiency. 
   public TaskTable(final BSPJobID jobId, 
                    final HamaConfiguration conf,
                    final PartitionedSplit[] splits) {
@@ -186,7 +186,7 @@ public final class TaskTable implements Writable {
 
   /**
    * Set the task array to a specific row.
-   * @param row denotes the i-th row, started from 0, of the table.
+   * @param row denotes the <i>i</i>th row, started from 0, of the table.
    * @param tasks are the entire tasks to be retried, including the init task.
    */
   void set(final int row, final Task[] tasks) {
@@ -196,6 +196,12 @@ public final class TaskTable implements Writable {
     this.tasks[row].set(tasks);
   }
 
+  /**
+   * Set the task at a specific position.
+   * @param row denotes the <i>i</i>th row, started from 0, of the table.
+   * @param column denotes the <i>j</i>th column, started from 0, in a row.
+   * @param task is a new task that will replace the old task in the table.
+   */
   void set(final int row, final int column, final Task task) {
     if(0 > row || rowLength() <= row) 
       throw new IllegalArgumentException("Invalid row value: "+row +". Total "+
@@ -218,7 +224,7 @@ public final class TaskTable implements Writable {
     for (int row = 0; row < rowLength(); row++) {
       final Task task = latestTaskAt(row);
       if(null == task) 
-        throw new NullPointerException("No task found at row "+row);
+        throw new NullPointerException("No latest task at row "+row+"!");
       if(task.getId().equals(taskAttemptId)) return task;
     } 
     return null;
@@ -235,7 +241,7 @@ public final class TaskTable implements Writable {
     for (int row = 0; row < rowLength(); row++) {
       final Task task = latestTaskAt(row);
       if(null == task) 
-        throw new NullPointerException("No task found at row "+row);
+        throw new NullPointerException("The latest task not found at row "+row);
       if(task.getAssignedHost().equals(host) && 
          (port == task.getAssignedPort())) matched.add(task);
     }
@@ -247,7 +253,7 @@ public final class TaskTable implements Writable {
     for (int row = 0; row < rowLength(); row++) {
       final Task task = latestTaskAt(row);
       if(null == task) 
-        throw new NullPointerException("No task found at row "+row);
+        throw new NullPointerException("The latest task not found at row "+row);
       if(!task.getAssignedHost().equals(host) && 
          (port != task.getAssignedPort())) matched.add(task);
     }
@@ -269,9 +275,9 @@ public final class TaskTable implements Writable {
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
       if(null == latest)  
-        throw new NullPointerException("No task found at row "+row);
+        throw new NullPointerException("The latest task not found at row "+row);
       if(latest.getId().equals(newest.getId())) {
-        set(row, columnLength(row), newest); 
+        set(row, (columnLength(row) - 1), newest); 
         flag = true; 
       }
     } 
@@ -286,7 +292,7 @@ public final class TaskTable implements Writable {
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
       if(null == latest)  
-        throw new NullPointerException("No task found at row "+row);
+        throw new NullPointerException("The latest task not found at row "+row);
       latestTasks.add(latest);  
     } 
     return Collections.unmodifiableList(latestTasks);
@@ -398,7 +404,7 @@ public final class TaskTable implements Writable {
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
       if(null == latest) 
-        throw new NullPointerException("Task at row "+row+" is null!");
+        throw new NullPointerException("No latest task at row "+row+"!");
       if(latest.getId().equals(taskAttemptId)) {
         latest.cancelledState();
         flag = true;
@@ -413,10 +419,10 @@ public final class TaskTable implements Writable {
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
       if(null == latest) 
-        throw new NullPointerException("Task at row "+row+" is null!");
+        throw new NullPointerException("No latest task at row "+row+"!");
       if(latest.isCancelled() || latest.isFailed()) count += 1;
     }
-    return ((count + 1) == rowLength());
+    return (count == rowLength());
   }
 
   boolean allTasksSucceeded() {
@@ -424,10 +430,21 @@ public final class TaskTable implements Writable {
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
       if(null == latest) 
-        throw new NullPointerException("Task at row "+row+" is null!");
+        throw new NullPointerException("No latest task at row "+row+"!");
       if(latest.isSucceeded()) count += 1;
     }
-    return ((count + 1) == rowLength());
+    return (count == rowLength());
+  }
+
+  boolean allTasksAssigned() {
+    int count = 0;
+    for (int row = 0; row < rowLength(); row++) {
+      final Task latest = latestTaskAt(row);
+      if(null == latest) 
+        throw new NullPointerException("No latest task at row "+row+"!");
+      if(latest.isAssigned()) count += 1;
+    }
+    return (count == rowLength());
   }
 
   /**
@@ -460,20 +477,6 @@ public final class TaskTable implements Writable {
     return null;
   }
 
-/*
-  boolean areAllTasksAssigned() {
-    int count = 0;
-    for(int idx = 0; idx < rowLength(); idx++) {
-      final int lastTaskPos = (columnLength(row) - 1);
-      final Task task = get(idx, lastTaskPos);
-      if(null == task) 
-        throw new RuntimeException("The task at row: "+idx+" not found!");
-      if(task.isAssigned()) count++;
-    }
-    if(rowLength() == count) return true; else return false;
-  }
-*/
-
   @Override
   public void write(DataOutput out) throws IOException {
     this.jobId.write(out);
@@ -481,7 +484,7 @@ public final class TaskTable implements Writable {
     out.writeInt(tasks.length); // numBSPTasks 
     for (int row = 0; row < tasks.length; row++) {
       final int columnLength = sizeAt(row);
-      if(0 >= columnLength)  // at least 1 task during init.
+      if(0 >= columnLength)  // each row at least 1 task during init.
         throw new IOException("Invalid column length for the "+row+"-th row.");
       out.writeInt(columnLength); // actual task attempts
     }

@@ -313,8 +313,6 @@ final case class KillJob(reason: String) extends Command
 class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                 federator: ActorRef) extends LocalService with Periodically {
 
-  type JobId = String
-
   protected val jobManager = JobManager()
 
   /* a guard for checking if all active tasks are scheduled. */
@@ -400,12 +398,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           throw new RuntimeException(expected+" target grooms expected, but "+
                                      "only "+actual+" found!")
         refs.foreach( ref => job.nextUnassignedTask match { 
-          case null => jobManager.moveToNextStage(job.getId) match {
-            case (true, _) => jobManager.update(ticket.
-              newWithJob(job.newWithRunningState))
-            case _ => LOG.error("Unable to move job {} to next stage!", 
-                                job.getId)
-          }
+          case null => 
           case task@_ => {
             val (host, port) = targetHostPort(ref)
             LOG.debug("Task {} is scheduled to target host {} port {}", 
@@ -414,6 +407,15 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             if(1 < task.getId.getId) 
               ref ! new Directive(Resume, task, setting.name) 
             else ref ! new Directive(Launch, task, setting.name)
+            if(job.allTasksAssigned) {
+              jobManager.moveToNextStage(job.getId) match {
+                case (true, _) => if(jobManager.update(ticket.newWithJob(job.
+                                     newWithRunningState)))
+                  LOG.debug("Job {} is running now!", job.getId) 
+                case _ => LOG.error("Unable to move job {} to next stage!", 
+                                    job.getId)
+              }
+            }
           }
         })
       }}
@@ -470,11 +472,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
              currentTasks, stats.host, maxTasksAllowed)
     (maxTasksAllowed >= (currentTasks+1)) match {
       case true => job.nextUnassignedTask match {
-        case null => jobManager.moveToNextStage(job.getId) match {
-          case (true, _) => if(jobManager.update(ticket.newWithJob(
-            job.newWithRunningState))) LOG.debug("Job is running!", job.getId) 
-          case _ => LOG.error("Unable to move job {} to next stage!", job.getId)
-        }
+        case null =>         
         case task@_ => {
           val (host, port) = targetHostPort(from)
           LOG.debug("Task {} is assigned with target host {} port {}", 
@@ -483,6 +481,15 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           if(1 < task.getId.getId)  
             from ! new Directive(Resume, task, setting.name) 
           else from ! new Directive(Launch, task, setting.name)
+          if(job.allTasksAssigned) {
+            jobManager.moveToNextStage(job.getId) match { 
+              case (true, _) => if(jobManager.update(ticket.
+                newWithJob(job.newWithRunningState))) 
+                LOG.debug("Job {} is running!", job.getId) 
+              case _ => LOG.error("Unable to move job {} to next stage!", 
+                                  job.getId)
+            }
+          }
         }
       }
       case false => LOG.warning("Drop GroomServer {} requests for a new task "+ 
@@ -555,14 +562,17 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     } 
     /**
      * Update task in task table.
-     * Check if all tasks are successful; if true, call whenJobFinished.
+     * Check if all tasks are successful
+     * Call whenJobFinished if all tasks are succeeded.
+     * Move the job to Finished stage.
      */
     case newest: Task => jobManager.ticketAt match {
       case (s: Some[Stage], t: Some[Ticket]) => t.get.job.update(newest) match {
         case true => if(t.get.job.allTasksSucceeded) {
-          // TODO: set job as completed
-          //       call when job finished
-          //       move job to finished stage 
+          val newJob = t.get.job.newWithSucceededState
+          jobManager.update(t.get.newWithJob(newJob))
+          whenJobFinished(newJob.getId) 
+          jobManager.move(newJob.getId)(Finished)
         }
         case false => LOG.warning("Unable to update task {}!", newest.getId)
       }
@@ -592,6 +602,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               }
               case false => { 
                 markJobAsRecovering(s.get, job)  
+                //job.rearrage(old)
+                //jobManager.move(job)(TaskAssign) xxxx
                 // TODO: deail with failed task in passive operation
                 //       e.g. rearrange(task),move task back to task assign,etc
                 //       once task is finished assign (groom request will auto

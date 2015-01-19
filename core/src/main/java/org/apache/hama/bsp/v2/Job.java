@@ -156,7 +156,7 @@ public final class Job implements Writable {
 
     public Builder setId(final BSPJobID id) { 
       if(null == this.id) this.id = id; else 
-      LOG.warn("Job id "+this.id+" already exists!");
+      LOG.warn("Job is created from old one so id "+this.id+" already exists!");
       return this;
     }
 
@@ -607,6 +607,10 @@ public final class Job implements Writable {
 
   public boolean allTasksSucceeded() {
     return getTasks().allTasksSucceeded();
+  }
+  
+  public boolean allTasksAssigned() {
+    return getTasks().allTasksAssigned();
   }
 
   public Task findTaskBy(final TaskAttemptID taskAttemptId) {

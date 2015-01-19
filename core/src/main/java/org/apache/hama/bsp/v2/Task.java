@@ -41,9 +41,9 @@ import org.apache.hama.io.PartitionedSplit;
  * old one provided.
  * This class can also produce metrics stats for monitor.
  */
-public final class Task implements Writable { 
+public final class Task implements Writable { // TODO: change to immutable
 
-  final Log LOG = LogFactory.getLog(Task.class);
+  static final Log LOG = LogFactory.getLog(Task.class);
 
   /* The unique id for this task, including BSPJobID. */
   private TaskAttemptID id;
@@ -235,7 +235,8 @@ public final class Task implements Writable {
     }
 
     public Builder setId(final TaskAttemptID id) {
-      this.id = id;
+      if(null == this.id) this.id = id; else 
+      LOG.warn("Task is from old one so id "+this.id+" already exists!");
       return this;
     }
 
@@ -554,8 +555,8 @@ public final class Task implements Writable {
   }
 
   /**
-   * Mark this is an action that passively assigns a task to a particular groom
-   * server which issuies a request.
+   * Mark this task is passively assigned to a particular groom server 
+   * which issuies a request.
    */
   public void assignedTo(final String name, final int port) { 
     this.marker = new Marker(false, true, name, port); 
