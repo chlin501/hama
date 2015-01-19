@@ -411,7 +411,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               jobManager.moveToNextStage(job.getId) match {
                 case (true, _) => if(jobManager.update(ticket.newWithJob(job.
                                      newWithRunningState)))
-                  LOG.debug("Job {} is running now!", job.getId) 
+                  LOG.info("Job {} is running now!", job.getId) 
                 case _ => LOG.error("Unable to move job {} to next stage!", 
                                     job.getId)
               }
@@ -485,7 +485,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             jobManager.moveToNextStage(job.getId) match { 
               case (true, _) => if(jobManager.update(ticket.
                 newWithJob(job.newWithRunningState))) 
-                LOG.debug("Job {} is running!", job.getId) 
+                LOG.info("Job {} is running!", job.getId) 
               case _ => LOG.error("Unable to move job {} to next stage!", 
                                   job.getId)
             }
@@ -579,13 +579,18 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case _ => LOG.warning("No job existed!")
     }
     /**
-     * Find task in corresponded stage.
+     * Find associated job (via task) in corresponded stage.
+     * Mark the job as recovering.
      * Check task is active or passive:
      * - when the task is active
-     * 
+     *   a. rearrage task 
+     *   b. move the job to task assign stage.
+     *   c. find corresponded groom reference.
+     *   d. rest operations are dealt when MatchedGroom is received.
      * - when the task is passive
-     *   a. create a new task with id incremented.
-     *   b. rearrange task by job.rearrange function.
+     *   a. rearrange task 
+     *   b. move the job to task assign stage.
+     *   c. assign will auto mark job as running if all tasks are assigned.
      */
     case fault: TaskFailure => {
       jobManager.findJobById(fault.taskAttemptId.getJobID) match {
@@ -597,44 +602,29 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               case true => { 
                 markJobAsRecovering(s.get, job)  
                 val newTask = job.rearrange(old)
+                jobManager.move(job.getId)(TaskAssign)
                 master ! FindGroomRef(old.getAssignedHost, old.getAssignedPort,
                                       newTask)
               }
               case false => { 
                 markJobAsRecovering(s.get, job)  
-                //job.rearrage(old)
-                //jobManager.move(job)(TaskAssign) xxxx
-                // TODO: deail with failed task in passive operation
-                //       e.g. rearrange(task),move task back to task assign,etc
-                //       once task is finished assign (groom request will auto
-                //       call assign() func), sched mark job as running if
-                //       no more task needs to be assign()-ed.
+                job.rearrage(old)
+                jobManager.move(job)(TaskAssign) 
               }
             }
           }
         } 
-        case _ => LOG.error("No job matches {}", fault.taskAttemptId.getJobID)
+        case _ => LOG.error("No matched job: {}", fault.taskAttemptId.getJobID)
       }
-      // TODO: reschedule the task by checking task's active groom setting.
-      //       - search fault.taskAttemptId in queue's job.
-      //       - check if the task is active or passive:
-      //         if active, restart at the same groom ref
-      //           a. clone a new task with (id + 1), 
-      //           b. rearrage task data, stats, etc.
-      //           c. - issue resume directive to groom with new task
-      //              - move job to task assign stage and
-      //              - call activeSchedule functions
-      //         if passive
-      //            a. clone task with (id + 1)
-      //            b. call job.rearrange(newTask). groom will request for exec
     }
     /**
-     * - BSPMaster replies groom reference where failed task (active schedule) 
-     *   ran. 
-     * - The groom reference is used for resuming the failed task. 
-     * - Mark the task with groom's host and port values.
-     * - Then move the job back to Processing stage. 
-     * - And mark the job as running.
+     * BSPMaster replies groom reference where failed task (active schedule) 
+     * ran. 
+     * The groom reference is used for resuming the failed task. 
+     * Mark the task with groom's host and port values.
+     * Then move the job back to Processing stage. 
+     * And mark the job as running.
+     * Note that newTask is a task after rearranged function gets called.
      */
     case MatchedGroom(newTask, ref) => {
       val jobId = newTask.getId.getJobID
