@@ -35,31 +35,11 @@ import scala.collection.immutable.IndexedSeq
 
 final case object GroomRegistration
 
-/*
-object MasterLookupException {
-
-  def apply(message: String): MasterLookupException = 
-    new MasterLookupException(message)
-
-  def apply(message: String, cause: Throwable): MasterLookupException = {
-    val e = new MasterLookupException(message)
-    e.initCause(cause)
-    e
-  }
-}
-
-class MasterLookupException(message: String) extends RuntimeException(message) 
-*/
-
 trait MembershipParticipant extends Membership with MasterDiscovery { 
  
   this: RemoteService => 
 
   protected lazy val cluster = Cluster(context.system)
-  
-/*
-  protected var master: Option[ProxyInfo] = None
-*/
 
   override def join(nodes: IndexedSeq[SystemInfo]): Unit= cluster.joinSeedNodes(
     nodes.map { (info) => {
@@ -83,18 +63,6 @@ trait MembershipParticipant extends Membership with MasterDiscovery {
                              roleLeaderMap) => 
   }
 
-/*
-  protected def masterFinder(): MasterFinder // TODO: option?
-
-  protected def lookupMaster(): ProxyInfo = {
-    val masters = masterFinder.masters
-    if(1 != masters.size) {
-      throw new MasterLookupException("Not valid master size "+masters.size+"!")
-    }  
-    masters(0)
-  }
-*/
-
   protected def whenMemberUp(member: Member) = if(member.hasRole("master")) {
     master.map { (m) => register(m) }
   }
@@ -107,20 +75,6 @@ trait MembershipParticipant extends Membership with MasterDiscovery {
 
   protected def memberEvent(event: MemberEvent) { }
 
-/*
-  override protected def retryCompleted(name: String, ret: Any) = name match {
-    case "lookupMaster" => {
-      val m = ret.asInstanceOf[ProxyInfo]
-      master = Option(m)
-      lookup(m.getActorName, m.getPath)
-    }
-    case _ => { 
-      LOG.error("Unexpected result {} after lookup!", ret) 
-      shutdown 
-    }
-  }
-*/
-
   override def afterLinked(target: String, proxy: ActorRef): Unit = 
     master.map { m => target.equals(m.getActorName) match {
       case true => {
@@ -129,12 +83,5 @@ trait MembershipParticipant extends Membership with MasterDiscovery {
       }
       case false =>
     }}
-
-/*
-  override protected def retryFailed(name: String, cause: Throwable) = { 
-    LOG.error("Shutdown system due to error {} when trying {}", cause, name) 
-    shutdown 
-  }
-*/
 
 }

@@ -46,6 +46,8 @@ trait MasterDiscovery extends Curator { self: RemoteService =>
   import MasterDiscovery._
 
   protected var master: Option[ProxyInfo] = None
+
+  protected def configuration(): HamaConfiguration
  
   //TODO: protected def register(type, data)
   
@@ -56,6 +58,7 @@ trait MasterDiscovery extends Curator { self: RemoteService =>
   }
 
   protected def masters(): Array[ProxyInfo] = list("/masters").map { child => {
+    initializeCurator(configuration)
     LOG.debug("Master znode found: {}", child)
     val conf = new HamaConfiguration
     pattern.findAllMatchIn(child).map { m =>
@@ -88,6 +91,5 @@ trait MasterDiscovery extends Curator { self: RemoteService =>
     LOG.error("Shutdown system due to error {} when trying {}", cause, name)
     shutdown
   }
-
   
 }

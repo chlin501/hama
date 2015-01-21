@@ -51,6 +51,8 @@ object Submitter {
 class Submitter(setting: Setting) extends RemoteService with MasterDiscovery 
                                                         with EventListener {
 
+  override def configuration(): HamaConfiguration = setting.hama
+
   override def initializeServices = retry("discover", 10, discover)
 
   protected def events: Receive = {

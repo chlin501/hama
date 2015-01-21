@@ -52,43 +52,6 @@ final case object GroomTaskFailureEvent extends Event
  */
 final case object DirectiveArrivalEvent extends Event
 
-/*
-object MasterFinder {
-
-  val pattern = """(\w+)_(\w+)@(\w+):(\d+)""".r
-
-  def apply(setting: Setting): MasterFinder = new MasterFinder(setting)
-
-}
-
-class MasterFinder(setting: Setting) extends Curator {
-
-  import MasterFinder._
-
-  initializeCurator(setting.hama)
-
-  def masters(): Array[ProxyInfo] = list("/masters").map { child => {
-    LOG.debug("Master znode found: {}", child)
-    val conf = new HamaConfiguration 
-    val ary = pattern.findAllMatchIn(child).map { m =>
-      val name = m.group(1)
-      conf.set("master.name", name)
-      val sys = m.group(2)
-      conf.set("master.actor-system.name", sys)
-      val host = m.group(3)
-      conf.set("master.host", host)
-      val port = m.group(4).toInt
-      conf.setInt("master.port", port)
-      new ProxyInfo.MasterBuilder(name, conf).build
-    }.toArray
-    if(ary.isEmpty) 
-      throw new MasterLookupException("Can't formulate master from " + child)
-    ary(0)
-  }}.toArray
-
-}
-*/
-
 object GroomServer {
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
@@ -99,9 +62,6 @@ object GroomServer {
   def main(args: Array[String]) {
     val groom = Setting.groom
     val sys = ActorSystem(groom.info.getActorSystemName, groom.config)
-/*
-    sys.actorOf(Props(groom.main, groom, MasterFinder(groom)), groom.name)
-*/
     sys.actorOf(Props(groom.main, groom), groom.name)
   }
 }
@@ -112,6 +72,8 @@ class GroomServer(setting: Setting) extends LocalService
                                        with MembershipParticipant 
                                        with EventListener { 
 
+  override def configuration(): HamaConfiguration = setting.hama
+
   override def initializeServices {
     retry("discover", 10, discover)
     val reporter = getOrCreate(Reporter.simpleName(setting.hama),
@@ -121,8 +83,6 @@ class GroomServer(setting: Setting) extends LocalService
   }
 
   override def stopServices = unsubscribe(self)
-
-  //override def masterFinder(): MasterFinder = finder 
 
   protected def report: Receive = {
     case stats: Stats => forward(GroomStatsReportEvent)(stats) 
@@ -149,4 +109,5 @@ class GroomServer(setting: Setting) extends LocalService
   }  
 
   override def receive = eventListenerManagement orElse dispatch orElse escalate orElse report orElse actorReply orElse retryResult orElse membership orElse unknown
+
 }
