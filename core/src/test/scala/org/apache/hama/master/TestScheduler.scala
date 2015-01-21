@@ -188,7 +188,15 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
                "false", "true", "groom2", "50002", "5")
 
 
-  it("test scheduling tasks") {
+  // TODO: create mock grooms actors
+  //       create job mixed up with active tasks
+  //       submit job to receptionist
+  //       verify normal flows 
+  //       send task fail from groom
+  //       verify if sched correctly react
+  //       stop groom  
+  //       verify if sched react correclty 
+  it("test scheduling mechansim.") {
     val setting = Setting.master
     val targets = Array("groom214:51144", "groom129:50002", "groom9:58249")
     val job = createJob("test", 3, "sched-active-passive", targets, 5)

@@ -670,8 +670,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               }
               case false => { 
                 markJobAsRecovering(s.get, job)  
-                job.rearrage(old)
-                jobManager.move(job)(TaskAssign) 
+                job.rearrange(old)
+                jobManager.move(job.getId)(TaskAssign) 
               }
             }
           }

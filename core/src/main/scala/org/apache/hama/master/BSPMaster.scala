@@ -97,8 +97,7 @@ object BSPMaster {
   def main(args: Array[String]) {
     val master = Setting.master
     val sys = ActorSystem(master.info.getActorSystemName, master.config)
-    sys.actorOf(Props(master.main, master, Registrator(master)), 
-                simpleName(master.hama))
+    sys.actorOf(Props(master.main, master, Registrator(master)), master.name)
   }
  
 }

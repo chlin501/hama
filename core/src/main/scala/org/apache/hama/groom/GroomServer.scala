@@ -97,8 +97,7 @@ object GroomServer {
   def main(args: Array[String]) {
     val groom = Setting.groom
     val sys = ActorSystem(groom.info.getActorSystemName, groom.config)
-    sys.actorOf(Props(groom.main, groom, MasterFinder(groom)), 
-                      simpleName(groom.hama))
+    sys.actorOf(Props(groom.main, groom, MasterFinder(groom)), groom.name)
   }
 }
 

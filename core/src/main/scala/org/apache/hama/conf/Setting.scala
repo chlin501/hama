@@ -26,6 +26,7 @@ import org.apache.hama.SystemInfo
 import org.apache.hama.master.BSPMaster
 import org.apache.hama.groom.GroomServer
 import org.apache.hama.groom.Container
+import org.apache.hama.client.Submitter
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
@@ -56,6 +57,10 @@ object Setting {
   def container(): Setting = container(new HamaConfiguration)
 
   def container(conf: HamaConfiguration): Setting = new ContainerSetting(conf)
+
+  def client(): Setting = client(new HamaConfiguration)
+
+  def client(conf: HamaConfiguration): Setting = new ClientSetting(conf)
 
 }
 
@@ -132,8 +137,8 @@ class MasterSetting(conf: HamaConfiguration) extends Setting {
   override def name(): String = BSPMaster.simpleName(conf)
 
   override def main(): Class[Actor] = {
-    val name = conf.get("master.main", classOf[BSPMaster].getName)
-    toClass[BSPMaster](name) match {
+    val m = conf.get("master.main", classOf[BSPMaster].getName)
+    toClass[BSPMaster](m) match {
       case Success(clazz) => clazz.asInstanceOf[Class[Actor]]
       case Failure(cause) => classOf[BSPMaster].asInstanceOf[Class[Actor]] 
     }
@@ -165,8 +170,8 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
   override def name(): String = GroomServer.simpleName(conf)
 
   override def main(): Class[Actor] = {
-    val name = conf.get("groom.main", classOf[GroomServer].getName)
-    toClass[GroomServer](name) match {
+    val m = conf.get("groom.main", classOf[GroomServer].getName)
+    toClass[GroomServer](m) match {
       case Success(clazz) => clazz.asInstanceOf[Class[Actor]] 
       case Failure(cause) => classOf[GroomServer].asInstanceOf[Class[Actor]] 
     }
@@ -181,11 +186,12 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
 
 }
 
-class ContainerSetting(conf: HamaConfiguration) extends Setting {
+/**
+ * Provide akka setting.
+ */
+protected[conf] trait Akka {
 
-  import Setting._
-
-  protected def content(listeningTo: String, port: Int): String = s"""
+  protected def remote(listeningTo: String, port: Int): String = s"""
     akka {
       actor {
         provider = "akka.remote.RemoteActorRefProvider"
@@ -205,11 +211,16 @@ class ContainerSetting(conf: HamaConfiguration) extends Setting {
       }
     }
   """
+}
+
+class ContainerSetting(conf: HamaConfiguration) extends Setting with Akka {
+
+  import Setting._
 
   override def hama(): HamaConfiguration = conf
 
   override def config(): Config = toConfig(" container { " + 
-    content(host, port) + " }").getConfig("container")
+    remote(host, port) + " }").getConfig("container")
 
   protected def info(system: String, host: String, port: Int): SystemInfo = 
     new SystemInfo(system, host, port)
@@ -219,20 +230,53 @@ class ContainerSetting(conf: HamaConfiguration) extends Setting {
   override def name(): String = Container.simpleName(conf)
 
   override def main(): Class[Actor] = {
-    val name = conf.get("container.main", classOf[Container].getName)
-    toClass[Container](name) match {
+    val m = conf.get("container.main", classOf[Container].getName)
+    toClass[Container](m) match {
       case Success(clazz) => clazz.asInstanceOf[Class[Actor]] 
       case Failure(cause) => classOf[Container].asInstanceOf[Class[Actor]] 
     }
   }
 
-  override def sys(): String = 
-    conf.get("container.actor-system.name", "BSPSystem")
+  override def sys(): String = conf.get("container.actor-system.name", 
+    "BSPSystem")
 
   override def host(): String = conf.get("container.host", 
                                          InetAddress.getLocalHost.getHostName)
 
   override def port(): Int = conf.getInt("container.port", 61000)
+  
+}
 
+class ClientSetting(conf: HamaConfiguration) extends Setting with Akka {
+
+  import Setting._
+
+  override def hama(): HamaConfiguration = conf
+
+  override def config(): Config = toConfig(" client { " + remote(host, port) + 
+    " }").getConfig("client")
+
+  protected def info(system: String, host: String, port: Int): SystemInfo = 
+    new SystemInfo(system, host, port)
+
+  override def info(): SystemInfo = info(sys, host, port)
+
+  override def name(): String = Submitter.simpleName(conf)
+
+  override def main(): Class[Actor] = {
+    val m = conf.get("client.main", classOf[Submitter].getName)
+    toClass[Submitter](m) match {
+      case Success(clazz) => clazz.asInstanceOf[Class[Actor]] 
+      case Failure(cause) => classOf[Submitter].asInstanceOf[Class[Actor]] 
+    }
+  }
+
+  override def sys(): String = conf.get("client.actor-system.name", 
+    "BSPSystem")
+
+  override def host(): String = conf.get("client.host", 
+                                         InetAddress.getLocalHost.getHostName)
+
+  override def port(): Int = conf.getInt("client.port", 1947)
   
 }
