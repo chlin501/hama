@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.master
-
+/*
 import org.apache.hama.TestEnv
 import org.apache.hama.ProxyInfo
 import org.apache.hama.conf.Setting
@@ -82,3 +82,4 @@ class TestRegistrator extends TestEnv("TestRegistrator") with LocalZooKeeper {
     curator.closeCurator
   }
 }
+*/

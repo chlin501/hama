@@ -72,7 +72,7 @@ class GroomServer(setting: Setting) extends LocalService
                                        with MembershipParticipant 
                                        with EventListener { 
 
-  override def configuration(): HamaConfiguration = setting.hama
+  override def setting(): Setting = setting
 
   override def initializeServices {
     retry("discover", 10, discover)
@@ -82,7 +82,10 @@ class GroomServer(setting: Setting) extends LocalService
                 classOf[TaskCounsellor], setting, self, reporter)
   }
 
-  override def stopServices = unsubscribe(self)
+  override def stopServices = {
+    unsubscribe(self)
+    stopCurator
+  }
 
   protected def report: Receive = {
     case stats: Stats => forward(GroomStatsReportEvent)(stats) 

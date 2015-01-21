@@ -76,6 +76,16 @@ trait Curator extends Conversion with CommonLog {
   // TODO: create instance from factory method. and singleton.
   protected var curatorFramework: Option[CuratorFramework] = None 
 
+  def startCurator(conf: HamaConfiguration): Boolean = curatorFramework match {
+    case None => { initializeCurator(conf); true }
+    case Some(client) => true
+  }
+
+  def stopCurator(): Boolean = curatorFramework.map { client => 
+    client.close 
+    true
+  }.getOrElse(false)
+
   /**
    * Initialize curator instance.
    * @param conf contains information for connecting to ZooKeeper, including
@@ -84,10 +94,7 @@ trait Curator extends Conversion with CommonLog {
    */
   def initializeCurator(conf: HamaConfiguration): Option[CuratorFramework] = 
     curatorFramework match { 
-      case Some(client) => { 
-        start(client) 
-        curatorFramework
-      }
+      case Some(client) => { start(client); curatorFramework }
       case None => {
         val client = build(conf)
         curatorFramework = Option(client)

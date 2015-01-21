@@ -82,8 +82,8 @@ class MockFederator(setting: Setting, master: ActorRef, tester: ActorRef)
 }
 
 
-class MockMaster(setting: Setting, tester: ActorRef)
-      extends BSPMaster(setting, null.asInstanceOf[Registrator]) {
+class MockMaster(setting: Setting, tester: ActorRef) 
+      extends BSPMaster(setting) {
 
   override def initializeServices {
     val conf = setting.hama

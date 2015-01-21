@@ -20,7 +20,6 @@ package org.apache.hama.all
 import akka.actor.ActorRef
 import org.apache.hama.MultiNodesEnv
 import org.apache.hama.master.BSPMaster
-import org.apache.hama.master.Registrator
 import org.apache.hama.groom.GroomServer
 import org.apache.hama.conf.Setting
 import org.apache.hama.zk.LocalZooKeeper
@@ -29,8 +28,7 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-class MockBSPMaster(setting: Setting) 
-      extends BSPMaster(setting, Registrator(setting)) { 
+class MockBSPMaster(setting: Setting) extends BSPMaster(setting) { 
 
   override def enroll(participant: ActorRef) {
     LOG.info("Groom {} joins now ...", participant.path.name)

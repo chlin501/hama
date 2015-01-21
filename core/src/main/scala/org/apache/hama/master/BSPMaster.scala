@@ -25,6 +25,7 @@ import org.apache.hama.Event
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.EventListener
+import org.apache.hama.RemoteService
 import org.apache.hama.SystemInfo
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
@@ -35,8 +36,7 @@ import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.ServiceAvailable
 import org.apache.hama.monitor.ServicesAvailable
 import org.apache.hama.monitor.Stats
-import org.apache.hama.util.Curator
-import org.apache.zookeeper.CreateMode
+import org.apache.hama.util.MasterDiscovery
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 import scala.collection.immutable.IndexedSeq
@@ -63,30 +63,6 @@ final case class CheckGroomsExist(jobId: BSPJobID, targetGrooms: Array[String])
 final case class AllGroomsExist(jobId: BSPJobID)
 final case class SomeGroomsNotExist(jobId: BSPJobID)
 
-object Registrator {
-
-  def apply(setting: Setting): Registrator = new Registrator(setting)
-
-}
-
-class Registrator(setting: Setting) extends Curator {
-
-  initializeCurator(setting.hama)
-
-  def mkPath(): String = {
-    val sys = setting.info.getActorSystemName
-    val host = setting.info.getHost
-    val port = setting.info.getPort
-    "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host, port)
-  }
-
-  def register() {
-    val path = mkPath
-    LOG.debug("Master znode will be registered at {}", path)
-    create(path, CreateMode.EPHEMERAL)
-  }
-}
-
 object BSPMaster {
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
@@ -97,22 +73,26 @@ object BSPMaster {
   def main(args: Array[String]) {
     val master = Setting.master
     val sys = ActorSystem(master.info.getActorSystemName, master.config)
-    sys.actorOf(Props(master.main, master, Registrator(master)), master.name)
+    sys.actorOf(Props(master.main, master), master.name)
   }
  
 }
 
 // TODO: - refactor FSM (perhaps remove it)
 //       - update internal stats to tracker
-class BSPMaster(setting: Setting, registrator: Registrator) 
-      extends LocalService with MembershipDirector with EventListener { 
+class BSPMaster(setting: Setting) extends LocalService with RemoteService
+                                                       with MasterDiscovery
+                                                       with MembershipDirector 
+                                                       with EventListener { 
 
   import BSPMaster._
 
   // TODO: use strategy and shutdown if any exceptions are thrown?
 
+  override def setting(): Setting = setting
+
   override def initializeServices {
-    registrator.register
+    register
     join(seedNodes)
     subscribe(self)
     val conf = setting.hama
@@ -125,7 +105,10 @@ class BSPMaster(setting: Setting, registrator: Registrator)
     // TODO: change master state
   }
 
-  override def stopServices = unsubscribe(self) 
+  override def stopServices = {
+    unsubscribe(self) 
+    stopCurator
+  }
 
   def seedNodes(): IndexedSeq[SystemInfo] = Vector(setting.info)
 
