@@ -22,7 +22,6 @@ import org.apache.hama.MultiNodesEnv
 import org.apache.hama.master.BSPMaster
 import org.apache.hama.master.Registrator
 import org.apache.hama.groom.GroomServer
-import org.apache.hama.groom.MasterFinder
 import org.apache.hama.conf.Setting
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
@@ -40,9 +39,7 @@ class MockBSPMaster(setting: Setting)
 
 }
 
-class MockGroomServer(setting: Setting) 
-      extends GroomServer(setting, MasterFinder(setting)) {
-}
+class MockGroomServer(setting: Setting) extends GroomServer(setting) 
 
 @RunWith(classOf[JUnitRunner])
 class TestMasterGroom extends MultiNodesEnv("TestMasterGroom") 

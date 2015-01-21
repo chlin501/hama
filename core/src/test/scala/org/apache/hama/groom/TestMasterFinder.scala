@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.groom
-
+/*
 import org.apache.hama.TestEnv
 import org.apache.hama.util.MockCurator
 import org.apache.hama.zk.LocalZooKeeper
@@ -64,3 +64,4 @@ class TestMasterFinder extends TestEnv("TestMasterFinder") with LocalZooKeeper {
     curator.closeCurator
   }
 }
+*/

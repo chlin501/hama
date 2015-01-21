@@ -23,9 +23,8 @@ import akka.actor.Props
 import org.apache.hama.Event
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
-import org.apache.hama.ProxyInfo
-import org.apache.hama.RemoteService
 import org.apache.hama.EventListener
+import org.apache.hama.RemoteService
 import org.apache.hama.conf.Setting
 import org.apache.hama.master.Directive
 import org.apache.hama.monitor.Stats
@@ -33,7 +32,6 @@ import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.ServicesAvailable
 import org.apache.hama.monitor.FindServiceBy
 import org.apache.hama.monitor.ServiceAvailable
-import org.apache.hama.util.Curator
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
@@ -54,6 +52,7 @@ final case object GroomTaskFailureEvent extends Event
  */
 final case object DirectiveArrivalEvent extends Event
 
+/*
 object MasterFinder {
 
   val pattern = """(\w+)_(\w+)@(\w+):(\d+)""".r
@@ -69,8 +68,8 @@ class MasterFinder(setting: Setting) extends Curator {
   initializeCurator(setting.hama)
 
   def masters(): Array[ProxyInfo] = list("/masters").map { child => {
-    LOG.debug("Master znode found is {}", child)
-    val conf = setting.hama
+    LOG.debug("Master znode found: {}", child)
+    val conf = new HamaConfiguration 
     val ary = pattern.findAllMatchIn(child).map { m =>
       val name = m.group(1)
       conf.set("master.name", name)
@@ -82,10 +81,13 @@ class MasterFinder(setting: Setting) extends Curator {
       conf.setInt("master.port", port)
       new ProxyInfo.MasterBuilder(name, conf).build
     }.toArray
+    if(ary.isEmpty) 
+      throw new MasterLookupException("Can't formulate master from " + child)
     ary(0)
   }}.toArray
 
 }
+*/
 
 object GroomServer {
 
@@ -97,17 +99,21 @@ object GroomServer {
   def main(args: Array[String]) {
     val groom = Setting.groom
     val sys = ActorSystem(groom.info.getActorSystemName, groom.config)
+/*
     sys.actorOf(Props(groom.main, groom, MasterFinder(groom)), groom.name)
+*/
+    sys.actorOf(Props(groom.main, groom), groom.name)
   }
 }
 
 // TODO: service may have metrics exportable (e.g. trait Exportable#getMetrics)
-class GroomServer(setting: Setting, finder: MasterFinder) 
-      extends LocalService with RemoteService with MembershipParticipant 
-      with EventListener { 
+class GroomServer(setting: Setting) extends LocalService 
+                                       with RemoteService 
+                                       with MembershipParticipant 
+                                       with EventListener { 
 
   override def initializeServices {
-    retry("lookupMaster", 10, lookupMaster)
+    retry("discover", 10, discover)
     val reporter = getOrCreate(Reporter.simpleName(setting.hama),
                                classOf[Reporter], setting, self) 
     getOrCreate(TaskCounsellor.simpleName(setting.hama), 
@@ -116,7 +122,7 @@ class GroomServer(setting: Setting, finder: MasterFinder)
 
   override def stopServices = unsubscribe(self)
 
-  override def masterFinder(): MasterFinder = finder 
+  //override def masterFinder(): MasterFinder = finder 
 
   protected def report: Receive = {
     case stats: Stats => forward(GroomStatsReportEvent)(stats) 

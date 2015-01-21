@@ -42,8 +42,8 @@ class MockReporter(setting: Setting, groom: ActorRef, tester: ActorRef)
 
 }
 
-class MockGroom(setting: Setting, tester: ActorRef)
-      extends GroomServer(setting: Setting, null.asInstanceOf[MasterFinder]) {
+class MockGroom(setting: Setting, tester: ActorRef) 
+      extends GroomServer(setting: Setting) {
 
   val GTracker = classOf[GroomsTracker].getName
 

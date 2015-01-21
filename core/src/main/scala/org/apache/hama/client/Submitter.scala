@@ -19,11 +19,13 @@ package org.apache.hama.client
 
 import akka.actor.ActorSystem
 import akka.actor.Props
-import org.apache.hama.Agent
+import org.apache.hama.ProxyInfo
+import org.apache.hama.RemoteService
 import org.apache.hama.EventListener
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
+import org.apache.hama.util.MasterDiscovery
 
 trait SubmitterMessage
 final case class JobCompleted(jobId: BSPJobID) extends SubmitterMessage
@@ -40,11 +42,16 @@ object Submitter {
     conf.get("client.name", classOf[Submitter].getSimpleName) + "#" +
     scala.util.Random.nextInt  
 
-  // TODO: business method
-  //def submit(job: BPSJob)
+  // TODO: business methods
+  //def submit(job: BPSJob): Boolean = {
+  //}
+  //def process(): Progress = { }  <- periodically check job process in master.
 }
 
-class Submitter(setting: Setting) extends Agent with EventListener {
+class Submitter(setting: Setting) extends RemoteService with MasterDiscovery 
+                                                        with EventListener {
+
+  override def initializeServices = retry("discover", 10, discover)
 
   protected def events: Receive = {
     case JobCompleted(jobId) => // TODO: subscribe to JobFinished event
