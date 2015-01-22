@@ -55,7 +55,7 @@ public class BSPJobContext {
     return jobId;
   }
 
-  void setJobID(BSPJobID id) {
+  public void setJobID(BSPJobID id) {
     this.jobId = id;
   }
 

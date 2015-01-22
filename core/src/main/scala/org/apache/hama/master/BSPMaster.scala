@@ -28,6 +28,7 @@ import org.apache.hama.EventListener
 import org.apache.hama.RemoteService
 import org.apache.hama.SystemInfo
 import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.client.AskForJobIdSysDir
 import org.apache.hama.conf.Setting
 import org.apache.hama.groom.RequestTask
 import org.apache.hama.groom.TaskFailure
@@ -60,6 +61,7 @@ final case object RequestTaskEvent extends Event
 final case object TaskFailureEvent extends Event
 
 final case class CheckGroomsExist(jobId: BSPJobID, targetGrooms: Array[String])
+// TODO: merge AllGroomsExist with SomeGroomsNotExist to e.g. GroomsExistsResult(found, notexist)
 final case class AllGroomsExist(jobId: BSPJobID)
 final case class SomeGroomsNotExist(jobId: BSPJobID)
 
@@ -125,7 +127,6 @@ class BSPMaster(setting: Setting) extends LocalService with RemoteService
   protected def listServices(from: ActorRef) = 
     from ! ServicesAvailable(services.toArray)
 
-  // TODO: move to membership director?
   protected def msgFromReceptionist: Receive = { 
     case CheckGroomsExist(jobId, targetGrooms) => {
       val uniqueGrooms = targetGrooms.map(_.trim).groupBy(k => k).keySet
@@ -195,10 +196,10 @@ class BSPMaster(setting: Setting) extends LocalService with RemoteService
     case fault: TaskFailure => forward(TaskFailureEvent)(fault)
   }
 
-  //protected def msgFromClient: Receive = {
-     //case AskForJobId => // TODO: generate new job id. sender ! NewJobID(id)
-  //}
+  protected def msgFromClient: Receive = {
+    case AskForJobIdSysDir => //TODO: sender ! NewJobIdAndSysDir(id, sysDir)
+  }
 
-  override def receive = eventListenerManagement orElse msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
+  override def receive = eventListenerManagement orElse msgFromClient orElse msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
   
 }

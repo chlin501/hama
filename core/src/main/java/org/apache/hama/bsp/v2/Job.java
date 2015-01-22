@@ -280,13 +280,14 @@ public final class Job implements Writable {
     }
     
     private void adjustNumBSPTasks() {
-      final String[] targetGrooms = conf.getStrings("bsp.target.grooms");
+      final String[] targets = conf.getStrings("bsp.target.grooms", 
+                                               new String[]{});
       final int numbsptasks = conf.getInt("bsp.peers.num", 1);
-      if(null != targetGrooms && targetGrooms.length > numbsptasks) { 
-        LOG.info("Adjust numBSPTasks "+numbsptasks+" to "+targetGrooms.length+
+      if(null != targets && targets.length > numbsptasks) { 
+        LOG.info("Adjust numBSPTasks "+numbsptasks+" to "+targets.length+
                  " because target grooms to be scheduled is larger than "+
                  "num bsp tasks.");
-        conf.setInt("bsp.peers.num", targetGrooms.length);  
+        conf.setInt("bsp.peers.num", targets.length);  
       }
     }
 

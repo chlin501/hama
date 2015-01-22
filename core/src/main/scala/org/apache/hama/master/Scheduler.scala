@@ -453,7 +453,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       LOG.debug("GroomServer form {} at {}:{} requests for assigning a task.", 
                 sender.path.name, req.stats.map { s => s.host}, 
                 req.stats.map { s=> s.port})
-      if(activeFinished) passiveAssign(req.stats, sender)
+      if(activeFinished) passiveAssign(req.stats, sender) // TODO: instead of checking activeFinished, each time when groom requests check if sender is from taret grooms (calcuate remaining free slots in target grooms, but this is a bit more complicated).  
     }
   } 
 

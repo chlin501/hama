@@ -164,9 +164,18 @@ class Federator(setting: Setting, master: ActorRef)
         case _ => LOG.warning("Unknown validation action: {}", action)
       })
     }
+    /**
+     * Reply for Check CheckMaxTasksAllowed.
+     */
     case TotalMaxTasks(jobId, available) => 
       validateTotalMaxTasks(jobId, available) 
+    /**
+     * Reply fro IfTargetGroomsExist.
+     */
     case AllGroomsExist(jobId) => validateAllGroomsExist(jobId)
+    /**
+     * Reply for IfTargetGroomsExist.
+     */
     case SomeGroomsNotExist(jobId) => validateSomeGroomsNotExist(jobId)
   }
 
@@ -203,7 +212,7 @@ class Federator(setting: Setting, master: ActorRef)
    * for other validation result.
    * @param jobId denotes a job id associated with a validate object.
    */
-  protected def postCheckFor(jobId: BSPJobID) = areAllVerified(jobId).map { v=> 
+  protected def postCheckFor(jobId: BSPJobID) = allVerified(jobId).map { v=> 
     v.receptionist ! v.validated
     validation -= v
   }
@@ -213,7 +222,7 @@ class Federator(setting: Setting, master: ActorRef)
    * receptionist for further actions, such reject or put to wait queue.
    * Otherwise do nothing and wait for other validation result.
    */
-  protected def areAllVerified(jobId: BSPJobID): Option[Validate] = {
+  protected def allVerified(jobId: BSPJobID): Option[Validate] = {
     val validate = findValidateBy(jobId)
     (0 == validate.actions.filter( e => e._2.equals(NotVerified)).size) match {
       case true => Option(validate)

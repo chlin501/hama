@@ -46,8 +46,8 @@ class MockFederator(setting: Setting, master: ActorRef, tester: ActorRef)
     trackers
   }
 
-  override def areAllVerified(jobId: BSPJobID): Option[Validate] = {
-    val r = super.areAllVerified(jobId)
+  override def allVerified(jobId: BSPJobID): Option[Validate] = {
+    val r = super.allVerified(jobId)
     r match {
       case Some(v) => {
         LOG.info("All validated for job id {}!", jobId)
