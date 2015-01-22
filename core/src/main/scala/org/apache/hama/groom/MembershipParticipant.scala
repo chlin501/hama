@@ -25,9 +25,9 @@ import akka.cluster.ClusterEvent.MemberRemoved
 import akka.cluster.ClusterEvent.MemberUp
 import akka.cluster.ClusterEvent.CurrentClusterState
 import akka.cluster.Member
-import org.apache.hama.RemoteService
 import org.apache.hama.Membership
 import org.apache.hama.ProxyInfo
+import org.apache.hama.RemoteService
 import org.apache.hama.SystemInfo
 import org.apache.hama.util.MasterDiscovery
 import org.apache.hama.util.Utils._
@@ -35,18 +35,16 @@ import scala.collection.immutable.IndexedSeq
 
 final case object GroomRegistration
 
-trait MembershipParticipant extends Membership with MasterDiscovery { 
- 
-  this: RemoteService => 
+trait MembershipParticipant extends RemoteService with Membership 
+                               with MasterDiscovery { 
 
   protected lazy val cluster = Cluster(context.system)
 
-  override def join(nodes: IndexedSeq[SystemInfo]): Unit= cluster.joinSeedNodes(
-    nodes.map { (info) => {
+  override def join(nodes: IndexedSeq[SystemInfo]): Unit = 
+    cluster.joinSeedNodes(nodes.map { info => 
       Address(info.getProtocol.toString, info.getActorSystemName, info.getHost,
               info.getPort)
-    }}
-  )
+    })
 
   override def subscribe(stakeholder: ActorRef) =
     cluster.subscribe(stakeholder, classOf[MemberUp])
@@ -63,9 +61,8 @@ trait MembershipParticipant extends Membership with MasterDiscovery {
                              roleLeaderMap) => 
   }
 
-  protected def whenMemberUp(member: Member) = if(member.hasRole("master")) {
-    master.map { (m) => register(m) }
-  }
+  protected def whenMemberUp(member: Member) = if(member.hasRole("master")) 
+    master.map { m => register(m) }
 
   protected def register(target: ProxyInfo) = 
     findProxyBy(target.getActorName) match { 

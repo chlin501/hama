@@ -635,6 +635,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           jobManager.update(t.get.newWithJob(newJob))
           whenJobFinished(newJob.getId) 
           jobManager.move(newJob.getId)(Finished)
+          // TODO: notify submitter by ticket.client ! JobComplete(newJob.getId)
         }
         case false => LOG.warning("Unable to update task {}!", newest.getId)
       }

@@ -43,7 +43,7 @@ object MasterDiscovery {
 
 }
 
-trait MasterDiscovery extends Curator { self: RemoteService => 
+trait MasterDiscovery extends RemoteService with Curator { 
 
   import MasterDiscovery._
 
@@ -109,6 +109,7 @@ trait MasterDiscovery extends Curator { self: RemoteService =>
     LOG.error("Shutdown system due to error {} when trying {}", cause, name)
     shutdown
   }
+
   
 }
 

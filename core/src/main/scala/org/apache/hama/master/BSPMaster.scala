@@ -79,7 +79,8 @@ object BSPMaster {
 }
 
 // TODO: - refactor FSM (perhaps remove it)
-//       - update internal stats to tracker
+//       - renew master state when related funcs are finished
+//       - update master state to tracker
 class BSPMaster(setting: Setting) extends LocalService with RemoteService
                                                        with MasterDiscovery
                                                        with MembershipDirector 
@@ -102,7 +103,6 @@ class BSPMaster(setting: Setting) extends LocalService with RemoteService
                                    classOf[Receptionist], setting, federator) 
     getOrCreate(Scheduler.simpleName(conf), classOf[Scheduler], 
                 conf, self, receptionist, federator) 
-    // TODO: change master state
   }
 
   override def stopServices = {
@@ -173,6 +173,7 @@ class BSPMaster(setting: Setting) extends LocalService with RemoteService
         case true => sender ! TargetRefs(matched)
         case false => sender ! SomeMatched(matched, nomatched)
       } 
+      // case JobCompleteEvent TODO:  xxxx
     } 
     case FindGroomsToKillTasks(infos) => {
       var matched = Set.empty[ActorRef] 
@@ -193,6 +194,10 @@ class BSPMaster(setting: Setting) extends LocalService with RemoteService
     case req: RequestTask => forward(RequestTaskEvent)(req) 
     case fault: TaskFailure => forward(TaskFailureEvent)(fault)
   }
+
+  //protected def msgFromClient: Receive = {
+     //case AskForJobId => // TODO: generate new job id. sender ! NewJobID(id)
+  //}
 
   override def receive = eventListenerManagement orElse msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
   
