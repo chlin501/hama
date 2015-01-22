@@ -27,6 +27,7 @@ import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.FileStatus
 
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.permission.FsPermission
 import org.apache.hama.HamaConfiguration
 
 class HDFSLocal extends Operation {
@@ -56,6 +57,12 @@ class HDFSLocal extends Operation {
   override def mkdirs(path: Path): Boolean = {
     validate
     localfs.mkdirs(path)
+  }
+
+  @throws(classOf[IOException])
+  override def mkdirs(path: Path, permission: FsPermission): Boolean = {
+    validate
+    localfs.mkdirs(path, permission)
   }
 
   @throws(classOf[IOException])

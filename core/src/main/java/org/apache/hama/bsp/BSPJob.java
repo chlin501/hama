@@ -384,10 +384,19 @@ public class BSPJob extends BSPJobContext {
 
   /**
    * Sets the input path for the job.
-   * 
+   * @param path denotes the input directory to be set.
    */
   public void setInputPath(Path path) {
     conf.set("bsp.input.dir", path.toString());
+  }
+
+  /**
+   * Check if the input directory is set.
+   * @return boolean indicates whether input path exists or not. True when
+   *                 path is set; otherwise false.
+   */
+  public boolean hasInputPath() {
+    return (null != conf.get("bsp.input.dir"));
   }
 
   /**
@@ -435,4 +444,23 @@ public class BSPJob extends BSPJobContext {
     if (queueBehaviour.equals(MessageQueue.PERSISTENT_QUEUE))
       conf.setBoolean(MessageQueue.PERSISTENT_QUEUE, true);
   }
+
+  /**
+   * Obtain replication value for this bsp job; value is set to 3.
+   * Note that original job client set replication value to 10.
+   * @return short value as the number of replication being set.
+   */
+  public short replication() {
+    return (short) conf.getInt("bsp.submit.replication", 3); 
+  }
+
+  /**
+   * Check if bsp.join.expr value exists or not. 
+   * @return boolena denotes whether join expression exists; true if exists. 
+   * Otherwise false.
+   */
+  public boolean hasJoinExpr() {
+    return (null != conf.get("bsp.join.expr"));
+  }
+
 }

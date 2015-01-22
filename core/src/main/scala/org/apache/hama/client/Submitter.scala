@@ -29,21 +29,28 @@ import org.apache.hama.RemoteService
 import org.apache.hama.bsp.BSPJob
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
+import org.apache.hama.fs.Operation
 import org.apache.hama.master.Reject
 import org.apache.hama.util.MasterDiscovery
+import scala.util.Failure
+import scala.util.Random
+import scala.util.Success
+import scala.util.Try
 
 final case object JobCompleteEvent extends Event
 
 trait SubmitterMessage
 final case object AskForJobIdSysDir extends SubmitterMessage
 final case class JobComplete(jobId: BSPJobID) extends SubmitterMessage
-final case class SubmitPaths(sumitDir: Path, splitPath: Path, jarPath: Path,
+final case class SubmitPaths(jobDir: Path, splitPath: Path, jarPath: Path,
                              jobPath: Path) extends SubmitterMessage
 final case class NewJobIdSysDir(id: BSPJobID, sysDir: Path) 
       extends SubmitterMessage
 final case class Submit(job: BSPJob) extends SubmitterMessage
 
 object Submitter {
+
+  val submit_ = "submit_"
 
   private var submitter: Option[ActorRef] = None
 
@@ -56,7 +63,7 @@ object Submitter {
 
   def simpleName(conf: HamaConfiguration): String = 
     conf.get("client.name", classOf[Submitter].getSimpleName) + "#" +
-    scala.util.Random.nextInt  
+    Random.nextInt  
 
   /**
    * Submit an assembled bsp job to master through submitter.
@@ -72,6 +79,11 @@ object Submitter {
 
 class Submitter(setting: Setting) extends RemoteService with MasterDiscovery 
                                                         with EventListener {
+
+  import Submitter._
+
+
+  protected val rand = new Random
 
   protected var masterProxy: Option[ActorRef] = None
 
@@ -123,7 +135,10 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
       bspJobId = Option(id)
       sysDir = Option(dir)
       bspJob match { 
-        case Some(job) => submitInternal(job, id, dir) 
+        case Some(job) => Try(submitInternal(job, id, dir)) match {
+          case Success(result) =>
+          case Failure(cause) => cleanup
+        }
         case None => LOG.error("Unlikely but no bsp job submitted!")
       }
     }
@@ -140,13 +155,34 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
   // TODO: BSPJobClient.submitJobInternal
   protected def submitInternal(job: BSPJob, id: BSPJobID, sysDir: Path) {
     job.setJobID(id) 
-    //  
+    val paths = submitPaths(sysDir)
+    val operation = Operation.get(setting.hama).operationFor(sysDir)
+    operation.remove(paths.jobDir)
+    val newJobDir = new Path(new Path(operation.makeQualified(paths.jobDir)).
+                                      toUri.getPath)
+    val newPaths = paths.copy(jobDir = newJobDir)
+    operation.mkdirs(newJobDir)
+    val replication = job.replication // Note: job client original set to 10
+    job.hasInputPath || job.hasJoinExpr match {
+      case true => // TODO: create split for job
+      case false =>
+    }
   }
 
-  // TODO: submit job dir, submit split file, submit jar file, submit job file
-  //protected def folders(sysDir: Path): SubmitPaths = { 
-    
-  //}
+  /**
+   * Formulate paths to be used, including 
+   * - the path in which split files are saved.  
+   * - the path the jar file is stored.
+   * - the path where the job xml is stored.
+   */
+  protected def submitPaths(sysDir: Path): SubmitPaths = { 
+    val randomValue = Integer.toString(Math.abs(rand.nextInt), 36)
+    val jobDir = new Path(sysDir, "%s%s".format(submit_, randomValue))
+    val splitPath = new Path(jobDir, "job.split") 
+    val jarPath = new Path(jobDir, "job.jar") 
+    val jobPath = new Path(jobDir, "job.xml") 
+    SubmitPaths(jobDir, splitPath, jarPath, jobPath)
+  }
 
   protected def cleanup() = {
     LOG.info("Cleanup job related information and then shutdown sytem ...")

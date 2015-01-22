@@ -24,10 +24,17 @@ import java.io.InputStream
 import java.io.OutputStream
 
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.permission.FsPermission
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.HamaConfiguration
 
 object Operation {
+
+  /**
+   * Create job dir permisison with rwx-rwx-rwx, i.e., global 
+   * readable, writable, and executable.
+   */
+  val jobDirPermission = FsPermission.createImmutable(0777.asInstanceOf[Short])
 
   val seperator: String = "/"
 
@@ -72,12 +79,20 @@ trait Operation {
   def configuration: HamaConfiguration
 
   /**
-   * Create a file based on the {@link Path} for writing.
+   * Make directory given with the {@link Path}.
    * @param path is the dirs to be created.
    * @return Boolean denotes if dirs are created or not.
    */
   @throws(classOf[IOException])
   def mkdirs(path: Path): Boolean 
+
+  /**
+   * Make directory given with the {@link Path} and permission.
+   * @param path is the dirs to be created.
+   * @param permission value to be assigned to the dir.
+   * @return Boolean denotes if dirs are created or not.
+   */  @throws(classOf[IOException])
+  def mkdirs(path: Path, pemission: FsPermission): Boolean 
 
   /**
    * Create data based on the {@link Path} given.
@@ -175,6 +190,10 @@ trait Operation {
 
   /**
    * Obtain an operation that owns the given path.
+   * The effect should be the same as 
+   * <code>
+   *   Path.getFileSystem(configuration)
+   * </code>
    * @return Operation for a particular path supplied.
    */
   def operationFor(path: Path): Operation
