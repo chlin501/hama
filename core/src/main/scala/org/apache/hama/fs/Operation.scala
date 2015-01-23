@@ -92,8 +92,8 @@ object Operation {
    * </code>
    * @return Operation for a particular path supplied.
    */
-  def operationFor(path: Path, conf: HamaConfiguration): Operation = {
-    val fs = get(conf); fs.setFs(path.getFileSystem(conf)); fs
+  def owns(path: Path, conf: HamaConfiguration): Operation = {
+    val op = get(conf); op.setFs(path.getFileSystem(conf)); op 
   }
 
   @throws(classOf[IOException])

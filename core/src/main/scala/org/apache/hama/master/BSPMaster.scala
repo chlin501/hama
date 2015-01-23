@@ -67,6 +67,10 @@ final case object RequestTaskEvent extends Event
  * An event shows that a task running on the target groom server fails.
  */
 final case object TaskFailureEvent extends Event
+/**
+ * An event when a client submit its job to master.
+ */
+final case object JobSubmitEvent extends Event
 
 final case class FileSystemCleaned(systemDir: Path)
 final case class CheckGroomsExist(jobId: BSPJobID, targetGrooms: Array[String])
@@ -168,7 +172,8 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
     val federator = getOrCreate(Federator.simpleName(conf), classOf[Federator],
                                 setting, self) 
     val receptionist = getOrCreate(Receptionist.simpleName(conf), 
-                                   classOf[Receptionist], setting, federator) 
+                                   classOf[Receptionist], setting, self, 
+                                   federator) 
     getOrCreate(Scheduler.simpleName(conf), classOf[Scheduler], 
                 conf, self, receptionist, federator) 
   }
@@ -284,6 +289,7 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
                                  jobId)
       }
     }
+    case submit: Submit => forward(JobSubmitEvent)(submit)
   }
 
   protected def newJobId(): BSPJobID = {

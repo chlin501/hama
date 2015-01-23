@@ -52,8 +52,9 @@ class MockFed(setting: Setting, master: ActorRef)
   }
 }
 
-class MockReceptionist(setting: Setting, federator: ActorRef, tester: ActorRef) 
-      extends Receptionist(setting, federator) {
+class MockReceptionist(setting: Setting, master: ActorRef, federator: ActorRef,
+                       tester: ActorRef) 
+      extends Receptionist(setting, master, federator) {
 
   override def enqueueJob(client: ActorRef, newJob: Job) = {
     LOG.info("Job created is {}", newJob)
@@ -82,8 +83,8 @@ class TestReceptionist extends TestEnv("TestReceptionist") with JobUtil {
     val fed = createWithArgs(Federator.simpleName(setting.hama),
                              classOf[MockFed], setting, master)
     val receptionist = createWithArgs(Receptionist.simpleName(setting.hama), 
-                                      classOf[MockReceptionist], setting, fed,
-                                      tester)
+                                      classOf[MockReceptionist], setting, 
+                                      master, fed, tester)
     val jobId = createJobId("test-receptionist", 1533)
     val jobFilePath = createJobFile(jobConf)
     LOG.info("Submit job id "+jobId.toString+" job.xml: "+jobFilePath)

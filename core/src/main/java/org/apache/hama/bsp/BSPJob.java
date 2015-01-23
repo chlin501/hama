@@ -97,6 +97,10 @@ public class BSPJob extends BSPJobContext {
     conf.set(WORKING_DIR, dir.toString());
   }
 
+  public void setWorkingDirectoryIfEmpty(Path dir) {
+    if(null == getWorkingDirectory()) setWorkingDirectory(dir);
+  }
+
   /**
    * Set the BSP algorithm class for the job.
    * 

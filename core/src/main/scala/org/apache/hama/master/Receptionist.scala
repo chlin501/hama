@@ -29,6 +29,8 @@ import org.apache.hadoop.io.Writable
 import org.apache.hadoop.io.WritableUtils
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
+import org.apache.hama.SubscribeEvent
+import org.apache.hama.UnsubscribeEvent
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.conf.Setting
@@ -138,7 +140,8 @@ object Receptionist {
  * @param setting contains groom related setting.
  * @param federator validates job configuration.
  */
-class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
+class Receptionist(setting: Setting, master: ActorRef, federator: ActorRef) 
+      extends LocalService {
 
   import Receptionist._
 
@@ -151,6 +154,10 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
 
   /* Operation against underlying storage. may need reload. */
   protected val operation = Operation.get(setting.hama)
+
+  override def initializeServices = master ! SubscribeEvent(JobSubmitEvent)  
+
+  override def stopServices = master ! UnsubscribeEvent(JobSubmitEvent)  
 
   /**
    * Clients call submit a jobId and jobFile, where the jobFile is the
@@ -218,11 +225,11 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
 
   protected def op(jobId: BSPJobID): Operation = {
     val path = new Path(operation.getSystemDirectory, jobId.toString)
-    Operation.operationFor(path, operation.configuration)
+    Operation.owns(path, operation.configuration)
   }
 
   protected def op(path: Path): Operation = 
-    Operation.operationFor(path, operation.configuration)
+    Operation.owns(path, operation.configuration)
 
   /**
    * Copy the job file from jobFilePath to localJobFilePath at local disk.

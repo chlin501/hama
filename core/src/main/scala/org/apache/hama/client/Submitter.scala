@@ -37,6 +37,7 @@ import org.apache.hama.conf.Setting
 import org.apache.hama.io.PartitionedSplit
 import org.apache.hama.fs.Operation
 import org.apache.hama.master.Reject
+import org.apache.hama.master.Submit
 import org.apache.hama.util.MasterDiscovery
 import scala.util.Failure
 import scala.util.Random
@@ -52,7 +53,7 @@ final case class WorkingDirs(jobDir: Path, splitPath: Path, jarPath: Path,
                              jobPath: Path) extends SubmitterMessage
 final case class Response(id: BSPJobID, sysDir: Path, maxTasks: Int) 
       extends SubmitterMessage
-final case class Submit(job: BSPJob) extends SubmitterMessage
+final case class SubmitJob(job: BSPJob) extends SubmitterMessage
 
 object Submitter {
 
@@ -72,12 +73,13 @@ object Submitter {
     Random.nextInt  
 
   /**
-   * Submit an assembled bsp job to master through submitter.
+   * Submit an assembled bsp job through submitter before actually submitting
+   * to master.
    * @param job is an BSPJob containing related configuration and code to be
    *            executed.
    */
-  def submit(job: BSPJob): Boolean = submitter.map { ref => 
-    ref ! Submit(job)
+  def submit(job: BSPJob): Boolean = submitter.map { client => 
+    client ! SubmitJob(job)
     true
   }.getOrElse(false)
 
@@ -127,7 +129,7 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
   }
 
   protected def clientMsg: Receive = {
-    case Submit(job) => masterProxy match {
+    case SubmitJob(job) => masterProxy match {
       case Some(m) => { askForMetadata; cache(job) }
       case None => cache(job)
     }
@@ -168,7 +170,7 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
   protected def submitInternal(job: BSPJob, id: BSPJobID, sysDir: Path, 
                                maxTasks: Int) {
     job.setJobID(id) 
-    val dirs = workingDirs(sysDir)
+    val dirs = workingDirs(sysDir) 
     val splitPath = dirs.splitPath
     val adjustedJob = adjustTasks(job, maxTasks)
     (adjustedJob.hasInputPath || adjustedJob.hasJoinExpr) match {
@@ -181,6 +183,7 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
       }
       case false => 
     }
+    val operation = Operation.get(setting.hama)
     adjustedJob.getJar match {
       case null => LOG.warning("Jar path is not set! User classes may not be " +
                                "found. Set BSPJob#setJar(String) or check "+
@@ -188,7 +191,6 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
       case originalJarPath@_ => {
         adjustedJob.setJobNameIfEmpty(originalJarPath)
         adjustedJob.setJar(splitPath.toString)
-        val operation = Operation.get(setting.hama)
         operation.copyFromLocal(new Path(originalJarPath))(splitPath)
         operation.setReplication(splitPath, adjustedJob.replication) 
         operation.setPermission(splitPath, newPermission(jobFilePermission))
@@ -196,6 +198,21 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
     }
     adjustedJob.setUser(BSPJobClient.getUnixUser)
     adjustedJob.setGroupBy(BSPJobClient.getUnixGroupBy(adjustedJob.getUser))
+    adjustedJob.setWorkingDirectoryIfEmpty(operation.getWorkingDirectory)
+
+    operation.create(splitPath, newPermission(jobFilePermission)) match {
+      case null => { 
+        LOG.error("Can't create path at {}", splitPath)
+        cleanup
+        shutdown 
+      }
+      case out@_ => try { job.writeXml(out) } finally { out.close }
+    }
+    masterProxy.map { m => bspJobId.map { id => {
+      val operation = owns(sysDir, setting.hama)
+      m ! Submit(id, operation.makeQualified(splitPath).toString)
+    }}}
+
   }
 
   protected def writeSplits(job: BSPJob, splits: Array[PartitionedSplit],
@@ -212,7 +229,7 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
   protected def writeSplitsHeader(conf: HamaConfiguration,
                                   splitPath: Path,
                                   splitSize: Int): DataOutputStream = {
-    val operation = operationFor(splitPath, conf)
+    val operation = owns(splitPath, conf)
     val out = toDataOutputStream(operation.create(splitPath, jobFilePermission))
     out.write(splitFileHeader)
     WritableUtils.writeVInt(out, currentSplitFileVersion)
@@ -257,6 +274,7 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
   /**
    * Submit job to master for partitioning data.
    */
+  // TODO: submit job to master for runtime partitioning
   protected def partition(job: BSPJob): BSPJob = job 
 
   /**
@@ -272,7 +290,7 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
     val jarPath = new Path(jobDir, "job.jar") 
     val jobPath = new Path(jobDir, "job.xml") 
 
-    val operation = operationFor(sysDir, setting.hama)
+    val operation = owns(sysDir, setting.hama)
     operation.remove(jobDir)
     val newJobDir = new Path(new Path(operation.makeQualified(jobDir)).
                                       toUri.getPath)
@@ -289,6 +307,11 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
     bspJob = None
     masterProxy = None
   }
+
+  // TODO: master periodically reports progress
+  //protected def process: Receive = { 
+    //case Progress => 
+  //}
 
   override def receive = clientMsg orElse masterMsg orElse unknown
 
