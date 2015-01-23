@@ -28,7 +28,8 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-class MockBSPMaster(setting: Setting) extends BSPMaster(setting) { 
+class MockBSPMaster(setting: Setting) 
+      extends BSPMaster(setting, "test-identifier") { 
 
   override def enroll(participant: ActorRef) {
     LOG.info("Groom {} joins now ...", participant.path.name)

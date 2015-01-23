@@ -19,6 +19,7 @@ package org.apache.hama.monitor.master
 
 import akka.actor.ActorRef
 import org.apache.hadoop.io.Writable
+import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.master.GroomLeave
 import org.apache.hama.master.GroomLeaveEvent
 import org.apache.hama.monitor.Tracker
@@ -27,6 +28,9 @@ import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.SlotStats
 import org.apache.hama.util.Utils._
 
+final case class ClientMaxTasksAllowed(jobId: BSPJobID) extends ProbeMessage
+final case class ClientTasksAllowed(jobId: BSPJobID, maxTasks: Int) 
+      extends ProbeMessage
 final case class GetMaxTasks(jobId: String) extends ProbeMessage
 final case class GetGroomCapacity(host: String, port: Int) extends ProbeMessage
 final case class GroomCapacity(host: String, port: Int, freeSlots: Int) 
@@ -124,6 +128,8 @@ final class GroomsTracker extends Tracker {
         freeSlotsPerGroom.get(key(stats)).getOrElse(0))
       case None => from ! GroomCapacity(host, port, 0) 
     }
+    case ClientMaxTasksAllowed(jobId) => 
+      from ! ClientTasksAllowed(jobId, totalMaxTasks)
     case _ => LOG.warning("Unknown action {} from {}!", action, from)
   }
 

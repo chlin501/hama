@@ -67,6 +67,7 @@ object PartitionedSplit {
     w.set(Array[Text]().asInstanceOf[Array[Writable]])
     w
   }
+
 }
 
 class PartitionedSplit extends Writable {

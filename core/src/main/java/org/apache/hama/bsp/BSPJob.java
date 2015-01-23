@@ -463,4 +463,10 @@ public class BSPJob extends BSPJobContext {
     return (null != conf.get("bsp.join.expr"));
   }
 
+  /**
+   * Check if input is partitioned.
+   */
+  public boolean hasPartitioned() {
+    return conf.getBoolean("input.has.partitioned", false);
+  }
 }

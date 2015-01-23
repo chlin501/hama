@@ -99,10 +99,6 @@ class Federator(setting: Setting, master: ActorRef)
     LOG.debug("Finish loading {} non default trackers ...", nonDefault.size)
   }
 
-  protected def listTracker: Receive = {
-    case ListTracker => listTrackers(sender) 
-  }
-
   protected def listTrackers(from: ActorRef) = 
     from ! TrackersAvailable(currentTrackers)
 
@@ -110,7 +106,7 @@ class Federator(setting: Setting, master: ActorRef)
     tracker.path.name 
   }.toArray
 
-  protected def dispatch: Receive = {
+  protected def trackerMsg: Receive = {
     /**
      * Ask tracker executing a specific action.
      */
@@ -122,9 +118,16 @@ class Federator(setting: Setting, master: ActorRef)
        tracker forward stats
     }
     /**
+     * List trackers currently available.
+     */
+    case ListTracker => listTrackers(sender) 
+    /**
      * List master services currently available.
      */
     case ListService => master forward ListService
+    /**
+     * Find master service by name.
+     */
     case req: FindServiceBy => master forward req 
   }
 
@@ -269,6 +272,6 @@ class Federator(setting: Setting, master: ActorRef)
       case _ => e
     }}
 
-  override def receive = eventListenerManagement orElse publish orElse validate orElse events orElse dispatch orElse listTracker orElse unknown
+  override def receive = eventListenerManagement orElse publish orElse validate orElse events orElse trackerMsg orElse unknown
 
 }

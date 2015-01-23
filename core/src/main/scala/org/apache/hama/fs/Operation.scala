@@ -30,6 +30,12 @@ import org.apache.hama.HamaConfiguration
 
 object Operation {
 
+
+  /**
+   * Create sys dir permission with rwx-wx-wx
+   */
+  val sysDirPermission = FsPermission.createImmutable(0733.asInstanceOf[Short])
+
   /**
    * Create job dir permisison with rwx-rwx-rwx, i.e., global 
    * readable, writable, and executable.

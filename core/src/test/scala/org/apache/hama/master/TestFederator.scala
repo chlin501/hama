@@ -83,7 +83,7 @@ class MockFederator(setting: Setting, master: ActorRef, tester: ActorRef)
 
 
 class MockMaster(setting: Setting, tester: ActorRef) 
-      extends BSPMaster(setting) {
+      extends BSPMaster(setting, "test-identifier") {
 
   override def initializeServices {
     val conf = setting.hama

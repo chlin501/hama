@@ -20,6 +20,7 @@ package org.apache.hama.client
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
+import java.io.IOException
 import org.apache.hadoop.fs.Path
 import org.apache.hama.Event
 import org.apache.hama.EventListener
@@ -28,7 +29,9 @@ import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.bsp.BSPJob
 import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.bsp.FileSplit
 import org.apache.hama.conf.Setting
+import org.apache.hama.io.PartitionedSplit
 import org.apache.hama.fs.Operation
 import org.apache.hama.master.Reject
 import org.apache.hama.util.MasterDiscovery
@@ -40,11 +43,11 @@ import scala.util.Try
 final case object JobCompleteEvent extends Event
 
 trait SubmitterMessage
-final case object AskForJobIdSysDir extends SubmitterMessage
+final case object Request extends SubmitterMessage
 final case class JobComplete(jobId: BSPJobID) extends SubmitterMessage
-final case class SubmitPaths(jobDir: Path, splitPath: Path, jarPath: Path,
+final case class WorkingDirs(jobDir: Path, splitPath: Path, jarPath: Path,
                              jobPath: Path) extends SubmitterMessage
-final case class NewJobIdSysDir(id: BSPJobID, sysDir: Path) 
+final case class Response(id: BSPJobID, sysDir: Path, maxTasks: Int) 
       extends SubmitterMessage
 final case class Submit(job: BSPJob) extends SubmitterMessage
 
@@ -95,13 +98,16 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
   /* master's system directory. */
   protected var sysDir: Option[Path] = None
 
+  /* max tasks allowed found for the client. */
+  protected var maxTasksAllowed: Int = 1 
+
   override def setting(): Setting = setting
 
   override def initializeServices = retry("discover", 10, discover)
 
   override def afterLinked(target: String, proxy: ActorRef): Unit = {
     masterProxy = Option(proxy)
-    bspJob.map { job => askForJobIdSysDir }
+    bspJob.map { job => askForMetadata }
   }
 
   /**
@@ -111,19 +117,22 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
    */
   protected def cache(job: BSPJob) = bspJob = Option(job)
 
-  protected def askForJobIdSysDir() = bspJobId match {
+  protected def askForMetadata() = bspJobId match {
     case Some(id) => LOG.warning("Job id alreay exists: {}!", id)
-    case None => masterProxy.map { m => m ! AskForJobIdSysDir }
+    case None => masterProxy.map { m => m ! Request }
   }
 
   protected def clientMsg: Receive = {
     case Submit(job) => masterProxy match {
-      case Some(m) => {
-        askForJobIdSysDir
-        cache(job)
-      }
+      case Some(m) => { askForMetadata; cache(job) }
       case None => cache(job)
     }
+  }
+
+  protected def settingForClient(id: BSPJobID, dir: Path, maxTasks: Int) {
+    bspJobId = Option(id)
+    sysDir = Option(dir)
+    maxTasksAllowed = maxTasks
   }
   
   protected def masterMsg: Receive = {
@@ -131,13 +140,12 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
      * Master creates a new job id for unsubmitted bsp job; and master's system
      * directory path.
      */
-    case NewJobIdSysDir(id, dir) => {
-      bspJobId = Option(id)
-      sysDir = Option(dir)
+    case Response(id, dir, maxTasks) => {
+      settingForClient(id, dir, maxTasks)
       bspJob match { 
-        case Some(job) => Try(submitInternal(job, id, dir)) match {
+        case Some(job) => Try(submitInternal(job, id, dir, maxTasks)) match {
           case Success(result) =>
-          case Failure(cause) => cleanup
+          case Failure(cause) => { cleanup; shutdown }
         }
         case None => LOG.error("Unlikely but no bsp job submitted!")
       }
@@ -145,29 +153,68 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
     /**
      * Scheduler replies directly when the job is finished.
      */    
-    case JobComplete(jobId) => cleanup
+    case JobComplete(jobId) => { cleanup; shutdown }
     case failure: Reject => { 
       LOG.error("Failing processing job because {}", failure.reason)
-      cleanup
+      cleanup; shutdown
     }
   }
 
   // TODO: BSPJobClient.submitJobInternal
-  protected def submitInternal(job: BSPJob, id: BSPJobID, sysDir: Path) {
+  protected def submitInternal(job: BSPJob, id: BSPJobID, sysDir: Path, 
+                               maxTasks: Int) {
     job.setJobID(id) 
-    val paths = submitPaths(sysDir)
-    val operation = Operation.get(setting.hama).operationFor(sysDir)
-    operation.remove(paths.jobDir)
-    val newJobDir = new Path(new Path(operation.makeQualified(paths.jobDir)).
-                                      toUri.getPath)
-    val newPaths = paths.copy(jobDir = newJobDir)
-    operation.mkdirs(newJobDir)
-    val replication = job.replication // Note: job client original set to 10
-    job.hasInputPath || job.hasJoinExpr match {
-      case true => // TODO: create split for job
-      case false =>
+    val dirs = workingDirs(sysDir)
+    val adjusted = adjustTasks(job, maxTasks)
+    (adjusted.hasInputPath || adjusted.hasJoinExpr) match {
+      case true => {
+        val splits = defaultSplit(dirs, adjusted, maxTasks)
+        // TODO: val splited = writeSplits
+        //       adjusted.setNumBspTasks(splited)
+        //       adjusted.set("bsp.job.split.file", dirs.splitPath)
+      }
+      case false => Array[PartitionedSplit]()
     }
   }
+
+  protected def adjustTasks(job: BSPJob, maxTasksAllowed: Int): BSPJob =
+    (maxTasksAllowed < job.getNumBspTask) match {
+      case true => { job.setNumBspTask(maxTasksAllowed); job }
+      case false => job
+    }
+
+  protected def defaultSplit(workingDirs: WorkingDirs, 
+                             job: BSPJob, 
+                             maxTasks: Int): Array[PartitionedSplit] = 
+    splitsForJob(workingDirs, job, maxTasks, partition)
+
+  protected def splitsForJob(workingDirs: WorkingDirs, 
+                             job: BSPJob, 
+                             maxTasks: Int, 
+                             partition: (BSPJob) => BSPJob): 
+      Array[PartitionedSplit] = {
+    // Note: original bsp job client set replication to 10
+    //val replication = job.replication 
+    val splits = job.getInputFormat.getSplits(job, maxTasks)
+    val partitioned = partition(job)
+    val newMaxTasks = partitioned.getInt("hama.partition.count", maxTasks)
+    val newSplits = partitioned.hasPartitioned match {
+      case true => partitioned.getInputFormat.getSplits(partitioned, maxTasks) 
+      case false => Array[PartitionedSplit]()
+    }
+    if(newMaxTasks < newSplits.length) 
+      throw new IOException("The number of splits "+newSplits.length+
+                            " exceeds that of max tasks "+newMaxTasks)
+    newSplits.map { split => split.isInstanceOf[FileSplit] match {
+      case true => PartitionedSplit.from(split.asInstanceOf[FileSplit]) 
+      case false => throw new RuntimeException("Split is not convertable!")
+    }}
+  }
+
+  /**
+   * Submit job to master for partitioning data.
+   */
+  protected def partition(job: BSPJob): BSPJob = job 
 
   /**
    * Formulate paths to be used, including 
@@ -175,21 +222,29 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
    * - the path the jar file is stored.
    * - the path where the job xml is stored.
    */
-  protected def submitPaths(sysDir: Path): SubmitPaths = { 
+  protected def workingDirs(sysDir: Path): WorkingDirs = { 
     val randomValue = Integer.toString(Math.abs(rand.nextInt), 36)
     val jobDir = new Path(sysDir, "%s%s".format(submit_, randomValue))
     val splitPath = new Path(jobDir, "job.split") 
     val jarPath = new Path(jobDir, "job.jar") 
     val jobPath = new Path(jobDir, "job.xml") 
-    SubmitPaths(jobDir, splitPath, jarPath, jobPath)
+
+    val operation = Operation.get(setting.hama).operationFor(sysDir)
+    operation.remove(jobDir)
+    val newJobDir = new Path(new Path(operation.makeQualified(jobDir)).
+                                      toUri.getPath)
+    operation.mkdirs(newJobDir)
+    WorkingDirs(newJobDir, splitPath, jarPath, jobPath)
   }
 
+  /**
+   * Cleanup job related information hold by this client.
+   */
   protected def cleanup() = {
     LOG.info("Cleanup job related information and then shutdown sytem ...")
     bspJobId = None 
     bspJob = None
     masterProxy = None
-    shutdown
   }
 
   override def receive = clientMsg orElse masterMsg orElse unknown

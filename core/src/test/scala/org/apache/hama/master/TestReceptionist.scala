@@ -30,7 +30,8 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-private class MockMaster1(setting: Setting) extends BSPMaster(setting)
+private class MockMaster1(setting: Setting) 
+      extends BSPMaster(setting, "test-identifier")
 
 class MockFed(setting: Setting, master: ActorRef) 
       extends Federator(setting, master) {

@@ -21,6 +21,9 @@ import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Address
 import akka.actor.Props
+import java.text.SimpleDateFormat
+import java.util.Date
+import org.apache.hadoop.fs.Path
 import org.apache.hama.Event
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
@@ -28,8 +31,10 @@ import org.apache.hama.EventListener
 import org.apache.hama.RemoteService
 import org.apache.hama.SystemInfo
 import org.apache.hama.bsp.BSPJobID
-import org.apache.hama.client.AskForJobIdSysDir
+import org.apache.hama.client.Request
+import org.apache.hama.client.Response
 import org.apache.hama.conf.Setting
+import org.apache.hama.fs.Operation
 import org.apache.hama.groom.RequestTask
 import org.apache.hama.groom.TaskFailure
 import org.apache.hama.monitor.FindServiceBy
@@ -37,6 +42,9 @@ import org.apache.hama.monitor.ListService
 import org.apache.hama.monitor.ServiceAvailable
 import org.apache.hama.monitor.ServicesAvailable
 import org.apache.hama.monitor.Stats
+import org.apache.hama.monitor.master.ClientMaxTasksAllowed
+import org.apache.hama.monitor.master.ClientTasksAllowed
+import org.apache.hama.monitor.master.GroomsTracker
 import org.apache.hama.util.MasterDiscovery
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
@@ -60,12 +68,19 @@ final case object RequestTaskEvent extends Event
  */
 final case object TaskFailureEvent extends Event
 
+final case class FileSystemCleaned(systemDir: Path)
 final case class CheckGroomsExist(jobId: BSPJobID, targetGrooms: Array[String])
 // TODO: merge AllGroomsExist with SomeGroomsNotExist to e.g. GroomsExistsResult(found, notexist)
 final case class AllGroomsExist(jobId: BSPJobID)
 final case class SomeGroomsNotExist(jobId: BSPJobID)
+final case class ResponseForClient(client: ActorRef, sysDir: Path, 
+                                   maxTasks: Int)
 
 object BSPMaster {
+
+  private def newIdentifier(): String = {
+    return new SimpleDateFormat("yyyyMMddHHmm").format(new Date())
+  }
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
     "master.name",
@@ -75,26 +90,77 @@ object BSPMaster {
   def main(args: Array[String]) {
     val master = Setting.master
     val sys = ActorSystem(master.info.getActorSystemName, master.config)
-    sys.actorOf(Props(master.main, master), master.name)
+    sys.actorOf(Props(master.main, master, newIdentifier), master.name)
   }
  
+}
+
+object FileSystemCleaner {
+
+  def simpleName(conf: HamaConfiguration): String = conf.get(
+    "master.fs.init.cleaner",
+    classOf[FileSystemCleaner].getSimpleName
+  )
+
+}
+
+protected[master] class FileSystemCleaner(setting: Setting, master: ActorRef) 
+      extends LocalService {
+
+  import Operation._
+
+  protected val operation = Operation.get(setting.hama)
+
+  override def initializeServices = retry("clean", 10, clean)
+
+  protected def systemDir(): Path = new Path(operation.makeQualified(new Path(
+    setting.hama.get("bsp.system.dir", "/tmp/hadoop/bsp/system"))))
+
+  protected def clean(): Boolean = 
+    operation.remove(systemDir) && operation.mkdirs(systemDir, sysDirPermission)
+
+  override protected def retryCompleted(name: String, ret: Any) = name match {
+    case "clean" => {
+      master ! FileSystemCleaned(systemDir)
+      LOG.info("File system is cleanup, stop {}!", name)
+      stop
+    }
+    case _ => { LOG.error("Unexpected result {} when cleanup!", ret); shutdown }
+  }
+
+  override protected def retryFailed(name: String, cause: Throwable) = {
+    LOG.error("Shutdown system due to error {} when trying {}!", cause, name)
+    shutdown
+  }
+
+  override def receive = unknown
+
 }
 
 // TODO: - refactor FSM (perhaps remove it)
 //       - renew master state when related funcs are finished
 //       - update master state to tracker
-class BSPMaster(setting: Setting) extends LocalService with RemoteService
-                                                       with MasterDiscovery
-                                                       with MembershipDirector 
-                                                       with EventListener { 
+class BSPMaster(setting: Setting, identifier: String) extends LocalService 
+                                                      with RemoteService
+                                                      with MasterDiscovery
+                                                      with MembershipDirector 
+                                                      with EventListener { 
 
   import BSPMaster._
 
+  /* value for the next job id. */
+  protected var nextJobId: Int = 1
+
+  protected var systemDir: Option[Path] = None
+
   // TODO: use strategy and shutdown if any exceptions are thrown?
+
+  protected var clientRequest = Map.empty[BSPJobID, ResponseForClient]
 
   override def setting(): Setting = setting
 
   override def initializeServices {
+    cleaner
     register
     join(seedNodes)
     subscribe(self)
@@ -106,6 +172,9 @@ class BSPMaster(setting: Setting) extends LocalService with RemoteService
     getOrCreate(Scheduler.simpleName(conf), classOf[Scheduler], 
                 conf, self, receptionist, federator) 
   }
+
+  protected def cleaner() = spawn(FileSystemCleaner.simpleName(setting.hama), 
+    classOf[FileSystemCleaner], setting, self)
 
   override def stopServices = {
     unsubscribe(self) 
@@ -174,7 +243,7 @@ class BSPMaster(setting: Setting) extends LocalService with RemoteService
         case true => sender ! TargetRefs(matched)
         case false => sender ! SomeMatched(matched, nomatched)
       } 
-      // case JobCompleteEvent TODO:  xxxx
+      // case JobCompleteEvent TODO:  
     } 
     case FindGroomsToKillTasks(infos) => {
       var matched = Set.empty[ActorRef] 
@@ -196,10 +265,45 @@ class BSPMaster(setting: Setting) extends LocalService with RemoteService
     case fault: TaskFailure => forward(TaskFailureEvent)(fault)
   }
 
-  protected def msgFromClient: Receive = {
-    case AskForJobIdSysDir => //TODO: sender ! NewJobIdAndSysDir(id, sysDir)
+  protected def clientRelatedMsg: Receive = {
+    case Request => {
+      val jobId = newJobId
+      clientRequest += (jobId -> ResponseForClient(sender,
+        systemDir.getOrElse(null), -1))
+      findServiceBy(Federator.simpleName(setting.hama)) match {
+        case Some(federator)  => federator ! AskFor(GroomsTracker.fullName, 
+          ClientMaxTasksAllowed(jobId)) 
+        case None =>
+      }
+    }
+    case ClientTasksAllowed(jobId, maxTasks) => {
+      clientRequest.get(jobId) match {
+        case Some(response) => response.client ! Response(jobId, 
+          response.sysDir, maxTasks) 
+        case None => LOG.warning("No client requests max tasks with jod id {}!",
+                                 jobId)
+      }
+    }
   }
 
-  override def receive = eventListenerManagement orElse msgFromClient orElse msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
+  protected def newJobId(): BSPJobID = {
+    val id = nextJobId
+    nextJobId = id + 1
+    new BSPJobID(identifier, id)
+  }
+
+  override def receive = cleanup  
+
+  protected def cleanup: Receive = {
+    case FileSystemCleaned(sysDir) => {
+      systemDir = Option(sysDir)
+      LOG.info("File system {} is cleaned!", sysDir)
+      context.become(opened) 
+    }
+  }
+
+
+  protected def opened: Receive = eventListenerManagement orElse clientRelatedMsg orElse msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
   
 }
+
