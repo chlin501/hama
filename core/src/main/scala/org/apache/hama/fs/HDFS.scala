@@ -66,6 +66,18 @@ class HDFS extends Operation {
   }
 
   @throws(classOf[IOException])
+  override def setReplication(path: Path, replication: Short): Boolean = {
+    validate
+    hdfs.setReplication(path, replication)
+  }
+
+  @throws(classOf[IOException])
+  override def setPermission(path: Path, permission: FsPermission) {
+    validate
+    hdfs.setPermission(path, permission)
+  }
+
+  @throws(classOf[IOException])
   override def create(path: Path, permission: FsPermission): OutputStream = {
     val out = create(path)
     hdfs.setPermission(path, permission) 

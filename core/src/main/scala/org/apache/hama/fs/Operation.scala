@@ -103,6 +103,8 @@ object Operation {
       case false => throw new IOException("Underlying is not DataOutputStream!")
     }
 
+  def newPermission(permission: FsPermission): FsPermission = 
+    new FsPermission(permission)
 }
 
 trait Operation {
@@ -129,6 +131,12 @@ trait Operation {
    */  
   @throws(classOf[IOException])
   def mkdirs(path: Path, pemission: FsPermission): Boolean 
+
+  @throws(classOf[IOException])
+  def setReplication(path: Path, replication: Short): Boolean = true 
+
+  @throws(classOf[IOException])
+  def setPermission(path: Path, permission: FsPermission) { }
 
   /**
    * Create path with permission specified.
@@ -210,9 +218,19 @@ trait Operation {
   @throws(classOf[IOException])
   def list[T](path: Path): java.util.List[T]
 
+  /**
+   * Copy file to local path from a desginated path.
+   * @param from is the desgined path specified.
+   * @param to is the file path at local.
+   */  
   @throws(classOf[IOException])
   def copyToLocal(from: Path)(to: Path)
 
+  /**
+   * Copy a file, located at local file system, to the path designated.
+   * @param from is the file at local.
+   * @param to is the dest path specified.
+   */
   @throws(classOf[IOException])
   def copyFromLocal(from: Path)(to: Path)
 

@@ -997,6 +997,10 @@ public class BSPJobClient extends Configured implements Tool {
    * Helper methods for unix operations
    */
 
+  public static final String getUnixUser() throws IOException {
+    return getUnixUserName();
+  }
+
   static String getUnixUserName() throws IOException {
     String[] result = executeShellCommand(new String[] { Shell.USER_NAME_COMMAND });
     if (result.length != 1) {
@@ -1014,6 +1018,11 @@ public class BSPJobClient extends Configured implements Tool {
       string = string.substring(string.indexOf("\\"));
     }
     return string;
+  }
+
+  public static final String getUnixGroupBy(final String user) 
+      throws IOException {
+    return getUnixUserGroupName(user);
   }
 
   static String getUnixUserGroupName(String user) throws IOException {

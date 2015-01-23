@@ -79,6 +79,7 @@ public class BSPJobContext {
     return conf.get("bsp.job.name", "");
   }
 
+
   public String getJar() {
     return conf.get("bsp.jar");
   }

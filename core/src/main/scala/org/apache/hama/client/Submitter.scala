@@ -30,6 +30,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.ProxyInfo
 import org.apache.hama.RemoteService
 import org.apache.hama.bsp.BSPJob
+import org.apache.hama.bsp.BSPJobClient
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.FileSplit
 import org.apache.hama.conf.Setting
@@ -168,27 +169,39 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
                                maxTasks: Int) {
     job.setJobID(id) 
     val dirs = workingDirs(sysDir)
+    val splitPath = dirs.splitPath
     val adjustedJob = adjustTasks(job, maxTasks)
     (adjustedJob.hasInputPath || adjustedJob.hasJoinExpr) match {
       case true => {
         val splits = defaultSplit(dirs, adjustedJob, maxTasks)
-        val splitPath = dirs.splitPath
         val out = writeSplitsHeader(job.configuration, splitPath, splits.length)
-        val numSplits = writeSplits(adjustedJob, splits, splitPath, maxTasks,
-                                    out)
-        // TODO: 
-        //       adjusted.setNumBspTasks(splited)
-        //       adjusted.set("bsp.job.split.file", dirs.splitPath)
+        val numSplits = writeSplits(adjustedJob, splits, out)
+        adjustedJob.setNumBspTask(numSplits)
+        adjustedJob.set("bsp.job.split.file", splitPath.toString)
       }
-      case false => Array[PartitionedSplit]()
+      case false => 
     }
+    adjustedJob.getJar match {
+      case null => LOG.warning("Jar path is not set! User classes may not be " +
+                               "found. Set BSPJob#setJar(String) or check "+
+                               "your jar file.")
+      case originalJarPath@_ => {
+        adjustedJob.setJobNameIfEmpty(originalJarPath)
+        adjustedJob.setJar(splitPath.toString)
+        val operation = Operation.get(setting.hama)
+        operation.copyFromLocal(new Path(originalJarPath))(splitPath)
+        operation.setReplication(splitPath, adjustedJob.replication) 
+        operation.setPermission(splitPath, newPermission(jobFilePermission))
+      }
+    }
+    adjustedJob.setUser(BSPJobClient.getUnixUser)
+    adjustedJob.setGroupBy(BSPJobClient.getUnixGroupBy(adjustedJob.getUser))
   }
 
   protected def writeSplits(job: BSPJob, splits: Array[PartitionedSplit],
-                            splitPath: Path, maxTasks: Int,
-                            out: DataOutputStream): Int = {
-    -1
-  }
+                            out: DataOutputStream): Int = try {
+    splits.map { split => { split.write(out); split }}.length
+  } finally { out.close }
 
   /**
    * Create an output stream with header information added.

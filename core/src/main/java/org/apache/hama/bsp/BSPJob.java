@@ -177,6 +177,11 @@ public class BSPJob extends BSPJobContext {
     conf.set("bsp.job.name", name);
   }
 
+  public void setJobNameIfEmpty(final String name) {
+    if(getJobName().isEmpty()) 
+      setJobName(new Path(name).getName());
+  }
+
   public void setUser(String user) {
     conf.set("user.name", user);
   }
@@ -469,4 +474,9 @@ public class BSPJob extends BSPJobContext {
   public boolean hasPartitioned() {
     return conf.getBoolean("input.has.partitioned", false);
   }
+
+  public void setGroupBy(final String user) {
+    conf.set("group.name", user);
+  }
+
 }

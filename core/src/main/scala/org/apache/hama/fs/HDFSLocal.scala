@@ -64,6 +64,18 @@ class HDFSLocal extends Operation {
   }
 
   @throws(classOf[IOException])
+  override def setReplication(path: Path, replication: Short): Boolean = {
+    validate
+    localfs.setReplication(path, replication)
+  }
+
+  @throws(classOf[IOException])
+  override def setPermission(path: Path, permission: FsPermission) {
+    validate
+    localfs.setPermission(path, permission)
+  }
+
+  @throws(classOf[IOException])
   override def create(path: Path, permission: FsPermission): OutputStream = {
     val out = create(path)
     localfs.setPermission(path, permission) 
