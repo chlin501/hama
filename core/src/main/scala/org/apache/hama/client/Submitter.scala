@@ -23,6 +23,7 @@ import akka.actor.Props
 import java.io.DataOutputStream
 import java.io.IOException
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.io.WritableUtils
 import org.apache.hama.Event
 import org.apache.hama.EventListener
 import org.apache.hama.HamaConfiguration
@@ -85,7 +86,8 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
                                                         with EventListener {
 
   import Submitter._
-
+  import Operation._
+  import PartitionedSplit._
 
   protected val rand = new Random
 
@@ -166,11 +168,14 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
                                maxTasks: Int) {
     job.setJobID(id) 
     val dirs = workingDirs(sysDir)
-    val adjusted = adjustTasks(job, maxTasks)
-    (adjusted.hasInputPath || adjusted.hasJoinExpr) match {
+    val adjustedJob = adjustTasks(job, maxTasks)
+    (adjustedJob.hasInputPath || adjustedJob.hasJoinExpr) match {
       case true => {
-        val splits = defaultSplit(dirs, adjusted, maxTasks)
-        val numSplits = writeSplits(adjusted, splits, dirs.splitPath, maxTasks)
+        val splits = defaultSplit(dirs, adjustedJob, maxTasks)
+        val splitPath = dirs.splitPath
+        val out = writeSplitsHeader(job.configuration, splitPath, splits.length)
+        val numSplits = writeSplits(adjustedJob, splits, splitPath, maxTasks,
+                                    out)
         // TODO: 
         //       adjusted.setNumBspTasks(splited)
         //       adjusted.set("bsp.job.split.file", dirs.splitPath)
@@ -180,16 +185,26 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
   }
 
   protected def writeSplits(job: BSPJob, splits: Array[PartitionedSplit],
-                            splitPath: Path, maxTasks: Int): Int = {
-    val operation = Operation.operationFor(splitPath, job.configuration)
-    val out = writeSplitsHeader(operation, splitPath, splits.length)
+                            splitPath: Path, maxTasks: Int,
+                            out: DataOutputStream): Int = {
     -1
   }
 
-  protected def writeSplitsHeader(operation: Operation,
-                                 splitPath: Path,
-                                 splitSize: Int): DataOutputStream = {
-    null.asInstanceOf[DataOutputStream]
+  /**
+   * Create an output stream with header information added.
+   * @param conf is a job configration.
+   * @param splitPath is the dest path for split files.
+   * @param splitSize is the splits array created.
+   */
+  protected def writeSplitsHeader(conf: HamaConfiguration,
+                                  splitPath: Path,
+                                  splitSize: Int): DataOutputStream = {
+    val operation = operationFor(splitPath, conf)
+    val out = toDataOutputStream(operation.create(splitPath, jobFilePermission))
+    out.write(splitFileHeader)
+    WritableUtils.writeVInt(out, currentSplitFileVersion)
+    WritableUtils.writeVInt(out, splitSize)
+    out
   }
 
   protected def adjustTasks(job: BSPJob, maxTasksAllowed: Int): BSPJob =
@@ -244,7 +259,7 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
     val jarPath = new Path(jobDir, "job.jar") 
     val jobPath = new Path(jobDir, "job.xml") 
 
-    val operation = Operation.operationFor(sysDir, setting.hama)
+    val operation = operationFor(sysDir, setting.hama)
     operation.remove(jobDir)
     val newJobDir = new Path(new Path(operation.makeQualified(jobDir)).
                                       toUri.getPath)

@@ -31,6 +31,10 @@ import org.apache.hama.bsp.FileSplit
 
 object PartitionedSplit {
 
+  val splitFileHeader = "SPL".getBytes
+
+  val currentSplitFileVersion: Int = 0
+
   def apply(path: String, partitionId: Int, start: Long, length: Long): 
     PartitionedSplit = apply(path, partitionId, start, length, Array()) 
 

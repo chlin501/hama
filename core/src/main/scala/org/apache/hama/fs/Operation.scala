@@ -18,6 +18,7 @@
 package org.apache.hama.fs
 
 import java.io.Closeable
+import java.io.DataOutputStream
 import java.io.FileNotFoundException
 import java.io.IOException
 import java.io.InputStream
@@ -32,15 +33,22 @@ import org.apache.hama.HamaConfiguration
 object Operation {
 
   /**
-   * Create sys dir permission with rwx-wx-wx
+   * Create sys dir with permission set to rwx-wx-wx
    */
   val sysDirPermission = FsPermission.createImmutable(0733.asInstanceOf[Short])
 
   /**
-   * Create job dir permisison with rwx-rwx-rwx, i.e., global 
-   * readable, writable, and executable.
+   * Create job dir with permission set to rwx-rwx-rwx, i.e., global readable, 
+   * writable, and executable.
    */
   val jobDirPermission = FsPermission.createImmutable(0777.asInstanceOf[Short])
+
+  /**
+   * Create job file with permission set to rw-r--r--; i.e., global readable, 
+   * and owner writable.
+   */
+  val jobFilePermission = FsPermission.createImmutable(0644.asInstanceOf[Short])
+
 
   val seperator: String = "/"
 
@@ -88,6 +96,13 @@ object Operation {
     val fs = get(conf); fs.setFs(path.getFileSystem(conf)); fs
   }
 
+  @throws(classOf[IOException])
+  def toDataOutputStream(out: OutputStream): DataOutputStream = 
+    out.isInstanceOf[DataOutputStream] match {
+      case true => out.asInstanceOf[DataOutputStream]
+      case false => throw new IOException("Underlying is not DataOutputStream!")
+    }
+
 }
 
 trait Operation {
@@ -111,8 +126,19 @@ trait Operation {
    * @param path is the dirs to be created.
    * @param permission value to be assigned to the dir.
    * @return Boolean denotes if dirs are created or not.
-   */  @throws(classOf[IOException])
+   */  
+  @throws(classOf[IOException])
   def mkdirs(path: Path, pemission: FsPermission): Boolean 
+
+  /**
+   * Create path with permission specified.
+   * Note that currently hadoop's FileSystem#setPermission is not implemented. 
+   * @param path is the path to be created.
+   * @param permission specifies the permission for the path created.
+   * @return OutputStream to which content will be written.
+   */
+  @throws(classOf[IOException])
+  def create(path: Path, pemission: FsPermission): OutputStream
 
   /**
    * Create data based on the {@link Path} given.
