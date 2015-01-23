@@ -37,15 +37,13 @@ class HDFS extends Operation {
   private var conf = new HamaConfiguration() 
   protected var hdfs: FileSystem = _
 
-  private def setFs(fs: FileSystem) = this.hdfs = fs
+  override protected[fs] def setFs(fs: FileSystem) = this.hdfs = fs
 
   override def configuration: HamaConfiguration = this.conf
 
   override def initialize(conf: HamaConfiguration) {
     this.conf = conf
-    if(null == configuration)
-      throw new IllegalArgumentException("HamaConfiguration is missing for "+
-                                         "HDFS!")
+    require(null != configuration, "HamaConfiguration is missing for HDFS!")
     this.hdfs = FileSystem.get(configuration)
   } 
  
@@ -132,12 +130,6 @@ class HDFS extends Operation {
     val confx = new HamaConfiguration()
     confx.setClass("bsp.fs.class", classOf[HDFSLocal], classOf[Operation]) 
     Operation.get(confx)
-  }
-
-  override def operationFor(path: Path): Operation = {
-    val newHdfs = Operation.get(configuration).asInstanceOf[HDFS]
-    newHdfs.setFs(path.getFileSystem(configuration))
-    newHdfs 
   }
 
   override def makeQualified(path: Path): String = 

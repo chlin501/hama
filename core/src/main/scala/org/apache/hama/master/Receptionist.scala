@@ -218,10 +218,11 @@ class Receptionist(setting: Setting, federator: ActorRef) extends LocalService {
 
   protected def op(jobId: BSPJobID): Operation = {
     val path = new Path(operation.getSystemDirectory, jobId.toString)
-    operation.operationFor(path)
+    Operation.operationFor(path, operation.configuration)
   }
 
-  protected def op(path: Path): Operation = operation.operationFor(path)
+  protected def op(path: Path): Operation = 
+    Operation.operationFor(path, operation.configuration)
 
   /**
    * Copy the job file from jobFilePath to localJobFilePath at local disk.

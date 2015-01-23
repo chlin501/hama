@@ -111,6 +111,13 @@ public class BSPJobContext {
     return this.conf;
   }
 
+  /**
+   * Obtain hama configuration instead of client casting conf explicitly.
+   */
+  public HamaConfiguration configuration() {
+    return (HamaConfiguration) this.conf;
+  }
+
   public String get(String name) {
     return conf.get(name);
   }

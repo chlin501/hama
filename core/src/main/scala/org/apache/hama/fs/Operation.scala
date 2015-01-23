@@ -23,13 +23,13 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 
+import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.fs.permission.FsPermission
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.HamaConfiguration
 
 object Operation {
-
 
   /**
    * Create sys dir permission with rwx-wx-wx
@@ -76,6 +76,18 @@ object Operation {
     workDir
   }
 
+  /**
+   * Obtain an operation that owns the given path.
+   * The effect should be the same as 
+   * <code>
+   *   Path.getFileSystem(configuration)
+   * </code>
+   * @return Operation for a particular path supplied.
+   */
+  def operationFor(path: Path, conf: HamaConfiguration): Operation = {
+    val fs = get(conf); fs.setFs(path.getFileSystem(conf)); fs
+  }
+
 }
 
 trait Operation {
@@ -83,6 +95,8 @@ trait Operation {
   def initialize(conf: HamaConfiguration) 
 
   def configuration: HamaConfiguration
+
+  protected[fs] def setFs(fs: FileSystem)
 
   /**
    * Make directory given with the {@link Path}.
@@ -193,17 +207,7 @@ trait Operation {
    * @return operation for local file system. 
    */
   def local: Operation
-
-  /**
-   * Obtain an operation that owns the given path.
-   * The effect should be the same as 
-   * <code>
-   *   Path.getFileSystem(configuration)
-   * </code>
-   * @return Operation for a particular path supplied.
-   */
-  def operationFor(path: Path): Operation
-
+  
   /**
    * Return a qualified path object, same as Path.makeQualified(FileSystem).
    * @param path to be normalized.

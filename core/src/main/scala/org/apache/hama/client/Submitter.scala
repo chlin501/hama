@@ -20,6 +20,7 @@ package org.apache.hama.client
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
+import java.io.DataOutputStream
 import java.io.IOException
 import org.apache.hadoop.fs.Path
 import org.apache.hama.Event
@@ -169,12 +170,26 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
     (adjusted.hasInputPath || adjusted.hasJoinExpr) match {
       case true => {
         val splits = defaultSplit(dirs, adjusted, maxTasks)
-        // TODO: val splited = writeSplits
+        val numSplits = writeSplits(adjusted, splits, dirs.splitPath, maxTasks)
+        // TODO: 
         //       adjusted.setNumBspTasks(splited)
         //       adjusted.set("bsp.job.split.file", dirs.splitPath)
       }
       case false => Array[PartitionedSplit]()
     }
+  }
+
+  protected def writeSplits(job: BSPJob, splits: Array[PartitionedSplit],
+                            splitPath: Path, maxTasks: Int): Int = {
+    val operation = Operation.operationFor(splitPath, job.configuration)
+    val out = writeSplitsHeader(operation, splitPath, splits.length)
+    -1
+  }
+
+  protected def writeSplitsHeader(operation: Operation,
+                                 splitPath: Path,
+                                 splitSize: Int): DataOutputStream = {
+    null.asInstanceOf[DataOutputStream]
   }
 
   protected def adjustTasks(job: BSPJob, maxTasksAllowed: Int): BSPJob =
@@ -229,7 +244,7 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
     val jarPath = new Path(jobDir, "job.jar") 
     val jobPath = new Path(jobDir, "job.xml") 
 
-    val operation = Operation.get(setting.hama).operationFor(sysDir)
+    val operation = Operation.operationFor(sysDir, setting.hama)
     operation.remove(jobDir)
     val newJobDir = new Path(new Path(operation.makeQualified(jobDir)).
                                       toUri.getPath)
