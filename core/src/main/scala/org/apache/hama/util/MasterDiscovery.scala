@@ -50,6 +50,9 @@ trait MasterDiscovery extends RemoteService with Curator {
   protected var master: Option[ProxyInfo] = None
 
   protected def setting(): Setting
+
+  protected def needRegister(): Boolean = 
+    setting.hama.getBoolean("master.need.register", true) 
  
   protected def mkPath(): String = {
     val sys = setting.info.getActorSystemName
@@ -58,7 +61,7 @@ trait MasterDiscovery extends RemoteService with Curator {
     "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host, port)
   }
 
-  protected def register() = startCurator(setting.hama) match {
+  protected def register() = if(needRegister) startCurator(setting.hama) match {
     case true => {
       val path = mkPath
       LOG.debug("Master znode will be registered at {}", path)

@@ -39,7 +39,7 @@ import org.apache.hama.bsp.message.queue.MessageQueue;
  * BSPJob is the primary interface for a user to describe a BSP job to the Hama
  * BSP framework for execution.
  */
-public class BSPJob extends BSPJobContext {
+public class BSPJob extends BSPJobContext { // TODO: builder, immutable
   public static enum JobState {
     DEFINE, RUNNING
   }
@@ -108,11 +108,19 @@ public class BSPJob extends BSPJobContext {
    * @throws IllegalStateException
    */
   @SuppressWarnings("rawtypes")
-  public void setBspClass(Class<? extends BSP> cls)
+  @Deprecated
+  public void setBspClass(Class<? extends BSP> cls) // TODO: remove
       throws IllegalStateException {
     ensureState(JobState.DEFINE);
     conf.setClass(WORK_CLASS_ATTR, cls, BSP.class);
   }
+
+  /**
+   * Set bsp based on the new BSP class.
+   */
+  public void setBSPClass(Class<? extends org.apache.hama.bsp.v2.BSP> clazz) {
+    conf.setClass("bsp.work.class", clazz, org.apache.hama.bsp.v2.BSP.class);
+  } 
 
   @SuppressWarnings("rawtypes")
   public void setSupersteps(Class<? extends Superstep>... classes) {
@@ -284,10 +292,20 @@ public class BSPJob extends BSPJobContext {
   /**
    * Sets the compression codec that should be used to compress messages.
    */
-  @SuppressWarnings({ "rawtypes" })
+  @SuppressWarnings({ "rawtypes" }) // TODO: remove
+  @Deprecated
   public void setCompressionCodec(Class<? extends BSPMessageCompressor> clazz) {
     conf.setClass(BSPMessageCompressorFactory.COMPRESSION_CODEC_CLASS, clazz,
         BSPMessageCompressor.class);
+  }
+
+  /**
+   * Set compression codec based on the new compressor class.
+   */
+  public void setCompressor(Class<? extends 
+      org.apache.hama.message.compress.BSPMessageCompressor> clazz) {
+    conf.setClass("hama.messenger.compression.class", clazz, 
+                  org.apache.hama.message.compress.BSPMessageCompressor.class);
   }
 
   /**

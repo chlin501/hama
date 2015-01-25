@@ -33,6 +33,11 @@ import org.scalatest.ShouldMatchers
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
+class Mock extends Agent {
+
+  override def receive = unknown
+}
+
 object TestEnv {
 
   /**
@@ -145,12 +150,6 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
    */
   protected def createWithArgs(name: String, clazz: Class[_], args: Any*): 
     ActorRef = system.actorOf(Props(clazz, args:_*), name)
-
-/*
-  protected def createWithArgs(name: String, clazz: Class[_], 
-                               dispatcher: String, args: Any*): ActorRef = 
-    system.actorOf(Props(clazz, args:_*).withDispatcher(dispatcher), name)
-*/
   
   /**
    * Create testActor without any arguments supplied.

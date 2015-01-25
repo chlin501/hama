@@ -36,6 +36,7 @@ import org.apache.hama.bsp.FileSplit
 import org.apache.hama.conf.Setting
 import org.apache.hama.io.PartitionedSplit
 import org.apache.hama.fs.Operation
+import org.apache.hama.logging.CommonLog
 import org.apache.hama.master.Reject
 import org.apache.hama.master.Submit
 import org.apache.hama.util.MasterDiscovery
@@ -55,22 +56,30 @@ final case class Response(id: BSPJobID, sysDir: Path, maxTasks: Int)
       extends SubmitterMessage
 final case class SubmitJob(job: BSPJob) extends SubmitterMessage
 
-object Submitter {
+object Submitter extends CommonLog {
 
   val submit_ = "submit_"
 
-  private var submitter: Option[ActorRef] = None
+  protected[client] var submitter: Option[ActorRef] = None
+  protected[client] var system: Option[ActorSystem] = None 
 
-  def startup(args: Array[String]) {
+  def start() {
     val setting = Setting.client
-    val system = ActorSystem(setting.info.getActorSystemName, setting.config) 
-    submitter = Option(system.actorOf(Props(setting.main, setting), 
-                       setting.name))
+    start(setting)
+  }
+
+  def start(setting: Setting) {
+    system = Option(ActorSystem(setting.info.getActorSystemName, 
+                                setting.config))
+    system.map { sys => {
+      LOG.debug("Submitter class to be instantiated: {}", setting.main)  
+      submitter = Option(sys.actorOf(Props(setting.main, setting), 
+                         setting.name))
+    }}
   }
 
   def simpleName(conf: HamaConfiguration): String = 
-    conf.get("client.name", classOf[Submitter].getSimpleName) + "#" +
-    Random.nextInt  
+    conf.get("client.name", classOf[Submitter].getSimpleName) + Random.nextInt  
 
   /**
    * Submit an assembled bsp job through submitter before actually submitting
@@ -143,8 +152,9 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
   
   protected def masterMsg: Receive = {
     /**
-     * Master creates a new job id for unsubmitted bsp job; and master's system
-     * directory path.
+     * Master creates a new job id for the new job.
+     * Master's system directory path and max tasks client can have are also
+     * attached in response.
      */
     case Response(id, dir, maxTasks) => {
       settingForClient(id, dir, maxTasks)
@@ -212,7 +222,6 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
       val operation = owns(sysDir, setting.hama)
       m ! Submit(id, operation.makeQualified(splitPath).toString)
     }}}
-
   }
 
   protected def writeSplits(job: BSPJob, splits: Array[PartitionedSplit],

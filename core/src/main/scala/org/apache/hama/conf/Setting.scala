@@ -31,6 +31,56 @@ import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
 
+/**
+ * Provide akka setting.
+ */
+protected trait Akka {
+
+  val clusterProvider = "akka.cluster.ClusterActorRefProvider"
+
+  val remoteProvider = "akka.remote.RemoteActorRefProvider"
+
+  protected def akka(content: String): String = " akka { " + content + " } "
+
+  protected def provider(string: String): String = 
+    s""" provider = "$string" """
+
+  protected def actor(provider: String): String = 
+   " actor { " + provider + serialization + " } "
+
+  protected def serialization(): String = """
+    serializers {
+      java = "akka.serialization.JavaSerializer"
+      proto = "akka.remote.serialization.ProtobufSerializer"
+      writable = "org.apache.hama.io.serialization.WritableSerializer"
+    }
+    serialization-bindings {
+      "com.google.protobuf.Message" = proto
+      "org.apache.hadoop.io.Writable" = writable
+    }
+  """
+
+  protected def cluster(host: String, port: Int, role: String): String = 
+    akka(actor(provider(clusterProvider)) + s"""
+      remote.netty.tcp {
+        hostname = "$host"
+        port = $port
+      }
+      cluster { 
+        roles = [$role]
+        auto-down-unreachable-after = 10s
+      }
+    """)
+
+  protected def remote(listeningTo: String, port: Int): String = 
+    akka(actor(provider(remoteProvider)) + s"""
+      remote.netty.tcp {
+        hostname = "$listeningTo"
+        port = $port
+      }
+    """)
+}
+
 object Setting {
 
   // TODO: rename to fromString?
@@ -64,34 +114,9 @@ object Setting {
 
 }
 
-trait Setting {
+trait Setting extends Akka {
 
   import Setting._
-
-  protected def akka(host: String, port: Int, role: String): String = s"""
-    akka {
-      actor {
-        provider = "akka.cluster.ClusterActorRefProvider"
-        serializers {
-          java = "akka.serialization.JavaSerializer"
-          proto = "akka.remote.serialization.ProtobufSerializer"
-          writable = "org.apache.hama.io.serialization.WritableSerializer"
-        }
-        serialization-bindings {
-          "com.google.protobuf.Message" = proto
-          "org.apache.hadoop.io.Writable" = writable
-        }
-      }
-      remote.netty.tcp {
-        hostname = "$host"
-        port = $port
-      }
-      cluster { 
-        roles = [$role]
-        auto-down-unreachable-after = 10s
-      }
-    }
-  """
 
   def hama(): HamaConfiguration 
 
@@ -127,7 +152,7 @@ class MasterSetting(conf: HamaConfiguration) extends Setting {
   override def hama(): HamaConfiguration = conf
 
   override def config(): Config = toConfig(" master { " + 
-    akka(host, port, "master") + " }").getConfig("master")
+    cluster(host, port, "master") + " }").getConfig("master")
 
   protected def info(system: String, host: String, port: Int): SystemInfo = 
     new SystemInfo(system, host, port)
@@ -160,7 +185,7 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
   override def hama(): HamaConfiguration = conf
 
   override def config(): Config = toConfig(" groom { " + 
-    akka(host, port, "groom") + " }").getConfig("groom")
+    cluster(host, port, "groom") + " }").getConfig("groom")
 
   protected def info(system: String, host: String, port: Int): SystemInfo = 
     new SystemInfo(system, host, port)
@@ -186,34 +211,7 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
 
 }
 
-/**
- * Provide akka setting.
- */
-protected[conf] trait Akka {
-
-  protected def remote(listeningTo: String, port: Int): String = s"""
-    akka {
-      actor {
-        provider = "akka.remote.RemoteActorRefProvider"
-        serializers {
-          java = "akka.serialization.JavaSerializer"
-          proto = "akka.remote.serialization.ProtobufSerializer"
-          writable = "org.apache.hama.io.serialization.WritableSerializer"
-        }
-        serialization-bindings {
-          "com.google.protobuf.Message" = proto
-          "org.apache.hadoop.io.Writable" = writable
-        }
-      }
-      remote.netty.tcp {
-        hostname = "$listeningTo"
-        port = $port
-      }
-    }
-  """
-}
-
-class ContainerSetting(conf: HamaConfiguration) extends Setting with Akka {
+class ContainerSetting(conf: HamaConfiguration) extends Setting{
 
   import Setting._
 
@@ -247,7 +245,7 @@ class ContainerSetting(conf: HamaConfiguration) extends Setting with Akka {
   
 }
 
-class ClientSetting(conf: HamaConfiguration) extends Setting with Akka {
+class ClientSetting(conf: HamaConfiguration) extends Setting {
 
   import Setting._
 

@@ -58,7 +58,7 @@ class MultiNodesSetting(conf: HamaConfiguration) extends Setting {
   def hama(): HamaConfiguration = conf
 
   override def config(): Config = ConfigFactory.parseString(" test { " + 
-    akka(host, port, "test") + " }").getConfig("test")
+    cluster(host, port, "test") + " }").getConfig("test")
 
   def info(system: String, host: String, port: Int): SystemInfo = 
     new SystemInfo(system, host, port)

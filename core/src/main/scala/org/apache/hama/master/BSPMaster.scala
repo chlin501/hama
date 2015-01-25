@@ -102,9 +102,7 @@ object BSPMaster {
 object FileSystemCleaner {
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
-    "master.fs.init.cleaner",
-    classOf[FileSystemCleaner].getSimpleName
-  )
+    "master.fs.cleaner", classOf[FileSystemCleaner].getSimpleName)
 
 }
 
@@ -115,7 +113,8 @@ protected[master] class FileSystemCleaner(setting: Setting, master: ActorRef)
 
   protected val operation = Operation.get(setting.hama)
 
-  override def initializeServices = retry("clean", 10, clean)
+  override def initializeServices = if(setting.hama.getBoolean(
+    "master.fs.cleaner.start", true)) retry("clean", 10, clean)
 
   protected def systemDir(): Path = new Path(operation.makeQualified(new Path(
     setting.hama.get("bsp.system.dir", "/tmp/hadoop/bsp/system"))))
@@ -175,7 +174,7 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
                                    classOf[Receptionist], setting, self, 
                                    federator) 
     getOrCreate(Scheduler.simpleName(conf), classOf[Scheduler], 
-                conf, self, receptionist, federator) 
+                setting, self, receptionist, federator) 
   }
 
   protected def cleaner() = spawn(FileSystemCleaner.simpleName(setting.hama), 
@@ -270,24 +269,28 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
     case fault: TaskFailure => forward(TaskFailureEvent)(fault)
   }
 
-  protected def clientRelatedMsg: Receive = {
-    case Request => {
-      val jobId = newJobId
-      clientRequest += (jobId -> ResponseForClient(sender,
-        systemDir.getOrElse(null), -1))
-      findServiceBy(Federator.simpleName(setting.hama)) match {
-        case Some(federator)  => federator ! AskFor(GroomsTracker.fullName, 
-          ClientMaxTasksAllowed(jobId)) 
-        case None =>
-      }
+  protected def processClientRequest(from: ActorRef) {
+    val jobId = newJobId
+    clientRequest += (jobId -> ResponseForClient(sender,
+      systemDir.getOrElse(null), -1))
+    findServiceBy(Federator.simpleName(setting.hama)) match {
+      case Some(federator)  => federator ! AskFor(GroomsTracker.fullName, 
+        ClientMaxTasksAllowed(jobId)) 
+      case None =>
     }
-    case ClientTasksAllowed(jobId, maxTasks) => {
-      clientRequest.get(jobId) match {
-        case Some(response) => response.client ! Response(jobId, 
-          response.sysDir, maxTasks) 
-        case None => LOG.warning("No client requests max tasks with jod id {}!",
-                                 jobId)
+    LOG.info("Client {} obtains job id {}, and system dir {}", from.path.name, 
+             jobId, systemDir)
+  }
+
+  protected def clientRelatedMsg: Receive = {
+    case Request => processClientRequest(sender)
+    case ClientTasksAllowed(jobId, maxTasks) => clientRequest.get(jobId) match {
+      case Some(response) => { 
+        response.client ! Response(jobId, response.sysDir, maxTasks) 
+        clientRequest -= jobId 
       }
+      case None => LOG.warning("No client requests max tasks with jod id {}!",
+                               jobId)
     }
     case submit: Submit => forward(JobSubmitEvent)(submit)
   }
@@ -298,16 +301,15 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
     new BSPJobID(identifier, id)
   }
 
-  override def receive = cleanup  
+  override def receive = cleanfs  
 
-  protected def cleanup: Receive = {
+  protected def cleanfs: Receive = {
     case FileSystemCleaned(sysDir) => {
       systemDir = Option(sysDir)
       LOG.info("File system {} is cleaned!", sysDir)
       context.become(opened) 
     }
   }
-
 
   protected def opened: Receive = eventListenerManagement orElse clientRelatedMsg orElse msgFromGroom orElse msgFromSched orElse msgFromReceptionist orElse dispatch orElse membership orElse unknown
   
