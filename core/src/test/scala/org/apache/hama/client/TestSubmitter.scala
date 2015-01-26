@@ -114,6 +114,7 @@ class MockM(setting: Setting, tester: ActorRef)
 final case class Tester(t: ActorRef)
 final case class Assign(m: ActorRef)
 final case object Unassign
+final case class NumBSPTasks(before: Int, after: Int)
 
 class MockSubmitter(setting: Setting) extends Submitter(setting) {
 
@@ -139,7 +140,17 @@ class MockSubmitter(setting: Setting) extends Submitter(setting) {
     tester.map { t => t ! dirs }
     dirs
   }
- 
+
+  override def adjustTasks(job: BSPJob, maxTasksAllowed: Int): BSPJob = {
+    val before = job.getNumBspTask
+    val newJob = super.adjustTasks(job, maxTasksAllowed)
+    val after = newJob.getNumBspTask
+    LOG.info("Num BSP tasks => before adjusted: {}, after adjusted: {}", 
+             before, after)
+    tester.map { t => t ! NumBSPTasks(before, after) }
+    newJob
+  }
+
   override def receive = testMsg orElse super.receive
    
 }
@@ -159,22 +170,6 @@ class MockSetting(setting: Setting) extends ClientSetting(setting.hama) {
 class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
 
   import PiEstimator._
-
-  def bspJob(requestTasks: Int): BSPJob = {
-    val conf = new HamaConfiguration
-    val bsp = new BSPJob(conf, classOf[PiEstimator.MyEstimator])
-    bsp.setCompressor(classOf[SnappyCompressor]) 
-    bsp.setCompressionThreshold(40)
-    bsp.setJobName("Pi Estimation Example")
-    bsp.setBSPClass(classOf[MyEstimator])
-    bsp.setInputFormat(classOf[NullInputFormat])
-    bsp.setOutputKeyClass(classOf[Text])
-    bsp.setOutputValueClass(classOf[DoubleWritable])
-    //bsp.setOutputFormat(classOf[TextOutputFormat])
-    FileOutputFormat.setOutputPath(bsp, TMP_OUTPUT)
-    bsp.setNumBspTask(requestTasks)
-    bsp
-  }
 
   val expectedJobId = createJobId("test", 1)
 
@@ -203,6 +198,22 @@ class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
     setting
   }
 
+  def bspJob(requestTasks: Int): BSPJob = {
+    val conf = new HamaConfiguration
+    val bsp = new BSPJob(conf, classOf[PiEstimator.MyEstimator])
+    bsp.setCompressor(classOf[SnappyCompressor]) 
+    bsp.setCompressionThreshold(40)
+    bsp.setJobName("Pi Estimation Example")
+    bsp.setBSPClass(classOf[MyEstimator])
+    bsp.setInputFormat(classOf[NullInputFormat])
+    bsp.setOutputKeyClass(classOf[Text])
+    bsp.setOutputValueClass(classOf[DoubleWritable])
+    //bsp.setOutputFormat(classOf[TextOutputFormat])
+    FileOutputFormat.setOutputPath(bsp, TMP_OUTPUT)
+    bsp.setNumBspTask(requestTasks)
+    bsp
+  }
+
 
   it("test submitter functions.") {
     val master = configMaster(Setting.master)
@@ -218,6 +229,7 @@ class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
     expect(response)
     submitter.map { client => client ! response }
     expect(expectedWorkingDirs)
+    expect(NumBSPTasks(clientRequestTasks, expectedMaxTasks))
     LOG.info("Done testing Submitter functions!")    
   }
 }

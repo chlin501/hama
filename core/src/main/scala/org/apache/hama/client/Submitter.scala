@@ -179,38 +179,55 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
       case None => LOG.error("Unlikely but no bsp job submitted!")
     }
 
+  protected def splitWhenInputExists(dirs: WorkingDirs, maxTasks: Int,
+                                     adjustedJob: BSPJob): BSPJob = 
+    (adjustedJob.hasInputPath || adjustedJob.hasJoinExpr) match {
+      case true => {
+        val splits = defaultSplit(dirs, adjustedJob, maxTasks)
+        val out = writeSplitsHeader(adjustedJob.configuration, dirs.splitPath, 
+                                    splits.length)
+        val numSplits = writeSplits(adjustedJob, splits, out)
+        adjustedJob.setNumBspTask(numSplits)
+        adjustedJob.set("bsp.job.split.file", dirs.splitPath.toString)
+        adjustedJob
+      }
+      case false => adjustedJob
+    }
+
+  protected def copyJarToMaster(jobMayHaveSplit: BSPJob, 
+                                splitPath: Path, 
+                                operation: Operation): BSPJob = 
+    jobMayHaveSplit.getJar match {
+      case null => {
+        LOG.warning("Jar path is not set! User classes may not be found. Set " +
+                    "BSPJob#setJar(String) or check your jar file.")
+        jobMayHaveSplit
+      }
+      case localJarPath@_ => {
+        jobMayHaveSplit.setJobNameIfEmpty(localJarPath)
+        val remote = splitPath.toString
+        val remotePath = new Path(remote)
+        jobMayHaveSplit.setJar(remote)
+        operation.copyFromLocal(new Path(localJarPath))(remotePath)
+        operation.setReplication(remotePath, jobMayHaveSplit.replication) 
+        operation.setPermission(remotePath, newPermission(jobFilePermission))
+        jobMayHaveSplit
+      }
+    }
+
   protected def submitInternal(job: BSPJob, id: BSPJobID, sysDir: Path, 
                                maxTasks: Int) {
     job.setJobID(id) 
     val dirs = workingDirs(sysDir) 
     val splitPath = dirs.splitPath
     val adjustedJob = adjustTasks(job, maxTasks)
-    (adjustedJob.hasInputPath || adjustedJob.hasJoinExpr) match {
-      case true => {
-        val splits = defaultSplit(dirs, adjustedJob, maxTasks)
-        val out = writeSplitsHeader(job.configuration, splitPath, splits.length)
-        val numSplits = writeSplits(adjustedJob, splits, out)
-        adjustedJob.setNumBspTask(numSplits)
-        adjustedJob.set("bsp.job.split.file", splitPath.toString)
-      }
-      case false => 
-    }
+    val jobMayHaveSplit = splitWhenInputExists(dirs, maxTasks, adjustedJob)
     val operation = Operation.get(setting.hama)
-    adjustedJob.getJar match {
-      case null => LOG.warning("Jar path is not set! User classes may not be " +
-                               "found. Set BSPJob#setJar(String) or check "+
-                               "your jar file.")
-      case originalJarPath@_ => {
-        adjustedJob.setJobNameIfEmpty(originalJarPath)
-        adjustedJob.setJar(splitPath.toString)
-        operation.copyFromLocal(new Path(originalJarPath))(splitPath)
-        operation.setReplication(splitPath, adjustedJob.replication) 
-        operation.setPermission(splitPath, newPermission(jobFilePermission))
-      }
-    }
-    adjustedJob.setUser(BSPJobClient.getUnixUser)
-    adjustedJob.setGroupBy(BSPJobClient.getUnixGroupBy(adjustedJob.getUser))
-    adjustedJob.setWorkingDirectoryIfEmpty(operation.getWorkingDirectory)
+    val jarManufactured = copyJarToMaster(jobMayHaveSplit, splitPath, operation)
+    val user = jarManufactured.getUser
+    jarManufactured.setUser(BSPJobClient.getUnixUser)
+    jarManufactured.setGroupBy(BSPJobClient.getUnixGroupBy(user))
+    jarManufactured.setWorkingDirectoryIfEmpty(operation.getWorkingDirectory)
 
     operation.create(splitPath, newPermission(jobFilePermission)) match {
       case null => { 
