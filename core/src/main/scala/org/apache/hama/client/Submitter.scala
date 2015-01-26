@@ -158,13 +158,7 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
      */
     case Response(id, dir, maxTasks) => {
       settingForClient(id, dir, maxTasks)
-      bspJob match { 
-        case Some(job) => Try(submitInternal(job, id, dir, maxTasks)) match {
-          case Success(result) =>
-          case Failure(cause) => { cleanup; shutdown }
-        }
-        case None => LOG.error("Unlikely but no bsp job submitted!")
-      }
+      checkThenSubmit(id, dir, maxTasks)
     }
     /**
      * Scheduler replies directly when the job is finished.
@@ -176,7 +170,15 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
     }
   }
 
-  // TODO: BSPJobClient.submitJobInternal
+  protected def checkThenSubmit(id: BSPJobID, dir: Path, maxTasks: Int) =
+    bspJob match { 
+      case Some(job) => Try(submitInternal(job, id, dir, maxTasks)) match {
+        case Success(result) =>
+        case Failure(cause) => { cleanup; shutdown }
+      }
+      case None => LOG.error("Unlikely but no bsp job submitted!")
+    }
+
   protected def submitInternal(job: BSPJob, id: BSPJobID, sysDir: Path, 
                                maxTasks: Int) {
     job.setJobID(id) 
@@ -286,6 +288,9 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
   // TODO: submit job to master for runtime partitioning
   protected def partition(job: BSPJob): BSPJob = job 
 
+  protected def randomValue(): String = 
+    Integer.toString(Math.abs(rand.nextInt), 36)
+
   /**
    * Formulate paths to be used, including 
    * - the path in which split files are saved.  
@@ -293,18 +298,22 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
    * - the path where the job xml is stored.
    */
   protected def workingDirs(sysDir: Path): WorkingDirs = { 
-    val randomValue = Integer.toString(Math.abs(rand.nextInt), 36)
     val jobDir = new Path(sysDir, "%s%s".format(submit_, randomValue))
     val splitPath = new Path(jobDir, "job.split") 
     val jarPath = new Path(jobDir, "job.jar") 
     val jobPath = new Path(jobDir, "job.xml") 
+    val newJobDir = rebuildJobDir(sysDir, setting.hama, jobDir)
+    WorkingDirs(newJobDir, splitPath, jarPath, jobPath)
+  }
 
-    val operation = owns(sysDir, setting.hama)
+  protected def rebuildJobDir(sysDir: Path, conf: HamaConfiguration,
+                              jobDir: Path): Path = {
+    val operation = owns(sysDir, conf)
     operation.remove(jobDir)
     val newJobDir = new Path(new Path(operation.makeQualified(jobDir)).
                                       toUri.getPath)
     operation.mkdirs(newJobDir)
-    WorkingDirs(newJobDir, splitPath, jarPath, jobPath)
+    newJobDir
   }
 
   /**

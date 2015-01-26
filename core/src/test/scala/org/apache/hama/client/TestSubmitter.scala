@@ -111,19 +111,33 @@ class MockM(setting: Setting, tester: ActorRef)
   override def receive = opened
 } 
 
+final case class Tester(t: ActorRef)
 final case class Assign(m: ActorRef)
 final case object Unassign
 
 class MockSubmitter(setting: Setting) extends Submitter(setting) {
 
+  var tester: Option[ActorRef] = None
+
   override def initializeServices { /* disable retry */ }
 
   def testMsg: Receive = {
+    case Tester(t) => tester = Option(t)
     case Assign(m) => {
       LOG.info("Call afterLinked for simulating master reply.")
       afterLinked("discover", m)
     }
     case Unassign => masterProxy = None
+  }
+
+  override def randomValue(): String = "random"
+
+  override def workingDirs(sysDir: Path): WorkingDirs = {
+    val dirs = super.workingDirs(sysDir)
+    LOG.info("Actual job dir: {}, split path: {}, jar path: {}, job path: {}", 
+             dirs.jobDir, dirs.splitPath, dirs.jarPath, dirs.jobPath)
+    tester.map { t => t ! dirs }
+    dirs
   }
  
   override def receive = testMsg orElse super.receive
@@ -146,7 +160,7 @@ class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
 
   import PiEstimator._
 
-  def bspJob(): BSPJob = {
+  def bspJob(requestTasks: Int): BSPJob = {
     val conf = new HamaConfiguration
     val bsp = new BSPJob(conf, classOf[PiEstimator.MyEstimator])
     bsp.setCompressor(classOf[SnappyCompressor]) 
@@ -158,13 +172,25 @@ class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
     bsp.setOutputValueClass(classOf[DoubleWritable])
     //bsp.setOutputFormat(classOf[TextOutputFormat])
     FileOutputFormat.setOutputPath(bsp, TMP_OUTPUT)
-    bsp.setNumBspTask(5)
+    bsp.setNumBspTask(requestTasks)
     bsp
   }
 
-  def expectedSysDir: Path = new Path("/tmp/hadoop/bsp/system")
+  val expectedJobId = createJobId("test", 1)
 
-  def expectedMaxTasks = 1024
+  val expectedSysDir: Path = new Path("/tmp/hadoop/bsp/system")
+
+  val expectedMaxTasks = 1024
+
+  val clientRequestTasks = 4096
+
+  def expectedWorkingDirs(): WorkingDirs = {
+    val jobDir = new Path(expectedSysDir, "submit_random")
+    val splitPath = new Path(jobDir, "job.split") 
+    val jarPath = new Path(jobDir, "job.jar") 
+    val jobPath = new Path(jobDir, "job.xml")
+    WorkingDirs(jobDir, splitPath, jarPath, jobPath)
+  }
 
   def configMaster(setting: Setting): Setting = {
     setting.hama.setBoolean("master.need.register", false)
@@ -177,16 +203,21 @@ class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
     setting
   }
 
+
   it("test submitter functions.") {
     val master = configMaster(Setting.master)
     Submitter.start(configClient(MockSetting()))
-    Submitter.submit(bspJob)
     val submitter = Submitter.submitter 
+    submitter.map { client => client ! Tester(tester) }
+    Submitter.submit(bspJob(clientRequestTasks))
     Submitter.system.map { sys => 
       val m = sys.actorOf(Props(classOf[MockM], master, tester), "mockMaster")
       submitter.map { client => client ! Assign(m) }
     }
-    expect(Response(createJobId("test", 1), expectedSysDir, expectedMaxTasks))
+    val response = Response(expectedJobId, expectedSysDir, expectedMaxTasks)
+    expect(response)
+    submitter.map { client => client ! response }
+    expect(expectedWorkingDirs)
     LOG.info("Done testing Submitter functions!")    
   }
 }

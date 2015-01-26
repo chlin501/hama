@@ -271,7 +271,7 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
 
   protected def processClientRequest(from: ActorRef) {
     val jobId = newJobId
-    clientRequest += (jobId -> ResponseForClient(sender,
+    clientRequest += (jobId -> ResponseForClient(from,
       systemDir.getOrElse(null), -1))
     findServiceBy(Federator.simpleName(setting.hama)) match {
       case Some(federator)  => federator ! AskFor(GroomsTracker.fullName, 
