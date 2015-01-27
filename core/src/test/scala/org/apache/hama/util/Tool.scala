@@ -37,16 +37,21 @@ object Tool extends CommonLog {
    * @param target is the output directory where classes files are written.
    */
   def compile(target: String, sources: List[String]) {
-    val s = new Settings() // TODO: need scala-library in bootclasspath otherwise exception thrown!
-    //s.classpath.append("/path/to/scala/lib/scala-library.jar")
-    //s.bootclasspath.append("/path/to/scala/lib/scala-library.jar")
+    val s = new Settings() 
+    val scalaHome = System.getProperty("scala.home")
+    require(null != scalaHome, "Scala home is not defined!")
+    val scalalibrary = new File(new File(scalaHome, "lib"), "scala-library.jar")
+    require(scalalibrary.exists, "Can't find scala-library.jar!")
+    val scalalibraryjar = scalalibrary.getAbsolutePath
+    s.classpath.append(scalalibraryjar)
+    s.bootclasspath.append(scalalibraryjar)
     s.outputDirs.setSingleOutput(new File(target).getAbsolutePath)
     val global = new Global(s)
     val runner = new global.Run
     runner.compile(sources)
   }
 
-  protected def loop(src: File): Array[String] = src.isDirectory match {
+  protected[util] def loop(src: File): Array[String] = src.isDirectory match {
     case true => Array.concat(Array(src.getPath+"/"), 
       src.listFiles.map { nested => loop(nested) }.flatten)
     case false => Array(src.getPath)
