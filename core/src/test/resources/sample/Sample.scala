@@ -15,36 +15,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.util
+package org.apache.hama.examples
 
-import java.io.File
+/**
+ * This is only used for testing compilation code.
+ */
+class Sample {
 
-import org.apache.hama.TestEnv
-import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
+  def say(): String = "hi"
 
-@RunWith(classOf[JUnitRunner])
-class TestTool extends TestEnv("TestTool") {
-
-  //override def afterAll { }
-
-  def srcRoot(): String = new File(Tool.pwd+"/src/test/resources/sample").
-    getAbsolutePath
-
-  def target(): String = {
-    val d = new File(testRootPath, "target").getAbsolutePath
-    mkdir(d)
-    d
-  }
-
-  def output(): String = new File(testRootPath, "sample.jar").getAbsolutePath 
-
-  def sources(): List[String] = 
-    List[String](new File(srcRoot, "Sample.scala").getAbsolutePath)
-
-  it("test tool functions.") {
-    Tool.compile(target, sources)
-    Tool.jar(target, output)
-    assert(true == new File(output).exists)
-  }
 }
+

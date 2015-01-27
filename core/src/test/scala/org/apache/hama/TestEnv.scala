@@ -121,6 +121,15 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
     }
   }
 
+  def mkTestRoot() = testRoot
+
+  def mkdir(dir: String) = {
+    val folder = new File(dir) 
+    if(!folder.exists) folder.mkdirs else true
+  }
+
+  override protected def beforeAll = mkTestRoot
+
   override protected def afterAll = {
     deleteTestRoot
     system.shutdown
