@@ -33,8 +33,9 @@ object Tool extends CommonLog {
   val pwd = System.getProperty("user.dir")
 
   /**
-   * Create compiler with output directory supplied. 
+   * Compile source code based on the output directory. 
    * @param target is the output directory where classes files are written.
+   * @param sources are a list of source files.
    */
   def compile(target: String, sources: List[String]) {
     val s = new Settings() 
@@ -59,26 +60,26 @@ object Tool extends CommonLog {
 
   /**
    * Jar a list of files under a specific directory.
-   * @param root is the directory under which all class files will be zipeed.
-   * @param targetDir is the output target directory to which the jar file are 
-   *                  written.
+   * @param srcRoot is the directory under which all class files will be zipeed.
+   * @param targetDir is the output target directory under which the jar file 
+   *                  are written.
    */
-  def jar(root: String, targetDir: String) {
-    val rootDir = new File(root)
+  def jar(srcRoot: String, targetDir: String) {
+    val rootDir = new File(srcRoot)
     val output = new JarOutputStream(new BufferedOutputStream(
       new FileOutputStream(targetDir)))
-    loop(rootDir).filter( entry => !entry.equals(root+"/")).map { entry =>
+    loop(rootDir).filter( entry => !entry.equals(srcRoot+"/")).map { entry =>
     val file = new File(entry)
     file.isDirectory match {
       case true => {
-        val newEntry = entry.replace(root+"/", "")
+        val newEntry = entry.replace(srcRoot+"/", "")
         val e = new JarEntry(newEntry)
         e.setTime(file.lastModified)
         output.putNextEntry(e)
         output.closeEntry
       }
       case false => {
-        val newEntry = entry.replace(root+"/", "")
+        val newEntry = entry.replace(srcRoot+"/", "")
         val e = new JarEntry(newEntry)
         e.setTime(file.lastModified)
         output.putNextEntry(e)

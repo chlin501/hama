@@ -105,6 +105,8 @@ object Operation {
 
   def newPermission(permission: FsPermission): FsPermission = 
     new FsPermission(permission)
+
+
 }
 
 trait Operation {

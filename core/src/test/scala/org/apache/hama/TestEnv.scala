@@ -123,9 +123,15 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
 
   def mkTestRoot() = testRoot
 
-  def mkdir(dir: String) = {
+  def mkdirs(dir: String) = {
     val folder = new File(dir) 
     if(!folder.exists) folder.mkdirs else true
+  }
+
+  def constitute(dirs: String*): String = {
+    var file = new File("")
+    dirs.foreach ( dir => file = new File(file, dir))
+    file.getAbsolutePath
   }
 
   override protected def beforeAll = mkTestRoot

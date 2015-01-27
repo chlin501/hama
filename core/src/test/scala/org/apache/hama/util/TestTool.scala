@@ -33,7 +33,7 @@ class TestTool extends TestEnv("TestTool") {
 
   def target(): String = {
     val d = new File(testRootPath, "target").getAbsolutePath
-    mkdir(d)
+    mkdirs(d)
     d
   }
 
