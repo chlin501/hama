@@ -30,9 +30,6 @@ import scala.tools.nsc.Settings
 
 object Tool extends CommonLog {
 
-  //val pwd = System.getProperty("user.dir")
-  //val scalaHome = System.getProperty("scala.home")
-
   /**
    * Compile source code based on the output directory. 
    * @param sources are a list of source files.
@@ -40,6 +37,7 @@ object Tool extends CommonLog {
    */
   def compile(sources: List[String], target: String) {
     val s = new Settings() 
+    // Note pom file's useSystemClassLoader as false has effect on classpath.
     s.outputDirs.setSingleOutput(new File(target).getAbsolutePath)
     val global = new Global(s)
     val runner = new global.Run
