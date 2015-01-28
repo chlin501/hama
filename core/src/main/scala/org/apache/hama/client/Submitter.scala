@@ -88,7 +88,7 @@ object Submitter extends CommonLog {
    *            executed.
    */
   def submit(job: BSPJob): Boolean = submitter.map { client => 
-    client ! SubmitJob(job)
+    client ! SubmitJob(job) //  TODO: validate bsp job before submitting?
     true
   }.getOrElse(false)
 
@@ -194,6 +194,9 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
       case false => adjustedJob
     }
 
+  /**
+   * Set job name with jar path if it's empty.
+   */
   protected def copyJarToMaster(jobMayHaveSplit: BSPJob, 
                                 splitPath: Path, 
                                 operation: Operation): BSPJob = 
@@ -215,6 +218,22 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
       }
     }
 
+  protected def systemSettingForJob(jarManufactured: BSPJob,
+                                    operation: Operation): BSPJob = {
+    val user = jarManufactured.getUser
+    jarManufactured.setUser(BSPJobClient.getUnixUser)
+    jarManufactured.setGroupBy(BSPJobClient.getUnixGroupBy(user))
+    jarManufactured.setWorkingDirectoryIfEmpty(operation.getWorkingDirectory)
+    jarManufactured
+  }
+
+  /**
+   * Main logic manufacturing bsp job before actually submitting to master.
+   * @param job to be manufactured.
+   * @param id for the bsp job.
+   * @param sysDir is system directory at master.
+   * @param maxTasks is the max tasks allowed to be used by client.
+   */
   protected def submitInternal(job: BSPJob, id: BSPJobID, sysDir: Path, 
                                maxTasks: Int) {
     job.setJobID(id) 
@@ -224,24 +243,26 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
     val jobMayHaveSplit = splitWhenInputExists(dirs, maxTasks, adjustedJob)
     val operation = Operation.get(setting.hama)
     val jarManufactured = copyJarToMaster(jobMayHaveSplit, splitPath, operation)
-    val user = jarManufactured.getUser
-    jarManufactured.setUser(BSPJobClient.getUnixUser)
-    jarManufactured.setGroupBy(BSPJobClient.getUnixGroupBy(user))
-    jarManufactured.setWorkingDirectoryIfEmpty(operation.getWorkingDirectory)
-
+    val jobWithSysSetting = systemSettingForJob(jarManufactured, operation)
     operation.create(splitPath, newPermission(jobFilePermission)) match {
       case null => { 
-        LOG.error("Can't create path at {}", splitPath)
+        LOG.error("Can't create remote path at {}", splitPath)
         cleanup
         shutdown 
       }
-      case out@_ => try { job.writeXml(out) } finally { out.close }
+      case out@_ => try { 
+        jobWithSysSetting.writeXml(out) 
+      } finally { out.close }
     }
+    actualSubmit(sysDir, splitPath, operation)
+  }
+
+  protected def actualSubmit(sysDir: Path, splitPath: Path,
+                             operation: Operation) = 
     masterProxy.map { m => bspJobId.map { id => {
       val operation = owns(sysDir, setting.hama)
       m ! Submit(id, operation.makeQualified(splitPath).toString)
     }}}
-  }
 
   protected def writeSplits(job: BSPJob, splits: Array[PartitionedSplit],
                             out: DataOutputStream): Int = try {

@@ -28,8 +28,6 @@ import org.apache.hama.logging.CommonLog
 
 object PiEstimator {
 
-  val TMP_OUTPUT = new Path("/tmp/pi-" + System.currentTimeMillis) 
-
   val iterations = 10000
 
   class MyEstimator extends BSP with CommonLog {

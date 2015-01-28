@@ -21,7 +21,10 @@ import akka.actor.ActorRef
 import akka.actor.Props
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import java.io.File
 import java.io.IOException
+import java.net.URL
+import java.net.URLClassLoader
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.DoubleWritable
 import org.apache.hadoop.io.Text
@@ -37,7 +40,8 @@ import org.apache.hama.bsp.v2.BSP
 import org.apache.hama.bsp.v2.BSPPeer
 import org.apache.hama.conf.ClientSetting
 import org.apache.hama.conf.Setting
-import org.apache.hama.groom.Executor
+import org.apache.hama.fs.Operation
+import org.apache.hama.groom.Executor // TODO: move hamaHome to util?
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.master.BSPMaster
 import org.apache.hama.message.compress.SnappyCompressor
@@ -72,6 +76,7 @@ final case class Tester(t: ActorRef)
 final case class Assign(m: ActorRef)
 final case object Unassign
 final case class NumBSPTasks(before: Int, after: Int)
+final case class JobName(equal: Boolean)
 
 class MockSubmitter(setting: Setting) extends Submitter(setting) {
 
@@ -108,6 +113,21 @@ class MockSubmitter(setting: Setting) extends Submitter(setting) {
     newJob
   }
 
+  override def copyJarToMaster(jobMayHaveSplit: BSPJob,
+                               splitPath: Path,
+                               operation: Operation): BSPJob = {
+    val localJarPath = jobMayHaveSplit.getJar
+    LOG.info("before copying jar to master, local jar path is {}", localJarPath)
+    val job = super.copyJarToMaster(jobMayHaveSplit, splitPath, operation)
+    val jobNameExpected = new Path(localJarPath).getName
+    val jobNameActual = job.getJobName
+    LOG.info("Expected job name: {}, actual job name: {}", 
+             jobNameExpected, jobNameActual)
+    tester.map { t => t ! JobName(jobNameExpected.equals(jobNameActual))}
+    job
+  }
+
+
   override def receive = testMsg orElse super.receive
    
 }
@@ -126,6 +146,8 @@ class MockSetting(setting: Setting) extends ClientSetting(setting.hama) {
 @RunWith(classOf[JUnitRunner])
 class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
 
+  val TMP_OUTPUT = new Path("/tmp/pi-" + System.currentTimeMillis)
+
   val expectedJobId = createJobId("test", 1)
 
   val expectedSysDir: Path = new Path("/tmp/hadoop/bsp/system")
@@ -134,10 +156,15 @@ class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
 
   val clientRequestTasks = 4096
 
+
   val submitterDir = constitute(testRootPath, "submitter")
   val classesDir = constitute(submitterDir, "classes")
   val jarDir = constitute(submitterDir, "jar")
   val jarFile = constitute(jarDir, "client.jar")
+  val customizedBSP = "org.apache.hama.examples.PiEstimator$MyEstimator"
+  val main = "org.apache.hama.examples.PiEstimator"
+  var mybsp: Option[Class[_]] = None
+  var mainClass: Option[Class[_]] = None 
 
   override def beforeAll = {
     super.beforeAll()
@@ -146,22 +173,30 @@ class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
     mkdirs(jarDir)
     Tool.compile(sources, classesDir)
     Tool.jar(classesDir, jarFile)
-    
-    // TODO:  
-    //       jar (need manifest file with main class defined)
-    //       runtime add to classpath by url class loader. 
-    //         - see RunJar or Coordinator.addJarToClasspath.
-    //       instantiate with Class.forName(className, true, loader) 
+    val loader = addToClasspath(jarFile) 
+    mainClass = Option(Class.forName(main, true, loader))
+    mybsp = Option(Class.forName(customizedBSP, true, loader))
   } 
 
-  override def afterAll {}
+  //override def afterAll {}
 
-  def sources(): List[String] = {
-    require(null != Executor.hamaHome, "hama.home.dir is not set!")
-    val source = constitute(Executor.hamaHome, "src", "test", "resources", 
-                 "examples", "PiEstimator.scala")
-    List(source) 
+  def addToClasspath(paths: String*): ClassLoader = {
+    val urls = paths.map { path => new File(path).toURI.toURL }.toArray[URL]
+    LOG.info("Urls to be added: {}", urls.mkString(", "))
+    val loader = Thread.currentThread.getContextClassLoader
+    val newLoader = new URLClassLoader(urls, loader) 
+    Thread.currentThread.setContextClassLoader(newLoader)
+    newLoader
   }
+
+  def piEstimator(): String = {
+    require(null != Executor.hamaHome, "hama.home.dir is not set!")
+    constitute(Executor.hamaHome, "core", "src", "test", "resources", 
+               "examples", "PiEstimator.scala")
+  }
+
+
+  def sources(): List[String] = List(piEstimator) 
 
   def expectedWorkingDirs(): WorkingDirs = {
     val jobDir = new Path(expectedSysDir, "submit_random")
@@ -182,32 +217,35 @@ class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
     setting
   }
 
-/*
-  def bspJob(requestTasks: Int): BSPJob = {
-    val conf = new HamaConfiguration
-    val bsp = new BSPJob(conf, classOf[PiEstimator.MyEsitmator])
-    bsp.setCompressor(classOf[SnappyCompressor]) 
-    bsp.setCompressionThreshold(40)
-    bsp.setJobName("Pi Estimation Example")
-    bsp.setBSPClass(classOf[PiEstimator.MyEstimator])
-    bsp.setInputFormat(classOf[NullInputFormat])
-    bsp.setOutputKeyClass(classOf[Text])
-    bsp.setOutputValueClass(classOf[DoubleWritable])
-    //bsp.setOutputFormat(classOf[TextOutputFormat])
-    FileOutputFormat.setOutputPath(bsp, TMP_OUTPUT)
-    bsp.setNumBspTask(requestTasks)
-    bsp
+  def bspJob(requestTasks: Int): BSPJob = mybsp match { 
+    case None => throw new RuntimeException("BSP class is missing!")
+    case Some(customized) => mainClass match { 
+      case None => throw new RuntimeException("Main class is missing!")
+      case Some(m) => {
+        val conf = new HamaConfiguration
+        val bsp = new BSPJob(conf, m)
+        bsp.setCompressor(classOf[SnappyCompressor]) 
+        bsp.setCompressionThreshold(40)
+        bsp.setBSPClass(customized.asInstanceOf[Class[BSP]])
+        bsp.setInputFormat(classOf[NullInputFormat])
+        bsp.setOutputKeyClass(classOf[Text])
+        bsp.setOutputValueClass(classOf[DoubleWritable])
+        //bsp.setOutputFormat(classOf[TextOutputFormat])
+        FileOutputFormat.setOutputPath(bsp, TMP_OUTPUT)
+        bsp.setNumBspTask(requestTasks)
+        bsp
+      }
+    }
   }
-*/
 
 
   it("test submitter functions.") {
-/*
     val master = configMaster(Setting.master)
     Submitter.start(configClient(MockSetting()))
     val submitter = Submitter.submitter 
     submitter.map { client => client ! Tester(tester) }
-    Submitter.submit(bspJob(clientRequestTasks))
+    val succeedSubmission = Submitter.submit(bspJob(clientRequestTasks))
+    assert(succeedSubmission)
     Submitter.system.map { sys => 
       val m = sys.actorOf(Props(classOf[MockM], master, tester), "mockMaster")
       submitter.map { client => client ! Assign(m) }
@@ -217,7 +255,7 @@ class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
     submitter.map { client => client ! response }
     expect(expectedWorkingDirs)
     expect(NumBSPTasks(clientRequestTasks, expectedMaxTasks))
-*/
+    expect(JobName(true))
     LOG.info("Done testing Submitter functions!")    
   }
 

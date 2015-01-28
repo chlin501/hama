@@ -28,8 +28,12 @@ class TestTool extends TestEnv("TestTool") {
 
   //override def afterAll { }
 
-  def srcRoot(): String = new File(Tool.pwd+"/src/test/resources/sample").
-    getAbsolutePath
+  val pwd = System.getProperty("user.dir")
+
+  def srcRoot(): String = {
+    require(null != pwd, "Working directory is missing!")
+    new File(pwd+"/src/test/resources/sample").getAbsolutePath
+  }
 
   def target(): String = {
     val d = new File(testRootPath, "target").getAbsolutePath
