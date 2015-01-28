@@ -129,9 +129,9 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
   }
 
   def constitute(dirs: String*): String = {
-    var file = new File("")
-    dirs.foreach ( dir => file = new File(file, dir))
-    file.getAbsolutePath
+    var file = new File(dirs(0))
+    dirs.drop(1).foreach ( dir => file = new File(file, dir))
+    file.getPath
   }
 
   override protected def beforeAll = mkTestRoot

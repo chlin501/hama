@@ -43,7 +43,7 @@ class TestTool extends TestEnv("TestTool") {
     List[String](new File(srcRoot, "Sample.scala").getAbsolutePath)
 
   it("test tool functions.") {
-    Tool.compile(target, sources)
+    Tool.compile(sources, target)
     Tool.jar(target, output)
     assert(true == new File(output).exists)
   }

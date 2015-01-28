@@ -30,22 +30,16 @@ import scala.tools.nsc.Settings
 
 object Tool extends CommonLog {
 
-  val pwd = System.getProperty("user.dir")
+  //val pwd = System.getProperty("user.dir")
+  //val scalaHome = System.getProperty("scala.home")
 
   /**
    * Compile source code based on the output directory. 
-   * @param target is the output directory where classes files are written.
    * @param sources are a list of source files.
+   * @param target is the output directory where classes files are written.
    */
-  def compile(target: String, sources: List[String]) {
+  def compile(sources: List[String], target: String) {
     val s = new Settings() 
-    val scalaHome = System.getProperty("scala.home")
-    require(null != scalaHome, "Scala home is not defined!")
-    val scalalibrary = new File(new File(scalaHome, "lib"), "scala-library.jar")
-    require(scalalibrary.exists, "Can't find scala-library.jar!")
-    val scalalibraryjar = scalalibrary.getAbsolutePath
-    s.classpath.append(scalalibraryjar)
-    s.bootclasspath.append(scalalibraryjar)
     s.outputDirs.setSingleOutput(new File(target).getAbsolutePath)
     val global = new Global(s)
     val runner = new global.Run
@@ -61,13 +55,17 @@ object Tool extends CommonLog {
   /**
    * Jar a list of files under a specific directory.
    * @param srcRoot is the directory under which all class files will be zipeed.
-   * @param targetDir is the output target directory under which the jar file 
+   * @param targetPath is the output target directory under which the jar file 
    *                  are written.
    */
-  def jar(srcRoot: String, targetDir: String) {
+  def jar(srcRoot: String, targetPath: String) { 
+    val targetFile = new File(targetPath)
+    require(!targetFile.isDirectory, "Target "+targetPath+" is directory!")
+    val targetParent = targetFile.getParentFile
+    if(!targetParent.exists) targetParent.mkdirs
     val rootDir = new File(srcRoot)
     val output = new JarOutputStream(new BufferedOutputStream(
-      new FileOutputStream(targetDir)))
+      new FileOutputStream(targetFile)))
     loop(rootDir).filter( entry => !entry.equals(srcRoot+"/")).map { entry =>
     val file = new File(entry)
     file.isDirectory match {

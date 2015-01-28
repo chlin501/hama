@@ -40,6 +40,7 @@ import scala.util.Failure
 
 object Utils extends CommonLog {
 
+
   def await[R <: Any: ClassTag](caller: ActorRef, message: Any, 
                                 defaultTimeout: FiniteDuration = 10.seconds,
                                 duration: Duration = Duration.Inf): R = {

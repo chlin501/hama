@@ -37,16 +37,16 @@ import org.apache.hama.bsp.v2.BSP
 import org.apache.hama.bsp.v2.BSPPeer
 import org.apache.hama.conf.ClientSetting
 import org.apache.hama.conf.Setting
+import org.apache.hama.groom.Executor
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.master.BSPMaster
 import org.apache.hama.message.compress.SnappyCompressor
 import org.apache.hama.sync.SyncException
 import org.apache.hama.util.JobUtil
+import org.apache.hama.util.Tool
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.immutable.IndexedSeq
-
-
 
 class MockM(setting: Setting, tester: ActorRef) 
       extends BSPMaster(setting, "testMaster") with JobUtil {
@@ -134,13 +134,34 @@ class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
 
   val clientRequestTasks = 4096
 
+  val submitterDir = constitute(testRootPath, "submitter")
+  val classesDir = constitute(submitterDir, "classes")
+  val jarDir = constitute(submitterDir, "jar")
+  val jarFile = constitute(jarDir, "client.jar")
+
   override def beforeAll = {
     super.beforeAll()
-    mkdirs(constitute(testRootPath, "submitter"))
-    // TODO: compile 
+    mkdirs(submitterDir)
+    mkdirs(classesDir)
+    mkdirs(jarDir)
+    Tool.compile(sources, classesDir)
+    Tool.jar(classesDir, jarFile)
+    
+    // TODO:  
     //       jar (need manifest file with main class defined)
-    //       runtime add to classpath by url class loader. see RunJar
+    //       runtime add to classpath by url class loader. 
+    //         - see RunJar or Coordinator.addJarToClasspath.
+    //       instantiate with Class.forName(className, true, loader) 
   } 
+
+  override def afterAll {}
+
+  def sources(): List[String] = {
+    require(null != Executor.hamaHome, "hama.home.dir is not set!")
+    val source = constitute(Executor.hamaHome, "src", "test", "resources", 
+                 "examples", "PiEstimator.scala")
+    List(source) 
+  }
 
   def expectedWorkingDirs(): WorkingDirs = {
     val jobDir = new Path(expectedSysDir, "submit_random")
