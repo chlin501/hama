@@ -435,7 +435,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       activeFinished = true
     }
   
-  protected def cleanActiveGrooms() = activeGrooms = None
+  protected def cleanCachedActiveGrooms() = activeGrooms = None
 
   protected def cacheActiveGrooms(refs: Array[ActorRef]) = 
     activeGrooms = Option(refs) 
@@ -449,8 +449,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * During TaskAssign Stage, master replies scheduler's request for groom 
    * references.
    */
-  // TODO: merge some matched to target refs 
-  protected def targetsResult: Receive = { 
+  // TODO: merge SomeMatched to TargetRefs 
+  protected def activeTargetGrooms: Receive = { 
     case TargetRefs(refs) => {
       cacheActiveGrooms(refs) 
       federator ! AskFor(GroomsTracker.fullName, GetGroomCapacity(refs))
@@ -477,8 +477,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def msgFromTaskCounsellor: Receive = {
     case msg: NoFreeSlot => msg.directive.task.isActive match {
       case true => freeSlotUnavailable
-      case false => LOG.error("Passive assignment complains no free slots "+
-                              " when assigning directive {} !", msg.directive) 
+      case false => LOG.error("Passive assignment returns no free slots "+
+                              "for directive {} from {}!", msg.directive, 
+                              sender.path.address.hostPort) 
     }
   }
 
@@ -492,7 +493,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       val ticketWithFailedJob = ticket.newWithJob(ticket.job.newWithFailedState)
       jobManager.update(ticketWithFailedJob)
       jobManager.move(ticketWithFailedJob.job.getId)(Finished)
-      cleanActiveGrooms 
+      cleanCachedActiveGrooms 
       activeFinished = false
     }
     case (s@_, t@_) => 
@@ -810,6 +811,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     federator ! JobFinishedMessage(jobId) 
    
 
-  override def receive = events orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse msgFromTaskCounsellor orElse unknown
+  override def receive = events orElse tickMessage orElse requestTask orElse dispense orElse activeTargetGrooms orElse msgFromTaskCounsellor orElse unknown
 
 }
