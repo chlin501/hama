@@ -32,8 +32,8 @@ final case class ClientMaxTasksAllowed(jobId: BSPJobID) extends ProbeMessage
 final case class ClientTasksAllowed(jobId: BSPJobID, maxTasks: Int) 
       extends ProbeMessage
 final case class GetMaxTasks(jobId: String) extends ProbeMessage
-final case class GetGroomCapacity(host: String, port: Int) extends ProbeMessage
-final case class GroomCapacity(host: String, port: Int, freeSlots: Int) 
+final case class GetGroomCapacity(grooms: Array[ActorRef]) extends ProbeMessage
+final case class GroomCapacity(mapping: Map[ActorRef, Int]) 
       extends ProbeMessage
 final case class TotalMaxTasks(jobId: String, allowed: Int) 
       extends ProbeMessage
@@ -121,16 +121,33 @@ final class GroomsTracker extends Tracker {
      * @param host is the target groom server name.
      * @param port used by the groom server.
      */
-    case GetGroomCapacity(host, port) => allStats.find( stats => 
-      host.equals(stats.host) && (port == stats.port)
-    ) match {
-      case Some(stats) => from ! GroomCapacity(host, port, 
-        freeSlotsPerGroom.get(key(stats)).getOrElse(0))
-      case None => from ! GroomCapacity(host, port, 0) 
-    }
+    case GetGroomCapacity(grooms: Array[ActorRef]) => 
+      from ! GroomCapacity(findFreeSlotsFor(grooms))
     case ClientMaxTasksAllowed(jobId) => 
       from ! ClientTasksAllowed(jobId, totalMaxTasks)
     case _ => LOG.warning("Unknown action {} from {}!", action, from)
   }
+
+  private def findFreeSlotsFor(grooms: Array[ActorRef]): Map[ActorRef, Int] = 
+    grooms.map { groom => {
+      val host = groom.path.address.host.getOrElse(null)
+      val port = groom.path.address.port.getOrElse(-1)
+      findGroomStatsBy(host, port) match {
+        case Some(stats) => 
+          (groom -> freeSlotsPerGroom.get(key(stats)).getOrElse(0))
+        case None => (groom -> 0)
+      }
+    }}.toMap
+
+  private def findGroomStatsBy(host: String, port: Int): Option[GroomStats] = 
+    allStats.find( stats => stats.host.equals(host) && (port == stats.port)) 
+
+/*
+    match {
+      case Some(stats) => from ! GroomCapacity(host, port, 
+        freeSlotsPerGroom.get(key(stats)).getOrElse(0))
+      case None => from ! GroomCapacity(host, port, 0) 
+    }
+*/
 
 }

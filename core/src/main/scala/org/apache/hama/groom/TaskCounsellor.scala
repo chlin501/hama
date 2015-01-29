@@ -270,7 +270,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def receiveDirective: Receive = {
     case directive: Directive => directive match {
       case null => LOG.error("Directive from {} is null!", sender.path.name)
-      case _ => whenReceive(directive) 
+      case _ => whenReceive(directive)(sender) 
     }
   }
 
@@ -279,7 +279,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * to child process directly.
    * When directive is kill, slot update will be done after ack is received.
    */
-  protected def whenReceive(d: Directive) =
+  protected def whenReceive(d: Directive)(from: ActorRef) =
     if(slotManager.hasFreeSlot(directiveQueue.size)) d.action match {
       case Launch | Resume => initializeOrDispatch(d) 
       case Kill => slotManager.findSlotBy(d.task.getId).map { slot =>
@@ -290,7 +290,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
         }
       }
       case _ => LOG.warning("Unknown directive {}", d)
-    } else sender ! NoFreeSlot(d)
+    } else from ! NoFreeSlot(d)
 
   /**
    * Executor ack for Kill action.

@@ -45,7 +45,7 @@ trait LocalService extends Service {
       case Some(found) => found
       case None => {
         val actor = context.actorOf(Props(target, args:_*), serviceName)
-        context.watch(actor)
+        context watch actor
         services ++= Set(actor)
         actor
       }

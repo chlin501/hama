@@ -32,12 +32,16 @@ import org.apache.hama.bsp.v2.ExceedMaxTaskAllowedException
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.conf.Setting
+import org.apache.hama.groom.NoFreeSlot
 import org.apache.hama.groom.RequestTask
 import org.apache.hama.groom.TaskFailure
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.GroomStats
+import org.apache.hama.monitor.master.GetGroomCapacity
+import org.apache.hama.monitor.master.GroomCapacity
+import org.apache.hama.monitor.master.GroomsTracker
 import org.apache.hama.monitor.master.TaskArrivalEvent
 import org.apache.hama.monitor.PublishEvent
 import org.apache.hama.monitor.PublishMessage
@@ -318,6 +322,14 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   /* a guard for checking if all active tasks are scheduled. */
   protected var activeFinished = false 
 
+  /** 
+   * A cache when asking tracker the num of free slots available per active 
+   * groom. 
+   * Note that it's an array because multiple tasks may be dispatched to the
+   * same groom server. 
+   */
+  protected var activeGrooms: Option[Array[ActorRef]] = None
+
   // TODO: move finished jobs to Federator's JobHistoryTracker(?)
   //       store job's metadata e.g. setting, state, etc. only
 
@@ -422,6 +434,16 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       }}
       activeFinished = true
     }
+  
+  protected def cleanActiveGrooms() = activeGrooms = None
+
+  protected def cacheActiveGrooms(refs: Array[ActorRef]) = 
+    activeGrooms = Option(refs) 
+  
+  protected def activeGroomsCached(): Array[ActorRef] = activeGrooms match {
+    case Some(ref) => ref
+    case None => throw new RuntimeException("Active grooms is missing!")
+  }
 
   /**
    * During TaskAssign Stage, master replies scheduler's request for groom 
@@ -429,7 +451,10 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    */
   // TODO: merge some matched to target refs 
   protected def targetsResult: Receive = { 
-    case TargetRefs(refs) => targetRefsFound(refs)
+    case TargetRefs(refs) => {
+      cacheActiveGrooms(refs) 
+      federator ! AskFor(GroomsTracker.fullName, GetGroomCapacity(refs))
+    }
     case SomeMatched(matched, nomatched) => if(!jobManager.isEmpty(TaskAssign))
       jobManager.headOf(TaskAssign).map { ticket => {
         ticket.client ! Reject("Grooms "+nomatched.mkString(", ")+
@@ -437,6 +462,41 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         jobManager.move(ticket.job.getId)(Finished) 
       }}
     else LOG.error("Can't schedule because TaskAssign queue is empty!")
+    case GroomCapacity(mapping: Map[ActorRef, Int]) => 
+      allGroomsHaveFreeSlots(mapping) match {
+        case true => targetRefsFound(activeGroomsCached)
+        case false => freeSlotUnavailable
+      }
+  }
+
+  /**
+   * When the GroomServer (actually TaskCounsellor) finds no free slots, it 
+   * replies with NoFreeSlot message, denoteing the directive dispatched can't 
+   * be executed.
+   */
+  protected def msgFromTaskCounsellor: Receive = {
+    case msg: NoFreeSlot => msg.directive.task.isActive match {
+      case true => freeSlotUnavailable
+      case false => LOG.error("Passive assignment complains no free slots "+
+                              " when assigning directive {} !", msg.directive) 
+    }
+  }
+
+  protected def allGroomsHaveFreeSlots(mapping: Map[ActorRef, Int]): Boolean =
+    mapping.count({ case (k, v) => v == 0}) == 0
+
+  protected def freeSlotUnavailable = jobManager.ticketAt match {
+    case (s: Some[Stage], t: Some[Ticket]) => {
+      val ticket = t.get
+      ticket.client ! Reject("Some target grooms do not have free slots!")
+      val ticketWithFailedJob = ticket.newWithJob(ticket.job.newWithFailedState)
+      jobManager.update(ticketWithFailedJob)
+      jobManager.move(ticketWithFailedJob.job.getId)(Finished)
+      cleanActiveGrooms 
+      activeFinished = false
+    }
+    case (s@_, t@_) => 
+      throw new RuntimeException("Invalid ticket "+t+"or stage "+s+"!") 
   }
 
   protected def targetHostPort(ref: ActorRef): (String, Int) = {
@@ -459,12 +519,22 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   } 
 
   protected def passiveAssign(stats: Option[GroomStats], from: ActorRef) = 
-    if(!jobManager.isEmpty(TaskAssign)) {
-      jobManager.headOf(TaskAssign).map { ticket => stats.map { s => 
-        assign(ticket, s, from) 
-      }}
-    } else LOG.debug("No job stays at task assign stage!")
+    jobManager.isEmpty(TaskAssign) match {
+      case false => jobManager.headOf(TaskAssign).map { ticket => 
+        stats.map { s => assign(ticket, s, from) }}
+      case true => LOG.debug("No task needs to schedule because job doesn't "+
+                             "stay at task assign stage!")
+    }  
 
+  /**
+   * Note that task assignment already consdiers multiple requests from the   
+   * same groom. For instance, groom server A has 3 slots available. It then
+   * issues 5 task requests. assign function will 
+   * a. check the max tasks allowed (i.e. slot size - broken) by the groom A.
+   * b. check the number of tasks already assigned to groom A.
+   * c. assign task when a - b still has free slot available; otherwise drop
+   *    request.
+   */
   protected def assign(ticket: Ticket, stats: GroomStats, from: ActorRef) {
     val job = ticket.job
     val currentTasks = job.getTaskCountFor(stats.hostPort)
@@ -733,14 +803,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case e: Exception => Failure(e) 
     }
 
-
-
   /**
    * This function is called when a job if finished its execution.
    */
   protected def whenJobFinished(jobId: BSPJobID) =  
     federator ! JobFinishedMessage(jobId) 
+   
 
-  override def receive = events orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse unknown
+  override def receive = events orElse tickMessage orElse requestTask orElse dispense orElse targetsResult orElse msgFromTaskCounsellor orElse unknown
 
 }

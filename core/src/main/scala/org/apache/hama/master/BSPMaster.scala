@@ -20,7 +20,9 @@ package org.apache.hama.master
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Address
+import akka.actor.OneForOneStrategy
 import akka.actor.Props
+import akka.actor.SupervisorStrategy.Stop
 import java.text.SimpleDateFormat
 import java.util.Date
 import org.apache.hadoop.fs.Path
@@ -156,9 +158,15 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
 
   protected var systemDir: Option[Path] = None
 
-  // TODO: use strategy and shutdown if any exceptions are thrown?
-
   protected var clientRequest = Map.empty[BSPJobID, ResponseForClient]
+
+  override val supervisorStrategy = OneForOneStrategy() {
+    case e: Exception => {
+      LOG.error("Shutdown because internal server error!", e)
+      shutdown
+      Stop
+    }
+  }
 
   override def setting(): Setting = setting
 
