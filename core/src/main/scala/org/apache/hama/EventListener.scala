@@ -48,6 +48,7 @@ trait EventListener { self: Agent =>
       mapping = mapping.filter( p => event.equals(p._1)).
                         mapValues { refs => refs - sender }
     )
+    // TODO: forward msg that auto dispatch to listeners?
   }
 
   /**

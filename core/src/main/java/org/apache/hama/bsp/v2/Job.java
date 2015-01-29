@@ -195,7 +195,7 @@ public final class Job implements Writable {
 
     public Builder setMaster(final String master) {
       if(null != master && !master.isEmpty())
-        conf.set("bsp.master.name", master);
+        conf.set("master.name", master);
       return this;
     }
 
@@ -451,7 +451,7 @@ public final class Job implements Writable {
    * @return String of the master name.
    */
   public String getMaster() {
-    return conf.get("bsp.master.name", "bspmaster");
+    return conf.get("master.name", "bspmaster");
   }
 
   /**

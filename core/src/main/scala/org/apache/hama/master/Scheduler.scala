@@ -365,7 +365,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def activeSchedule(job: Job) = job.targetGrooms match {
     case null => 
     case _ => job.targetGrooms.length match { 
-      case 0 =>
+      case 0 => LOG.debug("No active scheduling is required for job {}", 
+                          job.getId)
       case _ => schedule(job)
     }
   }
