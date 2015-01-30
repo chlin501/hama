@@ -56,6 +56,8 @@ trait MockTC extends Mock with Periodically {// task counsellor
 
   var sched: Option[ActorRef] = None
 
+  var tasks = Array.empty[Task]  
+
   override def preStart = tick(self, TaskRequest)
 
   def testMsg: Receive = {
@@ -95,6 +97,17 @@ trait MockTC extends Mock with Periodically {// task counsellor
              d.task.getPhase, d.task.isCompleted, d.task.isActive, 
              d.task.isAssigned, d.task.getTotalBSPTasks)
 
+  def add(task: Task) = {
+    tasks ++= Array(task)
+    LOG.info("{} has {} tasks: {}", name, tasks.length, tasks.mkString(", "))
+  }
+
+  def doLaunch(d: Directive, f: (Received) => Unit) {
+    val r = c(d)
+    f(r)
+    add(d.task)     
+    LOG.info("Directive at {} contains {}", name, r)
+  }
 
   override def receive = testMsg orElse tickMessage orElse super.receive
 }
@@ -102,11 +115,7 @@ trait MockTC extends Mock with Periodically {// task counsellor
 class Passive1(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => {
-       val r = c(d)
-       tester ! r
-       LOG.info("Directive at Passive1 contains {}", r)
-     }
+     case Launch => doLaunch(d, { r => tester ! r })
      case Resume =>
      case Kill =>
    }
@@ -115,11 +124,7 @@ class Passive1(tester: ActorRef) extends MockTC {
 class Passive2(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => {
-       val r = c(d)
-       tester ! r
-       LOG.info("Directive at Passive2 contains {}", r)
-     }
+     case Launch => doLaunch(d, { r => tester ! r })
      case Resume =>
      case Kill =>
    }
@@ -128,11 +133,7 @@ class Passive2(tester: ActorRef) extends MockTC {
 class Passive3(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => {
-       val r = c(d)
-       tester ! r
-       LOG.info("Directive at Passive3 contains {}", r)
-     }
+     case Launch => doLaunch(d, { r => tester ! r })
      case Resume =>
      case Kill =>
    }
@@ -141,11 +142,7 @@ class Passive3(tester: ActorRef) extends MockTC {
 class Passive4(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => {
-       val r = c(d)
-       tester ! r
-       LOG.info("Directive at Passive4 contains {}", r)
-     }
+     case Launch => doLaunch(d, { r => tester ! r })
      case Resume =>
      case Kill =>
    }
@@ -154,11 +151,7 @@ class Passive4(tester: ActorRef) extends MockTC {
 class Passive5(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => {
-       val r = c(d)
-       tester ! r
-       LOG.info("Directive at Passive5 contains {}", r)
-     }
+     case Launch => doLaunch(d, { r => tester ! r })
      case Resume =>
      case Kill =>
    }
@@ -167,11 +160,7 @@ class Passive5(tester: ActorRef) extends MockTC {
 class Active1(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => {
-       val r = c(d)
-       tester ! r
-       LOG.info("Directive at Active1 contains {}", r)
-     }
+     case Launch => doLaunch(d, { r => tester ! r })
      case Resume =>
      case Kill =>
    }
@@ -180,11 +169,7 @@ class Active1(tester: ActorRef) extends MockTC {
 class Active2(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => {
-       val r = c(d)
-       tester ! r
-       LOG.info("Directive at Active2 contains {}", r)
-     }
+     case Launch => doLaunch(d, { r => tester ! r })
      case Resume =>
      case Kill =>
    }
@@ -193,11 +178,7 @@ class Active2(tester: ActorRef) extends MockTC {
 class Active3(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => {
-       val r = c(d)
-       tester ! r
-       LOG.info("Directive at Active3 contains {}", r)
-     }
+     case Launch => doLaunch(d, { r => tester ! r })
      case Resume =>
      case Kill =>
    }
@@ -362,6 +343,15 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     expectAnyOf(r4, r5, r6, r7, r8)
     expectAnyOf(r4, r5, r6, r7, r8)
     expectAnyOf(r4, r5, r6, r7, r8)
+
+    // TODO: random pick up 1 passive groom to stop for simulating offline
+    //       then ask master sending GroomLeave event to sched
+    //       observe if active tasks are rescheduled to active grooms again, and
+    //       all passive tasks are reassigned as well. 
+    //       then ask one passive groom for task failure event (to sched)
+    //       observe if all tasks killed and rescheduled correctly.
+    //       then ask active groom task fail
+    //       observe if reject to client, set job to fail, and move job to finished, etc.
 
     LOG.info("Done testing scheduler functions!")
   }
