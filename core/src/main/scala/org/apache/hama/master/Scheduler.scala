@@ -64,7 +64,8 @@ final case class FindGroomsToKillTasks(infos: Set[SystemInfo])
 final case class GroomsFound(matched: Set[ActorRef], nomatched: Set[String])
       extends SchedulerMessage
 final case class TaskKilled(taskAttemptId: String) extends SchedulerMessage
-final case class FindGroomRef(host: String, port: Int, task: Task)
+final case class FindHealthyGrooms(hostPorts: Array[String], task: Task)
+//final case class FindGroomRef(host: String, port: Int, task: Task)
       extends SchedulerMessage
 final case class MatchedGroom(newTask: Task, ref: ActorRef)
       extends SchedulerMessage
@@ -744,18 +745,21 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           val job = j.get
           job.findTaskBy(fault.taskAttemptId) match {
             case null => LOG.error("No task matches {}", fault.taskAttemptId)
-            case old@_ => old.isActive match {
+            case failed@_ => failed.isActive match {
               case true => { 
                 markJobAsRecovering(s.get, job)  
-                val newTask = job.rearrange(old)
-                jobManager.move(job.getId)(TaskAssign)
-                master ! FindGroomRef(old.getAssignedHost, old.getAssignedPort,
-                                      newTask)
+                val newTask = job.rearrange(failed)
+                //jobManager.move(job.getId)(TaskAssign)
+                // TODO: instead of find failed groom, retrieving healthy grooms
+                //       where the rest tasks is executing!
+                //master ! FindGroomRef(failed.getAssignedHost,  // <-- wrong
+                                      //failed.getAssignedPort,
+                                      //newTask)
               }
               case false => { 
                 markJobAsRecovering(s.get, job)  
-                job.rearrange(old)
-                jobManager.move(job.getId)(TaskAssign) 
+                job.rearrange(failed)
+                //jobManager.move(job.getId)(TaskAssign) 
               }
             }
           }
@@ -763,6 +767,16 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case _ => LOG.error("No matched job: {}", fault.taskAttemptId.getJobID)
       }
     }
+    /**
+     * FindGroomRef 
+     * FindTaskAliveGrooms for restart
+     */
+    // TODO: case TaskFailureGrooms(grooms, newTask) => healthygrooms.foreach( groom => grom ! new Directive(Stop, newTask, ...) 
+    //       add Stop in Directive.Action
+    //       groom where healthy tasks running once receive stop msg, 
+    //       a. stop task
+    //       b. reply TaskStopped(taskAttemptId)
+    //          if all task stopped move job to task assign stage
     /**
      * BSPMaster replies groom reference where failed task (active schedule) 
      * ran. 
