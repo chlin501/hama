@@ -269,7 +269,7 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
       }) 
       sender ! GroomsFound(matched, nomatched)
     } 
-    case FindGroomRef(host, port, newTask) => // TODO: find corresponded groom actor based on host port and return with newTask. sched ! TaskFailureGroom(groomActorRef, newTask)
+    //case FindGroomRef(host, port, newTask) => // TODO: find corresponded groom actor based on host port and return with newTask. sched ! TaskFailureGrooms(grooms, newTask)
   }
 
   protected def msgFromGroom: Receive = {

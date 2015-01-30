@@ -726,18 +726,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case _ => LOG.warning("No job existed!")
     }
     /**
+     * Task failure only happens when the job is in Processing stage.
      * Find associated job (via task) in corresponded stage.
      * Mark the job as recovering.
-     * Check task is active or passive:
-     * - when the task is active
-     *   a. rearrage task 
-     *   b. move the job to task assign stage.
-     *   c. find corresponded groom reference.
-     *   d. rest operations are dealt when MatchedGroom is received.
-     * - when the task is passive
-     *   a. rearrange task 
-     *   b. move the job to task assign stage.
-     *   c. assign will auto mark job as running if all tasks are assigned.
+     * Find healthy groom references (grooms where tasks are still running)
+     * Rest operation is dealt in TaskAliveGrooms (stop tasks, etc.)
      */
     case fault: TaskFailure => {
       jobManager.findJobById(fault.taskAttemptId.getJobID) match {
@@ -745,22 +738,15 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           val job = j.get
           job.findTaskBy(fault.taskAttemptId) match {
             case null => LOG.error("No task matches {}", fault.taskAttemptId)
-            case failed@_ => failed.isActive match {
-              case true => { 
-                markJobAsRecovering(s.get, job)  
-                val newTask = job.rearrange(failed)
-                //jobManager.move(job.getId)(TaskAssign)
-                // TODO: instead of find failed groom, retrieving healthy grooms
-                //       where the rest tasks is executing!
-                //master ! FindGroomRef(failed.getAssignedHost,  // <-- wrong
-                                      //failed.getAssignedPort,
-                                      //newTask)
-              }
-              case false => { 
-                markJobAsRecovering(s.get, job)  
-                job.rearrange(failed)
-                //jobManager.move(job.getId)(TaskAssign) 
-              }
+            case failed@_ => {
+              markJobAsRecovering(s.get, job)  
+              //val newTask = job.rearrange(failed)
+              //jobManager.move(job.getId)(TaskAssign)
+              // TODO: instead of find failed groom, retrieving healthy grooms
+              //       where the rest tasks is executing!
+              //master ! FindGroomRef(failed.getAssignedHost,  // <-- wrong
+                                    //failed.getAssignedPort,
+                                    //newTask)
             }
           }
         } 
@@ -768,10 +754,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       }
     }
     /**
-     * FindGroomRef 
-     * FindTaskAliveGrooms for restart
+     * Send Stop directive with old task to groom. 
+     * Rearrage old task (increment task attempt id, etc.)
+     * waiting task stopped msgs returned by grooms.
      */
-    // TODO: case TaskFailureGrooms(grooms, newTask) => healthygrooms.foreach( groom => grom ! new Directive(Stop, newTask, ...) 
+    // TODO: case TaskAliveGrooms(grooms, newTask) => healthygrooms.foreach( groom => grom ! new Directive(Stop, newTask, ...); job.rearrange(tasks) )
     //       add Stop in Directive.Action
     //       groom where healthy tasks running once receive stop msg, 
     //       a. stop task
@@ -785,7 +772,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      * Then move the job back to Processing stage. 
      * And mark the job as running.
      * Note that newTask is a task after rearranged function gets called.
-     */
     case MatchedGroom(newTask, ref) => {
       val jobId = newTask.getId.getJobID
       val (host, port) = targetHostPort(ref) 
@@ -795,6 +781,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       jobManager.move(jobId)(Processing)
       markJobAsRunning(jobId)
     }
+     */
   }
 
   protected def markJobAsRecovering(stage: Stage, job: Job) =
