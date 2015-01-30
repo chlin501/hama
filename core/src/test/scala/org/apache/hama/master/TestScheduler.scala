@@ -37,6 +37,7 @@ import org.apache.hama.master.Directive.Action._
 import org.apache.hama.groom.TaskRequest
 import org.apache.hama.groom.RequestTask
 import org.apache.hama.monitor.GroomStats
+import org.apache.hama.monitor.SlotStats
 import org.apache.hama.monitor.master.GetGroomCapacity
 import org.apache.hama.monitor.master.GroomCapacity
 import org.apache.hama.util.JobUtil
@@ -50,9 +51,12 @@ final case class Received(action: Action, id: TaskAttemptID, start: Long,
                           finish: Long, split: PartitionedSplit, superstep: Int,
                           state: State, phase: Phase, completed: Boolean,
                           active: Boolean, assigned: Boolean, bspTasks: Int)
+
 trait MockTC extends Mock with Periodically {// task counsellor
 
   var sched: Option[ActorRef] = None
+
+  override def preStart = tick(self, TaskRequest)
 
   def testMsg: Receive = {
     case Sched(sched) => this.sched = Option(sched)
@@ -68,7 +72,21 @@ trait MockTC extends Mock with Periodically {// task counsellor
 
   def received(d: Directive) { }
 
-  def requestNewTask() { }
+  def requestNewTask() = sched.map { s => s ! RequestTask(currentGroomStats) } 
+
+  def currentGroomStats(): GroomStats = {
+    val n = name
+    val host = name
+    val port = 50000
+    val maxTasksAllowed = 3
+    val slotStats = currentSlotStats
+    LOG.debug("Current groom stats: name {}, host {}, port {}, maxTasks {}, "+
+              "slot stats {}", n, host, port, maxTasksAllowed, slotStats)
+    GroomStats(n, host, port, maxTasksAllowed, slotStats)
+  } 
+
+  def currentSlotStats(): SlotStats = 
+    SlotStats(Array("none", "none", "none"), Map(), 3)
 
 
   def c(d: Directive): Received = 
@@ -84,7 +102,11 @@ trait MockTC extends Mock with Periodically {// task counsellor
 class Passive1(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => tester ! c(d)
+     case Launch => {
+       val r = c(d)
+       tester ! r
+       LOG.info("Directive at Passive1 contains {}", r)
+     }
      case Resume =>
      case Kill =>
    }
@@ -93,7 +115,11 @@ class Passive1(tester: ActorRef) extends MockTC {
 class Passive2(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => tester ! c(d)
+     case Launch => {
+       val r = c(d)
+       tester ! r
+       LOG.info("Directive at Passive2 contains {}", r)
+     }
      case Resume =>
      case Kill =>
    }
@@ -102,7 +128,11 @@ class Passive2(tester: ActorRef) extends MockTC {
 class Passive3(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => tester ! c(d)
+     case Launch => {
+       val r = c(d)
+       tester ! r
+       LOG.info("Directive at Passive3 contains {}", r)
+     }
      case Resume =>
      case Kill =>
    }
@@ -111,7 +141,11 @@ class Passive3(tester: ActorRef) extends MockTC {
 class Passive4(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => tester ! c(d)
+     case Launch => {
+       val r = c(d)
+       tester ! r
+       LOG.info("Directive at Passive4 contains {}", r)
+     }
      case Resume =>
      case Kill =>
    }
@@ -120,7 +154,11 @@ class Passive4(tester: ActorRef) extends MockTC {
 class Passive5(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
-     case Launch => tester ! c(d)
+     case Launch => {
+       val r = c(d)
+       tester ! r
+       LOG.info("Directive at Passive5 contains {}", r)
+     }
      case Resume =>
      case Kill =>
    }
@@ -132,8 +170,7 @@ class Active1(tester: ActorRef) extends MockTC {
      case Launch => {
        val r = c(d)
        tester ! r
-       LOG.info("Directive at server {} contains {}", 
-                self.path.address.hostPort, r)
+       LOG.info("Directive at Active1 contains {}", r)
      }
      case Resume =>
      case Kill =>
@@ -146,8 +183,7 @@ class Active2(tester: ActorRef) extends MockTC {
      case Launch => {
        val r = c(d)
        tester ! r
-       LOG.info("Directive at server {} contains {}", 
-                self.path.address.hostPort, r)
+       LOG.info("Directive at Active2 contains {}", r)
      }
      case Resume =>
      case Kill =>
@@ -160,8 +196,7 @@ class Active3(tester: ActorRef) extends MockTC {
      case Launch => {
        val r = c(d)
        tester ! r
-       LOG.info("Directive at server {} contains {}", 
-                self.path.address.hostPort, r)
+       LOG.info("Directive at Active3 contains {}", r)
      }
      case Resume =>
      case Kill =>
@@ -233,7 +268,20 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     LOG.info("Dispatch {} reference to grooms!", self.path.name)
     master ! Sched(self)
   }
-   
+
+  override def targetHostPort(target: ActorRef): (String, Int) = 
+    target.path.name match {
+      case "active1" => ("active1", 50000)
+      case "active2" => ("active2", 50000)
+      case "active3" => ("active3", 50000)
+      case "passive1" => ("passive1", 50000)
+      case "passive2" => ("passive2", 50000)
+      case "passive3" => ("passive3", 50000)
+      case "passive4" => ("passive4", 50000)
+      case "passive5" => ("passive5", 50000)
+    }
+
+  override def receive = super.receive
 
 }
 
@@ -273,9 +321,17 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
   it("test scheduling functions.") {
     val setting = Setting.master
     val job = jobWithActiveGrooms("test", 2)
+
     val taskAttemptId1 = taskAttemptId(job.getId, 1, 1)
     val taskAttemptId2 = taskAttemptId(job.getId, 2, 1)
     val taskAttemptId3 = taskAttemptId(job.getId, 3, 1)
+
+    val taskAttemptId4 = taskAttemptId(job.getId, 4, 1)
+    val taskAttemptId5 = taskAttemptId(job.getId, 5, 1)
+    val taskAttemptId6 = taskAttemptId(job.getId, 6, 1)
+    val taskAttemptId7 = taskAttemptId(job.getId, 7, 1)
+    val taskAttemptId8 = taskAttemptId(job.getId, 8, 1)
+
     val client = createWithArgs("mockClient", classOf[Client], tester)
     val receptionist = createWithArgs("mockReceptionist", classOf[R], client)
     receptionist ! J(job)
@@ -284,16 +340,30 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
                                 passives)
     val sched = createWithArgs("mockSched", classOf[MockScheduler], setting, 
                                master, receptionist, federator, tester)
+
     val r1 = r(Launch, taskAttemptId1, active)
     val r2 = r(Launch, taskAttemptId2, active)
     val r3 = r(Launch, taskAttemptId3, active)
-    LOG.info("Expect directives sent to active grooms ")
+
+    val r4 = r(Launch, taskAttemptId4, passive)
+    val r5 = r(Launch, taskAttemptId5, passive)
+    val r6 = r(Launch, taskAttemptId6, passive)
+    val r7 = r(Launch, taskAttemptId7, passive)
+    val r8 = r(Launch, taskAttemptId8, passive)
+
+    LOG.info("Expect directives sent to active grooms ... ")
     expectAnyOf(r1, r2, r3) 
     expectAnyOf(r1, r2, r3) 
     expectAnyOf(r1, r2, r3) 
+
+    LOG.info("Expect directives sent to passive grooms ...")
+    expectAnyOf(r4, r5, r6, r7, r8)
+    expectAnyOf(r4, r5, r6, r7, r8)
+    expectAnyOf(r4, r5, r6, r7, r8)
+    expectAnyOf(r4, r5, r6, r7, r8)
+    expectAnyOf(r4, r5, r6, r7, r8)
 
     LOG.info("Done testing scheduler functions!")
   }
-
 
 }

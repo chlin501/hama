@@ -510,14 +510,24 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * GroomServer's TaskCounsellor requests for assigning a task.
    * @return Receive partiail function.
    */
+  // TODO: instead of checking activeFinished, each time when groom requests 
+  //       check if sender is from target grooms (calcuate remaining free 
+  //       slots in target grooms, but this may be more complicated).  
   def requestTask: Receive = {
     case req: RequestTask => {
-      LOG.debug("GroomServer form {} at {}:{} requests for assigning a task.", 
-                sender.path.name, req.stats.map { s => s.host}, 
-                req.stats.map { s=> s.port})
-      if(activeFinished) passiveAssign(req.stats, sender) // TODO: instead of checking activeFinished, each time when groom requests check if sender is from taret grooms (calcuate remaining free slots in target grooms, but this is a bit more complicated).  
+      beforePassiveAssign(req, sender)
+      if(activeFinished) passiveAssign(req.stats, sender) 
+      afterPassiveAssign(req, sender)
     }
   } 
+
+  protected def beforePassiveAssign(req: RequestTask, from: ActorRef) = 
+    LOG.debug("GroomServer from {} at {}:{} requests for assigning a task "+
+              "with activeFinished flag set to {}.", from.path.name, 
+              req.stats.map { s => s.host }, req.stats.map { s=> s.port }, 
+              activeFinished)
+
+  protected def afterPassiveAssign(req: RequestTask, from: ActorRef) { }
 
   protected def passiveAssign(stats: Option[GroomStats], from: ActorRef) = 
     jobManager.isEmpty(TaskAssign) match {
@@ -540,20 +550,21 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     val job = ticket.job
     val currentTasks = job.getTaskCountFor(stats.hostPort)
     val maxTasksAllowed = stats.maxTasks
-    LOG.debug("Currently there are {} tasks at {}, with max {} tasks allowed.", 
+    LOG.info("Currently there are {} tasks at {}, with max {} tasks allowed.", 
              currentTasks, stats.host, maxTasksAllowed)
     (maxTasksAllowed >= (currentTasks+1)) match {
       case true => job.nextUnassignedTask match {
         case null =>         
         case task@_ => {
           val (host, port) = targetHostPort(from)
-          LOG.debug("Task {} is assigned with target host {} port {}", 
+          LOG.info("Task {} is assigned with target host {} port {}", 
                    task.getId, host, port)
           task.assignedTo(host, port)
           if(1 < task.getId.getId)  
             from ! new Directive(Resume, task, setting.name) 
           else from ! new Directive(Launch, task, setting.name)
           if(job.allTasksAssigned) {
+            LOG.debug("Tasks for job {} are all assigned!", job.getId)
             jobManager.moveToNextStage(job.getId) match { 
               case (true, _) => if(jobManager.update(ticket.
                 newWithJob(job.newWithRunningState))) 

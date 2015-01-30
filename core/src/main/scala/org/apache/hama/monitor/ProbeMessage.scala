@@ -344,6 +344,12 @@ final class SlotStats extends Writable with ProbeMessage {
       ) + crashCount.hashCode
     ) + maxRetries
 
+  override def toString(): String = "SlotStats("+
+    slots.mkString("Array(", ",", ")")+
+    crashCount.mkString("Map(", ", ", ")") +
+    maxRetries
+  ")"
+
 }
 
 object TaskStats {
