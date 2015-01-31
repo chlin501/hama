@@ -656,6 +656,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           }
         }
         case true => {
+          // TODO: check job in killing or stopping
+          //       if killing, mark task on (leave) grooms as failed.
+          //       check if all task stopped. reject if needed.
+          //       if stopping, check if task is active. if true, 
+          //       change job to killing, etc.
           val newFailedTasks = t.get.job.findTasksBy(host, port) 
           newFailedTasks.size match {
             case 0 =>  
@@ -718,9 +723,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         val client = t.get.client
         job.markCancelledWith(taskAttemptId) match {
           case true => if(job.allTasksStopped) {
-            // TODO: check job is in stoping or killing state 
-            //       then decide to resume (move job to task assign stage or 
-            //       go as below)
+            // TODO: check job is in stoping or killing state.
+            //       then decide to resume (move job to task assign stage) or 
+            //       go as below (reject back to client, etc.)
 
             // Note: newjob is not in cancelled state because it's a groom leave
             //       event.
@@ -778,16 +783,22 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       jobManager.findJobById(fault.taskAttemptId.getJobID) match {
         case (s: Some[Stage], j: Some[Job]) => if(!j.get.isRecovering) {
           val job = j.get
-          markJobAsStopping(s.get, job)   
+          markJobAsRestarting(s.get, job)   
           val failed = job.findTaskBy(fault.taskAttemptId)
           val aliveGrooms = asScalaSet(job.tasksRunAtExcept(failed)).toSet
           master ! FindTasksAliveGrooms(aliveGrooms)
         } else {
           val job = j.get
           job.findTaskBy(fault.taskAttemptId).failedState
-          // TODO: check if all tasks stopped. 
-          //       if true, job.rearrage() all tasks. 
-          //       move job to task assign stage
+          // TODO: check job state: 
+          //       - job in killing
+          //         a. mark faulty task in the job as failed.
+          //         b. check if all tasks stopped. if true, 
+          //            notify job finished
+          //            move job to finished stage, etc.
+          //       - job in stopping
+          //         check if faulty task is active. if true, go killing route.
+          //         otherwise mark faulty task as failed, call rearrange, etc. 
         }
         case _ => LOG.error("No matched job: {}", fault.taskAttemptId.getJobID)
       }
@@ -833,9 +844,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      */
   }
 
-  protected def markJobAsStopping(stage: Stage, job: Job) =
+  protected def markJobAsRestarting(stage: Stage, job: Job) =
     jobManager.headOf(stage).map { ticket => 
-      jobManager.update(ticket.newWithJob(job.newWithStoppingState))  
+      jobManager.update(ticket.newWithJob(job.newWithRestartingState))  
     }
 
   protected def markJobAsRunning(jobId: BSPJobID) = 
@@ -854,7 +865,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    */
   protected def allPassiveTasks(host: String, port: Int, ticket: Ticket,
                                 failedTasks: java.util.List[Task]) {
-    val stopping = ticket.job.newWithStoppingState
+    val stopping = ticket.job.newWithRestartingState
     jobManager.update(ticket.newWithJob(stopping)) 
     failedTasks.foreach( task => task.failedState)
     val groomsAlive = asScalaSet(ticket.job.tasksRunAt).toSet.filter( groom => 

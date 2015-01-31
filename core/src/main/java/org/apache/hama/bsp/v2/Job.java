@@ -84,7 +84,7 @@ public final class Job implements Writable {
     RUNNING(2), 
     SUCCEEDED(3), 
     KILLING(4), // kill and stop all running tasks
-    STOPPING(5), // stop before resume 
+    RESTARTING(5), // stop then resume 
     FAILED(6);
 
     int s;
@@ -109,8 +109,8 @@ public final class Job implements Writable {
         case KILLING:
           stateName = "KILLING";
           break;
-        case STOPPING:
-          stateName = "STOPPING";
+        case RESTARTING:
+          stateName = "RESTARTING";
           break;
         case FAILED:
           stateName = "FAILED";
@@ -526,17 +526,17 @@ public final class Job implements Writable {
     return newWithState(State.KILLING); 
   }
 
-  public boolean isStopping() {
-    return State.STOPPING.equals(getState());
+  public boolean isRestarting() {
+    return State.RESTARTING.equals(getState());
   }
 
-  public Job newWithStoppingState() { 
-    return newWithState(State.STOPPING); 
+  public Job newWithRestartingState() { 
+    return newWithState(State.RESTARTING); 
   }
 
   public boolean isRecovering() {
     return (State.KILLING.equals(getState()) || 
-           State.STOPPING.equals(getState()));
+           State.RESTARTING.equals(getState()));
   }
 
   public boolean isFailed() {
