@@ -63,8 +63,8 @@ class MockTaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef,
     tester ! id 
   }
 
-  override def postKillAck(ack: KillAck) {
-    LOG.debug("<KillAck> {} receives {}", name, ack)
+  override def postCancelAck(ack: CancelAck) {
+    LOG.debug("<CancelAck> {} receives {}", name, ack)
     tester ! ack.taskAttemptId.toString
   }
 
@@ -153,30 +153,6 @@ class TestExecutor extends TestEnv(TestExecutor.actorSystemName,
 
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_3")
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_3")
-
-/*
-    // kill previous actions.
-    val directive3 = newDirective(Kill, task1)
-    taskCounsellor ! directive3
-    val directive4 = newDirective(Kill, task2)
-    taskCounsellor ! directive4
-
-    expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_3") // TODO: fail at here
-    expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_3")
-
-    taskCounsellor ! StopExecutor(1)
-    taskCounsellor ! StopExecutor(2)
-    taskCounsellor ! StopExecutor(3)
-
-    sleep(20.seconds)
-
-    expectAnyOf("groomServer_executor_1", "groomServer_executor_2") 
-    expectAnyOf("groomServer_executor_1", "groomServer_executor_2") 
-    expect(None)
-    expect(None)
-    expect(None)
-*/
-
     LOG.info("Done TestExecutor!")
   }
 }

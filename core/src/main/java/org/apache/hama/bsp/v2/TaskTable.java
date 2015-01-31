@@ -412,14 +412,14 @@ public final class TaskTable implements Writable {
     }
   }
 
-  boolean markKilledWith(final TaskAttemptID taskAttemptId) {
+  boolean markCancelledWith(final TaskAttemptID taskAttemptId) {
     boolean flag = false;
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
       if(null == latest) 
         throw new NullPointerException("No latest task at row "+row+"!");
       if(latest.getId().equals(taskAttemptId)) {
-        latest.killedState();
+        latest.cancelledState();
         flag = true;
         break;
       }
@@ -432,13 +432,13 @@ public final class TaskTable implements Writable {
    * @return boolean denotes if all tasks are stopped. if true, all tasks are 
    *                 stopped; otherwise some tasks are still operated.
    */
-  boolean allTasksKilled() {
+  boolean allTasksStopped() {
     int count = 0;
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
       if(null == latest) 
         throw new NullPointerException("No latest task at row "+row+"!");
-      if(latest.isKilled() || latest.isFailed()) count += 1;
+      if(latest.isCancelled() || latest.isFailed()) count += 1;
     }
     return (count == rowLength());
   }

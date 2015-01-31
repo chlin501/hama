@@ -69,8 +69,7 @@ final case class FindGroomsToStopTasks(infos: Set[SystemInfo])
 final case class GroomsToStopFound(matched: Set[ActorRef], 
                                    nomatched: Set[String])
       extends SchedulerMessage
-final case class TaskKilled(taskAttemptId: String) extends SchedulerMessage
-final case class TaskStopped(taskAttemptId: String) extends SchedulerMessage
+final case class TaskCancelled(taskAttemptId: String) extends SchedulerMessage
 final case class FindTasksAliveGrooms(infos: Set[SystemInfo]) 
       extends SchedulerMessage
 final case class TasksAliveGrooms(grooms: Set[ActorRef])
@@ -682,7 +681,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case (s: Some[Stage], t: Some[Ticket]) => matched.foreach( ref => {
           val (host, port) = targetHostPort(ref)
           t.get.job.findTasksBy(host, port).foreach ( task => 
-            ref ! new Directive(Kill, task, setting.name) 
+            ref ! new Directive(Cancel, task, setting.name) 
           )
         })
         case (s@_, t@_) => throw new RuntimeException("Invalid stage "+s+
@@ -694,7 +693,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case (s: Some[Stage], t: Some[Ticket]) => matched.foreach( ref => {
           val (host, port) = targetHostPort(ref)
           t.get.job.findTasksBy(host, port).foreach ( task => 
-            ref ! new Directive(Stop, task, setting.name) 
+            ref ! new Directive(Cancel, task, setting.name) 
           )
         })
         case (s@_, t@_) => throw new RuntimeException("Invalid stage " + s +
@@ -713,12 +712,16 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      *  - Move job from processing queue to finished queue.
      *  - Notify client.
      */
-    case TaskKilled(taskAttemptId) => jobManager.ticketAt match {
+    case TaskCancelled(taskAttemptId) => jobManager.ticketAt match {
       case (stage: Some[Stage], t: Some[Ticket]) => { 
         val job = t.get.job
         val client = t.get.client
-        job.markKilledWith(taskAttemptId) match {
-          case true => if(job.allTasksKilled) {
+        job.markCancelledWith(taskAttemptId) match {
+          case true => if(job.allTasksStopped) {
+            // TODO: check job is in stoping or killing state 
+            //       then decide to resume (move job to task assign stage or 
+            //       go as below)
+
             // Note: newjob is not in cancelled state because it's a groom leave
             //       event.
             val newJob = job.newWithFailedState 
@@ -742,7 +745,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       }
       case _ => LOG.error("No ticket found at any Stage!")
     }
-    case TaskStopped(taskAttemptId) => // TODO: if all tasks stopped. job.rearrange(task). move job to task assign
+    //case TaskStopped(taskAttemptId) => // TODO: if all tasks stopped. job.rearrange(task). move job to task assign
     /**
      * Update task in task table.
      * Check if all tasks are successful
@@ -790,7 +793,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       }
     }
     /**
-     * Send Stop directive with old task to groom. 
+     * Send Cancel directive with old task (not new task after rearrange) 
+     * to groom. 
      * Wait for TaskStopped msgs returned by grooms.
      */
     case TasksAliveGrooms(grooms) => jobManager.ticketAt match {
@@ -798,7 +802,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         val job = t.get.job
         val (host, port) = targetHostPort(groom)
         job.findTasksBy(host, port).foreach ( taskToStop => 
-          groom ! new Directive(Stop, taskToStop, setting.name) 
+          groom ! new Directive(Cancel, taskToStop, setting.name) 
         )
       })
       case (s@_, t@_) => LOG.error("Invalid stage {} or ticket {}!", s, t)

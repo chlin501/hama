@@ -116,8 +116,7 @@ class Passive1(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Kill =>
-     case Stop =>
+     case Cancel =>
      case Resume =>
    }
 }
@@ -126,8 +125,7 @@ class Passive2(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Kill =>
-     case Stop =>
+     case Cancel =>
      case Resume =>
    }
 }
@@ -136,8 +134,7 @@ class Passive3(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Kill =>
-     case Stop =>
+     case Cancel =>
      case Resume =>
    }
 }
@@ -146,8 +143,7 @@ class Passive4(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Kill =>
-     case Stop =>
+     case Cancel =>
      case Resume =>
    }
 }
@@ -156,8 +152,7 @@ class Passive5(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Kill =>
-     case Stop =>
+     case Cancel =>
      case Resume =>
    }
 }
@@ -166,8 +161,7 @@ class Active1(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Kill =>
-     case Stop =>
+     case Cancel =>
      case Resume =>
    }
 }
@@ -176,8 +170,7 @@ class Active2(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Kill =>
-     case Stop =>
+     case Cancel =>
      case Resume =>
    }
 }
@@ -186,8 +179,7 @@ class Active3(tester: ActorRef) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Kill =>
-     case Stop =>
+     case Cancel =>
      case Resume =>
    }
 }

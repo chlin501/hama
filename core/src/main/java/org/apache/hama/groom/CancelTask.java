@@ -23,13 +23,13 @@ import java.io.DataOutput;
 import org.apache.hadoop.io.Writable;
 import org.apache.hama.bsp.TaskAttemptID;
 
-public final class KillTask implements Writable {
+public final class CancelTask implements Writable {
 
   private TaskAttemptID taskAttemptId;
 
-  public KillTask() {}
+  public CancelTask() {}
 
-  public KillTask(final TaskAttemptID taskAttemptId) {
+  public CancelTask(final TaskAttemptID taskAttemptId) {
     if(null == taskAttemptId)
       throw new IllegalArgumentException("TaskAttemptID is missing!");
     this.taskAttemptId = taskAttemptId;
@@ -52,7 +52,7 @@ public final class KillTask implements Writable {
 
   @Override
   public String toString() {
-    return "KillTask("+taskAttemptId().toString()+")";
+    return "CancelTask("+taskAttemptId().toString()+")";
   }
 
 }

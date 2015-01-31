@@ -24,14 +24,14 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hama.bsp.TaskAttemptID;
 
-public final class KillAck implements Writable {
+public final class CancelAck implements Writable {
 
   private IntWritable slotSeq = new IntWritable(0);
   private TaskAttemptID taskAttemptId;
 
-  public KillAck() {}
+  public CancelAck() {}
 
-  public KillAck(final int slotSeq, final TaskAttemptID taskAttemptId) {
+  public CancelAck(final int slotSeq, final TaskAttemptID taskAttemptId) {
     if(0 >= slotSeq) 
       throw new IllegalArgumentException("Invalid slot seq value: "+slotSeq);
     this.slotSeq.set(slotSeq);
@@ -64,7 +64,7 @@ public final class KillAck implements Writable {
 
   @Override
   public String toString() {
-    return "KillAck("+slotSeq()+ ","+taskAttemptId().toString()+")";
+    return "CancelAck("+slotSeq()+ ","+taskAttemptId().toString()+")";
   }
 
 }

@@ -607,16 +607,16 @@ public final class Job implements Writable {
     return this.taskTable;
   }
 
-  public boolean markKilledWith(final String taskAttemptId) {
-    return getTasks().markKilledWith(TaskAttemptID.forName(taskAttemptId));
+  public boolean markCancelledWith(final String taskAttemptId) {
+    return getTasks().markCancelledWith(TaskAttemptID.forName(taskAttemptId));
   }
 
-  public boolean markKilledWith(final TaskAttemptID taskAttemptId) {
-    return getTasks().markKilledWith(taskAttemptId); 
+  public boolean markCancelledWith(final TaskAttemptID taskAttemptId) {
+    return getTasks().markCancelledWith(taskAttemptId); 
   }
 
-  public boolean allTasksKilled() { 
-    return getTasks().allTasksKilled();
+  public boolean allTasksStopped() { 
+    return getTasks().allTasksStopped();
   } 
 
   public boolean allTasksSucceeded() {

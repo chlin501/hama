@@ -23,7 +23,7 @@ import akka.actor.Deploy
 import akka.actor.OneForOneStrategy
 import akka.actor.Props
 import akka.actor.SupervisorStrategy.Restart
-import akka.actor.SupervisorStrategy.{ Stop => SStop}
+import akka.actor.SupervisorStrategy.Stop 
 import akka.remote.RemoteScope
 import java.io.DataInput
 import java.io.DataOutput
@@ -145,7 +145,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     /**
      * Executor throws exception.
      */
-    case ee: ExecutorException => { unwatchContainerWith(ee.slotSeq); SStop }
+    case ee: ExecutorException => { unwatchContainerWith(ee.slotSeq); Stop }
   }
 
   protected val slotManager = SlotManager(defaultMaxTasks)
@@ -235,7 +235,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       container ! new ResumeTask(d.task) 
       slotManager.book(slot.seq, d.task.getId, container)
     }
-    case _ => LOG.error("Action Kill/ Stop by {} shouldn't be here for slot " +
+    case _ => LOG.error("Action Cancel by {} shouldn't be here for slot " +
                         "{} for container does not exist!", d, slot.seq)
   }
 
@@ -282,14 +282,14 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def whenReceive(d: Directive)(from: ActorRef) =
     if(slotManager.hasFreeSlot(directiveQueue.size)) d.action match {
       case Launch | Resume => initializeOrDispatch(d) 
-      case Kill => slotManager.findSlotBy(d.task.getId).map { slot =>
+      case Cancel => slotManager.findSlotBy(d.task.getId).map { slot =>
         slot.container match { 
-          case Some(container) => container ! new KillTask(d.task.getId)  
+          case Some(container) => container ! new CancelTask(d.task.getId)  
           case None => LOG.error("No container is up. Can't kill task {}!",
                                  d.task.getId)
         }
       }
-      case Stop => 
+      case Cancel => 
         // TODO: find corresponsed slot.container where the task is running 
         //       issue to stop running task
         //       check stop ack and replies to master through groom ref.
@@ -297,33 +297,33 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     } else from ! NoFreeSlot(d)
 
   /**
-   * Executor ack for Kill action.
-   * Verify corresponded task is with Kill action and correct taskAttemptId.
+   * Executor ack for Cancel action.
+   * Verify corresponded task is with Cancel action and correct taskAttemptId.
    * @param Receive is partial function.
    */
   protected def killAck: Receive = {
-    case action: KillAck => {
-      preKillAck(action)
-      doKillAck(action)
-      postKillAck(action)
+    case action: CancelAck => {
+      preCancelAck(action)
+      doCancelAck(action)
+      postCancelAck(action)
     }
   }
 
-  protected def preKillAck(ack: KillAck) { }
+  protected def preCancelAck(ack: CancelAck) { }
 
-  protected def postKillAck(ack: KillAck) { 
+  protected def postCancelAck(ack: CancelAck) { 
     // TODO: notify master a task is killed
-    // e.g. taskCounsellor ! TaskKilled(ack.taskAttemptId.toString)
+    // e.g. taskCounsellor ! TaskCancelled(ack.taskAttemptId.toString)
   }
 
   /**
    * - Find corresponded slot seq and task attempt id replied from 
    * {@link Container}.
    * - Update information by removing task recorded in {@link Slot}.
-   * @param action is the KillAck that contains {@link TaskAttemptID} and slot
+   * @param action is the CancelAck that contains {@link TaskAttemptID} and slot
    *               seq. 
    */
-  protected def doKillAck(action: KillAck) = 
+  protected def doCancelAck(action: CancelAck) = 
     slotManager.clearSlotBy(action.slotSeq, action.taskAttemptId)
 
   protected def pushToLaunch(seq: Int, directive: Directive, 
@@ -454,8 +454,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
           LOG.info("{} requests for ResumeTask.", container.path.name)
           pushToResume(seq, d, container)
         }
-        case _ => LOG.error("Container {} shouldn't request kill/ Stop ",
-                            "action!", container.path.name)
+        case _ => LOG.error("Container {} shouldn't request Cancel action!", 
+                            container.path.name)
       }
       directiveQueue = rest
     }

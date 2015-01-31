@@ -198,7 +198,7 @@ public final class Task implements Writable { // TODO: change to immutable
    * particular executing point.
    */
   public static enum State {
-    WAITING, RUNNING, SUCCEEDED, FAILED, KILLED, STOPPED
+    WAITING, RUNNING, SUCCEEDED, FAILED, CANCELLED
   }
 
   public static final class Builder {
@@ -458,21 +458,14 @@ public final class Task implements Writable { // TODO: change to immutable
     this.state = State.FAILED;
   }
 
-  public boolean isKilled() {
-    return State.KILLED.equals(getState());
+  public boolean isCancelled() {
+    return State.CANCELLED.equals(getState());
   }
 
-  public void killedState() {
-    this.state = State.KILLED;
+  public void cancelledState() {
+    this.state = State.CANCELLED;
   }
-
-  public boolean isStopped() {
-    return State.STOPPED.equals(getState());
-  }
-
-  public void stoppedState() {
-    this.state = State.STOPPED;
-  }
+  
   public Phase getPhase() {
     return this.phase;
   }

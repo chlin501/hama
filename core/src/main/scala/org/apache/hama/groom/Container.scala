@@ -252,20 +252,20 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
   def postResume(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) { }
 
   /**
-   * Kill the task that is running.
+   * Cancel the task that is running.
    * @param Receive is partial function.
    */
-  def killTask: Receive = {
-    case action: KillTask => {
-      doKill(action.taskAttemptId)
-      postKill(slotSeq, action.taskAttemptId, sender)
+  def cancelTask: Receive = {
+    case action: CancelTask => {
+      doCancel(action.taskAttemptId)
+      postCancel(slotSeq, action.taskAttemptId, sender)
     }
   }
 
-  def doKill(taskAttemptId: TaskAttemptID) = stopChildren // TODO: any other operations?
+  def doCancel(taskAttemptId: TaskAttemptID) = stopChildren // TODO: any other operations?
 
-  def postKill(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = 
-    from ! new KillAck(slotSeq, taskAttemptId)
+  def postCancel(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = 
+    from ! new CancelAck(slotSeq, taskAttemptId)
 
   override def stopServices() {
     stopChildren
@@ -309,6 +309,6 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
     case taskReport: TaskReport => taskCounsellor ! taskReport 
   }
 
-  override def receive = launchTask orElse resumeTask orElse killTask orElse shutdownContainer orElse superviseeOffline orElse taskFinished orElse taskReport orElse unknown
+  override def receive = launchTask orElse resumeTask orElse cancelTask orElse shutdownContainer orElse superviseeOffline orElse taskFinished orElse taskReport orElse unknown
 
 }
