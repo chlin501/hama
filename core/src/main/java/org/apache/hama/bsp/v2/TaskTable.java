@@ -298,6 +298,19 @@ public final class TaskTable implements Writable {
     return Collections.unmodifiableList(latestTasks);
   }
 
+  /**
+   * Collect grooms by excluding the failed task because stopping failed task
+   * is not necessary.
+   * @param failed task to be excluded.
+   */
+  Set<SystemInfo> groomsExcept(final Task failed) {
+    final Set<SystemInfo> infos = new HashSet<SystemInfo>();
+    for(final Task latest: latestTasks()) {
+      if(!latest.equals(failed)) infos.add(latest.runsAt());
+    }
+    return Collections.unmodifiableSet(infos);
+  }
+
   Set<SystemInfo> grooms() {
     final Set<SystemInfo> infos = new HashSet<SystemInfo>();
     for(final Task latest: latestTasks()) {
@@ -399,14 +412,14 @@ public final class TaskTable implements Writable {
     }
   }
 
-  boolean markCancelledWith(final TaskAttemptID taskAttemptId) {
+  boolean markKilledWith(final TaskAttemptID taskAttemptId) {
     boolean flag = false;
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
       if(null == latest) 
         throw new NullPointerException("No latest task at row "+row+"!");
       if(latest.getId().equals(taskAttemptId)) {
-        latest.cancelledState();
+        latest.killedState();
         flag = true;
         break;
       }
@@ -419,13 +432,13 @@ public final class TaskTable implements Writable {
    * @return boolean denotes if all tasks are stopped. if true, all tasks are 
    *                 stopped; otherwise some tasks are still operated.
    */
-  boolean allTasksStopped() {
+  boolean allTasksKilled() {
     int count = 0;
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
       if(null == latest) 
         throw new NullPointerException("No latest task at row "+row+"!");
-      if(latest.isCancelled() || latest.isFailed()) count += 1;
+      if(latest.isKilled() || latest.isFailed()) count += 1;
     }
     return (count == rowLength());
   }

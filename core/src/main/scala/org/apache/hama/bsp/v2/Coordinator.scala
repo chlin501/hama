@@ -745,8 +745,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     reportTask
   }
 
-  protected def cancelledState() {
-    task.cancelledState
+  protected def killedState() {
+    task.killedState
     reportTask
   }
 

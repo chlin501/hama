@@ -267,7 +267,7 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
         case Some(ref) => matched += ref
         case None => nomatched += info.getHost+":"+info.getPort
       }) 
-      sender ! GroomsFound(matched, nomatched)
+      sender ! GroomsToKillFound(matched, nomatched)
     } 
     //case FindGroomRef(host, port, newTask) => // TODO: find corresponded groom actor based on host port and return with newTask. sched ! TaskFailureGrooms(grooms, newTask)
   }

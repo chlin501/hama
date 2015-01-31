@@ -23,7 +23,7 @@ import akka.actor.Deploy
 import akka.actor.OneForOneStrategy
 import akka.actor.Props
 import akka.actor.SupervisorStrategy.Restart
-import akka.actor.SupervisorStrategy.Stop
+import akka.actor.SupervisorStrategy.{ Stop => SStop}
 import akka.remote.RemoteScope
 import java.io.DataInput
 import java.io.DataOutput
@@ -145,7 +145,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     /**
      * Executor throws exception.
      */
-    case ee: ExecutorException => { unwatchContainerWith(ee.slotSeq); Stop }
+    case ee: ExecutorException => { unwatchContainerWith(ee.slotSeq); SStop }
   }
 
   protected val slotManager = SlotManager(defaultMaxTasks)
@@ -235,8 +235,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       container ! new ResumeTask(d.task) 
       slotManager.book(slot.seq, d.task.getId, container)
     }
-    case Kill => LOG.error("Action Kill by {} shouldn't be here for slot {} "+
-                           "for container does not exist!", d, slot.seq)
+    case Stop => // TODO: ?
+    case Kill => LOG.error("Action Kill by {} shouldn't be here for slot " +
+                           "{} for container does not exist!", d, slot.seq)
   }
 
   protected def whenExecutorExists(d: Directive): Unit = 
@@ -289,7 +290,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
                                  d.task.getId)
         }
       }
-      case _ => LOG.warning("Unknown directive {}", d)
+      case Stop => // TODO: stop running task
     } else from ! NoFreeSlot(d)
 
   /**
@@ -452,8 +453,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
           LOG.info("{} requests for ResumeTask.", container.path.name)
           pushToResume(seq, d, container)
         }
-        case _ => LOG.warning("Unknown action {} for task {} from {}", 
-                              d.action, d.task.getId, d.master)
+        case Stop => // TODO: pushToStop(...)
       }
       directiveQueue = rest
     }

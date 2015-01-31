@@ -61,11 +61,11 @@ final case class SomeMatched(matched: Array[ActorRef],
                              nomatched: Array[String]) extends SchedulerMessage
 final case class FindGroomsToKillTasks(infos: Set[SystemInfo]) 
       extends SchedulerMessage
-final case class GroomsFound(matched: Set[ActorRef], nomatched: Set[String])
+final case class GroomsToKillFound(matched: Set[ActorRef], 
+                                   nomatched: Set[String])
       extends SchedulerMessage
 final case class TaskKilled(taskAttemptId: String) extends SchedulerMessage
-final case class FindHealthyGrooms(hostPorts: Array[String], task: Task)
-//final case class FindGroomRef(host: String, port: Int, task: Task)
+final case class FindTasksAliveGrooms(infos: Set[SystemInfo]) 
       extends SchedulerMessage
 final case class MatchedGroom(newTask: Task, ref: ActorRef)
       extends SchedulerMessage
@@ -490,6 +490,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def freeSlotUnavailable = jobManager.ticketAt match {
     case (s: Some[Stage], t: Some[Ticket]) => {
       val ticket = t.get
+      // TODO: do kill the rest tasks first!!! e.g. FindGroomsToKillTasks
       ticket.client ! Reject("Some target grooms do not have free slots!")
       val ticketWithFailedJob = ticket.newWithJob(ticket.job.newWithFailedState)
       jobManager.update(ticketWithFailedJob)
@@ -585,10 +586,10 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   /**
    * GroomLeave event happens and some tasks run on failed groom, so following
    * actions are taken:
-   * - mark tasks running on the failed groom as failure.
+   * - mark tasks running on the failed groom to failed state.
    * - note kill command for later reference.
    * - find grooms where rest tasks are running.
-   * - rest operations are executed when GroomsFound.
+   * - rest operations are executed when GroomsToKillFound.
    */
   protected def whenActiveTasksFail(host: String, port: Int, job: Job,
                                     failedTasks: java.util.List[Task]) {
@@ -637,11 +638,21 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      * Then check if any tasks fail on the groom by tasks size found.
      */
     case GroomLeave(name, host, port) => jobManager.ticketAt match {
-      case (s: Some[Stage], t: Some[Ticket]) => if(!t.get.job.isRecovering) {
-        val failedTasks = t.get.job.findTasksBy(host, port)
-        failedTasks.size match {
-          case 0 => LOG.debug("No tasks run on failed groom {}:{}!", host, port)
-          case _ => someTasksFailure(host, port, t.get, s.get, failedTasks)
+      case (s: Some[Stage], t: Some[Ticket]) => t.get.job.isRecovering match {
+        case false => {
+          val failedTasks = t.get.job.findTasksBy(host, port)
+          failedTasks.size match {
+            case 0 => LOG.debug("No tasks run on failed groom {}:{}!", host, 
+                                port)
+            case _ => someTasksFailure(host, port, t.get, s.get, failedTasks)
+          }
+        }
+        case true => {
+          val newFailedTasks = t.get.job.findTasksBy(host, port) 
+          newFailedTasks.size match {
+            case 0 =>  
+            case _ => newFailedTasks.foreach( task => task.failedState)
+          }
         }
       }
       case _ => LOG.warning("No job existed!")
@@ -649,9 +660,10 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     /**
      * Scheduler asks master for grooms references where tasks are running by 
      * issuing FindGroomsToKillTasks.
+     * Grooms found already exclude failed groom server.
      * Once receiving grooms references, issue kill command to groom servers.
      */
-    case GroomsFound(matched, nomatched) => if(!nomatched.isEmpty) 
+    case GroomsToKillFound(matched, nomatched) => if(!nomatched.isEmpty) 
       LOG.error("Some grooms {} not found!", nomatched.mkString(",")) 
       else matched.foreach( ref => {
         val host = ref.path.address.host.getOrElse(null)
@@ -681,8 +693,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case (stage: Some[Stage], t: Some[Ticket]) => { 
         val job = t.get.job
         val client = t.get.client
-        job.markCancelledWith(taskAttemptId) match {
-          case true => if(job.allTasksStopped) {
+        job.markKilledWith(taskAttemptId) match {
+          case true => if(job.allTasksKilled) {
             // Note: newjob is not in cancelled state because it's a groom leave
             //       event.
             val newJob = job.newWithFailedState 
@@ -734,8 +746,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      */
     case fault: TaskFailure => {
       jobManager.findJobById(fault.taskAttemptId.getJobID) match {
-        case (s: Some[Stage], j: Some[Job]) => {
+        case (s: Some[Stage], j: Some[Job]) => if(!j.get.isRecovering) {
           val job = j.get
+          markJobAsRecovering(s.get, job)   
+          val failed = job.findTaskBy(fault.taskAttemptId)
+          val aliveGrooms = asScalaSet(job.tasksRunAtExcept(failed)).toSet
+          master ! FindTasksAliveGrooms(aliveGrooms)
+/*
           job.findTaskBy(fault.taskAttemptId) match {
             case null => LOG.error("No task matches {}", fault.taskAttemptId)
             case failed@_ => {
@@ -749,7 +766,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                                     //newTask)
             }
           }
-        } 
+*/
+        } else LOG.info("Recovering job {}!", fault.taskAttemptId.getJobID)
         case _ => LOG.error("No matched job: {}", fault.taskAttemptId.getJobID)
       }
     }

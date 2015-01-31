@@ -594,16 +594,16 @@ public final class Job implements Writable {
     return this.taskTable;
   }
 
-  public boolean markCancelledWith(final String taskAttemptId) {
-    return getTasks().markCancelledWith(TaskAttemptID.forName(taskAttemptId));
+  public boolean markKilledWith(final String taskAttemptId) {
+    return getTasks().markKilledWith(TaskAttemptID.forName(taskAttemptId));
   }
 
-  public boolean markCancelledWith(final TaskAttemptID taskAttemptId) {
-    return getTasks().markCancelledWith(taskAttemptId); 
+  public boolean markKilledWith(final TaskAttemptID taskAttemptId) {
+    return getTasks().markKilledWith(taskAttemptId); 
   }
 
-  public boolean allTasksStopped() { // TODO: cancelled and fail. need change?
-    return getTasks().allTasksStopped();
+  public boolean allTasksKilled() { 
+    return getTasks().allTasksKilled();
   } 
 
   public boolean allTasksSucceeded() {
@@ -706,6 +706,17 @@ public final class Job implements Writable {
    */
   public Set<SystemInfo> tasksRunAt() {
     return getTasks().grooms(); 
+  }
+
+  /**
+   * Return groom servers on which tasks are running, except the failed one. 
+   * Multiple tasks may run on the same groom server, but only one info will be
+   * returned by this function. 
+   * Note that failed task may run on the same servers as tasks still alive, so
+   * grooms returned may contain that hosts failed task.
+   */  
+  public Set<SystemInfo> tasksRunAtExcept(final Task failed) {
+    return getTasks().groomsExcept(failed); 
   }
 
   /**

@@ -52,8 +52,9 @@ public class Directive implements Writable {
 
   public static enum Action {
     Launch(1), 
-    Kill(2),  // TODO; rename to cancel?
-    Resume(3); 
+    Kill(2),  
+    Stop(3), /* stop first before resume. */
+    Resume(4); 
 
     int t;
     Action(int t) { this.t = t; }
@@ -124,6 +125,8 @@ public class Directive implements Writable {
       this.action = Launch;
     } else if(Kill.value() == t) {
       this.action = Kill;
+    } else if(Stop.value() == t) {
+      this.action = Stop;
     } else if(Resume.value() == t) {
       this.action = Resume;
     } else {
