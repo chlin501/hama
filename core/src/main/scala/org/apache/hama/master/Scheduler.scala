@@ -64,9 +64,9 @@ final case class FindGroomsToKillTasks(infos: Set[SystemInfo])
 final case class GroomsToKillFound(matched: Set[ActorRef], 
                                    nomatched: Set[String])
       extends SchedulerMessage
-final case class FindGroomsToStopTasks(infos: Set[SystemInfo]) 
+final case class FindGroomsToRestartTasks(infos: Set[SystemInfo]) 
       extends SchedulerMessage
-final case class GroomsToStopFound(matched: Set[ActorRef], 
+final case class GroomsToRestartFound(matched: Set[ActorRef], 
                                    nomatched: Set[String])
       extends SchedulerMessage
 final case class TaskCancelled(taskAttemptId: String) extends SchedulerMessage
@@ -692,7 +692,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case (s@_, t@_) => throw new RuntimeException("Invalid stage "+s+
                                                       " or ticket "+t+"!")
       }
-    case GroomsToStopFound(matched, nomatched) => if(!nomatched.isEmpty) 
+    case GroomsToRestartFound(matched, nomatched) => if(!nomatched.isEmpty) 
       LOG.error("Can't stop for grooms {} not found!", nomatched.mkString(",")) 
       else jobManager.ticketAt match {
         case (s: Some[Stage], t: Some[Ticket]) => matched.foreach( ref => {
@@ -750,7 +750,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       }
       case _ => LOG.error("No ticket found at any Stage!")
     }
-    //case TaskStopped(taskAttemptId) => // TODO: if all tasks stopped. job.rearrange(task). move job to task assign
     /**
      * Update task in task table.
      * Check if all tasks are successful
@@ -806,21 +805,21 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     /**
      * Send Cancel directive with old task (not new task after rearrange) 
      * to groom. 
-     * Wait for TaskStopped msgs returned by grooms.
+     * Wait for TaskCancelled msgs returned by grooms.
      */
     case TasksAliveGrooms(grooms) => jobManager.ticketAt match {
       case (s: Some[Stage], t: Some[Ticket]) => grooms.foreach( groom => {
         val job = t.get.job
         val (host, port) = targetHostPort(groom)
-        job.findTasksBy(host, port).foreach ( taskToStop => 
-          groom ! new Directive(Cancel, taskToStop, setting.name) 
+        job.findTasksBy(host, port).foreach ( taskToRestart => 
+          groom ! new Directive(Cancel, taskToRestart, setting.name) 
         )
       })
       case (s@_, t@_) => LOG.error("Invalid stage {} or ticket {}!", s, t)
     }
     //       groom where healthy tasks running once receive stop msg, 
     //         a. stop task
-    //         b. reply TaskStopped(taskAttemptId)
+    //         b. reply TaskCancelled(taskAttemptId)
     //       if all task stopped 
     //         a. rearrange(task)
     //         b. move job to task assign stage
@@ -861,7 +860,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * Instead of rearrange and move job back to task assign stage immediately:
    * - mark tasks as failed first.
    * - find grooms where tasks are still up running. 
-   * - wait for TasksToStopGrooms returned.
+   * - wait for TasksToRestartGrooms returned.
    */
   protected def allPassiveTasks(host: String, port: Int, ticket: Ticket,
                                 failedTasks: java.util.List[Task]) {
@@ -871,7 +870,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     val groomsAlive = asScalaSet(ticket.job.tasksRunAt).toSet.filter( groom => 
       !host.equals(groom.getHost) && (port != groom.getPort)
     )  
-    master ! FindGroomsToStopTasks(groomsAlive)
+    master ! FindGroomsToRestartTasks(groomsAlive)
   }
 
   /**

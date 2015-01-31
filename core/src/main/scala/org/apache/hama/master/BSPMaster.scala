@@ -268,7 +268,7 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
       }) 
       sender ! GroomsToKillFound(matched, nomatched)
     } 
-    case FindGroomsToStopTasks(infos) => {
+    case FindGroomsToRestartTasks(infos) => {
       var matched = Set.empty[ActorRef] 
       var nomatched = Set.empty[String] 
       infos.foreach( info => grooms.find( groom => 
@@ -278,9 +278,9 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
         case Some(ref) => matched += ref
         case None => nomatched += info.getHost+":"+info.getPort
       }) 
-      sender ! GroomsToStopFound(matched, nomatched)
+      sender ! GroomsToRestartFound(matched, nomatched)
     }
-    // case JobCompleteEvent TODO:  
+    // case JobCompleteEvent TODO:  notify client job is complete?
   }
 
   protected def msgFromGroom: Receive = {

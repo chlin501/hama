@@ -277,7 +277,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   /**
    * Initialize child process if no executor found; otherwise dispatch action 
    * to child process directly.
-   * When directive is kill, slot update will be done after ack is received.
+   * When directive is cancelled, slot update will be done after ack is 
+   * received.
    */
   protected def whenReceive(d: Directive)(from: ActorRef) =
     if(slotManager.hasFreeSlot(directiveQueue.size)) d.action match {
@@ -285,7 +286,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       case Cancel => slotManager.findSlotBy(d.task.getId).map { slot =>
         slot.container match { 
           case Some(container) => container ! new CancelTask(d.task.getId)  
-          case None => LOG.error("No container is up. Can't kill task {}!",
+          case None => LOG.error("No container is up. Can't cancel task {}!",
                                  d.task.getId)
         }
       }
@@ -301,7 +302,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * Verify corresponded task is with Cancel action and correct taskAttemptId.
    * @param Receive is partial function.
    */
-  protected def killAck: Receive = {
+  protected def cancelAck: Receive = {
     case action: CancelAck => {
       preCancelAck(action)
       doCancelAck(action)
@@ -312,7 +313,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   protected def preCancelAck(ack: CancelAck) { }
 
   protected def postCancelAck(ack: CancelAck) { 
-    // TODO: notify master a task is killed
+    // TODO: notify master a task is cancelled
     // e.g. taskCounsellor ! TaskCancelled(ack.taskAttemptId.toString)
   }
 
@@ -467,6 +468,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
   }
 
-  override def receive = escalate orElse collectorMsgs orElse processReady orElse tickMessage orElse killAck orElse receiveDirective orElse superviseeOffline orElse unknown
+  override def receive = escalate orElse collectorMsgs orElse processReady orElse tickMessage orElse cancelAck orElse receiveDirective orElse superviseeOffline orElse unknown
 
 }
