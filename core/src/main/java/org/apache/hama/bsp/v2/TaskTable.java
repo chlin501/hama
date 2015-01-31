@@ -428,7 +428,7 @@ public final class TaskTable implements Writable {
   }
 
   /**
-   * Check if all tasks are either cancelled or failed.
+   * Check if all tasks are either killed or failed.
    * @return boolean denotes if all tasks are stopped. if true, all tasks are 
    *                 stopped; otherwise some tasks are still operated.
    */

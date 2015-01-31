@@ -70,6 +70,7 @@ final case class GroomsToStopFound(matched: Set[ActorRef],
                                    nomatched: Set[String])
       extends SchedulerMessage
 final case class TaskKilled(taskAttemptId: String) extends SchedulerMessage
+final case class TaskStopped(taskAttemptId: String) extends SchedulerMessage
 final case class FindTasksAliveGrooms(infos: Set[SystemInfo]) 
       extends SchedulerMessage
 final case class TasksAliveGrooms(grooms: Set[ActorRef])
@@ -596,11 +597,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * - find grooms where rest tasks are running.
    * - rest operations are executed when GroomsToKillFound.
    */
-  protected def whenActiveTasksFail(host: String, port: Int, job: Job,
+  protected def whenActiveTasksFail(host: String, port: Int, ticket: Ticket,
                                     failedTasks: java.util.List[Task]) {
+    val killing = ticket.job.newWithKillingState
+    jobManager.update(ticket.newWithJob(killing)) 
     failedTasks.foreach( task => task.failedState)
-    jobManager.cacheCommand(job.getId.toString, KillJob(host, port))
-    val groomsAlive = asScalaSet(job.tasksRunAt).toSet.filter( groom => 
+    jobManager.cacheCommand(ticket.job.getId.toString, KillJob(host, port))
+    val groomsAlive = asScalaSet(ticket.job.tasksRunAt).toSet.filter( groom => 
       !host.equals(groom.getHost) && (port != groom.getPort)
     )  
     master ! FindGroomsToKillTasks(groomsAlive)
@@ -618,12 +621,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def someTasksFailure(host: String, port: Int, ticket: Ticket, 
                                  stage: Stage, 
                                  failedTasks: java.util.List[Task]) {
-    val job = ticket.job
-    val recovering = job.newWithRecoveringState
-    jobManager.update(ticket.newWithJob(recovering)) 
+    //val job = ticket.job
+    //val recovering = job.newWithRecoveringState
+    //jobManager.update(ticket.newWithJob(recovering)) 
     failedTasks.exists(task => task.isActive) match { 
-      case true => whenActiveTasksFail(host, port, recovering, failedTasks)
-      case false => allPassiveTasks(host, port, recovering, failedTasks)
+      case true => whenActiveTasksFail(host, port, ticket, failedTasks)
+      case false => allPassiveTasks(host, port, ticket, failedTasks)
       /*allPassiveTasks(stage, recovering, failedTasks) match {
         case Success(result) => 
         case Failure(ex) => ex match {
@@ -657,7 +660,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           val newFailedTasks = t.get.job.findTasksBy(host, port) 
           newFailedTasks.size match {
             case 0 =>  
-            case _ => newFailedTasks.foreach( task => task.failedState)
+            case _ => {
+              // TODO: check if new failed tasks contain active tasks:
+              //       if true, reject
+              newFailedTasks.foreach( task => task.failedState)
+            }
           }
         }
       }
@@ -678,7 +685,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             ref ! new Directive(Kill, task, setting.name) 
           )
         })
-        case _ => 
+        case (s@_, t@_) => throw new RuntimeException("Invalid stage "+s+
+                                                      " or ticket "+t+"!")
       }
     case GroomsToStopFound(matched, nomatched) => if(!nomatched.isEmpty) 
       LOG.error("Can't stop for grooms {} not found!", nomatched.mkString(",")) 
@@ -689,7 +697,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             ref ! new Directive(Stop, task, setting.name) 
           )
         })
-        case _ => 
+        case (s@_, t@_) => throw new RuntimeException("Invalid stage " + s +
+                                                      " or ticket " + t + "!")
       } 
     /**
      * This happens when the groom leave event is triggered and where 
@@ -733,7 +742,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       }
       case _ => LOG.error("No ticket found at any Stage!")
     }
-    //case TaskStopped(taskAttemptId) => // TODO: if all tasks stopped. job.rearrange(task). move job to task assign
+    case TaskStopped(taskAttemptId) => // TODO: if all tasks stopped. job.rearrange(task). move job to task assign
     /**
      * Update task in task table.
      * Check if all tasks are successful
@@ -754,38 +763,28 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case _ => LOG.warning("No job existed!")
     }
     /**
-     * Task failure only happens when the job is in Processing stage.
+     * Task failure ideally should happen when the job is in Processing stage.
      * Find associated job (via task) in corresponded stage.
      * Mark the job as recovering.
-     * Find healthy groom references (grooms where tasks are still running)
+     * Find groom references where tasks are still running.
      * Rest operation is dealt in TasksAliveGrooms (stop tasks, etc.)
+     * Note that active tasks can be restart at the original grooms assigned
+     * because it's not groom failure.
      */
     case fault: TaskFailure => {
       jobManager.findJobById(fault.taskAttemptId.getJobID) match {
         case (s: Some[Stage], j: Some[Job]) => if(!j.get.isRecovering) {
           val job = j.get
-          markJobAsRecovering(s.get, job)   
+          markJobAsStopping(s.get, job)   
           val failed = job.findTaskBy(fault.taskAttemptId)
           val aliveGrooms = asScalaSet(job.tasksRunAtExcept(failed)).toSet
           master ! FindTasksAliveGrooms(aliveGrooms)
-/*
-          job.findTaskBy(fault.taskAttemptId) match {
-            case null => LOG.error("No task matches {}", fault.taskAttemptId)
-            case failed@_ => {
-              markJobAsRecovering(s.get, job)  
-              //val newTask = job.rearrange(failed)
-              //jobManager.move(job.getId)(TaskAssign)
-              // TODO: instead of find failed groom, retrieving healthy grooms
-              //       where the rest tasks is executing!
-              //master ! FindGroomRef(failed.getAssignedHost,  // <-- wrong
-                                    //failed.getAssignedPort,
-                                    //newTask)
-            }
-          }
-*/
         } else {
           val job = j.get
           job.findTaskBy(fault.taskAttemptId).failedState
+          // TODO: check if all tasks stopped. 
+          //       if true, job.rearrage() all tasks. 
+          //       move job to task assign stage
         }
         case _ => LOG.error("No matched job: {}", fault.taskAttemptId.getJobID)
       }
@@ -830,9 +829,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      */
   }
 
-  protected def markJobAsRecovering(stage: Stage, job: Job) =
+  protected def markJobAsStopping(stage: Stage, job: Job) =
     jobManager.headOf(stage).map { ticket => 
-      jobManager.update(ticket.newWithJob(job.newWithRecoveringState))  
+      jobManager.update(ticket.newWithJob(job.newWithStoppingState))  
     }
 
   protected def markJobAsRunning(jobId: BSPJobID) = 
@@ -849,10 +848,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * - find grooms where tasks are still up running. 
    * - wait for TasksToStopGrooms returned.
    */
-  protected def allPassiveTasks(host: String, port: Int, job: Job,
+  protected def allPassiveTasks(host: String, port: Int, ticket: Ticket,
                                 failedTasks: java.util.List[Task]) {
+    val stopping = ticket.job.newWithStoppingState
+    jobManager.update(ticket.newWithJob(stopping)) 
     failedTasks.foreach( task => task.failedState)
-    val groomsAlive = asScalaSet(job.tasksRunAt).toSet.filter( groom => 
+    val groomsAlive = asScalaSet(ticket.job.tasksRunAt).toSet.filter( groom => 
       !host.equals(groom.getHost) && (port != groom.getPort)
     )  
     master ! FindGroomsToStopTasks(groomsAlive)

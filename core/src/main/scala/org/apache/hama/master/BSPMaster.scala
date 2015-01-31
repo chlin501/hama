@@ -255,7 +255,6 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
         case true => sender ! TargetRefs(matched)
         case false => sender ! SomeMatched(matched, nomatched)
       } 
-      // case JobCompleteEvent TODO:  
     } 
     case FindGroomsToKillTasks(infos) => {
       var matched = Set.empty[ActorRef] 
@@ -269,7 +268,19 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
       }) 
       sender ! GroomsToKillFound(matched, nomatched)
     } 
-    //case FindGroomRef(host, port, newTask) => // TODO: find corresponded groom actor based on host port and return with newTask. sched ! TaskFailureGrooms(grooms, newTask)
+    case FindGroomsToStopTasks(infos) => {
+      var matched = Set.empty[ActorRef] 
+      var nomatched = Set.empty[String] 
+      infos.foreach( info => grooms.find( groom => 
+        groom.path.address.host.equals(Option(info.getHost)) &&
+        groom.path.address.port.equals(Option(info.getPort))
+      ) match {
+        case Some(ref) => matched += ref
+        case None => nomatched += info.getHost+":"+info.getPort
+      }) 
+      sender ! GroomsToStopFound(matched, nomatched)
+    }
+    // case JobCompleteEvent TODO:  
   }
 
   protected def msgFromGroom: Receive = {

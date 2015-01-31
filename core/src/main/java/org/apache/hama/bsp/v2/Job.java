@@ -80,7 +80,12 @@ public final class Job implements Writable {
   private TaskTable taskTable;
 
   public static enum State {
-    PREP(1), RUNNING(2), SUCCEEDED(3), RECOVERING(4), FAILED(5), CANCELLED(6);
+    PREP(1), 
+    RUNNING(2), 
+    SUCCEEDED(3), 
+    KILLING(4), // kill and stop all running tasks
+    STOPPING(5), // stop before resume 
+    FAILED(6);
 
     int s;
 
@@ -101,11 +106,14 @@ public final class Job implements Writable {
         case SUCCEEDED:
           stateName = "SUCCEEDED";
           break;
+        case KILLING:
+          stateName = "KILLING";
+          break;
+        case STOPPING:
+          stateName = "STOPPING";
+          break;
         case FAILED:
           stateName = "FAILED";
-          break;
-        case CANCELLED:
-          stateName = "CANCELLED";
           break;
       }
       return stateName;
@@ -510,12 +518,25 @@ public final class Job implements Writable {
     return newWithState(State.SUCCEEDED); 
   }
 
-  public boolean isRecovering() {
-    return State.RECOVERING.equals(getState());
+  public boolean isKilling() {
+    return State.KILLING.equals(getState());
   }
 
-  public Job newWithRecoveringState() { 
-    return newWithState(State.RECOVERING); 
+  public Job newWithKillingState() { 
+    return newWithState(State.KILLING); 
+  }
+
+  public boolean isStopping() {
+    return State.STOPPING.equals(getState());
+  }
+
+  public Job newWithStoppingState() { 
+    return newWithState(State.STOPPING); 
+  }
+
+  public boolean isRecovering() {
+    return (State.KILLING.equals(getState()) || 
+           State.STOPPING.equals(getState()));
   }
 
   public boolean isFailed() {
@@ -524,14 +545,6 @@ public final class Job implements Writable {
 
   public Job newWithFailedState() {
     return newWithState(State.FAILED); 
-  }
-
-  public boolean isCancelled() {
-    return State.CANCELLED.equals(getState());
-  }
-
-  public Job newWithCancelledState() { 
-    return newWithState(State.CANCELLED); 
   }
 
   public long getProgress() {
