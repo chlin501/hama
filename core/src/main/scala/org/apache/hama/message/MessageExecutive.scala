@@ -24,7 +24,6 @@ import java.util.{ Iterator => Iter }
 import java.util.Map.Entry
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
-import org.apache.hama.Offline
 import org.apache.hama.ProxyInfo
 import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
@@ -271,7 +270,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
   override def offline(target: ActorRef) = 
     if(target.path.name.startsWith("messenger-")) {
       coordinator.map { (bspPeer) =>  bspPeer ! TransferredFailure }
-    } else container ! Offline(target)  
+    } else LOG.warning("Unexpected {} offline!", target)
 
   /**
    * Find the peer name equals to the target, and then send the bundler over

@@ -237,10 +237,8 @@ class Coordinator(conf: HamaConfiguration,  // common conf
           actor ! Setup(bspPeer) 
           supersteps ++= Map(className -> Spawned(superstep, actor))
         }
-        case Failure(cause) => {
-          failedState
-          throw InstantiationFailure(task.getId, cause)  
-        }
+        /* container will restart this task becuase it's not yet executed. */
+        case Failure(cause) => throw InstantiationFailure(task.getId, cause)  
       } 
     })  
   }
@@ -293,13 +291,16 @@ class Coordinator(conf: HamaConfiguration,  // common conf
         afterCompute(peer, superstepActorRef)
         Option(superstepActorRef)
       }
-      case None => {
+      case None => throw new RuntimeException("Superstep "+className+ " is "+
+                                              "missing for task "+ task.getId +
+                                              "!") 
+      /*{
         LOG.error("Can't execute, superstep {} is missing for task {}!", 
                   className, task.getId)
         failedState
         container ! SuperstepNotFoundFailure(className)
         None
-      }
+      }*/
     }
 
   protected def beforeCompute(peer: BSPPeer, superstep: ActorRef,
@@ -468,10 +469,13 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def beforeLeave() = clear
 
   protected def transferredFailure: Receive = {
-    case TransferredFailure => {
+    case TransferredFailure => throw new RuntimeException(
+      "Unable to transfer messages for task "+task.getId+"!" 
+    )
+    /*{
       failedState
       container ! TransferredFailure 
-    }
+    }*/
   }
  
   protected def leave: Receive = {
@@ -740,15 +744,22 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     reportTask
   }
 
-  protected def failedState() {
-    task.failedState
-    reportTask
+/*
+  protected def failedState() { 
+    //task.failedState instead of reporting failure, exception is thrown!
+    reportTask 
   }
 
   protected def killedState() {
     task.killedState
     reportTask
   }
+
+  protected def stoppedState() {
+    task.stoppedState
+    reportTask
+  }
+*/
 
   protected def reportTask() = container ! TaskReport(task.copyTask)
 

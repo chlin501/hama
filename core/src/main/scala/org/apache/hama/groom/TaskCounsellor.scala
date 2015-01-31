@@ -235,9 +235,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       container ! new ResumeTask(d.task) 
       slotManager.book(slot.seq, d.task.getId, container)
     }
-    case Stop => // TODO: ?
-    case Kill => LOG.error("Action Kill by {} shouldn't be here for slot " +
-                           "{} for container does not exist!", d, slot.seq)
+    case _ => LOG.error("Action Kill/ Stop by {} shouldn't be here for slot " +
+                        "{} for container does not exist!", d, slot.seq)
   }
 
   protected def whenExecutorExists(d: Directive): Unit = 
@@ -251,7 +250,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected def initializeOrDispatch(d: Directive) = 
     slotManager.find[Unit]({ slot => None.equals(slot.executor) })({
-      found => whenExecutorNotFound(found, d)
+      executorEmptySlot => whenExecutorNotFound(executorEmptySlot, d)
     })({ whenExecutorExists(d) })
 
   // TODO: move to ProcessManager trait?
@@ -290,7 +289,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
                                  d.task.getId)
         }
       }
-      case Stop => // TODO: stop running task
+      case Stop => 
+        // TODO: find corresponsed slot.container where the task is running 
+        //       issue to stop running task
+        //       check stop ack and replies to master through groom ref.
+        //       if not matched task LOG.error
     } else from ! NoFreeSlot(d)
 
   /**
@@ -447,13 +450,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
           LOG.info("{} requests for LaunchTask.", container.path.name)
           pushToLaunch(seq, d, container)  
         }
-        case Kill => LOG.error("Container {} shouldn't request kill ",
-                               "action!", container.path.name)
         case Resume => {
           LOG.info("{} requests for ResumeTask.", container.path.name)
           pushToResume(seq, d, container)
         }
-        case Stop => // TODO: pushToStop(...)
+        case _ => LOG.error("Container {} shouldn't request kill/ Stop ",
+                            "action!", container.path.name)
       }
       directiveQueue = rest
     }
