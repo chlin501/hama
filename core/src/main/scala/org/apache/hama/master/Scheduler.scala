@@ -470,13 +470,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         jobManager.move(ticket.job.getId)(Finished) 
       }} else LOG.error("Can't schedule because TaskAssign queue is empty!")
     /** 
-     * GroomCapacity is replied, after GetGroomCapacity. 
+     * GroomCapacity is replied by GroomsTracker, after GetGroomCapacity. 
      * Note that activeGroomsCached may contain the same groom multiple times. 
      */
     case GroomCapacity(mapping: Map[ActorRef, Int]) =>  
       allGroomsHaveFreeSlots(mapping) match {
         case yes if yes.isEmpty => targetRefsFound(activeGroomsCached)
-        case notEnough if !notEnough.isEmpty => preSlotUnavailable(notEnough) 
+        case no if !no.isEmpty => preSlotUnavailable(no) 
       }
   }
 
@@ -715,7 +715,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               }
               case false => {
                 tasks.foreach( failed => failed.failedState )
-                if(t.get.job.allTasksStopped) restart(t.get.job)
+                if(t.get.job.allTasksStopped) restart(t.get)
               }  
             }
           }
@@ -771,7 +771,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         t.get.job.markCancelledWith(taskAttemptId) match {
           case true => if(t.get.job.allTasksStopped) t.get.job.getState match {
             case KILLING => whenAllTasksStopped(t.get)
-            case RESTARTING => restart(t.get.job)
+            case RESTARTING => restart(t.get)
           }
           case false => LOG.error("Unable to mark task {} killed!", 
                                   taskAttemptId)
@@ -809,15 +809,23 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      */
     case fault: TaskFailure => {
       jobManager.findJobById(fault.taskAttemptId.getJobID) match {
-        case (s: Some[Stage], j: Some[Job]) => if(!j.get.isRecovering) {
-          val job = j.get
-          markJobAsRestarting(s.get, job)   
-          val failed = job.findTaskBy(fault.taskAttemptId)
-          val aliveGrooms = toSet[SystemInfo](job.tasksRunAtExcept(failed))
-          master ! FindTasksAliveGrooms(aliveGrooms)
-        } else {
-          val job = j.get
-          job.findTaskBy(fault.taskAttemptId).failedState
+        case (s: Some[Stage], j: Some[Job]) => j.get.isRecovering match {
+          case false => {
+            val job = j.get
+            markJobAsRestarting(s.get, job)   
+            val failed = job.findTaskBy(fault.taskAttemptId)
+            val aliveGrooms = toSet[SystemInfo](job.tasksRunAtExcept(failed))
+            master ! FindTasksAliveGrooms(aliveGrooms)
+          } 
+          case true => j.get.getState match {
+            case KILLING => j.get.findTaskBy(fault.taskAttemptId) match {
+              case null =>
+              case task@_ => {
+                task.failedState
+                //TODO: if(j.get.allTasksStopped) whenAllTasksStopped  xxxx
+              }
+            }
+            case RESTARTING =>
           // TODO: check job state: 
           //       - job in killing
           //         a. mark faulty task in the job as failed.
@@ -827,6 +835,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           //       - job in stopping
           //         check if faulty task is active. if true, go killing route.
           //         otherwise mark faulty task as failed, call rearrange, etc. 
+          }
         }
         case _ => LOG.error("No matched job: {}", fault.taskAttemptId.getJobID)
       }
@@ -854,10 +863,19 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     //         b. move job to task assign stage
   }
 
-  protected def restart(job: Job) { 
-    jobManager.move(job.getId)(TaskAssign) 
-    activeFinished = false 
-    activeSchedule(job) 
+  protected def restart(ticket: Ticket) { 
+    // TODO: find the latest integrigy superstep from tracker.
+    //       update job superstep to the latest integrity superstep
+    //       update job's all tasks with 
+    //         a. newTask = task.withIdIncremented
+    //         b. newTask.waitingState
+    //         c. newTask1 = newTask.newWithSuperstep(superstepFoundInTracker)
+    //         d. newTask1.revoke
+    //       call jobManager.update(job)
+    //       then go as below 
+    //jobManager.move(job.getId)(TaskAssign) 
+    //activeFinished = false 
+    //activeSchedule(job) 
   }
 
   protected def whenAllTasksStopped(ticket: Ticket) { 
@@ -907,25 +925,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     )  
     master ! FindGroomsToRestartTasks(groomsAlive)
   }
-
-  /**
-   * Add a new task to the end of corresponded column in task table.
-   * Failed tasks will also be marked as failure in rearrange function.
-   * Move job from processing stage back to task assign stage.
-  protected def allPassiveTasks(stage: Stage, job: Job, 
-                                failed: java.util.List[Task]): Try[Boolean] = 
-    try { 
-      failed.foreach { failedTask => job.rearrange(failedTask) } 
-      stage match { 
-        case Processing => jobManager.move(job.getId)(TaskAssign)
-        case _ => throw new RuntimeException("Job "+job.getId+" is not at "+
-                                             "Processing stage!")
-      } 
-      Success(true)
-    } catch {
-      case e: Exception => Failure(e) 
-    }
-   */
 
   /**
    * This function is called when a job if finished its execution.

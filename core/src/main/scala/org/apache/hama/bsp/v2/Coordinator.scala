@@ -718,6 +718,11 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     reportTask
   }
 
+  /**
+   * Change task phase.
+   * Increment superstep count by one.
+   * Report the task to master.
+   */
   protected def exitBarrierPhase() {
     task.exitBarrierPhase
     task.incrementSuperstep

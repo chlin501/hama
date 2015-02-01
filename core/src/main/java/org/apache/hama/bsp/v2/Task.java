@@ -63,7 +63,7 @@ public final class Task implements Writable { // TODO: change to immutable
   private PartitionedSplit split;  
 
   // TODO: change current superstep type to long!
-  private IntWritable currentSuperstep = new IntWritable(1);
+  private IntWritable currentSuperstep = new IntWritable(0);
 
   /* The state of this task. */
   private State state = State.WAITING; 
@@ -413,6 +413,12 @@ public final class Task implements Writable { // TODO: change to immutable
 
   public int getCurrentSuperstep() {
     return this.currentSuperstep.get();
+  }
+
+  public Task newWithSuperstep(int superstep) {
+    if(0 > superstep) 
+      throw new IllegalArgumentException("Invalid superstep "+superstep);
+    return new Builder(this).setCurrentSuperstep(superstep).build(); 
   }
   
   /**
