@@ -163,7 +163,7 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
     }
 
   /**
-   * Stop all realted operations.
+   * Force children to stop by calling context.stop(reference).
    */
   protected def stopChildren() { // TODO: move to computation trait
     tasklog.map { log => stop(log) }

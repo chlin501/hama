@@ -660,9 +660,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             case list if list.isEmpty => 
             case failedTasks if !failedTasks.isEmpty => { 
               failedTasks.foreach( failed => failed.failedState )
-              if(t.get.job.allTasksStopped) {
-                // TODO: xxxx
-              }
+              if(t.get.job.allTasksStopped) whenAllTasksStopped(t.get)
             }
           }
           case RESTARTING =>
@@ -731,30 +729,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      */
     case TaskCancelled(taskAttemptId) => jobManager.ticketAt match {
       case (stage: Some[Stage], t: Some[Ticket]) => { 
-        val job = t.get.job
-        val client = t.get.client
-        job.markCancelledWith(taskAttemptId) match {
-          case true => if(job.allTasksStopped) {
+        t.get.job.markCancelledWith(taskAttemptId) match {
+          case true => if(t.get.job.allTasksStopped) t.get.job.getState match {
+            case KILLING => whenAllTasksStopped(t.get)
+            case RESTARTING => 
             // TODO: check job is in stoping or killing state.
             //       then decide to resume (move job to task assign stage) or 
             //       go as below (reject back to client, etc.)
-
-            // Note: newjob is not in cancelled state because it's a groom leave
-            //       event.
-            val newJob = job.newWithFailedState 
-            jobManager.update(t.get.newWithJob(newJob))
-            val jobId = newJob.getId
-            whenJobFinished(jobId) 
-            jobManager.move(jobId)(Finished)
-            jobManager.getCommand(jobId.toString) match {
-              case Some(found) if found.isInstanceOf[KillJob] => 
-                client ! Reject(found.asInstanceOf[KillJob].reason)  
-              case Some(found) if !found.isInstanceOf[KillJob] => 
-                LOG.warning("Unknown command {} to react for job {}", found, 
-                            jobId)
-              case None => LOG.warning("No matched command for job {} in "+
-                                       "reacting to cancelled event!", jobId)
-            }
           }
           case false => LOG.error("Unable to mark task {} killed!", 
                                   taskAttemptId)
@@ -765,7 +746,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     /**
      * Update task in task table.
      * Check if all tasks are successful
-     * Call whenJobFinished if all tasks are succeeded.
+     * Call broadcastFinished if all tasks are succeeded.
      * Move the job to Finished stage.
      */
     case newest: Task => jobManager.ticketAt match {
@@ -773,7 +754,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case true => if(t.get.job.allTasksSucceeded) {
           val newJob = t.get.job.newWithSucceededState
           jobManager.update(t.get.newWithJob(newJob))
-          whenJobFinished(newJob.getId) 
+          broadcastFinished(newJob.getId) 
           jobManager.move(newJob.getId)(Finished)
           // TODO: notify submitter by ticket.client ! JobComplete(newJob.getId)
         }
@@ -835,24 +816,24 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     //       if all task stopped 
     //         a. rearrange(task)
     //         b. move job to task assign stage
-    /**
-     * BSPMaster replies groom reference where failed task (active schedule) 
-     * ran. 
-     * The groom reference is used for resuming the failed task. 
-     * Mark the task with groom's host and port values.
-     * Then move the job back to Processing stage. 
-     * And mark the job as running.
-     * Note that newTask is a task after rearranged function gets called.
-    case MatchedGroom(newTask, ref) => {
-      val jobId = newTask.getId.getJobID
-      val (host, port) = targetHostPort(ref) 
-      LOG.debug("Task {} is rescheduled to target {}:{}", jobId, host, port)
-      newTask.scheduleTo(host, port)
-      ref ! new Directive(Resume, newTask, setting.name)
-      jobManager.move(jobId)(Processing)
-      markJobAsRunning(jobId)
+  }
+
+  protected def whenAllTasksStopped(ticket: Ticket) { 
+    val job = ticket.job
+    val newJob = job.newWithFailedState 
+    jobManager.update(ticket.newWithJob(newJob))
+    val jobId = newJob.getId
+    broadcastFinished(jobId) 
+    jobManager.move(jobId)(Finished)
+    jobManager.getCommand(jobId.toString) match {
+      case Some(found) if found.isInstanceOf[KillJob] => 
+        ticket.client ! Reject(found.asInstanceOf[KillJob].reason)  
+      case Some(found) if !found.isInstanceOf[KillJob] => 
+        LOG.warning("Unknown command {} to react for job {}", found, 
+                    jobId)
+      case None => LOG.warning("No matched command for job {} in "+
+                               "reacting to cancelled event!", jobId)
     }
-     */
   }
 
   protected def markJobAsRestarting(stage: Stage, job: Job) =
@@ -907,7 +888,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   /**
    * This function is called when a job if finished its execution.
    */
-  protected def whenJobFinished(jobId: BSPJobID) =  
+  protected def broadcastFinished(jobId: BSPJobID) =  
     federator ! JobFinishedMessage(jobId) 
    
 

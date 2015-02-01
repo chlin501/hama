@@ -83,8 +83,10 @@ public final class Job implements Writable {
     PREP(1), 
     RUNNING(2), 
     SUCCEEDED(3), 
-    KILLING(4), // kill and stop all running tasks
-    RESTARTING(5), // stop then resume 
+    /* issue cancel message. going to stop the job. */
+    KILLING(4), // TODO: rename to stop?
+    /* issue cancel message. going to resume all tasks. */
+    RESTARTING(5), 
     FAILED(6);
 
     int s;
