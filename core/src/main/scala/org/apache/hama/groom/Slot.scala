@@ -244,7 +244,7 @@ class SlotManager extends CommonLog {
   /**
    * The number of tasks allowed.
    */
-  protected[groom] def maxTasksAllowed(): Int = (slots.size - brokenSlot)
+  protected[groom] def maxTasksAllowed(): Int = slots.size 
 
   protected[groom] def findSlotBy(seq: Int): Option[Slot] = find({ slot =>
     slot.seq == seq

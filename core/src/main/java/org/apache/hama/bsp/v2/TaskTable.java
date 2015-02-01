@@ -308,7 +308,8 @@ public final class TaskTable implements Writable {
   Set<SystemInfo> groomsExcept(final Task failed) {
     final Set<SystemInfo> infos = new HashSet<SystemInfo>();
     for(final Task latest: latestTasks()) {
-      if(!latest.equals(failed)) infos.add(latest.runsAt());
+      final SystemInfo info = latest.runsAt();
+      if(!latest.equals(failed) && null != info) infos.add(info);
     }
     return Collections.unmodifiableSet(infos);
   }
@@ -316,7 +317,8 @@ public final class TaskTable implements Writable {
   Set<SystemInfo> grooms() {
     final Set<SystemInfo> infos = new HashSet<SystemInfo>();
     for(final Task latest: latestTasks()) {
-      infos.add(latest.runsAt());
+      final SystemInfo info = latest.runsAt();
+      if(null != info) infos.add(info);
     }
     return Collections.unmodifiableSet(infos);
   }

@@ -537,9 +537,17 @@ public final class Task implements Writable { // TODO: change to immutable
     return getAssignedHost() + ":" + getAssignedPort();
   }
 
+  /**
+   * Return system info if this task is assigned to a particular groom server;
+   * otherwise return null.
+   */
   public SystemInfo runsAt() {
-    final String sys = configuration.get("bsp.actor-system.name", "BSPSystem");
-    return new SystemInfo(sys, getAssignedHost(), getAssignedPort()); 
+    if(isAssigned()) {
+      final String sys = configuration.get("bsp.actor-system.name", 
+        "BSPSystem");
+      return new SystemInfo(sys, getAssignedHost(), getAssignedPort()); 
+    }  
+    return null;
   }
 
   /**

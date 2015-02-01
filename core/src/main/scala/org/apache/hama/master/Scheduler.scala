@@ -406,7 +406,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * Note: active tasks may schedule to the same target groom servers when
    * only a task fails instead of groom.
    * 
-   * Note: activeFinished flag must be marked as true once all directives
+   * Note that activeFinished flag must be marked as true once all directives
    * are sent to grooms.
    */
   protected def targetRefsFound(refs: Array[ActorRef]) = 
@@ -454,8 +454,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   }
 
   /**
-   * During TaskAssign Stage, master replies scheduler's request for groom 
-   * references.
+   * During TaskAssign Stage, master replies scheduler's requesting groom 
+   * references, by GetTargetRefs message, for active tasks.
    */
   // TODO: merge SomeMatched to TargetRefs 
   protected def activeTargetGrooms: Receive = { 
@@ -468,12 +468,15 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         ticket.client ! Reject("Grooms "+nomatched.mkString(", ")+
                                " do not exist!")
         jobManager.move(ticket.job.getId)(Finished) 
-      }}
-    else LOG.error("Can't schedule because TaskAssign queue is empty!")
-    case GroomCapacity(mapping: Map[ActorRef, Int]) => 
+      }} else LOG.error("Can't schedule because TaskAssign queue is empty!")
+    /** 
+     * GroomCapacity is replied, after GetGroomCapacity. 
+     * Note that activeGroomsCached may contain the same groom multiple times. 
+     */
+    case GroomCapacity(mapping: Map[ActorRef, Int]) =>  
       allGroomsHaveFreeSlots(mapping) match {
-        case true => targetRefsFound(activeGroomsCached)
-        case false => freeSlotUnavailable
+        case yes if yes.isEmpty => targetRefsFound(activeGroomsCached)
+        case notEnough if !notEnough.isEmpty => preSlotUnavailable(notEnough) 
       }
   }
 
@@ -484,30 +487,65 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    */
   protected def msgFromTaskCounsellor: Receive = {
     case msg: NoFreeSlot => msg.directive.task.isActive match {
-      case true => freeSlotUnavailable
+      case true => postSlotUnavailable(sender, msg.directive)  
+      /**
+       * Passive assign always checks if requestng groom has enough free slot. 
+       * So ideally it won't fall to this category.
+       */
       case false => LOG.error("Passive assignment returns no free slots "+
                               "for directive {} from {}!", msg.directive, 
                               sender.path.address.hostPort) 
     }
   }
 
-  protected def allGroomsHaveFreeSlots(mapping: Map[ActorRef, Int]): Boolean =
-    mapping.count({ case (k, v) => v == 0}) == 0
+  protected def allGroomsHaveFreeSlots(mapping: Map[ActorRef, Int]): 
+    Set[ActorRef] = mapping.filter { case (k, v) => v == 0 }.
+                            map { case (k, v) => k }.toSet
 
-  protected def freeSlotUnavailable = jobManager.ticketAt match {
-    case (s: Some[Stage], t: Some[Ticket]) => {
-      val ticket = t.get
-      // TODO: do kill the rest tasks first!!! e.g. FindGroomsToKillTasks
-      ticket.client ! Reject("Some target grooms do not have free slots!")
-      val ticketWithFailedJob = ticket.newWithJob(ticket.job.newWithFailedState)
-      jobManager.update(ticketWithFailedJob)
-      jobManager.move(ticketWithFailedJob.job.getId)(Finished)
-      cleanCachedActiveGrooms 
-      activeFinished = false
+  // TODO: to avoid active scheduling to grooms with insufficient slots, due to
+  //       delay reporting, probably changing to allow schduler to update slots
+  //       in tracker directly after assign() or schedule() executed.
+  protected def preSlotUnavailable(notEnough: Set[ActorRef]) = 
+    jobManager.ticketAt match {
+      case (s: Some[Stage], t: Some[Ticket]) => {
+        val grooms = notEnough.map { ref => 
+          val (host, port) = targetHostPort(ref) 
+          host+":"+port
+        }.toArray.mkString(",")
+        val ticket = t.get
+        val newTicket = ticket.newWithJob(ticket.job.newWithFailedState)
+        jobManager.update(newTicket)
+        jobManager.move(newTicket.job.getId)(Finished)
+        newTicket.client ! Reject("Grooms "+grooms+" do not have free slots!")
+        cleanCachedActiveGrooms 
+        activeFinished = false
+      }
+      case (s@_, t@_) => throw new RuntimeException("Invalid ticket " + t +
+                                                    " or stage " + s + "!") 
     }
-    case (s@_, t@_) => 
-      throw new RuntimeException("Invalid ticket "+t+"or stage "+s+"!") 
-  }
+
+  protected def postSlotUnavailable(groom: ActorRef, d: Directive) = 
+    jobManager.ticketAt match {
+      case (s: Some[Stage], t: Some[Ticket]) => {
+        val ticket = t.get
+        val (host, port) = targetHostPort(groom)
+        val killing = ticket.job.newWithKillingState
+        jobManager.update(ticket.newWithJob(killing)) 
+        ticket.job.findTaskBy(d.task.getId) match {
+          case null => throw new RuntimeException("No matched task "+
+                                                  d.task.getId+" for reply "+
+                                                  " from "+groom.path.name)
+          case task@_ => task.failedState
+        } 
+        jobManager.cacheCommand(ticket.job.getId.toString, KillJob(host, port))
+        val groomsAlive = toSet[SystemInfo](ticket.job.tasksRunAt).
+          filter( groom => !host.equals(groom.getHost) && 
+                  (port != groom.getPort))  
+        master ! FindGroomsToKillTasks(groomsAlive)
+      } 
+      case (s@_, t@_) => throw new RuntimeException("Invalid ticket " + t +
+                                                    " or stage " + s + "!") 
+    } 
 
   protected def targetHostPort(ref: ActorRef): (String, Int) = {
     val host = ref.path.address.host.getOrElse("")
@@ -591,8 +629,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   }
 
   /**
-   * GroomLeave event happens and some tasks run on failed groom, so following
-   * actions are taken:
+   * GroomLeave event happens with some tasks run on the failed groom
+   * Tghen following actions are taken:
    * - mark tasks running on the failed groom to failed state.
    * - note kill command for later reference.
    * - find grooms where rest tasks are running.
@@ -605,6 +643,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     failedTasks.foreach( task => task.failedState)
     jobManager.cacheCommand(ticket.job.getId.toString, KillJob(host, port))
     val groomsAlive = toSet[SystemInfo](ticket.job.tasksRunAt).filter( groom => 
+      // exclude groom (host:port) that's already failed.actions are taken:
       !host.equals(groom.getHost) && (port != groom.getPort)
     )  
     master ! FindGroomsToKillTasks(groomsAlive)
@@ -614,17 +653,15 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                                       e: Throwable) {
     jobManager.cacheCommand(job.getId.toString, KillJob(e))
     val grooms = toSet[SystemInfo](job.tasksRunAt).filter( groom => 
-      !(host.equals(groom.getHost) && (port == groom.getPort))
+      // exclude groom (host:port) that's already failed.
+      !host.equals(groom.getHost) && (port != groom.getPort)
     )
     master ! FindGroomsToKillTasks(grooms) 
   }
 
   protected def someTasksFailure(host: String, port: Int, ticket: Ticket, 
                                  stage: Stage, 
-                                 failedTasks: java.util.List[Task]) {
-    //val job = ticket.job
-    //val recovering = job.newWithRecoveringState
-    //jobManager.update(ticket.newWithJob(recovering)) 
+                                 failedTasks: List[Task]) =
     failedTasks.exists(task => task.isActive) match { 
       case true => whenActiveTasksFail(host, port, ticket, failedTasks)
       case false => allPassiveTasks(host, port, ticket, failedTasks)
@@ -638,7 +675,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         }
       }*/
     }
-  }
 
   protected def events: Receive = {
     /**
@@ -671,12 +707,16 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               failed.isActive 
             }) match {
               case true => { 
+                /* active tasks fails, switch to killing state. */
                 tasks.foreach( failed => failed.failedState )
                 val killing = t.get.job.newWithKillingState
                 jobManager.update(t.get.newWithJob(killing)) 
                 if(t.get.job.allTasksStopped) whenAllTasksStopped(t.get) 
               }
-              case false =>  // TODO: go with restarting route
+              case false => {
+                tasks.foreach( failed => failed.failedState )
+                if(t.get.job.allTasksStopped) restart(t.get.job)
+              }  
             }
           }
         }
@@ -695,7 +735,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case (s: Some[Stage], t: Some[Ticket]) => matched.foreach( ref => {
           val (host, port) = targetHostPort(ref)
           t.get.job.findTasksBy(host, port).foreach ( task => 
-            ref ! new Directive(Cancel, task, setting.name) 
+            if(!task.isFailed) ref ! new Directive(Cancel, task, setting.name) 
           )
         })
         case (s@_, t@_) => throw new RuntimeException("Invalid stage "+s+
@@ -707,7 +747,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case (s: Some[Stage], t: Some[Ticket]) => matched.foreach( ref => {
           val (host, port) = targetHostPort(ref)
           t.get.job.findTasksBy(host, port).foreach ( task => 
-            ref ! new Directive(Cancel, task, setting.name) 
+            if(!task.isFailed) ref ! new Directive(Cancel, task, setting.name) 
           )
         })
         case (s@_, t@_) => throw new RuntimeException("Invalid stage " + s +
@@ -731,10 +771,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         t.get.job.markCancelledWith(taskAttemptId) match {
           case true => if(t.get.job.allTasksStopped) t.get.job.getState match {
             case KILLING => whenAllTasksStopped(t.get)
-            case RESTARTING => // TODO: move job to task assign, etc.
-            // TODO: check job is in stoping or killing state.
-            //       then decide to resume (move job to task assign stage) or 
-            //       go as below (reject back to client, etc.)
+            case RESTARTING => restart(t.get.job)
           }
           case false => LOG.error("Unable to mark task {} killed!", 
                                   taskAttemptId)
@@ -815,6 +852,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     //       if all task stopped 
     //         a. rearrange(task)
     //         b. move job to task assign stage
+  }
+
+  protected def restart(job: Job) { 
+    jobManager.move(job.getId)(TaskAssign) 
+    activeFinished = false 
+    activeSchedule(job) 
   }
 
   protected def whenAllTasksStopped(ticket: Ticket) { 

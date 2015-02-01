@@ -257,30 +257,28 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
       } 
     } 
     case FindGroomsToKillTasks(infos) => {
-      var matched = Set.empty[ActorRef] 
-      var nomatched = Set.empty[String] 
-      infos.foreach( info => grooms.find( groom => 
-        groom.path.address.host.equals(Option(info.getHost)) &&
-        groom.path.address.port.equals(Option(info.getPort))
-      ) match {
-        case Some(ref) => matched += ref
-        case None => nomatched += info.getHost+":"+info.getPort
-      }) 
+      val (matched, nomatched) = findGroomsBy(infos)
       sender ! GroomsToKillFound(matched, nomatched)
     } 
     case FindGroomsToRestartTasks(infos) => {
-      var matched = Set.empty[ActorRef] 
-      var nomatched = Set.empty[String] 
-      infos.foreach( info => grooms.find( groom => 
-        groom.path.address.host.equals(Option(info.getHost)) &&
-        groom.path.address.port.equals(Option(info.getPort))
-      ) match {
-        case Some(ref) => matched += ref
-        case None => nomatched += info.getHost+":"+info.getPort
-      }) 
+      val (matched, nomatched) = findGroomsBy(infos)
       sender ! GroomsToRestartFound(matched, nomatched)
     }
-    // case JobCompleteEvent TODO:  notify client job is complete?
+    //TODO: case JobCompleteEvent  // notify client job is complete?
+  }
+
+  protected def findGroomsBy(infos: Set[SystemInfo]): 
+      (Set[ActorRef], Set[String]) = {
+    var matched = Set.empty[ActorRef] 
+    var nomatched = Set.empty[String] 
+    infos.foreach( info => grooms.find( groom => 
+      groom.path.address.host.equals(Option(info.getHost)) &&
+      groom.path.address.port.equals(Option(info.getPort))
+    ) match {
+      case Some(ref) => matched += ref
+      case None => nomatched += info.getHost+":"+info.getPort
+    }) 
+    (matched, nomatched)
   }
 
   protected def msgFromGroom: Receive = {

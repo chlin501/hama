@@ -210,7 +210,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     val name = setting.name
     val host = setting.host
     val port = setting.port
-    val maxTasksAllowed = slotManager.maxTasksAllowed
+    val maxTasksAllowed = slotManager.maxTasksAllowed - slotManager.brokenSlot
     val slotStats = currentSlotStats
     LOG.debug("Current groom stats: name {}, host {}, port {}, maxTasks {}, "+
               "slot stats {}", name, host, port, maxTasksAllowed, slotStats)
@@ -343,8 +343,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   }
 
   /**
-   * When an executor fails, counsellor unwatch container so container won't 
-   * be observed on offline; when only container fails (no executor), offline 
+   * When an executor fails, container is unwatched so no container offline  
+   * event will be observed. Only container fails (no executor), offline 
    * will notify accordingly.  
    */
   // TODO: move to ProcessManager trait?
