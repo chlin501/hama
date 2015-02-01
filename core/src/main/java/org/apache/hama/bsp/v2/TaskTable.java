@@ -231,10 +231,12 @@ public final class TaskTable implements Writable {
   }
 
   /**
-   * Find tasks matching to host, port supplied.
+   * Find tasks with assigned port and host matching to host, port supplied.
    * Matched tasks denote tasks running on the node with host and port values
    * given. 
-   * @param Task[] is an array of tasks matching to host and port values given.
+   * @param host is the target host string to be compared.  
+   * @param port is the target port value to be compared.  
+   * @return List<Task> is a list of task; default is empty list.
    */
   List<Task> findTasksBy(final String host, final int port) {
     final List<Task> matched = new ArrayList<Task>();

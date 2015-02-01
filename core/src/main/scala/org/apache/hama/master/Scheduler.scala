@@ -664,24 +664,22 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               if(t.get.job.allTasksStopped) whenAllTasksStopped(t.get)
             }
           }
-          case RESTARTING =>
-        }
-/*
-          // TODO: check job in killing or stopping
-          //       if killing, mark task on (leave) grooms as failed.
-          //       check if all task stopped. reject if needed.
-          //       if stopping, check if task is active. if true, 
-          //       change job to killing, etc.
-          val newFailedTasks = t.get.job.findTasksBy(host, port) 
-          newFailedTasks.size match {
-            case 0 =>  
-            case _ => {
-              // TODO: check if new failed tasks contain active tasks:
-              //       if true, reject
-              newFailedTasks.foreach( task => task.failedState)
+          case RESTARTING => toList(t.get.job.findTasksBy(host, port)) match {
+            case list if list.isEmpty => LOG.debug("No tasks run on failed "+
+                                                   "groom {}:{}!", host, port)
+            case tasks if !tasks.isEmpty => tasks.exists({ failed => 
+              failed.isActive 
+            }) match {
+              case true => { 
+                tasks.foreach( failed => failed.failedState )
+                val killing = t.get.job.newWithKillingState
+                jobManager.update(t.get.newWithJob(killing)) 
+                if(t.get.job.allTasksStopped) whenAllTasksStopped(t.get) 
+              }
+              case false =>  // TODO: go with restarting route
             }
           }
-*/
+        }
       }
       case _ => LOG.warning("No job existed!")
     } 
@@ -733,7 +731,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         t.get.job.markCancelledWith(taskAttemptId) match {
           case true => if(t.get.job.allTasksStopped) t.get.job.getState match {
             case KILLING => whenAllTasksStopped(t.get)
-            case RESTARTING => 
+            case RESTARTING => // TODO: move job to task assign, etc.
             // TODO: check job is in stoping or killing state.
             //       then decide to resume (move job to task assign stage) or 
             //       go as below (reject back to client, etc.)
