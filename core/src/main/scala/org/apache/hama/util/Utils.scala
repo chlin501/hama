@@ -37,6 +37,7 @@ import scala.reflect.ClassTag
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
+import scala.collection.JavaConversions._
 
 object Utils extends CommonLog {
 
@@ -90,5 +91,8 @@ object Utils extends CommonLog {
     result
   }
 
+  def toList[A](jlist: java.util.List[A]): List[A] = asScalaBuffer(jlist).toList
+
+  def toSet[A](jset: java.util.Set[A]): Set[A] = asScalaSet(jset).toSet
 }
 

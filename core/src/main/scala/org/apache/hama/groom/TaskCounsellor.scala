@@ -290,11 +290,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
                                  d.task.getId)
         }
       }
-      case Cancel => 
-        // TODO: find corresponsed slot.container where the task is running 
-        //       issue to stop running task
-        //       check stop ack and replies to master through groom ref.
-        //       if not matched task LOG.error
     } else from ! NoFreeSlot(d)
 
   /**

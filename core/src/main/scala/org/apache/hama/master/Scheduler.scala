@@ -30,6 +30,7 @@ import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.ExceedMaxTaskAllowedException
 import org.apache.hama.bsp.v2.Job
+import org.apache.hama.bsp.v2.Job.State._
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.conf.Setting
 import org.apache.hama.groom.NoFreeSlot
@@ -45,8 +46,9 @@ import org.apache.hama.monitor.master.GroomsTracker
 import org.apache.hama.monitor.master.TaskArrivalEvent
 import org.apache.hama.monitor.PublishEvent
 import org.apache.hama.monitor.PublishMessage
-import scala.collection.immutable.Queue
+import org.apache.hama.util.Utils._
 import scala.collection.JavaConversions._
+import scala.collection.immutable.Queue
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
@@ -602,7 +604,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     jobManager.update(ticket.newWithJob(killing)) 
     failedTasks.foreach( task => task.failedState)
     jobManager.cacheCommand(ticket.job.getId.toString, KillJob(host, port))
-    val groomsAlive = asScalaSet(ticket.job.tasksRunAt).toSet.filter( groom => 
+    val groomsAlive = toSet[SystemInfo](ticket.job.tasksRunAt).filter( groom => 
       !host.equals(groom.getHost) && (port != groom.getPort)
     )  
     master ! FindGroomsToKillTasks(groomsAlive)
@@ -611,7 +613,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def taskExceedsMaxAttempt(host: String, port: Int, job: Job, 
                                       e: Throwable) {
     jobManager.cacheCommand(job.getId.toString, KillJob(e))
-    val grooms = asScalaSet(job.tasksRunAt).toSet.filter( groom => 
+    val grooms = toSet[SystemInfo](job.tasksRunAt).filter( groom => 
       !(host.equals(groom.getHost) && (port == groom.getPort))
     )
     master ! FindGroomsToKillTasks(grooms) 
@@ -647,15 +649,25 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      */
     case GroomLeave(name, host, port) => jobManager.ticketAt match {
       case (s: Some[Stage], t: Some[Ticket]) => t.get.job.isRecovering match {
-        case false => {
-          val failedTasks = t.get.job.findTasksBy(host, port)
-          failedTasks.size match {
-            case 0 => LOG.debug("No tasks run on failed groom {}:{}!", host, 
-                                port)
-            case _ => someTasksFailure(host, port, t.get, s.get, failedTasks)
-          }
+        case false => toList(t.get.job.findTasksBy(host, port)) match {
+          case list if list.isEmpty => LOG.debug("No tasks run on failed "+
+                                                 "groom {}:{}!", host, port)
+          case failedTasks if !failedTasks.isEmpty => 
+            someTasksFailure(host, port, t.get, s.get, failedTasks)
         }
-        case true => {
+        case true => t.get.job.getState match {
+          case KILLING => toList(t.get.job.findTasksBy(host, port)) match {
+            case list if list.isEmpty => 
+            case failedTasks if !failedTasks.isEmpty => { 
+              failedTasks.foreach( failed => failed.failedState )
+              if(t.get.job.allTasksStopped) {
+                // TODO: xxxx
+              }
+            }
+          }
+          case RESTARTING =>
+        }
+/*
           // TODO: check job in killing or stopping
           //       if killing, mark task on (leave) grooms as failed.
           //       check if all task stopped. reject if needed.
@@ -670,7 +682,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               newFailedTasks.foreach( task => task.failedState)
             }
           }
-        }
+*/
       }
       case _ => LOG.warning("No job existed!")
     } 
@@ -784,7 +796,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           val job = j.get
           markJobAsRestarting(s.get, job)   
           val failed = job.findTaskBy(fault.taskAttemptId)
-          val aliveGrooms = asScalaSet(job.tasksRunAtExcept(failed)).toSet
+          val aliveGrooms = toSet[SystemInfo](job.tasksRunAtExcept(failed))
           master ! FindTasksAliveGrooms(aliveGrooms)
         } else {
           val job = j.get
@@ -867,7 +879,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     val stopping = ticket.job.newWithRestartingState
     jobManager.update(ticket.newWithJob(stopping)) 
     failedTasks.foreach( task => task.failedState)
-    val groomsAlive = asScalaSet(ticket.job.tasksRunAt).toSet.filter( groom => 
+    val groomsAlive = toSet[SystemInfo](ticket.job.tasksRunAt).filter( groom => 
       !host.equals(groom.getHost) && (port != groom.getPort)
     )  
     master ! FindGroomsToRestartTasks(groomsAlive)
