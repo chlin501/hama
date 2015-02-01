@@ -657,7 +657,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         }
         case true => t.get.job.getState match {
           case KILLING => toList(t.get.job.findTasksBy(host, port)) match {
-            case list if list.isEmpty => 
+            case list if list.isEmpty => LOG.debug("No tasks run on failed "+
+                                                   "groom {}:{}!", host, port)
             case failedTasks if !failedTasks.isEmpty => { 
               failedTasks.foreach( failed => failed.failedState )
               if(t.get.job.allTasksStopped) whenAllTasksStopped(t.get)
@@ -890,7 +891,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    */
   protected def broadcastFinished(jobId: BSPJobID) =  
     federator ! JobFinishedMessage(jobId) 
-   
 
   override def receive = events orElse tickMessage orElse requestTask orElse dispense orElse activeTargetGrooms orElse msgFromTaskCounsellor orElse unknown
 
