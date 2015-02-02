@@ -463,7 +463,7 @@ public final class Job implements Writable {
   public Job newWithLastCheckpoint(final int lastCheckpoint) {
     return new Builder(this).setLastCheckpoint(lastCheckpoint).build(); 
   }
-*
+*/
 
   /**
    * Get the number of BSP tasks to run; default set to 1.
@@ -684,6 +684,7 @@ public final class Job implements Writable {
     return getTasks().nextUnassignedTask();
   }
 
+  // TODO: return Progress object, instead of boolean.
   public boolean update(final Task newest) {
     return getTasks().update(newest);
   }

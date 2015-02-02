@@ -434,6 +434,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             if(1 < task.getId.getId) 
               ref ! new Directive(Resume, task, setting.name) 
             else ref ! new Directive(Launch, task, setting.name)
+// TODO: aggregate checking if all tasks assigned logic with assign's one.
+//       mark job started (give start time)
             if(job.allTasksAssigned) {
               jobManager.moveToNextStage(job.getId) match {
                 case (true, _) => if(jobManager.update(ticket.newWithJob(job.
@@ -617,6 +619,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           if(1 < task.getId.getId)  
             from ! new Directive(Resume, task, setting.name) 
           else from ! new Directive(Launch, task, setting.name)
+// TODO: aggregate checking if all tasks assigned logic with schedule's one.
+//       mark job started (give start time)
           if(job.allTasksAssigned) {
             LOG.debug("Tasks for job {} are all assigned!", job.getId)
             jobManager.moveToNextStage(job.getId) match { 
@@ -795,6 +799,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      * Call broadcastFinished if all tasks are succeeded.
      * Move the job to Finished stage.
      */
+    // TODO: job update function returns progress instead of boolean. so that
+    //       progress can be used to notify client by e.g. client ! Progress(..)
     case newest: Task => jobManager.ticketAt match {
       case (s: Some[Stage], t: Some[Ticket]) => t.get.job.update(newest) match {
         case true => if(t.get.job.allTasksSucceeded) {
@@ -950,12 +956,24 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def broadcastFinished(jobId: BSPJobID) =  
     federator ! JobFinishedMessage(jobId) 
 
+  /**
+   * beforeRestart function calls to FindLatestCheckpoint. Tracker replies
+   * LatestCheckpoint message.
+   */
   protected def msgFromFederator: Receive = {
-    case LatestCheckpoint(jobId: BSPJobID, superstep: Long) => whenRestart
+    case LatestCheckpoint(jobId: BSPJobID, superstep: Long) => 
+      whenRestart(jobId, superstep)
   }
 
-  protected def whenRestart() {
-    // TODO: find the latest integrigy superstep from tracker.
+  protected def whenRestart(jobId: BSPJobID, latest: Long) = 
+    jobManager.findJobById(jobId) match {
+      case (s: Some[Stage], j: Some[Job]) => {
+        val jobWithLatestCheckpoint = j.get.newWithSuperstepCount(latest)
+      }
+      case _ => throw new RuntimeException("Can't find job "+jobId+" when "+
+                                           "restarting.")
+
+    // TODO: 
     //       update job superstep to the latest integrity superstep
     //       update job's all tasks with 
     //         a. newTask = task.withIdIncremented
