@@ -726,7 +726,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               }
               case false => {
                 tasks.foreach( failed => failed.failedState )
-                if(t.get.job.allTasksStopped) restart(t.get)
+                if(t.get.job.allTasksStopped) beforeRestart(t.get)
               }  
             }
           }
@@ -782,7 +782,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         t.get.job.markCancelledWith(taskAttemptId) match { 
           case true => if(t.get.job.allTasksStopped) t.get.job.getState match {
             case KILLING => whenAllTasksStopped(t.get)
-            case RESTARTING => restart(t.get)
+            case RESTARTING => beforeRestart(t.get)
           }
           case false => LOG.error("Unable to mark task {} killed!", 
                                   taskAttemptId)
@@ -814,7 +814,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      * Mark the job as recovering.
      * Find groom references where tasks are still running.
      * Rest operation is dealt in TasksAliveGrooms (stop tasks, etc.)
-     * Note that active tasks can be restart at the original grooms assigned
+     * Note that active tasks can be restarted at the original grooms assigned
      * because it's not groom failure.
      */
     case fault: TaskFailure => {
@@ -849,7 +849,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               case task@_ => {
                 task.failedState
                 if(j.get.allTasksStopped) jobManager.ticketAt match {
-                  case (s: Some[Stage], t: Some[Ticket]) => restart(t.get)
+                  case (s: Some[Stage], t: Some[Ticket]) => beforeRestart(t.get)
                   case _ => throw new RuntimeException("No ticket found!")
                 }
               }
@@ -883,22 +883,9 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     //         b. move job to task assign stage
   }
 
-  protected def restart(ticket: Ticket) { 
+  protected def beforeRestart(ticket: Ticket) = 
     federator ! AskFor(CheckpointIntegrator.fullName, 
                        FindLatestCheckpoint(ticket.job.getId))
-    // TODO: find the latest integrigy superstep from tracker.
-    //       update job superstep to the latest integrity superstep
-    //       update job's all tasks with 
-    //         a. newTask = task.withIdIncremented
-    //         b. newTask.waitingState
-    //         c. newTask1 = newTask.newWithSuperstep(superstepFoundInTracker)
-    //         d. newTask1.revoke
-    //       call jobManager.update(job)
-    //       then go as below 
-    //jobManager.move(job.getId)(TaskAssign) 
-    //activeFinished = false 
-    //activeSchedule(job) 
-  }
 
   /**
    * Following actions are taken:
@@ -964,8 +951,22 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     federator ! JobFinishedMessage(jobId) 
 
   protected def msgFromFederator: Receive = {
-    case LatestCheckpoint(jobId: BSPJobID, superstep: Long) => // TODO: todo
-       
+    case LatestCheckpoint(jobId: BSPJobID, superstep: Long) => whenRestart
+  }
+
+  protected def whenRestart() {
+    // TODO: find the latest integrigy superstep from tracker.
+    //       update job superstep to the latest integrity superstep
+    //       update job's all tasks with 
+    //         a. newTask = task.withIdIncremented
+    //         b. newTask.waitingState
+    //         c. newTask1 = newTask.newWithSuperstep(superstepFoundInTracker)
+    //         d. newTask1.revoke
+    //       call jobManager.update(job)
+    //       then go as below 
+    //jobManager.move(job.getId)(TaskAssign) 
+    //activeFinished = false 
+    //activeSchedule(job)   
   }
 
   protected def notifyJobComplete(client: ActorRef, jobId: BSPJobID) =
