@@ -134,7 +134,7 @@ public final class Job implements Writable {
     private long progress;
     private long setupProgress;
     private long cleanupProgress;
-    private long startTime = System.currentTimeMillis();
+    private long startTime = now();
     private long finishTime;
     private long superstepCount;  
     private TaskTable taskTable;
@@ -604,6 +604,15 @@ public final class Job implements Writable {
 
   public Job newWithFinishTime(final long finishTime) {
     return new Builder(this).setFinishTime(finishTime).build();
+  }
+
+  /**
+   * Create a job with finish time set to System.currentTimemillis().
+   * @return Job that contains finish time marked with currentTimemillis().
+   */
+  // TODO: maybe pick up the latest finish time of tasks.
+  public Job newWithFinishNow() { 
+    return newWithFinishTime(now());
   }
 
   public long getSuperstepCount() {

@@ -804,7 +804,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     case newest: Task => jobManager.ticketAt match {
       case (s: Some[Stage], t: Some[Ticket]) => t.get.job.update(newest) match {
         case true => if(t.get.job.allTasksSucceeded) {
-          val newJob = t.get.job.newWithSucceededState
+          val newJob = t.get.job.newWithSucceededState.newWithFinishNow
           jobManager.update(t.get.newWithJob(newJob))
           broadcastFinished(newJob.getId) 
           jobManager.move(newJob.getId)(Finished)
@@ -895,14 +895,14 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   /**
    * Following actions are taken:
-   * - mark the job as failed
+   * - mark the job as failed and set finish time to current timemillis.
    * - broadcast job is finished, so tracker can update its state accordigly.
    * - move the job to Finished stage
    * - notify client that its' job has failed.
    */
   protected def whenAllTasksStopped(ticket: Ticket) { 
     val job = ticket.job
-    val newJob = job.newWithFailedState 
+    val newJob = job.newWithFailedState.newWithFinishNow 
     jobManager.update(ticket.newWithJob(newJob))
     val jobId = newJob.getId
     broadcastFinished(jobId) 
