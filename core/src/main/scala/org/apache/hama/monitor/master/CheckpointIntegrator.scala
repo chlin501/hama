@@ -113,10 +113,20 @@ final class CheckpointIntegrator extends Tracker with Curator {
     case FindLatestCheckpoint(jobId: BSPJobID) => {
       val pathToJobId = "%s/%s".format(verifiedPath(configuration), 
                                        jobId.toString)
-      from ! LatestCheckpoint(jobId, list(pathToJobId).map(_.toInt).max.toLong)
+      val latest = latestSuperstep(pathToJobId) match {
+        case Success(value) => value
+        case Failure(cause) => {
+          LOG.warning("Can't find the latest checkpoint because {}", cause)
+          -1
+        }
+      }
+      from ! LatestCheckpoint(jobId, latest)
     }
+    case _ => LOG.warning("Unknown action {} from {}!", action, from.path.name)
   }
 
-
+  private def latestSuperstep(pathToJobId: String): Try[Long] = Try(
+    list(pathToJobId).map(_.toInt).max.toLong
+  )
 }
 
