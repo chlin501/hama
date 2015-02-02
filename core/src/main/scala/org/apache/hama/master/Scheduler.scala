@@ -526,23 +526,24 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   protected def postSlotUnavailable(groom: ActorRef, d: Directive) = 
     jobManager.ticketAt match {
-      case (s: Some[Stage], t: Some[Ticket]) => {
-        val ticket = t.get
-        val (host, port) = targetHostPort(groom)
-        val killing = ticket.job.newWithKillingState
-        jobManager.update(ticket.newWithJob(killing)) 
-        ticket.job.findTaskBy(d.task.getId) match {
+      case (s: Some[Stage], t: Some[Ticket]) => 
+        t.get.job.findTaskBy(d.task.getId) match {
           case null => throw new RuntimeException("No matched task "+
                                                   d.task.getId+" for reply "+
                                                   " from "+groom.path.name)
-          case task@_ => task.failedState
+          case task@_ => {
+            val (host, port) = targetHostPort(groom)
+            val killing = t.get.job.newWithKillingState
+            jobManager.update(t.get.newWithJob(killing)) 
+            task.failedState
+            jobManager.cacheCommand(t.get.job.getId.toString, 
+                                    KillJob(host, port))
+            val groomsAlive = toSet[SystemInfo](t.get.job.tasksRunAtExcept(
+              task
+            ))
+            master ! FindGroomsToKillTasks(groomsAlive)
+          }
         } 
-        jobManager.cacheCommand(ticket.job.getId.toString, KillJob(host, port))
-        val groomsAlive = toSet[SystemInfo](ticket.job.tasksRunAt).
-          filter( groom => !host.equals(groom.getHost) && 
-                  (port != groom.getPort))  
-        master ! FindGroomsToKillTasks(groomsAlive)
-      } 
       case (s@_, t@_) => throw new RuntimeException("Invalid ticket " + t +
                                                     " or stage " + s + "!") 
     } 
@@ -819,10 +820,15 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           } 
           case true => j.get.getState match {
             case KILLING => j.get.findTaskBy(fault.taskAttemptId) match {
-              case null =>
+              case null => throw new RuntimeException("No matched task for "+
+                                                      fault.taskAttemptId)
               case task@_ => {
                 task.failedState
-                //TODO: if(j.get.allTasksStopped) whenAllTasksStopped  xxxx
+                if(j.get.allTasksStopped) jobManager.ticketAt match {
+                  case (s: Some[Stage], t: Some[Ticket]) => 
+                    whenAllTasksStopped(t.get) 
+                  case _ => throw new RuntimeException("No ticket found!")
+                }
               }
             }
             case RESTARTING =>
