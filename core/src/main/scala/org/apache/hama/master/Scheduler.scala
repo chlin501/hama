@@ -707,8 +707,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             case tasks if !tasks.isEmpty => tasks.exists({ failed => 
               failed.isActive 
             }) match {
+              /**
+               * Failed groom contains active tasks, the system is unable to
+               * restart those tasks at the failed groom. So switch to killing
+               * state.
+               */
               case true => { 
-                /* active tasks fails, switch to killing state. */
                 tasks.foreach( failed => failed.failedState )
                 val killing = t.get.job.newWithKillingState
                 jobManager.update(t.get.newWithJob(killing)) 
@@ -760,16 +764,16 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      * max attempt upper bound.
      * 
      * In processing queue:
-     * - Mark task as cancelled.
-     * - Check if all tasks in the job are stopped, either cancelled or failed.
-     * If all tasks are marked as stopped:
-     *  - Issue job finished event.
-     *  - Move job from processing queue to finished queue.
-     *  - Notify client.
+     * - mark alive task as cancelled (not failed).
+     * - check if all tasks in the job are stopped, either cancelled or failed.
+     * If all tasks are marked as either cancelled or failed:
+     *  - issue job finished event.
+     *  - move job from processing queue to finished queue.
+     *  - notify client.
      */
     case TaskCancelled(taskAttemptId) => jobManager.ticketAt match {
-      case (stage: Some[Stage], t: Some[Ticket]) => { 
-        t.get.job.markCancelledWith(taskAttemptId) match {
+      case (stage: Some[Stage], t: Some[Ticket]) =>  
+        t.get.job.markCancelledWith(taskAttemptId) match { 
           case true => if(t.get.job.allTasksStopped) t.get.job.getState match {
             case KILLING => whenAllTasksStopped(t.get)
             case RESTARTING => restart(t.get)
@@ -777,7 +781,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           case false => LOG.error("Unable to mark task {} killed!", 
                                   taskAttemptId)
         }
-      }
       case _ => LOG.error("No ticket found at any Stage!")
     }
     /**
@@ -800,7 +803,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case _ => LOG.warning("No job existed!")
     }
     /**
-     * Task failure ideally should happen when the job is in Processing stage.
+     * Task failure should happen when the job is in Processing stage.
      * Find associated job (via task) in corresponded stage.
      * Mark the job as recovering.
      * Find groom references where tasks are still running.
@@ -811,13 +814,16 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     case fault: TaskFailure => {
       jobManager.findJobById(fault.taskAttemptId.getJobID) match {
         case (s: Some[Stage], j: Some[Job]) => j.get.isRecovering match {
+          /**
+           * Directly mark the job as restarting because active tasks can be 
+           * rescheduled to the original groom, which is still online. 
+           */
           case false => {
-            val job = j.get
-            markJobAsRestarting(s.get, job)   
-            val failed = job.findTaskBy(fault.taskAttemptId)
-            val aliveGrooms = toSet[SystemInfo](job.tasksRunAtExcept(failed))
+            markJobAsRestarting(s.get, j.get)   
+            val failed = j.get.findTaskBy(fault.taskAttemptId) 
+            val aliveGrooms = toSet[SystemInfo](j.get.tasksRunAtExcept(failed))
             master ! FindTasksAliveGrooms(aliveGrooms)
-          } 
+          }
           case true => j.get.getState match {
             case KILLING => j.get.findTaskBy(fault.taskAttemptId) match {
               case null => throw new RuntimeException("No matched task for "+
@@ -831,16 +837,17 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                 }
               }
             }
-            case RESTARTING =>
-          // TODO: check job state: 
-          //       - job in killing
-          //         a. mark faulty task in the job as failed.
-          //         b. check if all tasks stopped. if true, 
-          //            notify job finished
-          //            move job to finished stage, etc.
-          //       - job in stopping
-          //         check if faulty task is active. if true, go killing route.
-          //         otherwise mark faulty task as failed, call rearrange, etc. 
+            case RESTARTING => j.get.findTaskBy(fault.taskAttemptId) match { 
+              case null => throw new RuntimeException("No matched task for "+
+                                                      fault.taskAttemptId)
+              case task@_ => {
+                task.failedState
+                if(j.get.allTasksStopped) jobManager.ticketAt match {
+                  case (s: Some[Stage], t: Some[Ticket]) => restart(t.get)
+                  case _ => throw new RuntimeException("No ticket found!")
+                }
+              }
+            }
           }
         }
         case _ => LOG.error("No matched job: {}", fault.taskAttemptId.getJobID)
@@ -849,7 +856,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     /**
      * Send Cancel directive with old task (not new task after rearrange) 
      * to groom. 
-     * Wait for TaskCancelled msgs returned by grooms.
+     * Wait for TaskCancelled messages replied by grooms where tasks still 
+     * alive.
      */
     case TasksAliveGrooms(grooms) => jobManager.ticketAt match {
       case (s: Some[Stage], t: Some[Ticket]) => grooms.foreach( groom => {
@@ -884,6 +892,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     //activeSchedule(job) 
   }
 
+  /**
+   * Following actions are taken:
+   * - mark the job as failed
+   * - broadcast job is finished, so tracker can update its state accordigly.
+   * - move the job to Finished stage
+   * - notify client that its' job has failed.
+   */
   protected def whenAllTasksStopped(ticket: Ticket) { 
     val job = ticket.job
     val newJob = job.newWithFailedState 
@@ -894,9 +909,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     jobManager.getCommand(jobId.toString) match {
       case Some(found) if found.isInstanceOf[KillJob] => 
         ticket.client ! Reject(found.asInstanceOf[KillJob].reason)  
-      case Some(found) if !found.isInstanceOf[KillJob] => 
+      case Some(found) if !found.isInstanceOf[KillJob] => {
         LOG.warning("Unknown command {} to react for job {}", found, 
                     jobId)
+        ticket.client ! Reject("Job "+jobId.toString+" fails!")  
+      }
       case None => LOG.warning("No matched command for job {} in "+
                                "reacting to cancelled event!", jobId)
     }

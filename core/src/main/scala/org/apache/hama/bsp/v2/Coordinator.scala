@@ -165,7 +165,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
     addJarToClasspath(taskAttemptId, taskConf)
     setupPhase
     setupSupersteps(taskConf)
-    currentSuperstep = startSuperstep
+    currentSuperstep = startSuperstep 
     LOG.debug("Start executing superstep {} for task {}", 
               currentSuperstep.getOrElse(null), taskAttemptId)
   }
@@ -250,9 +250,12 @@ class Coordinator(conf: HamaConfiguration,  // common conf
                             variables: Map[String, Writable] = emptyVariables): 
     Option[ActorRef] = execute(superstepName, bspPeer, variables)
 
-  protected def startSuperstep(): Option[ActorRef] =  
-    execute(classOf[FirstSuperstep].getName, bspPeer, 
+  protected def startSuperstep(): Option[ActorRef] = {
+    val ref =execute(classOf[FirstSuperstep].getName, bspPeer, 
             Map.empty[String, Writable])
+    runningState
+    ref
+  }
 
   protected def isFirstSuperstep(className: String): Boolean =
     classOf[FirstSuperstep].getName.equals(className)
@@ -310,7 +313,6 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   protected def whenCompute(peer: BSPPeer, superstep: ActorRef) {
     computePhase
     superstep ! Compute(peer) 
-    runningState
   }
 
   protected def afterCompute(peer: BSPPeer, superstep: ActorRef) { } 
