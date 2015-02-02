@@ -33,6 +33,7 @@ import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Job.State._
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.conf.Setting
+import org.apache.hama.client.JobComplete
 import org.apache.hama.groom.NoFreeSlot
 import org.apache.hama.groom.RequestTask
 import org.apache.hama.groom.TaskFailure
@@ -78,8 +79,9 @@ final case class FindTasksAliveGrooms(infos: Set[SystemInfo])
 final case class TasksAliveGrooms(grooms: Set[ActorRef])
       extends SchedulerMessage
 
-final case class FindLatestCheckpoint(jobId: BSPJobID)
+final case class FindLatestCheckpoint(jobId: BSPJobID) extends SchedulerMessage
 final case class LatestCheckpoint(jobId: BSPJobID, superstep: Long)
+      extends SchedulerMessage
 
 final case object JobFinishedEvent extends PublishEvent
 
@@ -800,7 +802,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           jobManager.update(t.get.newWithJob(newJob))
           broadcastFinished(newJob.getId) 
           jobManager.move(newJob.getId)(Finished)
-          // TODO: notify submitter by ticket.client ! JobComplete(newJob.getId)
+          notifyJobComplete(t.get.client, newJob.getId) 
         }
         case false => LOG.warning("Unable to update task {}!", newest.getId)
       }
@@ -962,9 +964,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     federator ! JobFinishedMessage(jobId) 
 
   protected def msgFromFederator: Receive = {
-    case LatestCheckpoint(jobId: BSPJobID, superstep: Long) => 
+    case LatestCheckpoint(jobId: BSPJobID, superstep: Long) => // TODO: todo
        
   }
+
+  protected def notifyJobComplete(client: ActorRef, jobId: BSPJobID) =
+    client ! JobComplete(jobId)
 
   override def receive = events orElse tickMessage orElse requestTask orElse dispense orElse activeTargetGrooms orElse msgFromTaskCounsellor orElse unknown
 

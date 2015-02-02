@@ -163,7 +163,10 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
     /**
      * Scheduler replies directly when the job is finished.
      */    
-    case JobComplete(jobId) => { cleanup; shutdown }
+    case JobComplete(jobId) => { 
+      LOG.info("Job {} is complete!", jobId.toString)
+      cleanup; shutdown 
+    }
     case failure: Reject => { 
       LOG.error("Failing processing job because {}", failure.reason)
       cleanup; shutdown
@@ -358,7 +361,7 @@ class Submitter(setting: Setting) extends RemoteService with MasterDiscovery
    * Cleanup job related information hold by this client.
    */
   protected def cleanup() = {
-    LOG.info("Cleanup job related information and then shutdown sytem ...")
+    LOG.debug("Cleanup job related information ...")
     bspJobId = None 
     bspJob = None
     masterProxy = None
