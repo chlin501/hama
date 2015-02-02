@@ -43,6 +43,7 @@ import org.apache.hama.monitor.GroomStats
 import org.apache.hama.monitor.master.GetGroomCapacity
 import org.apache.hama.monitor.master.GroomCapacity
 import org.apache.hama.monitor.master.GroomsTracker
+import org.apache.hama.monitor.master.CheckpointIntegrator
 import org.apache.hama.monitor.master.TaskArrivalEvent
 import org.apache.hama.monitor.PublishEvent
 import org.apache.hama.monitor.PublishMessage
@@ -76,6 +77,9 @@ final case class FindTasksAliveGrooms(infos: Set[SystemInfo])
       extends SchedulerMessage
 final case class TasksAliveGrooms(grooms: Set[ActorRef])
       extends SchedulerMessage
+
+final case class FindLatestCheckpoint(jobId: BSPJobID)
+final case class LatestCheckpoint(jobId: BSPJobID, superstep: Long)
 
 final case object JobFinishedEvent extends PublishEvent
 
@@ -878,6 +882,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   }
 
   protected def restart(ticket: Ticket) { 
+    federator ! AskFor(CheckpointIntegrator.fullName, 
+                       FindLatestCheckpoint(ticket.job.getId))
     // TODO: find the latest integrigy superstep from tracker.
     //       update job superstep to the latest integrity superstep
     //       update job's all tasks with 
@@ -954,6 +960,11 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    */
   protected def broadcastFinished(jobId: BSPJobID) =  
     federator ! JobFinishedMessage(jobId) 
+
+  protected def msgFromFederator: Receive = {
+    case LatestCheckpoint(jobId: BSPJobID, superstep: Long) => 
+       
+  }
 
   override def receive = events orElse tickMessage orElse requestTask orElse dispense orElse activeTargetGrooms orElse msgFromTaskCounsellor orElse unknown
 

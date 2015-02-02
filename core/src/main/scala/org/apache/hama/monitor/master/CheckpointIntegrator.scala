@@ -25,32 +25,24 @@ import org.apache.hama.Agent
 import org.apache.hama.Close
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.bsp.BSPJobID
-import org.apache.hama.fs.Operation
 import org.apache.hama.util.Curator
+import org.apache.hama.master.FindLatestCheckpoint
 import org.apache.hama.master.JobFinishedEvent
+import org.apache.hama.master.LatestCheckpoint
 import org.apache.hama.monitor.Tracker
 import org.apache.hama.monitor.Checkpointer
 import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 
-final class Checker(conf: HamaConfiguration,  // common conf
+// TODO: find functions and create abstract class or trait required for spawn
+class Checker(conf: HamaConfiguration,  // common conf
                     jobId: String,
                     superstep: Int, 
                     totalTasks: Int) extends Agent with Curator {
 
   import Checkpointer._
-
-  val operation = Operation.get(conf)
-
-  protected def verifiedPath(conf: HamaConfiguration): String = 
-    "%s/%s".format(root(conf), 
-                   conf.get("bsp.checkpoint.verified.path", "verified"))
-
-  protected def verifiedPath(conf: HamaConfiguration, 
-                             jobId: String, 
-                             superstep: Long): String = 
-    "%s/%s/%s".format(verifiedPath(conf), jobId, superstep)
+  import CheckpointIntegrator._ 
 
   override def preStart() = try { verifyCheckpoint(totalTasks) match {
     case Success(successful) => if(successful) 
@@ -75,11 +67,23 @@ final class Checker(conf: HamaConfiguration,  // common conf
 
 object CheckpointIntegrator {
 
+  import Checkpointer._
+
   val superstepOf = "superstep-of-"
+
+  def fullName(): String = classOf[CheckpointIntegrator].getName
+
+  def verifiedPath(conf: HamaConfiguration): String = 
+    "%s/%s".format(root(conf), 
+                   conf.get("bsp.checkpoint.verified.path", "verified"))
+
+  def verifiedPath(conf: HamaConfiguration, jobId: String, 
+                   superstep: Long): String = 
+    "%s/%s/%s".format(verifiedPath(conf), jobId, superstep)
 
 }
 
-final class CheckpointIntegrator extends Tracker {
+final class CheckpointIntegrator extends Tracker with Curator {
 
   import CheckpointIntegrator._
 
@@ -92,14 +96,27 @@ final class CheckpointIntegrator extends Tracker {
 
   override def notified(msg: Any) = msg match {
     case LatestSuperstep(jobId, n, totalTasks) => {
-      children += spawn(superstepOf + n, classOf[Checker], 
+      children += spawn(superstepOf + n, classOf[Checker], // TODO: performance?
                         configuration, jobId.toString, n, totalTasks)
     } 
+    /**
+     * Reset stats when a job finish execution. 
+     */
     case jobId: BSPJobID => {
       children.foreach( child => child ! Close )
       children = Set.empty[ActorRef] 
     }
     case _ => LOG.warning("Unknown message {}!", msg)
   }
+
+  override def askFor(action: Any, from: ActorRef) = action match {
+    case FindLatestCheckpoint(jobId: BSPJobID) => {
+      val pathToJobId = "%s/%s".format(verifiedPath(configuration), 
+                                       jobId.toString)
+      from ! LatestCheckpoint(jobId, list(pathToJobId).map(_.toInt).max.toLong)
+    }
+  }
+
+
 }
 
