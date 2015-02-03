@@ -47,7 +47,7 @@ import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.duration.FiniteDuration
 
-final case class Sched(sched: ActorRef)
+final case class Refs(sched: ActorRef, m: ActorRef)
 final case class Received(action: Action, id: TaskAttemptID, start: Long,
                           finish: Long, split: PartitionedSplit, 
                           superstep: Long, state: State, phase: Phase, 
@@ -59,12 +59,17 @@ trait MockTC extends Mock with Periodically {// task counsellor
 
   var sched: Option[ActorRef] = None
 
+  var master: Option[ActorRef] = None
+
   var tasks = Array.empty[Task]  
 
   override def preStart = tick(self, TaskRequest)
 
   def testMsg: Receive = {
-    case Sched(sched) => this.sched = Option(sched)
+    case Refs(sched, m) => {
+      this.sched = Option(sched)
+      this.master = Option(m)
+    }
     case directive: Directive => directive match {
       case null => throw new RuntimeException("Directive shouldn't be null!")
       case d@_ => received(d)
@@ -200,11 +205,11 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef]) extends Mock {
                actives.map { a => a.path.name }.mkString(", "))
       sender ! TargetRefs(actives)
     }
-    case Sched(sched: ActorRef) => {
+    case Refs(sched, null) => {
       LOG.info("Dispatch {} to active and passive grooms!", sched.path.name)
       this.scheduler = Option(sched)
-      actives.foreach { active => active ! Sched(sched) }
-      passives.foreach { passive => passive ! Sched(sched) }
+      actives.foreach { active => active ! Refs(sched, self) }
+      passives.foreach { passive => passive ! Refs(sched, self) }
     }
     case OfflinePassive(n) => {
       val FullName = "passive" + n
@@ -268,7 +273,7 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   override def initializeServices { 
     super.initializeServices
     LOG.info("Dispatch {} reference to grooms!", self.path.name)
-    master ! Sched(self)
+    master ! Refs(self, null)
   }
 
   override def targetHostPort(target: ActorRef): (String, Int) = 
@@ -369,7 +374,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     expectAnyOf(r4, r5, r6, r7, r8)
    
     val num = pickup
-    //master ! OfflinePassive(num)
+    master ! OfflinePassive(num)
 
     // TODO: random pick up 1 passive groom to stop for simulating offline
     //       then ask master sending GroomLeave event to sched
