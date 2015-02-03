@@ -18,6 +18,7 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
+import org.apache.hama.Close
 import org.apache.hama.Mock
 import org.apache.hama.Periodically
 import org.apache.hama.TestEnv
@@ -52,6 +53,7 @@ final case class Received(action: Action, id: TaskAttemptID, start: Long,
                           superstep: Long, state: State, phase: Phase, 
                           completed: Boolean, active: Boolean, 
                           assigned: Boolean, bspTasks: Int)
+final case class OfflinePassive(n: Int)
 
 trait MockTC extends Mock with Periodically {// task counsellor
 
@@ -67,6 +69,7 @@ trait MockTC extends Mock with Periodically {// task counsellor
       case null => throw new RuntimeException("Directive shouldn't be null!")
       case d@_ => received(d)
     }
+    
   }
 
   override def ticked(msg: Tick): Unit = msg match {
@@ -189,6 +192,8 @@ class Client(tester: ActorRef) extends Mock
 
 class Master(actives: Array[ActorRef], passives: Array[ActorRef]) extends Mock {
 
+  var scheduler: Option[ActorRef] = None
+
   def testMsg: Receive = {
     case GetTargetRefs(infos) => {
       LOG.info("{} asks for active grooms {}!", sender.path.name, 
@@ -197,9 +202,24 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef]) extends Mock {
     }
     case Sched(sched: ActorRef) => {
       LOG.info("Dispatch {} to active and passive grooms!", sched.path.name)
+      this.scheduler = Option(sched)
       actives.foreach { active => active ! Sched(sched) }
       passives.foreach { passive => passive ! Sched(sched) }
     }
+    case OfflinePassive(n) => {
+      val FullName = "passive" + n
+      passives.foreach ( passive => passive.path.name match {
+        case FullName => {
+          LOG.info("Notify groom {} to offline!", FullName)
+          passive ! Close
+          scheduler.map { sched => 
+            LOG.info("Notify scheduler that groom {} is offline!", FullName) 
+            sched ! GroomLeave(FullName, FullName, 50000)
+          }
+        }
+        case _ => 
+      })
+    } 
   }
 
   override def receive = testMsg orElse super.receive
@@ -270,6 +290,7 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 @RunWith(classOf[JUnitRunner])
 class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
+  val rand = new java.util.Random
   val emptySplit: PartitionedSplit = null
   val active: Boolean = true
   val passive: Boolean = false
@@ -299,6 +320,8 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
   def taskAttemptId(jobId: BSPJobID, taskId: Int, attemptId: Int): 
     TaskAttemptID = createTaskAttemptId(jobId, taskId, attemptId)
+
+  def pickup: Int = rand.nextInt(8) + 1
 
   it("test scheduling functions.") {
     val setting = Setting.master
@@ -344,6 +367,8 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     expectAnyOf(r4, r5, r6, r7, r8)
     expectAnyOf(r4, r5, r6, r7, r8)
     expectAnyOf(r4, r5, r6, r7, r8)
+   
+    val num = pickup
 
     // TODO: random pick up 1 passive groom to stop for simulating offline
     //       then ask master sending GroomLeave event to sched
