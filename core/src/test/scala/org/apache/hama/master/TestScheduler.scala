@@ -369,6 +369,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     expectAnyOf(r4, r5, r6, r7, r8)
    
     val num = pickup
+    //master ! OfflinePassive(num)
 
     // TODO: random pick up 1 passive groom to stop for simulating offline
     //       then ask master sending GroomLeave event to sched

@@ -707,7 +707,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                                  failedTasks: List[Task]) =
     failedTasks.exists(task => task.isActive) match { 
       case true => whenActiveTasksFail(host, port, ticket, failedTasks)
-      case false => allPassiveTasks(host, port, ticket, failedTasks)
+      case false => onlyPassiveTasksFail(host, port, ticket, failedTasks)
       /*allPassiveTasks(stage, recovering, failedTasks) match {
         case Success(result) => 
         case Failure(ex) => ex match {
@@ -971,8 +971,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * - find grooms where tasks are still up running. 
    * - wait for TasksToRestartGrooms returned.
    */
-  protected def allPassiveTasks(host: String, port: Int, ticket: Ticket,
-                                failedTasks: java.util.List[Task]) {
+  protected def onlyPassiveTasksFail(host: String, port: Int, ticket: Ticket,
+                                     failedTasks: java.util.List[Task]) {
     val stopping = ticket.job.newWithRestartingState
     jobManager.update(ticket.newWith(stopping)) 
     failedTasks.foreach( task => task.failedState)
@@ -997,28 +997,48 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       whenRestart(jobId, superstep)
   }
 
+  protected def whenRestart(jobId: BSPJobID, latest: Long) = 
+    Try(updateJob(jobId, latest)) match {
+      case Success(job) => activeSchedule(job)
+      case Failure(result) => jobManager.findTicketById(jobId) match {
+        case (s: Some[Stage], t: Some[Ticket]) => {
+          jobManager.update(t.get.newWith(t.get.job.newWithFailedState))
+          jobManager.move(jobId)(Finished)
+          t.get.client ! Reject("Job "+jobId.toString+" fails because "+ result)
+        } 
+        case _ => throw new RuntimeException("Can't find job "+jobId+" when "+
+                                             "updating job data.")
+      }
+    }
+
   /**
    * Obtain ticket by job id. 
    * Update job's superstep to the latest checkpoint found in tracker.
    * Update all tasks' superstep, state, and marker values; and increment id.
-   *  
-   */
-  protected def whenRestart(jobId: BSPJobID, latest: Long) = 
+   */  
+  protected def updateJob(jobId: BSPJobID, latest: Long): Job = {
     jobManager.findTicketById(jobId) match {
       case (s: Some[Stage], t: Some[Ticket]) => {
         val jobWithLatestCheckpoint = t.get.job.newWithSuperstepCount(latest)
         jobWithLatestCheckpoint.allTasks.map { task =>
-          val updated = task.withIdIncremented.newWithSuperstep(latest).
-                             newWithWaitingState.newWithRevoke
+          val newTask = task.withIdIncremented
+          val id = newTask.getId.getId 
+          val allowed = t.get.job.getMaxTaskAttempts
+          if(id > allowed) 
+            throw new RuntimeException("Task "+newTask.getId+" exceeds "+
+                                       allowed+" times allowed!")
+          val updated = newTask.newWithSuperstep(latest).newWithWaitingState.
+                                newWithRevoke
           jobWithLatestCheckpoint.update(updated)
         }
         jobManager.update(t.get.newWith(jobWithLatestCheckpoint)) 
         jobManager.move(jobId)(TaskAssign)
-        activeSchedule(t.get.job)   
+        t.get.job
       }
       case _ => throw new RuntimeException("Can't find job "+jobId+" when "+
-                                           "restarting.")
+                                           "updating job data.")
     }
+  }
 
   protected def notifyJobComplete(client: ActorRef, jobId: BSPJobID) =
     client ! JobComplete(jobId)
