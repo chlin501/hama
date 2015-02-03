@@ -52,7 +52,9 @@ final case class Invalid(reason: String) extends Validation
 sealed trait ReceptionistMessage
 final case class Ticket(client: ActorRef, job: Job) extends ReceptionistMessage{
 
-  def newWithJob(newJob: Job): Ticket = Ticket(client, newJob)
+  def newWith(newJob: Job): Ticket = Ticket(client, newJob)
+
+  def newWith(newClient: ActorRef): Ticket = Ticket(newClient, job)
 
 }
 

@@ -84,7 +84,7 @@ class TestJobManager extends TestEnv("TestJobManager") with JobUtil {
         val ticket = t.get
         LOG.info("Ticket now is moved to stage {}", stage)
         assert(Processing.equals(stage))
-        val result = jobManager.update(ticket.newWithJob(ticket.
+        val result = jobManager.update(ticket.newWith(ticket.
                      job.newWithFailedState))
         LOG.info("Successfully update job to fail state? {}", result)
         assert(result) 

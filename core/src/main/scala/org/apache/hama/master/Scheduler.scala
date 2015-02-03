@@ -469,7 +469,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 //       mark job started (give start time)
             if(job.allTasksAssigned) {
               jobManager.moveToNextStage(job.getId) match {
-                case (true, _) => if(jobManager.update(ticket.newWithJob(job.
+                case (true, _) => if(jobManager.update(ticket.newWith(job.
                                      newWithRunningState)))
                   LOG.info("Job {} is running now!", job.getId) 
                 case _ => LOG.error("Unable to move job {} to next stage!", 
@@ -552,7 +552,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           host+":"+port
         }.toArray.mkString(",")
         val ticket = t.get
-        val newTicket = ticket.newWithJob(ticket.job.newWithFailedState)
+        val newTicket = ticket.newWith(ticket.job.newWithFailedState)
         jobManager.update(newTicket)
         jobManager.move(newTicket.job.getId)(Finished)
         newTicket.client ! Reject("Grooms "+grooms+" do not have free slots!")
@@ -573,7 +573,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           case task@_ => {
             val (host, port) = targetHostPort(groom)
             val killing = t.get.job.newWithKillingState
-            jobManager.update(t.get.newWithJob(killing)) 
+            jobManager.update(t.get.newWith(killing)) 
             task.failedState
             jobManager.cacheCommand(t.get.job.getId.toString, 
                                     KillJob(host, port))
@@ -656,7 +656,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             LOG.debug("Tasks for job {} are all assigned!", job.getId)
             jobManager.moveToNextStage(job.getId) match { 
               case (true, _) => if(jobManager.update(ticket.
-                newWithJob(job.newWithRunningState))) 
+                newWith(job.newWithRunningState))) 
                 LOG.info("Job {} is running!", job.getId) 
               case _ => LOG.error("Unable to move job {} to next stage!", 
                                   job.getId)
@@ -681,7 +681,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def whenActiveTasksFail(host: String, port: Int, ticket: Ticket,
                                     failedTasks: java.util.List[Task]) {
     val killing = ticket.job.newWithKillingState
-    jobManager.update(ticket.newWithJob(killing)) 
+    jobManager.update(ticket.newWith(killing)) 
     failedTasks.foreach( task => task.failedState)
     jobManager.cacheCommand(ticket.job.getId.toString, KillJob(host, port))
     val groomsAlive = toSet[SystemInfo](ticket.job.tasksRunAt).filter( groom => 
@@ -756,7 +756,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               case true => { 
                 tasks.foreach( failed => failed.failedState )
                 val killing = t.get.job.newWithKillingState
-                jobManager.update(t.get.newWithJob(killing)) 
+                jobManager.update(t.get.newWith(killing)) 
                 if(t.get.job.allTasksStopped) whenAllTasksStopped(t.get) 
               }
               case false => {
@@ -836,7 +836,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case (s: Some[Stage], t: Some[Ticket]) => t.get.job.update(newest) match {
         case true => if(t.get.job.allTasksSucceeded) {
           val newJob = t.get.job.newWithSucceededState.newWithFinishNow
-          jobManager.update(t.get.newWithJob(newJob))
+          jobManager.update(t.get.newWith(newJob))
           broadcastFinished(newJob.getId) 
           jobManager.move(newJob.getId)(Finished)
           notifyJobComplete(t.get.client, newJob.getId) 
@@ -934,7 +934,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def whenAllTasksStopped(ticket: Ticket) { 
     val job = ticket.job
     val newJob = job.newWithFailedState.newWithFinishNow 
-    jobManager.update(ticket.newWithJob(newJob))
+    jobManager.update(ticket.newWith(newJob))
     val jobId = newJob.getId
     broadcastFinished(jobId) 
     jobManager.move(jobId)(Finished)
@@ -953,13 +953,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   protected def markJobAsRestarting(stage: Stage, job: Job) =
     jobManager.headOf(stage).map { ticket => 
-      jobManager.update(ticket.newWithJob(job.newWithRestartingState))  
+      jobManager.update(ticket.newWith(job.newWithRestartingState))  
     }
 
   protected def markJobAsRunning(jobId: BSPJobID) = 
     jobManager.findJobById(jobId) match {
       case (s: Some[Stage], j: Some[Job]) => jobManager.headOf(s.get).map { t=>
-        jobManager.update(t.newWithJob(j.get.newWithRunningState))  
+        jobManager.update(t.newWith(j.get.newWithRunningState))  
       }
       case _ => LOG.error("Fail to mark job {} as running!", jobId)
     }
@@ -973,7 +973,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def allPassiveTasks(host: String, port: Int, ticket: Ticket,
                                 failedTasks: java.util.List[Task]) {
     val stopping = ticket.job.newWithRestartingState
-    jobManager.update(ticket.newWithJob(stopping)) 
+    jobManager.update(ticket.newWith(stopping)) 
     failedTasks.foreach( task => task.failedState)
     val groomsAlive = toSet[SystemInfo](ticket.job.tasksRunAt).filter( groom => 
       !host.equals(groom.getHost) && (port != groom.getPort)
@@ -1005,7 +1005,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                              newWithWaitingState.newWithRevoke
           jobWithLatestCheckpoint.update(updated)
         }
-        jobManager.update(t.get.newWithJob(jobWithLatestCheckpoint)) 
+        jobManager.update(t.get.newWith(jobWithLatestCheckpoint)) 
       }
       case _ => throw new RuntimeException("Can't find job "+jobId+" when "+
                                            "restarting.")
