@@ -17,13 +17,18 @@
  */
 package org.apache.hama.bsp.v2;
 
-public final class ExceedMaxTaskAllowedException extends RuntimeException {
+import org.apache.hama.bsp.BSPJobID;
+
+public final class TaskMaxAttemptedException extends RuntimeException {
 
   final String jobId;
   final int maxAttemptAllowed;
 
-  public ExceedMaxTaskAllowedException(final String jobId,
-                                       final int maxAllowed) {
+  public TaskMaxAttemptedException(final BSPJobID jobId, final int maxAllowed) {
+    this(maxAllowed, jobId.toString());
+  }
+
+  public TaskMaxAttemptedException(final int maxAllowed, final String jobId) {
     this.jobId = jobId;
     this.maxAttemptAllowed = maxAllowed;
   }
@@ -38,7 +43,7 @@ public final class ExceedMaxTaskAllowedException extends RuntimeException {
 
   @Override 
   public String toString() {
-    return "Exceed "+getMaxAttemptAllowed()+" max tasks allowed "+
+    return "Exceed max task "+getMaxAttemptAllowed()+" allowed "+
            "for job "+getJobId();
   }
 

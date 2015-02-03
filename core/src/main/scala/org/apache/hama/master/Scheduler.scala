@@ -28,7 +28,7 @@ import org.apache.hama.SystemInfo
 import org.apache.hama.Tick
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.bsp.v2.ExceedMaxTaskAllowedException
+import org.apache.hama.bsp.v2.TaskMaxAttemptedException
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Job.State._
 import org.apache.hama.bsp.v2.Task
@@ -692,6 +692,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     master ! FindGroomsToKillTasks(groomsAlive)
   } 
 
+/*
   protected def taskExceedsMaxAttempt(host: String, port: Int, job: Job, 
                                       e: Throwable) {
     jobManager.cacheCommand(job.getId.toString, KillJob(e))
@@ -701,22 +702,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     )
     master ! FindGroomsToKillTasks(grooms) 
   }
+*/
 
-  protected def someTasksFailure(host: String, port: Int, ticket: Ticket, 
-                                 stage: Stage, 
-                                 failedTasks: List[Task]) =
+  protected def someTasksFail(host: String, port: Int, ticket: Ticket, 
+                              stage: Stage, failedTasks: List[Task]) =
     failedTasks.exists(task => task.isActive) match { 
       case true => whenActiveTasksFail(host, port, ticket, failedTasks)
       case false => onlyPassiveTasksFail(host, port, ticket, failedTasks)
-      /*allPassiveTasks(stage, recovering, failedTasks) match {
-        case Success(result) => 
-        case Failure(ex) => ex match {
-          case e: ExceedMaxTaskAllowedException => 
-            taskExceedsMaxAttempt(host, port, recovering, ex)
-          case _ => LOG.error("Unexpected exception in dealing with passive "+
-                              "tasks fail: {}", ex)
-        }
-      }*/
     }
 
   protected def events: Receive = {
@@ -732,7 +724,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           case list if list.isEmpty => LOG.debug("No tasks run on failed "+
                                                  "groom {}:{}!", host, port)
           case failedTasks if !failedTasks.isEmpty => 
-            someTasksFailure(host, port, t.get, s.get, failedTasks)
+            someTasksFail(host, port, t.get, s.get, failedTasks)
         }
         case true => t.get.job.getState match {
           case KILLING => toList(t.get.job.findTasksBy(host, port)) match {
@@ -973,8 +965,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    */
   protected def onlyPassiveTasksFail(host: String, port: Int, ticket: Ticket,
                                      failedTasks: java.util.List[Task]) {
-    val stopping = ticket.job.newWithRestartingState
-    jobManager.update(ticket.newWith(stopping)) 
+    val restarting = ticket.job.newWithRestartingState
+    jobManager.update(ticket.newWith(restarting)) 
     failedTasks.foreach( task => task.failedState)
     val groomsAlive = toSet[SystemInfo](ticket.job.tasksRunAt).filter( groom => 
       !host.equals(groom.getHost) && (port != groom.getPort)
@@ -997,17 +989,29 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       whenRestart(jobId, superstep)
   }
 
+  /**
+   * After all tasks are stopped, either cancelled or failed, and beforeRestart
+   * finds the latest checkpoint value, this function is then executed.
+   * 
+   * 
+   * @param jobId is the job to be re-excecuted.
+   * @param latest is the latest completed checkpoint value. 
+   */
   protected def whenRestart(jobId: BSPJobID, latest: Long) = 
     Try(updateJob(jobId, latest)) match {
       case Success(job) => activeSchedule(job)
-      case Failure(result) => jobManager.findTicketById(jobId) match {
-        case (s: Some[Stage], t: Some[Ticket]) => {
-          jobManager.update(t.get.newWith(t.get.job.newWithFailedState))
-          jobManager.move(jobId)(Finished)
-          t.get.client ! Reject("Job "+jobId.toString+" fails because "+ result)
-        } 
-        case _ => throw new RuntimeException("Can't find job "+jobId+" when "+
-                                             "updating job data.")
+      case Failure(cause) => cause match {
+        case e: TaskMaxAttemptedException => 
+          jobManager.findTicketById(jobId) match {
+            case (s: Some[Stage], t: Some[Ticket]) => { 
+              jobManager.update(t.get.newWith(t.get.job.newWithFailedState))
+              jobManager.move(jobId)(Finished)
+              t.get.client ! Reject(e.toString)
+            } 
+            case _ => throw new RuntimeException("Can't find job "+jobId+
+                                                 " when updating job data.")
+          }
+        case e: Exception => throw e 
       }
     }
 
@@ -1024,9 +1028,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           val newTask = task.withIdIncremented
           val id = newTask.getId.getId 
           val allowed = t.get.job.getMaxTaskAttempts
-          if(id > allowed) 
-            throw new RuntimeException("Task "+newTask.getId+" exceeds "+
-                                       allowed+" times allowed!")
+          if(id > allowed) throw new TaskMaxAttemptedException(jobId, allowed)
           val updated = newTask.newWithSuperstep(latest).newWithWaitingState.
                                 newWithRevoke
           jobWithLatestCheckpoint.update(updated)

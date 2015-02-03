@@ -215,8 +215,9 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef]) extends Mock {
       val FullName = "passive" + n
       passives.foreach ( passive => passive.path.name match {
         case FullName => {
-          LOG.info("Notify groom {} to offline!", FullName)
+          LOG.info("Notify (passive) groom {} to offline!", FullName)
           passive ! Close
+          Thread.sleep(1*1000)
           scheduler.map { sched => 
             LOG.info("Notify scheduler that groom {} is offline!", FullName) 
             sched ! GroomLeave(FullName, FullName, 50000)

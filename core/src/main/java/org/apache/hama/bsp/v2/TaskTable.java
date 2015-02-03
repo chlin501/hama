@@ -387,8 +387,8 @@ public final class TaskTable implements Writable {
       throw new NullPointerException("Attempt tasks at row "+row+" is empty!"); 
     final int maxAttemptAllowed = getMaxTaskAttempts(); 
     if(maxAttemptAllowed < taskAttemptArray.length) 
-      throw new ExceedMaxTaskAllowedException(newTask.getId().getJobID().
-      toString(), maxAttemptAllowed);
+      throw new TaskMaxAttemptedException(newTask.getId().getJobID(), 
+                                          maxAttemptAllowed);
     final Task[] tmpTasks = new Task[taskAttemptArray.length+1];
     for(int idx = 0; idx < tmpTasks.length; idx++) {
       if(idx < (taskAttemptArray.length-1) ) {
@@ -417,8 +417,8 @@ public final class TaskTable implements Writable {
                                          "is empty!"); 
         final int maxAttemptAllowed = getMaxTaskAttempts(); 
         if(maxAttemptAllowed < oldAttempts.length) 
-          throw new ExceedMaxTaskAllowedException(newTask.getId().getJobID().
-          toString(), maxAttemptAllowed);
+          throw new TaskMaxAttemptedException(newTask.getId().getJobID(),
+                                              maxAttemptAllowed);
         final Task[] tmpAttempts = new Task[oldAttempts.length+1];
         for(int idx = 0; idx < tmpAttempts.length; idx++) {
           if(idx < (oldAttempts.length-1) ) {
