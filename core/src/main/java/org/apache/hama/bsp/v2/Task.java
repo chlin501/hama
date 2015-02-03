@@ -62,8 +62,7 @@ public final class Task implements Writable { // TODO: change to immutable
   /* The input meta data for this task. */
   private PartitionedSplit split;  
 
-  // TODO: change current superstep type to long!
-  private IntWritable currentSuperstep = new IntWritable(0);
+  private LongWritable currentSuperstep = new LongWritable(0);
 
   /* The state of this task. */
   private State state = State.WAITING; 
@@ -208,7 +207,7 @@ public final class Task implements Writable { // TODO: change to immutable
     private long startTime;
     private long finishTime;
     private PartitionedSplit split = null;
-    private int currentSuperstep;
+    private long currentSuperstep;
     private Phase phase = Phase.SETUP;
     private State state = State.WAITING;
     private boolean completed = false;
@@ -271,7 +270,7 @@ public final class Task implements Writable { // TODO: change to immutable
       return this;
     }
 
-    public Builder setCurrentSuperstep(final int currentSuperstep) {
+    public Builder setCurrentSuperstep(final long currentSuperstep) {
       if(0 >= currentSuperstep)
         throw new IllegalArgumentException("Invalid superstep "+
                                            currentSuperstep+"value!");
@@ -335,7 +334,7 @@ public final class Task implements Writable { // TODO: change to immutable
               final long startTime, 
               final long finishTime, 
               final PartitionedSplit split, 
-              final int currentSuperstep,
+              final long currentSuperstep,
               final State state, 
               final Phase phase, 
               final boolean completed, 
@@ -357,7 +356,7 @@ public final class Task implements Writable { // TODO: change to immutable
     if(0 > currentSuperstep)
       throw new IllegalArgumentException("Invalid superstep "+currentSuperstep+
                                          " value!");
-    this.currentSuperstep = new IntWritable(currentSuperstep);
+    this.currentSuperstep = new LongWritable(currentSuperstep);
     this.state = state;
     if(null == this.state)
       throw new NullPointerException("Task's State is missing!");
@@ -411,11 +410,11 @@ public final class Task implements Writable { // TODO: change to immutable
     return this.split;
   }
 
-  public int getCurrentSuperstep() {
+  public long getCurrentSuperstep() {
     return this.currentSuperstep.get();
   }
 
-  public Task newWithSuperstep(int superstep) {
+  public Task newWithSuperstep(long superstep) {
     if(0 > superstep) 
       throw new IllegalArgumentException("Invalid superstep "+superstep);
     return new Builder(this).setCurrentSuperstep(superstep).build(); 
@@ -425,11 +424,15 @@ public final class Task implements Writable { // TODO: change to immutable
    * Increment the current superstep via 1.
    */
   public void incrementSuperstep() {
-    this.currentSuperstep = new IntWritable((getCurrentSuperstep()+1));
+    this.currentSuperstep = new LongWritable((getCurrentSuperstep()+1));
   }
 
   public State getState() {
     return this.state;
+  }
+
+  public Task newWithWaitingState() {
+    return new Builder(this).setState(State.WAITING).build();
   }
 
   public boolean isWaiting() {
@@ -440,12 +443,20 @@ public final class Task implements Writable { // TODO: change to immutable
     this.state = State.WAITING; 
   } 
 
+  public Task newWithRunningState() {
+    return new Builder(this).setState(State.RUNNING).build();
+  }
+
   public boolean isRunning() {
     return State.RUNNING.equals(getState());
   }
 
   public void runningState() {
     this.state = State.RUNNING;
+  }
+
+  public Task newWithSucceededState() {
+    return new Builder(this).setState(State.SUCCEEDED).build();
   }
 
   public boolean isSucceeded() {
@@ -456,12 +467,20 @@ public final class Task implements Writable { // TODO: change to immutable
     this.state = State.SUCCEEDED;
   }
 
+  public Task newWithFailedState() {
+    return new Builder(this).setState(State.FAILED).build();
+  }
+
   public boolean isFailed() {
     return State.FAILED.equals(getState());
   }
 
   public void failedState() {
     this.state = State.FAILED;
+  }
+
+  public Task newWithCancelledState() {
+    return new Builder(this).setState(State.CANCELLED).build();
   }
 
   public boolean isCancelled() {
@@ -564,8 +583,18 @@ public final class Task implements Writable { // TODO: change to immutable
     this.marker = new Marker(true, true, name, port); 
   } 
 
+  /**
+   * Revoke assigned host, port to the default values, i.e. localhost:50000.
+   */
   public void revoke() { 
     this.marker = new Marker(false, SystemInfo.Localhost, 50000); 
+  }
+
+  /**
+   * Create a new task with assigned host, port set to default.
+   */
+  public Task newWithRevoke() {
+    return new Builder(this).revoke().build();
   }
 
   /**
@@ -620,7 +649,7 @@ public final class Task implements Writable { // TODO: change to immutable
     } else {
       this.split = null;
     } 
-    this.currentSuperstep = new IntWritable(0);
+    this.currentSuperstep = new LongWritable(0);
     this.currentSuperstep.readFields(in);
     this.state = WritableUtils.readEnum(in, State.class);
     this.phase = WritableUtils.readEnum(in, Phase.class);

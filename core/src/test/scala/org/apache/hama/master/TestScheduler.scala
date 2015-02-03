@@ -48,9 +48,10 @@ import scala.concurrent.duration.FiniteDuration
 
 final case class Sched(sched: ActorRef)
 final case class Received(action: Action, id: TaskAttemptID, start: Long,
-                          finish: Long, split: PartitionedSplit, superstep: Int,
-                          state: State, phase: Phase, completed: Boolean,
-                          active: Boolean, assigned: Boolean, bspTasks: Int)
+                          finish: Long, split: PartitionedSplit, 
+                          superstep: Long, state: State, phase: Phase, 
+                          completed: Boolean, active: Boolean, 
+                          assigned: Boolean, bspTasks: Int)
 
 trait MockTC extends Mock with Periodically {// task counsellor
 

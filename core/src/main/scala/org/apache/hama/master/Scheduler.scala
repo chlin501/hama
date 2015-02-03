@@ -969,6 +969,10 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     jobManager.findJobById(jobId) match {
       case (s: Some[Stage], j: Some[Job]) => {
         val jobWithLatestCheckpoint = j.get.newWithSuperstepCount(latest)
+        jobWithLatestCheckpoint.allTasks.map { task =>
+          task.withIdIncremented.newWithSuperstep(latest).newWithWaitingState.
+               newWithRevoke
+        }// xxxx
       }
       case _ => throw new RuntimeException("Can't find job "+jobId+" when "+
                                            "restarting.")

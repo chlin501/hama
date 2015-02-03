@@ -26,7 +26,7 @@ import org.apache.hama.monitor.Tracker
 
 final case object TaskArrivalEvent extends PublishEvent
 final case object SuperstepIncrementEvent extends PublishEvent
-final case class LatestSuperstep(jobId: BSPJobID, superstep: Int, 
+final case class LatestSuperstep(jobId: BSPJobID, superstep: Long, 
                                  totalTasks: Int)
 
 object JobTasksTracker {
@@ -39,7 +39,7 @@ final class JobTasksTracker extends Tracker {
 
   private var tasks = Set.empty[Task]
 
-  private var currentSuperstep = 0 
+  private var currentSuperstep: Long = 0 
 
   override def initialize() = subscribe(JobFinishedEvent)
 
