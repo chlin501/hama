@@ -191,7 +191,7 @@ public class TestJob extends TestCase {
     assertEquals("SuperstepCount should be equal.", 1947L,
                  forVerification.getSuperstepCount()); 
 
-    final TaskTable taskTable = forVerification.getTasks();
+    final TaskTable taskTable = forVerification.table();
     assertNotNull("TaskTable shouldn't be null.", taskTable);
     final Task task = taskTable.get(0, 0);
     assertNotNull("Task shouldn't be null.", task);

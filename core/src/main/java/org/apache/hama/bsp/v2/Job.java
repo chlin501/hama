@@ -166,7 +166,7 @@ public final class Job implements Writable {
       this.startTime = old.getStartTime();
       this.finishTime = old.getFinishTime();
       this.superstepCount = old.getSuperstepCount();
-      this.taskTable = old.getTasks();
+      this.taskTable = old.table();
     }
 
     public Builder setId(final BSPJobID id) { 
@@ -631,40 +631,40 @@ public final class Job implements Writable {
     return new Builder(this).setConf(conf).build(); 
   }
 
-  protected TaskTable getTasks() { 
+  protected TaskTable table() { 
     return this.taskTable;
   }
 
   public boolean markCancelledWith(final String taskAttemptId) {
-    return getTasks().markCancelledWith(TaskAttemptID.forName(taskAttemptId));
+    return table().markCancelledWith(TaskAttemptID.forName(taskAttemptId));
   }
 
   public boolean markCancelledWith(final TaskAttemptID taskAttemptId) {
-    return getTasks().markCancelledWith(taskAttemptId); 
+    return table().markCancelledWith(taskAttemptId); 
   }
 
   public boolean allTasksStopped() { 
-    return getTasks().allTasksStopped();
+    return table().allTasksStopped();
   } 
 
   public boolean allTasksSucceeded() {
-    return getTasks().allTasksSucceeded();
+    return table().allTasksSucceeded();
   }
   
   public boolean allTasksAssigned() {
-    return getTasks().allTasksAssigned();
+    return table().allTasksAssigned();
   }
 
   public Task findTaskBy(final TaskAttemptID taskAttemptId) {
-    return getTasks().findTaskBy(taskAttemptId);
+    return table().findTaskBy(taskAttemptId);
   }
 
   public List<Task> findTasksBy(final String host, final int port) {
-    return getTasks().findTasksBy(host, port);
+    return table().findTasksBy(host, port);
   }
 
   public List<Task> findTasksNotIn(final String host, final int port) {
-    return getTasks().findTasksNotIn(host, port);
+    return table().findTasksNotIn(host, port);
   }
 
   /**
@@ -678,7 +678,7 @@ public final class Job implements Writable {
     final Task newTask = old.withIdIncremented(); 
     newTask.waitingState();
     newTask.revoke();
-    getTasks().add(newTask);
+    table().add(newTask);
     old.failedState();
     return newTask;
   }
@@ -690,12 +690,12 @@ public final class Job implements Writable {
    *              task id.
    */
   public Task nextUnassignedTask() {
-    return getTasks().nextUnassignedTask();
+    return table().nextUnassignedTask();
   }
 
   // TODO: return Progress object, instead of boolean.
   public boolean update(final Task newest) {
-    return getTasks().update(newest);
+    return table().update(newest);
   }
 
   /**
@@ -747,7 +747,7 @@ public final class Job implements Writable {
    * returned by this function. 
    */
   public Set<SystemInfo> tasksRunAt() {
-    return getTasks().grooms(); 
+    return table().grooms(); 
   }
 
   /**
@@ -758,7 +758,7 @@ public final class Job implements Writable {
    * grooms returned may contain that hosts failed task.
    */  
   public Set<SystemInfo> tasksRunAtExcept(final Task failed) {
-    return getTasks().groomsExcept(failed); 
+    return table().groomsExcept(failed); 
   }
 
   /**
@@ -767,7 +767,7 @@ public final class Job implements Writable {
    * @return int is the count of tasks assigned to the same GroomServer.
    */
   public int getTaskCountFor(final String groomServerName) {
-    final Integer count = getTasks().group().get(groomServerName);
+    final Integer count = table().group().get(groomServerName);
     int cnt = 0;
     if(null != count) cnt = count.intValue();
     return cnt;
@@ -787,7 +787,7 @@ public final class Job implements Writable {
     finishTime.write(out);
     superstepCount.write(out);
     conf.write(out);
-    if(null != getTasks()) {
+    if(null != table()) {
       out.writeBoolean(true);
       taskTable.write(out);
     } else {
