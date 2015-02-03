@@ -408,7 +408,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def dispense: Receive = {
     case Dispense(ticket) => {  
       jobManager.enqueue(ticket) 
-      activeFinished = false 
       activeSchedule(ticket.job) 
     }
   }
@@ -430,6 +429,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   // TODO: allow impl to obtain stats, etc. from tracker   
   protected def schedule(job: Job) {
+    activeFinished = false 
     val targetGrooms = job.targetInfos  
     LOG.debug("{} requests target grooms refs {} for scheduling!", 
              name, targetGrooms.mkString(","))
@@ -480,7 +480,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         })
       }}
       activeFinished = true
-    }
+    } else LOG.error("No job exists at TaskAssign stage when active grooms "+
+                     "found !")
   
   protected def cleanCachedActiveGrooms() = activeGrooms = None
 
@@ -996,6 +997,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       whenRestart(jobId, superstep)
   }
 
+  /**
+   * Obtain ticket by job id. 
+   * Update job's superstep to the latest checkpoint found in tracker.
+   * Update all tasks' superstep, state, and marker values; and increment id.
+   *  
+   */
   protected def whenRestart(jobId: BSPJobID, latest: Long) = 
     jobManager.findTicketById(jobId) match {
       case (s: Some[Stage], t: Some[Ticket]) => {
@@ -1006,23 +1013,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           jobWithLatestCheckpoint.update(updated)
         }
         jobManager.update(t.get.newWith(jobWithLatestCheckpoint)) 
+        jobManager.move(jobId)(TaskAssign)
+        activeSchedule(t.get.job)   
       }
       case _ => throw new RuntimeException("Can't find job "+jobId+" when "+
                                            "restarting.")
-
-    // TODO: 
-    //       update job superstep to the latest integrity superstep
-    //       update job's all tasks with 
-    //         a. newTask = task.withIdIncremented
-    //         b. newTask.waitingState
-    //         c. newTask1 = newTask.newWithSuperstep(superstepFoundInTracker)
-    //         d. newTask1.revoke
-    //       call jobManager.update(job)
-    //       then go as below 
-    //jobManager.move(job.getId)(TaskAssign) 
-    //activeFinished = false 
-    //activeSchedule(job)   
-  }
+    }
 
   protected def notifyJobComplete(client: ActorRef, jobId: BSPJobID) =
     client ! JobComplete(jobId)
