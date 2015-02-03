@@ -231,6 +231,22 @@ public final class TaskTable implements Writable {
   }
 
   /**
+   * Collect the latest task in this task table.
+   * The latest task is the newest one in a column, which has the largest id.
+   * @return List<Task> is the list of tasks found.
+   */
+  List<Task> allTasks() {
+    final List<Task> matched = new ArrayList<Task>();
+    for (int row = 0; row < rowLength(); row++) {
+      final Task task = latestTaskAt(row);
+      if(null == task) 
+        throw new NullPointerException("The latest task not found at row "+row);
+      matched.add(task);
+    } 
+    return Collections.unmodifiableList(matched);
+  }
+
+  /**
    * Find tasks with assigned port and host matching to host, port supplied.
    * Matched tasks denote tasks running on the node with host and port values
    * given. 

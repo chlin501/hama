@@ -668,6 +668,14 @@ public final class Job implements Writable {
   }
 
   /**
+   * Return all latest tasks found in task table.
+   * @return List<Task> is a list of tasks.
+   */
+  public List<Task> allTasks() {
+    return table().allTasks();
+  }
+
+  /**
    * Tasktable:  
    * - Create a new task, with attempt id incremented, based on the old one.
    * - Reset task to waiting state.
