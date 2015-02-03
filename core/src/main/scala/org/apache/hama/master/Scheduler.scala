@@ -212,6 +212,37 @@ protected[master] class JobManager extends CommonLog {
     } else None 
   }
 
+  protected[master] def findTicketById(jobId: BSPJobID): 
+    (Option[Stage], Option[Ticket]) = findTicketBy(TaskAssign, jobId) match {
+      case Some(ticket) => (Option(TaskAssign), Option(ticket))
+      case None => findTicketBy(Processing, jobId) match {
+        case Some(ticket) => (Option(Processing), Option(ticket))
+        case None => findTicketBy(Finished, jobId) match {
+          case Some(ticket) => (Option(Finished), Option(ticket))
+          case None => (None, None)
+        }
+      }
+    }
+
+  protected[master] def findTicketBy(stage: Stage, jobId: BSPJobID): 
+    Option[Ticket] = stage match {
+    case TaskAssign => if(!isEmpty(TaskAssign)) {
+      val ticket = taskAssignQueue.head
+      val job = ticket.job
+      if(job.getId.equals(jobId)) Option(ticket) else None
+    } else None
+    case Processing => if(!isEmpty(Processing)) { 
+      val ticket = processingQueue.head
+      val job = ticket.job
+      if(job.getId.equals(jobId)) Option(ticket) else None
+    } else None
+    case Finished => if(!isEmpty(Finished)) {
+      val ticket = finishedQueue.head
+      val job = ticket.job
+      if(job.getId.equals(jobId)) Option(ticket) else None
+    } else None 
+  }  
+
   protected def dequeue(stage: Stage): Option[Ticket] = 
     stage match {
       case TaskAssign => if(!isEmpty(TaskAssign)) {
@@ -966,13 +997,15 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   }
 
   protected def whenRestart(jobId: BSPJobID, latest: Long) = 
-    jobManager.findJobById(jobId) match {
-      case (s: Some[Stage], j: Some[Job]) => {
-        val jobWithLatestCheckpoint = j.get.newWithSuperstepCount(latest)
+    jobManager.findTicketById(jobId) match {
+      case (s: Some[Stage], t: Some[Ticket]) => {
+        val jobWithLatestCheckpoint = t.get.job.newWithSuperstepCount(latest)
         jobWithLatestCheckpoint.allTasks.map { task =>
-          task.withIdIncremented.newWithSuperstep(latest).newWithWaitingState.
-               newWithRevoke
-        }// xxxx
+          val updated = task.withIdIncremented.newWithSuperstep(latest).
+                             newWithWaitingState.newWithRevoke
+          jobWithLatestCheckpoint.update(updated)
+        }
+        jobManager.update(t.get.newWithJob(jobWithLatestCheckpoint)) 
       }
       case _ => throw new RuntimeException("Can't find job "+jobId+" when "+
                                            "restarting.")
