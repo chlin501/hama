@@ -70,6 +70,7 @@ final case class CurrentState(jobId: String, jobState: String,
                               tasksState: String)
 final case class Groom(name: String, taskSize: Int)
 final case object CalculateGroomTaskSize
+final case class AttemptId(id: Int)
 
 trait MockTC extends Mock with Periodically {// task counsellor
 
@@ -142,6 +143,11 @@ trait MockTC extends Mock with Periodically {// task counsellor
     LOG.debug("Directive at {} now has {} tasks!", name, tasksLength)
   }
 
+  def doCancel(d: Directive, f: (Directive) => Unit) {
+    f(d)
+    //LOG.info("xxxxxxxxxxxx {} receives Cancel by directive {}", name, d)
+  }
+
   override def receive = testMsg orElse tickMessage orElse super.receive 
 }
 
@@ -154,7 +160,7 @@ class Passive1(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel =>
+     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
      case Resume =>
    }
 
@@ -169,7 +175,7 @@ class Passive2(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel =>
+     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
      case Resume =>
    }
 }
@@ -183,7 +189,7 @@ class Passive3(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel =>
+     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
      case Resume =>
    }
 }
@@ -197,7 +203,7 @@ class Passive4(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel =>
+     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
      case Resume =>
    }
 }
@@ -211,7 +217,7 @@ class Passive5(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel =>
+     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
      case Resume =>
    }
 }
@@ -225,7 +231,7 @@ class Active1(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel =>
+     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
      case Resume =>
    }
 }
@@ -239,7 +245,7 @@ class Active2(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel =>
+     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
      case Resume =>
    }
 }
@@ -253,7 +259,7 @@ class Active3(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel =>
+     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
      case Resume =>
    }
 }
@@ -443,6 +449,7 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
   val expectedTaskSize = 8
+  val passiveTaskSize = 5
   val queue = new LinkedBlockingQueue[Groom]()
   var gate = new CountDownLatch(1)
   var taskMapping = Map.empty[String, Int]
@@ -504,13 +511,16 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
   def taskAttemptId(jobId: BSPJobID, taskId: Int, attemptId: Int): 
     TaskAttemptID = createTaskAttemptId(jobId, taskId, attemptId)
 
-  def pickup: Int = rand.nextInt(5) + 1 // 5 passive server
+  def pickup: Int = rand.nextInt(passiveTaskSize) + 1 // 5 passive server
 
   def mkTasksState(size: Int, state: String): String = 
     (for(idx <- 0 until size) yield state).toArray.mkString("<", ", ", ">")
 
   def getTaskSize(num: Int): Int = taskMapping.get("passive"+num).getOrElse(-1)
 
+  /**
+   * 
+   */
   it("test scheduling functions.") {
     val setting = Setting.master
     val job = jobWithActiveGrooms("test", 2)
@@ -575,11 +585,22 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
              " target groom has {} tasks!", num, taskSize)
     
     assert(0 < taskSize)
-    assert( 0 < num && 6 > num) // between 1 - 5 for it's passive server
+    // assert num value is between 1 - 5 (inclusive) as passive server.
+    assert( 0 < num && passiveTaskSize >= num) 
     master ! OfflinePassive(num)
 
     expect(CurrentState(job.getId.toString, "RESTARTING", 
                         mkTasksState(taskSize, "FAILED")))
+
+    // verify that cancel action is attempting to cancel 7 tasks' 
+    // attempt id value 1 (1 task fails)
+    expect(AttemptId(1))
+    expect(AttemptId(1))
+    expect(AttemptId(1))
+    expect(AttemptId(1))
+    expect(AttemptId(1))
+    expect(AttemptId(1))
+    expect(AttemptId(1))
 
     // TODO: random pick up 1 passive groom to stop for simulating offline
     //       then ask master sending GroomLeave event to sched
