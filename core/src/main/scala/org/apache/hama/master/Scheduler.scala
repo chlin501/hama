@@ -462,26 +462,31 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             LOG.debug("Task {} is scheduled to target host {} port {}", 
                       task.getId, host, port)
             task.scheduleTo(host, port)
-            if(1 < task.getId.getId) 
-              ref ! new Directive(Resume, task, setting.name) 
-            else ref ! new Directive(Launch, task, setting.name)
-// TODO: aggregate checking if all tasks assigned logic with assign's one.
-//       mark job started (give start time)
-            if(job.allTasksAssigned) {
-              jobManager.moveToNextStage(job.getId) match {
-                case (true, _) => if(jobManager.update(ticket.newWith(job.
-                                     newWithRunningState)))
-                  LOG.info("Job {} is running now!", job.getId) 
-                case _ => LOG.error("Unable to move job {} to next stage!", 
-                                    job.getId)
-              }
+            task.getId.getId match {
+              case id if 1 < id => 
+                ref ! new Directive(Resume, task, setting.name) 
+              case _ => ref ! new Directive(Launch, task, setting.name)
             }
+            whenAllTasksScheduled(ticket)
           }
         })
       }}
       activeFinished = true
     } else LOG.error("No job exists at TaskAssign stage when active grooms "+
                      "found !")
+
+  protected def whenAllTasksScheduled(ticket: Ticket): Boolean =
+    if(ticket.job.allTasksAssigned) {
+      jobManager.moveToNextStage(ticket.job.getId) match {
+        case (true, _) => if(jobManager.update(ticket.newWith(ticket.job.
+                           newWithRunningState))) {
+          LOG.info("Job {} is running now!", ticket.job.getId) 
+          true
+        } else false
+        case _ => { LOG.error("Unable to move job {} to next stage!", 
+                              ticket.job.getId); false }
+      }
+    } else false
   
   protected def cleanCachedActiveGrooms() = activeGrooms = None
 
@@ -647,21 +652,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
           LOG.debug("Task {} is assigned with target host {} port {}", 
                    task.getId, host, port)
           task.assignedTo(host, port)
-          if(1 < task.getId.getId)  
-            from ! new Directive(Resume, task, setting.name) 
-          else from ! new Directive(Launch, task, setting.name)
-// TODO: aggregate checking if all tasks assigned logic with schedule's one.
-//       mark job started (give start time)
-          if(job.allTasksAssigned) {
-            LOG.debug("Tasks for job {} are all assigned!", job.getId)
-            jobManager.moveToNextStage(job.getId) match { 
-              case (true, _) => if(jobManager.update(ticket.
-                newWith(job.newWithRunningState))) 
-                LOG.info("Job {} is running!", job.getId) 
-              case _ => LOG.error("Unable to move job {} to next stage!", 
-                                  job.getId)
-            }
+          task.getId.getId match {
+            case id if 1 < id => 
+              from ! new Directive(Resume, task, setting.name) 
+            case _ => from ! new Directive(Launch, task, setting.name)
           }
+          whenAllTasksAssigned(ticket)
         }
       }
       case false => LOG.warning("Drop GroomServer {} requests for a new task "+ 
@@ -669,6 +665,20 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                                 "allowed!", stats.host, maxTasksAllowed) 
     }
   }
+
+  protected def whenAllTasksAssigned(ticket: Ticket): Boolean = 
+    if(ticket.job.allTasksAssigned) {
+      LOG.debug("Tasks for job {} are all assigned!", ticket.job.getId)
+      jobManager.moveToNextStage(ticket.job.getId) match { 
+        case (true, _) => if(jobManager.update(ticket.
+                             newWith(ticket.job.newWithRunningState))) {
+          LOG.info("Job {} is running!", ticket.job.getId); 
+          true 
+        } else false
+        case _ => { LOG.error("Unable to move job {} to next stage!", 
+                              ticket.job.getId); false }
+      }
+    } else false
 
   /**
    * GroomLeave event happens with some tasks run on the failed groom
@@ -688,7 +698,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     val groomsAlive = toSet[SystemInfo](infos).filterNot( info => 
       ( host + port ).equals( info.getHost + info.getPort )
     )  
-    LOG.debug("Grooms still alive when active tasks fail: {}", groomsAlive)
+    LOG.debug("Grooms still alive when active tasks {}:{} fail => {}", 
+              host, port, groomsAlive)
     master ! FindGroomsToKillTasks(groomsAlive)
   } 
 
@@ -962,7 +973,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     val groomsAlive = toSet[SystemInfo](infos).filterNot( info => 
       ( host + port ).equals( info.getHost + info.getPort )
     ) 
-    LOG.info("xxxxxxxxxxxxx Grooms still alive when passive tasks fail: {}", groomsAlive)
+    LOG.info("Grooms still alive when passive tasks at {}:{} fail => {}", 
+              host, port, groomsAlive)
     master ! FindGroomsToRestartTasks(groomsAlive)
   }
 

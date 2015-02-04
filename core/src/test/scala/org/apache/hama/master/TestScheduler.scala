@@ -296,8 +296,11 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef]) extends Mock {
       GroomName = "passive" + n
       LOG.info("########## Start groom {} offline event! ##########", GroomName)
       passives.find(passive => passive.path.name.equals(GroomName)) match {
-        case Some(ref) => ref ! Close 
-        case None => LOG.error("No Matched groom to offline: "+GroomName)
+        case Some(ref) => {
+          LOG.info("{} is notified to offline!!!", ref.path.name)
+          ref ! Close 
+        }
+        case None => LOG.error("No matched groom to offline: "+GroomName)
       }
     } 
     case Terminated(ref) => scheduler.map { sched => 
@@ -307,22 +310,38 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef]) extends Mock {
     }
     case FindGroomsToRestartTasks(infos) => {
       val (matched, nomatched) = findGroomsBy(infos)
-      LOG.info("Grooms matched: {} nomatched: {}", matched, nomatched)
+      LOG.info("Grooms to restart => matched: {} nomatched: {}", matched,
+               nomatched)
       sender ! GroomsToRestartFound(matched, nomatched)
     }
   }
 
-  protected def findGroomsBy(infos: Set[SystemInfo]):
+  protected def findGroomsBy(infos: Set[SystemInfo]): 
       (Set[ActorRef], Set[String]) = {
+    val activeGroom = true
+    val passiveGroom = false
+
     var matched = Set.empty[ActorRef]
     var nomatched = Set.empty[String]
-    infos.foreach( info => actives.find( groom =>
-      groom.path.address.host.equals(Option(info.getHost)) &&
-      groom.path.address.port.equals(Option(info.getPort))
-    ) match {
-      case Some(ref) => matched += ref
-      case None => nomatched += info.getHost+":"+info.getPort
-    })
+
+    val group = infos.groupBy { info => info.getHost.startsWith("active") }
+
+    group.get(activeGroom).map { infos => infos.foreach( info =>
+      actives.find( active => active.path.name.equals(info.getHost)).
+              map { ref => matched += ref }
+    )}
+
+    group.get(passiveGroom).map { infos => infos.foreach( info => 
+      passives.find( passive => passive.path.name.equals(info.getHost)).
+               map { ref => matched += ref }
+    )}
+
+    LOG.debug("Matched grooms: {}, infos: {}", matched, infos)
+
+    if(matched.size != infos.size) 
+      throw new RuntimeException("Expect "+infos.size+" grooms, but "+
+                                 matched.size+" found!")
+
     (matched, nomatched)
   }
 
@@ -406,6 +425,16 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case "passive5" => ("passive5", 50000)
     }
 
+  override def whenAllTasksAssigned(ticket: Ticket): Boolean = 
+    super.whenAllTasksAssigned(ticket) match {
+      case true => {
+        LOG.info("Inform master to calculate groom task size mapping ...")
+        master ! CalculateGroomTaskSize 
+        true
+      }
+      case false => false
+    }  
+
   override def receive = super.receive
 
 }
@@ -477,7 +506,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
   def pickup: Int = rand.nextInt(5) + 1 // 5 passive server
 
-  def getTasksState(size: Int, state: String): String = 
+  def mkTasksState(size: Int, state: String): String = 
     (for(idx <- 0 until size) yield state).toArray.mkString("<", ", ", ">")
 
   def getTaskSize(num: Int): Int = taskMapping.get("passive"+num).getOrElse(-1)
@@ -515,6 +544,13 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     val r7 = r(Launch, taskAttemptId7, passive)
     val r8 = r(Launch, taskAttemptId8, passive)
 
+    LOG.info("Waiting assigned/ scheduled task size to be calculated ...")
+
+    Try(gate.await) match {
+      case Success(ok) => LOG.info("Task size mapping => {}", taskMapping)
+      case Failure(cause) => throw cause
+    }
+
     LOG.info("Expect directives sent to active grooms ... ")
     expectAnyOf(r1, r2, r3) 
     expectAnyOf(r1, r2, r3) 
@@ -526,13 +562,6 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     expectAnyOf(r4, r5, r6, r7, r8)
     expectAnyOf(r4, r5, r6, r7, r8)
     expectAnyOf(r4, r5, r6, r7, r8)
-
-    master ! CalculateGroomTaskSize
-
-    Try(gate.await) match {
-      case Success(ok) => LOG.info("Task size mapping => {}", taskMapping)
-      case Failure(cause) => throw cause
-    }
    
     var num = pickup 
     var taskSize = getTaskSize(num)
@@ -542,14 +571,15 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
       taskSize = getTaskSize(num); 
     }
 
+    LOG.info("Going to trigger offline groom 'passive{}' event where the "+
+             " target groom has {} tasks!", num, taskSize)
+    
     assert(0 < taskSize)
-    assert( 0 < num && 5 > num) // between 1 - 5 for it's passive server
-    LOG.info("Trigger offline groom 'passive{},' which has {} tasks!", num, 
-             taskSize)
+    assert( 0 < num && 6 > num) // between 1 - 5 for it's passive server
     master ! OfflinePassive(num)
 
     expect(CurrentState(job.getId.toString, "RESTARTING", 
-                        getTasksState(taskSize, "FAILED")))
+                        mkTasksState(taskSize, "FAILED")))
 
     // TODO: random pick up 1 passive groom to stop for simulating offline
     //       then ask master sending GroomLeave event to sched
