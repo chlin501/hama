@@ -71,6 +71,7 @@ final case class CurrentState(jobId: String, jobState: String,
 final case class Groom(name: String, taskSize: Int)
 final case object CalculateGroomTaskSize
 final case class AttemptId(id: Int)
+final case class JobId(jobId: String, from: String)
 
 trait MockTC extends Mock with Periodically {// task counsellor
 
@@ -366,7 +367,7 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef]) extends Mock {
   override def receive = testMsg orElse super.receive 
 }
 
-class F extends Mock { // federator
+class F(tester: ActorRef) extends Mock { // federator
 
   def testMsg: Receive = {
     case AskFor(recepiant: String, action: Any) => action match {
@@ -376,8 +377,8 @@ class F extends Mock { // federator
         sender ! capacity
       }
       case FindLatestCheckpoint(jobId) => {
-        // TODO: reply with the latest checkpoint/ superstep value.
-        // sender ! LatestCheckpoint(jobId, 19241)
+        tester ! JobId(jobId.toString, sender.path.name)
+        sender ! LatestCheckpoint(jobId, 19241)
       }
       case _ => throw new RuntimeException("Unknown action "+action+"!")
     }
@@ -455,6 +456,12 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       }
       case false => false
     }  
+
+  override def updateJob(jobId: BSPJobID, latest: Long): Job = {
+    val updatedJob = super.updateJob(jobId, latest)
+    // TODO: tester ! job state, etc.
+    updatedJob
+  }
 
   override def receive = super.receive
 
@@ -553,7 +560,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     val client = createWithArgs("mockClient", classOf[Client], tester)
     val receptionist = createWithArgs("mockReceptionist", classOf[R], client)
     receptionist ! J(job)
-    val federator = createWithArgs("mockFederator", classOf[F])
+    val federator = createWithArgs("mockFederator", classOf[F], tester)
     val master = createWithArgs("mockMaster", classOf[Master], actives, 
                                 passives)
     val sched = createWithArgs("mockSched", classOf[MockScheduler], setting, 
@@ -616,6 +623,12 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     expect(AttemptId(1))
     expect(AttemptId(1))
     expect(AttemptId(1))
+
+    // find latest checkpoint from federator
+    expect(JobId(job.getId.toString, sched.path.name))
+
+    // verify job after updateJob function
+    // TODO: expect(...)
 
     // TODO: random pick up 1 passive groom to stop for simulating offline
     //       then ask master sending GroomLeave event to sched

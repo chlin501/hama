@@ -1049,6 +1049,6 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def notifyJobComplete(client: ActorRef, jobId: BSPJobID) =
     client ! JobComplete(jobId)
 
-  override def receive = events orElse tickMessage orElse requestTask orElse dispense orElse activeTargetGrooms orElse msgFromTaskCounsellor orElse unknown
+  override def receive = events orElse tickMessage orElse requestTask orElse dispense orElse activeTargetGrooms orElse msgFromTaskCounsellor orElse msgFromFederator orElse unknown
 
 }
