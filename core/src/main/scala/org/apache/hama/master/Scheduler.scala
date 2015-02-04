@@ -578,9 +578,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
             task.failedState
             jobManager.cacheCommand(t.get.job.getId.toString, 
                                     KillJob(host, port))
-            val groomsAlive = toSet[SystemInfo](t.get.job.tasksRunAtExcept(
-              task
-            ))
+            val grooms = t.get.job.tasksRunAtExcept(task)
+            val groomsAlive = toSet[SystemInfo](grooms)
             master ! FindGroomsToKillTasks(groomsAlive)
           }
         } 
@@ -638,14 +637,14 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     val job = ticket.job
     val currentTasks = job.getTaskCountFor(stats.hostPort)
     val maxTasksAllowed = stats.maxTasks
-    LOG.info("Currently there are {} tasks at {}, with max {} tasks allowed.", 
+    LOG.debug("Currently there are {} tasks at {}, with max {} tasks allowed.", 
              currentTasks, stats.host, maxTasksAllowed)
     (maxTasksAllowed >= (currentTasks+1)) match {
       case true => job.nextUnassignedTask match {
         case null =>         
         case task@_ => {
           val (host, port) = targetHostPort(from)
-          LOG.info("Task {} is assigned with target host {} port {}", 
+          LOG.debug("Task {} is assigned with target host {} port {}", 
                    task.getId, host, port)
           task.assignedTo(host, port)
           if(1 < task.getId.getId)  
@@ -685,24 +684,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     jobManager.update(ticket.newWith(killing)) 
     failedTasks.foreach( task => task.failedState)
     jobManager.cacheCommand(ticket.job.getId.toString, KillJob(host, port))
-    val groomsAlive = toSet[SystemInfo](ticket.job.tasksRunAt).filter( groom => 
-      // exclude groom (host:port) that's already failed.actions are taken:
-      !host.equals(groom.getHost) && (port != groom.getPort)
+    val infos = ticket.job.tasksRunAt
+    val groomsAlive = toSet[SystemInfo](infos).filterNot( info => 
+      ( host + port ).equals( info.getHost + info.getPort )
     )  
+    LOG.debug("Grooms still alive when active tasks fail: {}", groomsAlive)
     master ! FindGroomsToKillTasks(groomsAlive)
   } 
-
-/*
-  protected def taskExceedsMaxAttempt(host: String, port: Int, job: Job, 
-                                      e: Throwable) {
-    jobManager.cacheCommand(job.getId.toString, KillJob(e))
-    val grooms = toSet[SystemInfo](job.tasksRunAt).filter( groom => 
-      // exclude groom (host:port) that's already failed.
-      !host.equals(groom.getHost) && (port != groom.getPort)
-    )
-    master ! FindGroomsToKillTasks(grooms) 
-  }
-*/
 
   protected def someTasksFail(host: String, port: Int, ticket: Ticket, 
                               stage: Stage, failedTasks: List[Task]) =
@@ -968,9 +956,13 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     val restarting = ticket.job.newWithRestartingState
     jobManager.update(ticket.newWith(restarting)) 
     failedTasks.foreach( task => task.failedState)
-    val groomsAlive = toSet[SystemInfo](ticket.job.tasksRunAt).filter( groom => 
-      !host.equals(groom.getHost) && (port != groom.getPort)
-    )  
+    val infos = ticket.job.tasksRunAt
+    LOG.debug("Grooms on which tasks are currently running: {}. "+
+             "And failed groom: {}:{}", infos.mkString(", "), host, port)
+    val groomsAlive = toSet[SystemInfo](infos).filterNot( info => 
+      ( host + port ).equals( info.getHost + info.getPort )
+    ) 
+    LOG.info("xxxxxxxxxxxxx Grooms still alive when passive tasks fail: {}", groomsAlive)
     master ! FindGroomsToRestartTasks(groomsAlive)
   }
 

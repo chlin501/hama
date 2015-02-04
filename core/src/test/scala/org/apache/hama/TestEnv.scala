@@ -35,7 +35,8 @@ import scala.concurrent.duration.FiniteDuration
 
 class Mock extends Agent {
 
-  override def receive = unknown
+  override def receive = close orElse unknown 
+
 }
 
 object TestEnv {
