@@ -78,6 +78,8 @@ trait MockTC extends Mock with Periodically {// task counsellor
 
   var master: Option[ActorRef] = None
 
+  var tester: Option[ActorRef] = None
+
   var tasks = Array.empty[Task]  
 
   var queue: Option[BlockingQueue[Groom]] = None
@@ -143,123 +145,132 @@ trait MockTC extends Mock with Periodically {// task counsellor
     LOG.debug("Directive at {} now has {} tasks!", name, tasksLength)
   }
 
-  def doCancel(d: Directive, f: (Directive) => Unit) {
-    f(d)
+  def doCancel(d: Directive) {
+    tester.map { t => t ! AttemptId(d.task.getId.getId) }
+    scheduler.map { sched => sched ! TaskCancelled(d.task.getId.toString) }
     //LOG.info("xxxxxxxxxxxx {} receives Cancel by directive {}", name, d)
   }
 
   override def receive = testMsg orElse tickMessage orElse super.receive 
 }
 
-class Passive1(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
+class Passive1(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def preStart {
      super.preStart
      queue = Option(q)
+     tester = Option(t)
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
+     case Launch => doLaunch(d, { r => t ! r })
+     case Cancel => doCancel(d)
      case Resume =>
    }
 
 }
 
-class Passive2(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
+class Passive2(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def preStart {
      super.preStart
      queue = Option(q)
+     tester = Option(t)
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
+     case Launch => doLaunch(d, { r => t ! r })
+     case Cancel => doCancel(d)
      case Resume =>
    }
 }
 
-class Passive3(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
+class Passive3(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def preStart {
      super.preStart
      queue = Option(q)
+     tester = Option(t)
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
+     case Launch => doLaunch(d, { r => t ! r })
+     case Cancel => doCancel(d)
      case Resume =>
    }
 }
 
-class Passive4(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
+class Passive4(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def preStart {
      super.preStart
      queue = Option(q)
+     tester = Option(t)
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
+     case Launch => doLaunch(d, { r => t ! r })
+     case Cancel => doCancel(d)
      case Resume =>
    }
 }
 
-class Passive5(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
+class Passive5(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def preStart {
      super.preStart
      queue = Option(q)
+     tester = Option(t)
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
+     case Launch => doLaunch(d, { r => t ! r })
+     case Cancel => doCancel(d)
      case Resume =>
    }
 }
 
-class Active1(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
+class Active1(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def preStart {
      super.preStart
      queue = Option(q)
+     tester = Option(t)
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
+     case Launch => doLaunch(d, { r => t ! r })
+     case Cancel => doCancel(d)
      case Resume =>
    }
 }
 
-class Active2(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
+class Active2(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def preStart {
      super.preStart
      queue = Option(q)
+     tester = Option(t)
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
+     case Launch => doLaunch(d, { r => t ! r })
+     case Cancel => doCancel(d)
      case Resume =>
    }
 }
 
-class Active3(tester: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
+class Active3(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
    override def preStart {
      super.preStart
      queue = Option(q)
+     tester = Option(t)
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => tester ! r })
-     case Cancel => doCancel(d, { d => tester ! AttemptId(d.task.getId.getId) })
+     case Launch => doLaunch(d, { r => t ! r })
+     case Cancel => doCancel(d)
      case Resume =>
    }
 }
@@ -363,6 +374,10 @@ class F extends Mock { // federator
         val capacity = GroomCapacity(grooms.map{ groom => (groom -> 3) }.toMap)
         LOG.info("Make-up grooms capacity {}", capacity)
         sender ! capacity
+      }
+      case FindLatestCheckpoint(jobId) => {
+        // TODO: reply with the latest checkpoint/ superstep value.
+        // sender ! LatestCheckpoint(jobId, 19241)
       }
       case _ => throw new RuntimeException("Unknown action "+action+"!")
     }

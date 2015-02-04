@@ -92,7 +92,6 @@ class Checkpointer(commConf: HamaConfiguration,
                    taskConf: HamaConfiguration, 
                    taskAttemptId: TaskAttemptID, 
                    superstepCount: Long, 
-                   // task: Task
                    messenger: ActorRef,
                    superstepWorker: ActorRef) 
       extends LocalService with Curator {

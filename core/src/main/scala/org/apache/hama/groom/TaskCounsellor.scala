@@ -41,9 +41,9 @@ import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.v2.TaskFinished
 import org.apache.hama.conf.Setting
 import org.apache.hama.logging.CommonLog
-import org.apache.hama.master.Scheduler
 import org.apache.hama.master.Directive
 import org.apache.hama.master.Directive.Action._
+import org.apache.hama.master.TaskCancelled
 import org.apache.hama.monitor.CollectedStats
 import org.apache.hama.monitor.GetGroomStats
 import org.apache.hama.monitor.GroomStats
@@ -309,9 +309,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def preCancelAck(ack: CancelAck) { }
 
+  /**
+   * Notify master the task with specific task attempt id is cancelled.
+   */
   protected def postCancelAck(ack: CancelAck) { 
-    // TODO: notify master a task is cancelled
-    // e.g. taskCounsellor ! TaskCancelled(ack.taskAttemptId.toString)
+    groom ! TaskCancelled(ack.taskAttemptId.toString)
   }
 
   /**
