@@ -104,10 +104,10 @@ trait MockTC extends Mock with Periodically {// task counsellor
       case null => throw new RuntimeException("Directive shouldn't be null!")
       case d@_ => received(d)
     }
-    case CalculateGroomTaskSize => queue.map { q => 
-      q.put(Groom(name, tasksLength)) 
-    }
+    case CalculateGroomTaskSize => inform(Groom(name, tasksLength))
   }
+
+  def inform(groomData: Groom) = queue.map { q => q.put(groomData) }
 
   override def ticked(msg: Tick): Unit = msg match {
     case TaskRequest => requestNewTask()
@@ -165,6 +165,14 @@ trait MockTC extends Mock with Periodically {// task counsellor
     remove(d.task)
   }
 
+  def doResume(d: Directive) { 
+    LOG.debug("{}, having {} tasks, receives directive to {} task {}", 
+              name, tasksLength, d.action, d.task)
+    add(d.task)     
+    inform(Groom(name, tasksLength)) 
+    // TODO: verify action, task id, superstep value, etc.
+  }
+
   override def receive = testMsg orElse tickMessage orElse super.receive 
 }
 
@@ -179,7 +187,7 @@ class Passive1(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d)
      case Cancel => doCancel(d)
-     case Resume =>
+     case Resume => doResume(d)
    }
 
 }
@@ -195,7 +203,7 @@ class Passive2(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d)
      case Cancel => doCancel(d)
-     case Resume =>
+     case Resume => doResume(d)
    }
 }
 
@@ -210,7 +218,7 @@ class Passive3(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d)
      case Cancel => doCancel(d)
-     case Resume =>
+     case Resume => doResume(d)
    }
 }
 
@@ -225,7 +233,7 @@ class Passive4(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d)
      case Cancel => doCancel(d)
-     case Resume =>
+     case Resume => doResume(d)
    }
 }
 
@@ -240,7 +248,7 @@ class Passive5(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d)
      case Cancel => doCancel(d)
-     case Resume =>
+     case Resume => doResume(d)
    }
 }
 
@@ -255,7 +263,7 @@ class Active1(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d)
      case Cancel => doCancel(d)
-     case Resume =>
+     case Resume => doResume(d)
    }
 }
 
@@ -270,7 +278,7 @@ class Active2(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d)
      case Cancel => doCancel(d)
-     case Resume =>
+     case Resume => doResume(d)
    }
 }
 
@@ -285,7 +293,7 @@ class Active3(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    override def received(d: Directive) = d.action match { 
      case Launch => doLaunch(d)
      case Cancel => doCancel(d)
-     case Resume =>
+     case Resume => doResume(d)
    }
 }
 
@@ -520,7 +528,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
   val passiveTaskSize = 5
   val queue = new LinkedBlockingQueue[Groom]()
   var startGate = new CountDownLatch(1)
-  //var cancelGate = new CountDownLatch(1)
+  var resumeGate = new CountDownLatch(1)
   var taskMapping = Map.empty[String, Int]
   var executor: Option[ExecutorService] = None
 
@@ -548,6 +556,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     createWithArgs("passive5", classOf[Passive5], tester, queue)
   )
 
+  // for launch action
   class TaskSizeReceiver(startGate: CountDownLatch, 
                          q: BlockingQueue[Groom]) extends Callable[Boolean] {
 
@@ -555,9 +564,31 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     override def call(): Boolean = {
       while(!Thread.currentThread.isInterrupted) {
         val groom = q.take   
-        LOG.info("Mock groom {} has {} tasks.", groom.name, groom.taskSize) 
         taskMapping += (groom.name -> groom.taskSize)
-        if(expectedTaskSize == taskMapping.size) startGate.countDown
+        LOG.debug("[For Launch] taskMapping: {}.", taskMapping) 
+        if(expectedTaskSize == taskMapping.values.sum) {
+          startGate.countDown
+          Thread.currentThread.interrupt
+        }
+      }
+      true
+    }
+  }
+
+  // for resume action
+  class TaskSizeReceiver1(resumeGate: CountDownLatch, 
+                          q: BlockingQueue[Groom]) extends Callable[Boolean] {
+
+    @throws(classOf[Exception])
+    override def call(): Boolean = {
+      while(!Thread.currentThread.isInterrupted) {
+        val groom = q.take   
+        taskMapping += (groom.name -> groom.taskSize)
+        LOG.debug("[For Resume] taskMapping {}", taskMapping) 
+        if(expectedTaskSize == taskMapping.values.sum) {
+          resumeGate.countDown
+          Thread.currentThread.interrupt
+        }
       }
       true
     }
@@ -573,6 +604,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     executor.map {exec => exec.shutdown }
     super.afterAll
   } 
+
   def r(action: Action, id: TaskAttemptID, activeOrPassive: Boolean): Received =
     Received(action, id, 0, 0, emptySplit, 0, WAITING, SETUP, completed, 
              activeOrPassive, assigned, 8)
@@ -635,7 +667,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     LOG.info("Waiting assigned/ scheduled task size to be calculated ...")
 
     Try(startGate.await) match {
-      case Success(ok) => LOG.info("Task size mapping => {}", taskMapping)
+      case Success(ok) => LOG.info("[Launch] TaskSize mapping: {}", taskMapping)
       case Failure(cause) => throw cause
     }
 
@@ -690,6 +722,21 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     expectAnyOf(expectedTasks(taskAttemptId1, taskAttemptId2, taskAttemptId3, 
                               taskAttemptId4, taskAttemptId5, taskAttemptId6, 
                               taskAttemptId7, taskAttemptId8))
+
+    taskMapping = Map.empty[String, Int]
+
+    executor.map { exec => 
+      exec.submit(new TaskSizeReceiver1(resumeGate, queue)) 
+    }
+   
+    // all tasks are successfully dispatch to grooms and they are all resume
+    // action.
+    Try(resumeGate.await) match {
+      case Success(ok) => LOG.info("[Resume] TaskSize mapping: {}", taskMapping)
+      case Failure(cause) => throw cause
+    }    
+
+   
 
     // TODO: random pick up 1 passive groom to stop for simulating offline
     //       then ask master sending GroomLeave event to sched
