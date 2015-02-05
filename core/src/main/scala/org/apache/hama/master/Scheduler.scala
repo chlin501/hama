@@ -732,7 +732,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                                                    "groom {}:{}!", host, port)
             case failedTasks if !failedTasks.isEmpty => { 
               failedTasks.foreach( failed => failed.failedState )
-              if(t.get.job.allTasksStopped) whenAllTasksStopped(t.get)
+              if(t.get.job.allTasksStopped) killAllTasks(t.get)
             }
           }
           case RESTARTING => toList(t.get.job.findTasksBy(host, port)) match {
@@ -750,7 +750,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                 tasks.foreach( failed => failed.failedState )
                 val killing = t.get.job.newWithKillingState
                 jobManager.update(t.get.newWith(killing)) 
-                if(t.get.job.allTasksStopped) whenAllTasksStopped(t.get) 
+                if(t.get.job.allTasksStopped) killAllTasks(t.get) 
               }
               case false => {
                 tasks.foreach( failed => failed.failedState )
@@ -763,6 +763,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case _ => LOG.warning("No job existed!")
     } 
     /**
+     * This happens when a groom leaves.
      * Scheduler asks master for grooms references where tasks are running by 
      * issuing FindGroomsToKillTasks.
      * Grooms found already exclude failed groom server.
@@ -780,14 +781,17 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
         case (s@_, t@_) => throw new RuntimeException("Invalid stage "+s+
                                                       " or ticket "+t+"!")
       }
+    /**
+     * This happens when a groom leaves.
+     */
     case GroomsToRestartFound(matched, nomatched) => if(!nomatched.isEmpty) 
       LOG.error("Can't stop for grooms {} not found!", nomatched.mkString(",")) 
       else jobManager.ticketAt match {
         case (s: Some[Stage], t: Some[Ticket]) => matched.foreach( ref => {
           val (host, port) = targetHostPort(ref)
-          t.get.job.findTasksBy(host, port).foreach ( task => 
+          t.get.job.findTasksBy(host, port).foreach ( task => {
             if(!task.isFailed) ref ! new Directive(Cancel, task, setting.name) 
-          )
+          })
         })
         case (s@_, t@_) => throw new RuntimeException("Invalid stage " + s +
                                                       " or ticket " + t + "!")
@@ -809,7 +813,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case (stage: Some[Stage], t: Some[Ticket]) =>  
         t.get.job.markCancelledWith(taskAttemptId) match { 
           case true => if(t.get.job.allTasksStopped) t.get.job.getState match {
-            case KILLING => whenAllTasksStopped(t.get)
+            case KILLING => killAllTasks(t.get)
             case RESTARTING => beforeRestart(t.get)
           }
           case false => LOG.error("Unable to mark task {} killed!", 
@@ -867,8 +871,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               case task@_ => {
                 task.failedState
                 if(j.get.allTasksStopped) jobManager.ticketAt match {
-                  case (s: Some[Stage], t: Some[Ticket]) => 
-                    whenAllTasksStopped(t.get) 
+                  case (s: Some[Stage], t: Some[Ticket]) => killAllTasks(t.get) 
                   case _ => throw new RuntimeException("No ticket found!")
                 }
               }
@@ -890,8 +893,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       }
     }
     /**
-     * Send Cancel directive with old task (not new task after rearrange) 
-     * to groom. 
+     * Send Cancel directive with old task to groom when a task fail. 
      * Wait for TaskCancelled messages replied by grooms where tasks still 
      * alive.
      */
@@ -924,7 +926,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * - move the job to Finished stage
    * - notify client that its' job has failed.
    */
-  protected def whenAllTasksStopped(ticket: Ticket) { 
+  protected def killAllTasks(ticket: Ticket) { 
     val job = ticket.job
     val newJob = job.newWithFailedState.newWithFinishNow 
     jobManager.update(ticket.newWith(newJob))

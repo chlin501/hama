@@ -137,14 +137,21 @@ trait MockTC extends Mock with Periodically {// task counsellor
              d.task.getPhase, d.task.isCompleted, d.task.isActive, 
              d.task.isAssigned, d.task.getTotalBSPTasks)
 
-  def add(task: Task) = {
+  def add(task: Task) {
     tasks ++= Array(task)
-    LOG.debug("{} has {} tasks: {}", name, tasks.length, tasks.mkString(", "))
+    LOG.debug("[add] {} has {} tasks: {}", name, tasks.length, 
+              tasks.mkString(", "))
   }
 
-  def doLaunch(d: Directive, f: (Received) => Unit) {
+  def remove(task: Task) {
+    tasks = tasks diff Array(task)
+    LOG.debug("[remove] {} has {} tasks: {}", name, tasks.length, 
+              tasks.mkString(", "))
+  }
+
+  def doLaunch(d: Directive) {
     val r = c(d)
-    f(r)
+    tester.map { t => t ! r }
     add(d.task)     
     LOG.debug("Directive at {} now has {} tasks!", name, tasksLength)
   }
@@ -152,7 +159,7 @@ trait MockTC extends Mock with Periodically {// task counsellor
   def doCancel(d: Directive) {
     tester.map { t => t ! AttemptId(d.task.getId.getId) }
     scheduler.map { sched => sched ! TaskCancelled(d.task.getId.toString) }
-    //LOG.info("xxxxxxxxxxxx {} receives Cancel by directive {}", name, d)
+    remove(d.task)
   }
 
   override def receive = testMsg orElse tickMessage orElse super.receive 
@@ -167,7 +174,7 @@ class Passive1(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => t ! r })
+     case Launch => doLaunch(d)
      case Cancel => doCancel(d)
      case Resume =>
    }
@@ -183,7 +190,7 @@ class Passive2(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => t ! r })
+     case Launch => doLaunch(d)
      case Cancel => doCancel(d)
      case Resume =>
    }
@@ -198,7 +205,7 @@ class Passive3(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => t ! r })
+     case Launch => doLaunch(d)
      case Cancel => doCancel(d)
      case Resume =>
    }
@@ -213,7 +220,7 @@ class Passive4(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => t ! r })
+     case Launch => doLaunch(d)
      case Cancel => doCancel(d)
      case Resume =>
    }
@@ -228,7 +235,7 @@ class Passive5(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => t ! r })
+     case Launch => doLaunch(d)
      case Cancel => doCancel(d)
      case Resume =>
    }
@@ -243,7 +250,7 @@ class Active1(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => t ! r })
+     case Launch => doLaunch(d)
      case Cancel => doCancel(d)
      case Resume =>
    }
@@ -258,7 +265,7 @@ class Active2(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => t ! r })
+     case Launch => doLaunch(d)
      case Cancel => doCancel(d)
      case Resume =>
    }
@@ -273,7 +280,7 @@ class Active3(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
    }
 
    override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d, { r => t ! r })
+     case Launch => doLaunch(d)
      case Cancel => doCancel(d)
      case Resume =>
    }
@@ -479,6 +486,7 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                              updatedJob.targetGrooms.mkString(","))
     LOG.info("Extracted job information: {}", updated)
     tester ! updated
+    // TODO: verify tasks in job task id (increment by 1), state (waiting) etc.
     updatedJob
   }
 
@@ -494,7 +502,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
   val expectedTaskSize = 8
   val passiveTaskSize = 5
   val queue = new LinkedBlockingQueue[Groom]()
-  var gate = new CountDownLatch(1)
+  var startGate = new CountDownLatch(1)
   var taskMapping = Map.empty[String, Int]
   var executor: Option[ExecutorService] = None
 
@@ -522,7 +530,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     createWithArgs("passive5", classOf[Passive5], tester, queue)
   )
 
-  class TaskSizeReceiver(gate: CountDownLatch, 
+  class TaskSizeReceiver(startGate: CountDownLatch, 
                          q: BlockingQueue[Groom]) extends Callable[Boolean] {
 
     @throws(classOf[Exception])
@@ -531,7 +539,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
         val groom = q.take   
         LOG.info("Mock groom {} has {} tasks.", groom.name, groom.taskSize) 
         taskMapping += (groom.name -> groom.taskSize)
-        if(expectedTaskSize == taskMapping.size) gate.countDown
+        if(expectedTaskSize == taskMapping.size) startGate.countDown
       }
       true
     }
@@ -540,7 +548,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
   override def beforeAll {
     super.beforeAll
     executor = Option(Executors.newSingleThreadExecutor)
-    executor.map { exec => exec.submit(new TaskSizeReceiver(gate, queue)) }
+    executor.map { exec => exec.submit(new TaskSizeReceiver(startGate, queue)) }
   }
 
   override def afterAll {
@@ -606,7 +614,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
     LOG.info("Waiting assigned/ scheduled task size to be calculated ...")
 
-    Try(gate.await) match {
+    Try(startGate.await) match {
       case Success(ok) => LOG.info("Task size mapping => {}", taskMapping)
       case Failure(cause) => throw cause
     }
