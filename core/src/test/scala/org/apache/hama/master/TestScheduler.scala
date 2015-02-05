@@ -75,6 +75,9 @@ final case class JobId(jobId: String, from: String)
 final case class UpdatedJob(jobId: BSPJobID, jobName: String, 
                             maxTaskAttempts: Int, state: String,
                             latestCheckpoint: Long, activeGrooms: String)
+final case class UpdatedTask(jobId: TaskAttemptID, assigned: Boolean,
+                             assignedHost: String, assignedPort: Int,
+                             totalBSPTasks: Int)
 
 trait MockTC extends Mock with Periodically {// task counsellor
 
@@ -477,17 +480,30 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case false => false
     }  
 
+/*
+  override def whenAllTasksStopped(ticket: Ticket) {
+    super.whenAllTasksStopped(ticket)
+  }
+*/
+
   override def updateJob(jobId: BSPJobID, latest: Long): Job = {
-    val updatedJob = super.updateJob(jobId, latest)
-    LOG.info("Job after updated: {}", updatedJob)
-    val updated = UpdatedJob(updatedJob.getId, updatedJob.getName, 
-                             updatedJob.getMaxTaskAttempts, "RESTARTING",
+    val updated = super.updateJob(jobId, latest)
+    LOG.debug("Job after updated: {}", updated)
+    val updatedJob = UpdatedJob(updated.getId, updated.getName, 
+                             updated.getMaxTaskAttempts, "RESTARTING",
                              latestCheckpoint, 
-                             updatedJob.targetGrooms.mkString(","))
-    LOG.info("Extracted job information: {}", updated)
-    tester ! updated
-    // TODO: verify tasks in job task id (increment by 1), state (waiting) etc.
-    updatedJob
+                             updated.targetGrooms.mkString(","))
+    LOG.info("Extracted job information: {}", updatedJob)
+    tester ! updatedJob
+    val tasksList = updated.allTasks.map { task => {
+      val updatedTask = UpdatedTask(task.getId, task.isAssigned, 
+                                    task.getAssignedHost, task.getAssignedPort,
+                                    task.getTotalBSPTasks)
+      updatedTask
+    }}.toList
+    LOG.info("Extracted tasks information: {}", tasksList)
+    tester ! tasksList
+    updated
   }
 
   override def receive = super.receive
@@ -503,6 +519,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
   val passiveTaskSize = 5
   val queue = new LinkedBlockingQueue[Groom]()
   var startGate = new CountDownLatch(1)
+  //var cancelGate = new CountDownLatch(1)
   var taskMapping = Map.empty[String, Int]
   var executor: Option[ExecutorService] = None
 
@@ -576,9 +593,10 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     UpdatedJob(old.getId, jobName, old.getMaxTaskAttempts, "RESTARTING",
                latestCheckpoint, old.targetGrooms.mkString(","))
 
-  /**
-   * 
-   */
+  def expectedTasks(ids: TaskAttemptID*): List[UpdatedTask] = ids.map { id =>
+    UpdatedTask(id, false, SystemInfo.Localhost, 50000, expectedTaskSize)
+  }.toList
+
   it("test scheduling functions.") {
     val setting = Setting.master
     val job = jobWithActiveGrooms("test", 2)
@@ -600,7 +618,8 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     val master = createWithArgs("mockMaster", classOf[Master], actives, 
                                 passives)
     val sched = createWithArgs("mockSched", classOf[MockScheduler], setting, 
-                               master, receptionist, federator, tester)
+                               master, receptionist, federator, 
+                               tester)
 
     val r1 = r(Launch, taskAttemptId1, active)
     val r2 = r(Launch, taskAttemptId2, active)
@@ -665,6 +684,11 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
     // verify job after updateJob function
     expect(expectedJob(job))
+
+    // verify tasks after updatedJob function
+    expectAnyOf(expectedTasks(taskAttemptId1, taskAttemptId2, taskAttemptId3, 
+                              taskAttemptId4, taskAttemptId5, taskAttemptId6, 
+                              taskAttemptId7, taskAttemptId8))
 
     // TODO: random pick up 1 passive groom to stop for simulating offline
     //       then ask master sending GroomLeave event to sched

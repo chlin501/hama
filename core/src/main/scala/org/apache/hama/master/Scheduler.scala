@@ -732,7 +732,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                                                    "groom {}:{}!", host, port)
             case failedTasks if !failedTasks.isEmpty => { 
               failedTasks.foreach( failed => failed.failedState )
-              if(t.get.job.allTasksStopped) killAllTasks(t.get)
+              if(t.get.job.allTasksStopped) allTasksKilled(t.get)
             }
           }
           case RESTARTING => toList(t.get.job.findTasksBy(host, port)) match {
@@ -750,7 +750,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                 tasks.foreach( failed => failed.failedState )
                 val killing = t.get.job.newWithKillingState
                 jobManager.update(t.get.newWith(killing)) 
-                if(t.get.job.allTasksStopped) killAllTasks(t.get) 
+                if(t.get.job.allTasksStopped) allTasksKilled(t.get) 
               }
               case false => {
                 tasks.foreach( failed => failed.failedState )
@@ -810,15 +810,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      *  - notify client.
      */
     case TaskCancelled(taskAttemptId) => jobManager.ticketAt match {
-      case (stage: Some[Stage], t: Some[Ticket]) =>  
-        t.get.job.markCancelledWith(taskAttemptId) match { 
-          case true => if(t.get.job.allTasksStopped) t.get.job.getState match {
-            case KILLING => killAllTasks(t.get)
-            case RESTARTING => beforeRestart(t.get)
-          }
-          case false => LOG.error("Unable to mark task {} killed!", 
-                                  taskAttemptId)
-        }
+      case (stage: Some[Stage], t: Some[Ticket]) => 
+        cancelTask(t.get, taskAttemptId)
       case _ => LOG.error("No ticket found at any Stage!")
     }
     /**
@@ -871,7 +864,8 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
               case task@_ => {
                 task.failedState
                 if(j.get.allTasksStopped) jobManager.ticketAt match {
-                  case (s: Some[Stage], t: Some[Ticket]) => killAllTasks(t.get) 
+                  case (s: Some[Stage], t: Some[Ticket]) =>
+                    allTasksKilled(t.get) 
                   case _ => throw new RuntimeException("No ticket found!")
                 }
               }
@@ -907,13 +901,27 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       })
       case (s@_, t@_) => LOG.error("Invalid stage {} or ticket {}!", s, t)
     }
-    //       groom where healthy tasks running once receive stop msg, 
-    //         a. stop task
-    //         b. reply TaskCancelled(taskAttemptId)
-    //       if all task stopped 
-    //         a. rearrange(task)
-    //         b. move job to task assign stage
   }
+
+  /**
+   * Mark the replied task attempt id as cancelled; then check if all tasks
+   * are stopped - either cancelled or failed.
+   * If all tasks are stopped, check the job state in deciding to kill the job
+   * or perform restarting procedure.
+   * @param ticket contains job and client.
+   * @param taskAttemptId is the task to be marked as cancelled.
+   */
+  protected def cancelTask(ticket: Ticket, taskAttemptId: String) = 
+    ticket.job.markCancelledWith(taskAttemptId) match { 
+      case true => if(ticket.job.allTasksStopped) whenAllTasksStopped(ticket)
+      case false => LOG.error("Unable to mark task {} killed!", taskAttemptId)
+    }
+
+  protected def whenAllTasksStopped(ticket: Ticket) = 
+    ticket.job.getState match {
+      case KILLING => allTasksKilled(ticket)
+      case RESTARTING => beforeRestart(ticket)
+    }
 
   protected def beforeRestart(ticket: Ticket) = 
     federator ! AskFor(CheckpointIntegrator.fullName, 
@@ -926,7 +934,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * - move the job to Finished stage
    * - notify client that its' job has failed.
    */
-  protected def killAllTasks(ticket: Ticket) { 
+  protected def allTasksKilled(ticket: Ticket) { 
     val job = ticket.job
     val newJob = job.newWithFailedState.newWithFinishNow 
     jobManager.update(ticket.newWith(newJob))
