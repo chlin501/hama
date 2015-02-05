@@ -288,13 +288,18 @@ public final class TaskTable implements Writable {
     return taskAttemptArray[taskAttemptArray.length-1];
   }
 
+  /**
+   * Update the task where the task attempt id is exactly the same.
+   * For newly attempt task, with task attempt id incremented by one, please 
+   * check {@link #add(Task) }
+   */
   boolean update(final Task newest) {
     boolean flag = false;
     for (int row = 0; row < rowLength(); row++) {
       final Task latest = latestTaskAt(row);
       if(null == latest)  
         throw new NullPointerException("The latest task not found at row "+row);
-      if(latest.getId().equals(newest.getId())) {
+      if(latest.getId().equals(newest.getId())) { 
         set(row, (columnLength(row) - 1), newest); 
         flag = true; 
       }

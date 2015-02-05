@@ -337,7 +337,8 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef]) extends Mock {
     case Terminated(ref) => scheduler.map { sched => 
       if(ref.path.name.equals(GroomName)) 
         sched ! GroomLeave(GroomName, GroomName, 50000)
-      else LOG.error("Unexpected actor {} is offline!", ref.path.name)  
+      else LOG.error("{} notifies actor {} is offline!", ref.path.name, 
+                     sender.path.name)  
     }
     case FindGroomsToRestartTasks(infos) => {
       val (matched, nomatched) = findGroomsBy(infos)
@@ -594,7 +595,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
                latestCheckpoint, old.targetGrooms.mkString(","))
 
   def expectedTasks(ids: TaskAttemptID*): List[UpdatedTask] = ids.map { id =>
-    UpdatedTask(id, false, SystemInfo.Localhost, 50000, expectedTaskSize)
+    UpdatedTask(id.next, false, SystemInfo.Localhost, 50000, expectedTaskSize)
   }.toList
 
   it("test scheduling functions.") {

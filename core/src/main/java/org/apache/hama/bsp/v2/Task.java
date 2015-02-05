@@ -234,8 +234,13 @@ public final class Task implements Writable { // TODO: change to immutable
     }
 
     public Builder setId(final TaskAttemptID id) {
-      if(null == this.id) this.id = id; else 
-      LOG.debug("Task is from old one so id "+this.id+" already exists!");
+      if(null == this.id) this.id = id; else
+      LOG.warn("From old task so id "+this.id+" can't be changed!");
+      return this;
+    }
+
+    public Builder newId(final TaskAttemptID id) {
+      this.id = id; 
       return this;
     }
 
@@ -702,7 +707,7 @@ public final class Task implements Writable { // TODO: change to immutable
   }
 
   public Task withIdIncremented() {
-    return new Builder(this).setId(getId().next()).build();
+    return new Builder(this).newId(getId().next()).build();
   }
 
 }

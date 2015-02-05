@@ -692,6 +692,13 @@ public final class Job implements Writable {
   }
    */
 
+  public Job newAttemptTask(final Task idIncremented) {
+    if(idIncremented.getId().getId() > getMaxTaskAttempts()) 
+      throw new TaskMaxAttemptedException(getId(), getMaxTaskAttempts());
+    table().add(idIncremented);
+    return this;
+  }
+
   /**
    * This function is mainly used for checking next task available. 
    * @return Task contains the latest task attempt id for those share the same

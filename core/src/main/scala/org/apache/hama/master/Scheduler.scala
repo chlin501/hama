@@ -1040,13 +1040,10 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       case (s: Some[Stage], t: Some[Ticket]) => {
         val jobWithLatestCheckpoint = t.get.job.newWithSuperstepCount(latest)
         jobWithLatestCheckpoint.allTasks.map { task =>
-          val newTask = task.withIdIncremented
-          val id = newTask.getId.getId 
-          val allowed = t.get.job.getMaxTaskAttempts
-          if(id > allowed) throw new TaskMaxAttemptedException(jobId, allowed)
-          val updated = newTask.newWithSuperstep(latest).newWithWaitingState.
-                                newWithRevoke
-          jobWithLatestCheckpoint.update(updated)
+          jobWithLatestCheckpoint.newAttemptTask(task.withIdIncremented.
+                                                      newWithSuperstep(latest).
+                                                      newWithWaitingState.
+                                                      newWithRevoke)
         }
         val newTicket = t.get.newWith(jobWithLatestCheckpoint)
         jobManager.update(newTicket) 
