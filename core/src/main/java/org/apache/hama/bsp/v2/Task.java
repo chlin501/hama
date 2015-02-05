@@ -235,7 +235,7 @@ public final class Task implements Writable { // TODO: change to immutable
 
     public Builder setId(final TaskAttemptID id) {
       if(null == this.id) this.id = id; else 
-      LOG.warn("Task is from old one so id "+this.id+" already exists!");
+      LOG.debug("Task is from old one so id "+this.id+" already exists!");
       return this;
     }
 
@@ -350,7 +350,7 @@ public final class Task implements Writable { // TODO: change to immutable
 
     this.split = split;
     if(null == this.split)  
-      LOG.warn("No split for task "+this.id.toString()+". Perhaps no input "+
+      LOG.debug("No split for task "+this.id.toString()+". Perhaps no input "+
                "is required.");
 
     if(0 > currentSuperstep)

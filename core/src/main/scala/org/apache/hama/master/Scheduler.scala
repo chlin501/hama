@@ -262,15 +262,16 @@ protected[master] class JobManager extends CommonLog {
       } else None
     }
 
+  /**
+   * No verification between next stage and target stage because a job may 
+   * have one or more tasks fail that leads to the job is moved back to 
+   * task assign stage.
+   */
   protected[master] def move(jobId: BSPJobID)(target: Stage): Boolean = 
     findJobById(jobId) match {
-      case (s: Some[Stage], j: Some[Job]) => {
-        val currentStage = s.get
-        val nextStage = stages(stages.indexOf(currentStage) + 1)
-        if(nextStage.equals(target)) dequeue(currentStage) match {
-          case Some(ticket) => { enqueue(nextStage, ticket) ; true }
-          case None => false
-        } else false
+      case (s: Some[Stage], j: Some[Job]) => dequeue(s.get) match {
+        case Some(ticket) => { enqueue(target, ticket); true }
+        case None => false
       }
       case _ => false
     }
@@ -1037,9 +1038,12 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                                 newWithRevoke
           jobWithLatestCheckpoint.update(updated)
         }
-        jobManager.update(t.get.newWith(jobWithLatestCheckpoint)) 
-        jobManager.move(jobId)(TaskAssign)
-        t.get.job
+        val newTicket = t.get.newWith(jobWithLatestCheckpoint)
+        jobManager.update(newTicket) 
+        jobManager.move(jobId)(TaskAssign) match {
+          case true => newTicket.job
+          case false => throw new RuntimeException("Unable to move job "+jobId)
+        }
       }
       case _ => throw new RuntimeException("Can't find job "+jobId+" when "+
                                            "updating job data.")

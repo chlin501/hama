@@ -72,6 +72,9 @@ final case class Groom(name: String, taskSize: Int)
 final case object CalculateGroomTaskSize
 final case class AttemptId(id: Int)
 final case class JobId(jobId: String, from: String)
+final case class UpdatedJob(jobId: BSPJobID, jobName: String, 
+                            maxTaskAttempts: Int, state: String,
+                            latestCheckpoint: Long, activeGrooms: String)
 
 trait MockTC extends Mock with Periodically {// task counsellor
 
@@ -367,7 +370,15 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef]) extends Mock {
   override def receive = testMsg orElse super.receive 
 }
 
+object F {
+
+  val latestCheckpoint: Long = 19241
+
+}
+
 class F(tester: ActorRef) extends Mock { // federator
+
+  import F._
 
   def testMsg: Receive = {
     case AskFor(recepiant: String, action: Any) => action match {
@@ -378,7 +389,7 @@ class F(tester: ActorRef) extends Mock { // federator
       }
       case FindLatestCheckpoint(jobId) => {
         tester ! JobId(jobId.toString, sender.path.name)
-        sender ! LatestCheckpoint(jobId, 19241)
+        sender ! LatestCheckpoint(jobId, latestCheckpoint)
       }
       case _ => throw new RuntimeException("Unknown action "+action+"!")
     }
@@ -410,6 +421,8 @@ class R(client: ActorRef) extends Mock { // receptionist
 class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                     federator: ActorRef, tester: ActorRef) 
       extends Scheduler(setting, master, receptionist, federator) {
+
+  import F._
 
   override def initializeServices { 
     super.initializeServices
@@ -459,7 +472,13 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   override def updateJob(jobId: BSPJobID, latest: Long): Job = {
     val updatedJob = super.updateJob(jobId, latest)
-    // TODO: tester ! job state, etc.
+    LOG.info("Job after updated: {}", updatedJob)
+    val updated = UpdatedJob(updatedJob.getId, updatedJob.getName, 
+                             updatedJob.getMaxTaskAttempts, "RESTARTING",
+                             latestCheckpoint, 
+                             updatedJob.targetGrooms.mkString(","))
+    LOG.info("Extracted job information: {}", updated)
+    tester ! updated
     updatedJob
   }
 
@@ -470,12 +489,17 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 @RunWith(classOf[JUnitRunner])
 class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
+  import F._
+
   val expectedTaskSize = 8
   val passiveTaskSize = 5
   val queue = new LinkedBlockingQueue[Groom]()
   var gate = new CountDownLatch(1)
   var taskMapping = Map.empty[String, Int]
   var executor: Option[ExecutorService] = None
+
+  val jobName = "test-sched"
+  val activeGrooms = Array("active3:50000", "avtive1:50000", "active2:50000") 
 
   val rand = new java.util.Random
   val emptySplit: PartitionedSplit = null
@@ -528,7 +552,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
              activeOrPassive, assigned, 8)
 
   def jobWithActiveGrooms(ident: String, id: Int): Job = createJob(ident, id, 
-    "test-sched", Array("host123:412", "host1:1924", "host717:22123"), 8)
+    jobName, activeGrooms, 8)
 
   def taskAttemptId(jobId: BSPJobID, taskId: Int, attemptId: Int): 
     TaskAttemptID = createTaskAttemptId(jobId, taskId, attemptId)
@@ -539,6 +563,10 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     (for(idx <- 0 until size) yield state).toArray.mkString("<", ", ", ">")
 
   def getTaskSize(num: Int): Int = taskMapping.get("passive"+num).getOrElse(-1)
+
+  def expectedJob(old: Job): UpdatedJob =
+    UpdatedJob(old.getId, jobName, old.getMaxTaskAttempts, "RESTARTING",
+               latestCheckpoint, old.targetGrooms.mkString(","))
 
   /**
    * 
@@ -614,8 +642,8 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     expect(CurrentState(job.getId.toString, "RESTARTING", 
                         mkTasksState(taskSize, "FAILED")))
 
-    // verify that cancel action is attempting to cancel 7 tasks' 
-    // attempt id value 1 (1 task fails)
+    // verify that cancel action is attempting to cancel 7 tasks (1 task fails)
+    // with attempt id value set 1 
     expect(AttemptId(1))
     expect(AttemptId(1))
     expect(AttemptId(1))
@@ -628,7 +656,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     expect(JobId(job.getId.toString, sched.path.name))
 
     // verify job after updateJob function
-    // TODO: expect(...)
+    expect(expectedJob(job))
 
     // TODO: random pick up 1 passive groom to stop for simulating offline
     //       then ask master sending GroomLeave event to sched
