@@ -264,6 +264,17 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
       val (matched, nomatched) = findGroomsBy(infos)
       sender ! GroomsToRestartFound(matched, nomatched)
     }
+    case FindTasksAliveGrooms(infos) => {
+      val (matched, nomatched) = findGroomsBy(infos)
+      nomatched.isEmpty match {
+        case true => sender ! TasksAliveGrooms(matched)
+        case false => { 
+          LOG.error("Can't find grooms {} for restarting tasks!", 
+                    nomatched.mkString(","))
+          shutdown
+        }
+      }
+    }
     //TODO: case JobCompleteEvent  // notify client job is complete?
   }
 

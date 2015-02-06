@@ -26,6 +26,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.LinkedBlockingQueue
 import org.apache.hama.Close
+import org.apache.hama.HamaConfiguration
 import org.apache.hama.Mock
 import org.apache.hama.Periodically
 import org.apache.hama.SystemInfo
@@ -43,6 +44,7 @@ import org.apache.hama.conf.Setting
 import org.apache.hama.io.PartitionedSplit
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
+import org.apache.hama.groom.TaskFailure
 import org.apache.hama.groom.TaskRequest
 import org.apache.hama.groom.RequestTask
 import org.apache.hama.monitor.GroomStats
@@ -65,7 +67,9 @@ final case class Received(action: Action, id: TaskAttemptID, start: Long,
                           superstep: Long, state: State, phase: Phase, 
                           completed: Boolean, active: Boolean, 
                           assigned: Boolean, bspTasks: Int)
+final case class OfflineActive(n: Int)
 final case class OfflinePassive(n: Int)
+final case class FailTask(groomId: Int, passive: Boolean = true)
 final case class CurrentState(jobId: String, jobState: String,
                               tasksState: String)
 final case class Groom(name: String, taskSize: Int)
@@ -78,6 +82,10 @@ final case class UpdatedJob(jobId: BSPJobID, jobName: String,
 final case class UpdatedTask(jobId: TaskAttemptID, assigned: Boolean,
                              assignedHost: String, assignedPort: Int,
                              totalBSPTasks: Int)
+final case class Values(id: Int, taskSize: Int, isPassive: Boolean = true)
+final case class TaskAttemptIds(ids: Array[TaskAttemptID])
+final case class Error(reason: String)
+final case class TaskFailJobState(state: String)
 
 trait MockTC extends Mock with Periodically {// task counsellor
 
@@ -105,6 +113,14 @@ trait MockTC extends Mock with Periodically {// task counsellor
       case d@_ => received(d)
     }
     case CalculateGroomTaskSize => inform(Groom(name, tasksLength))
+    case FailTask(id, isPassive) => if(0 < tasksLength) {
+      val failed = tasks.head
+      tasks = tasks diff Array(failed)
+      scheduler.map { sched => 
+        LOG.info("Notify scheduler task {} fails ...", failed.getId)
+        sched ! TaskFailure(failed.getId, currentGroomStats) 
+      } 
+    } else tester.map { t => t ! Error("No task exists at groom "+name+"!")}
   }
 
   def inform(groomData: Groom) = queue.map { q => q.put(groomData) }
@@ -154,14 +170,24 @@ trait MockTC extends Mock with Periodically {// task counsellor
 
   def doLaunch(d: Directive) {
     val r = c(d)
+    LOG.debug("Received to be verified: {}", r)
     tester.map { t => t ! r }
     add(d.task)     
     LOG.debug("Directive at {} now has {} tasks!", name, tasksLength)
   }
 
   def doCancel(d: Directive) {
-    tester.map { t => t ! AttemptId(d.task.getId.getId) }
-    scheduler.map { sched => sched ! TaskCancelled(d.task.getId.toString) }
+    d.task.getConfiguration.getBoolean("test.task.failure", false) match {
+      case true => { 
+        LOG.debug("Test task failure by cancelling task for {} ", d.task.getId)
+        tester.map { t => t ! d.task.getId }
+      } 
+      case false => {
+        LOG.debug("Cancel Task for non task failure!", d.task.getId)
+        tester.map { t => t ! AttemptId(d.task.getId.getId) }
+        scheduler.map { sched => sched ! TaskCancelled(d.task.getId.toString) }
+      }
+    }
     remove(d.task)
   }
 
@@ -299,7 +325,8 @@ class Active3(t: ActorRef, q: BlockingQueue[Groom]) extends MockTC {
 
 class Client(tester: ActorRef) extends Mock
 
-class Master(actives: Array[ActorRef], passives: Array[ActorRef]) extends Mock {
+class Master(actives: Array[ActorRef], passives: Array[ActorRef], 
+             tester: ActorRef) extends Mock {
 
   var scheduler: Option[ActorRef] = None
 
@@ -328,8 +355,20 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef]) extends Mock {
       passives.foreach { passive => passive ! Refs(sched, self) }
     }
     case CalculateGroomTaskSize => {
+      LOG.debug("{} asks for calcuating grooms task size mapping!", 
+               sender.path.name)
       actives.foreach { active => active forward CalculateGroomTaskSize }
       passives.foreach { passive => passive forward CalculateGroomTaskSize }
+    }
+    case FailTask(id, isPassive) => isPassive match {
+      case true => passives.foreach ( passive => 
+        if(passive.path.name.equals(("passive"+id))) {
+          LOG.debug("Instruct matached passive groom to offline task: {}", 
+                    passive.path.name)
+          passive ! FailTask(id, isPassive)
+        }
+      )
+      case false => actives.foreach { active  => /* TODO: active */ }
     }
     case OfflinePassive(n) => {
       GroomName = "passive" + n
@@ -349,15 +388,38 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef]) extends Mock {
                      sender.path.name)  
     }
     case FindGroomsToRestartTasks(infos) => {
-      val (matched, nomatched) = findGroomsBy(infos)
+      val (matched, nomatched) = findGroomsBy0(infos)
       LOG.info("Grooms to restart => matched: {} nomatched: {}", matched,
                nomatched)
       sender ! GroomsToRestartFound(matched, nomatched)
     }
+    case FindTasksAliveGrooms(infos) => {
+      val (matched, nomatched) = findGroomsBy0(infos)
+      nomatched.isEmpty match {
+        case true => sender ! TasksAliveGrooms(matched)
+        case false => {
+          tester ! Error("Can't find grooms "+nomatched.mkString(",") +
+                         " for restarting tasks!")
+        }
+      }
+    } 
   }
 
-  protected def findGroomsBy(infos: Set[SystemInfo]): 
+  def findPassiveBy(infos: Set[SystemInfo]):
       (Set[ActorRef], Set[String]) = {
+    var matched = Set.empty[ActorRef]
+    var nomatched = Set.empty[String]
+    infos.foreach( info => passives.find( groom =>
+      groom.path.address.host.equals(Option(info.getHost)) &&
+      groom.path.address.port.equals(Option(info.getPort))
+    ) match {
+      case Some(ref) => matched += ref
+      case None => nomatched += info.getHost+":"+info.getPort
+    })
+    (matched, nomatched)
+  }
+
+  def findGroomsBy0(infos: Set[SystemInfo]): (Set[ActorRef], Set[String]) = {
     val activeGroom = true
     val passiveGroom = false
 
@@ -482,18 +544,12 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   override def whenAllTasksAssigned(ticket: Ticket): Boolean = 
     super.whenAllTasksAssigned(ticket) match {
       case true => {
-        LOG.info("Inform master to calculate groom task size mapping ...")
+        LOG.debug("Inform master to calculate groom task size mapping ...")
         master ! CalculateGroomTaskSize 
         true
       }
       case false => false
     }  
-
-/*
-  override def whenAllTasksStopped(ticket: Ticket) {
-    super.whenAllTasksStopped(ticket)
-  }
-*/
 
   override def updateJob(jobId: BSPJobID, latest: Long): Job = {
     val updated = super.updateJob(jobId, latest)
@@ -515,6 +571,25 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     updated
   }
 
+  override def beforeCancelTask(groom: ActorRef, failed: Task): 
+      (ActorRef, Task) = {
+    failed.getConfiguration.setBoolean("test.task.failure", true)
+    LOG.debug("Failed task {} with test.task.failure set to {}", 
+             failed.getId, failed.getConfiguration.get("test.task.failure"))
+    (groom, failed)
+  }
+
+  override def firstTaskFail(stage: Stage, job: Job, faultId: TaskAttemptID) {
+    super.firstTaskFail(stage, job, faultId)
+    jobManager.findJobById(job.getId) match {
+      case (s: Some[Stage], j: Some[Job]) => {
+        LOG.info("Task fails with job {}", job.getId)
+        //tester ! TaskFailJobState(j.get.getState.toString)
+      }
+      case _ => tester ! Error("Can't find job "+job.getId)
+    }
+  }
+
   override def receive = super.receive
 
 }
@@ -525,11 +600,12 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
   import F._
 
   val expectedTaskSize = 8
+  val activeTaskSize = 3
   val passiveTaskSize = 5
   val queue = new LinkedBlockingQueue[Groom]()
-  var startGate = new CountDownLatch(1)
-  var resumeGate = new CountDownLatch(1)
-  var taskMapping = Map.empty[String, Int]
+  val startGate = new CountDownLatch(1)
+  val resumeGate = new CountDownLatch(1)
+  @volatile var taskMapping = Map.empty[String, Int]
   var executor: Option[ExecutorService] = None
 
   val jobName = "test-sched"
@@ -557,7 +633,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
   )
 
   // for launch action
-  class TaskSizeReceiver(startGate: CountDownLatch, 
+  class TaskSizeReceiverForLaunch(startGate: CountDownLatch, 
                          q: BlockingQueue[Groom]) extends Callable[Boolean] {
 
     @throws(classOf[Exception])
@@ -565,18 +641,20 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
       while(!Thread.currentThread.isInterrupted) {
         val groom = q.take   
         taskMapping += (groom.name -> groom.taskSize)
-        LOG.debug("[For Launch] taskMapping: {}.", taskMapping) 
-        if(expectedTaskSize == taskMapping.values.sum) {
+        val totalTaskSize = taskMapping.values.sum
+        LOG.debug("[For Launch] taskMapping now has {} tasks.", totalTaskSize) 
+        if(expectedTaskSize == totalTaskSize) {
           startGate.countDown
           Thread.currentThread.interrupt
         }
       }
+      LOG.debug("[For Launch] All tasks are reported!")
       true
     }
   }
 
   // for resume action
-  class TaskSizeReceiver1(resumeGate: CountDownLatch, 
+  class TaskSizeReceiverForResume(resumeGate: CountDownLatch, 
                           q: BlockingQueue[Groom]) extends Callable[Boolean] {
 
     @throws(classOf[Exception])
@@ -590,6 +668,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
           Thread.currentThread.interrupt
         }
       }
+      LOG.debug("[For Resume] All tasks are reported!")
       true
     }
   }
@@ -597,30 +676,41 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
   override def beforeAll {
     super.beforeAll
     executor = Option(Executors.newSingleThreadExecutor)
-    executor.map { exec => exec.submit(new TaskSizeReceiver(startGate, queue)) }
+    executor match { 
+      case Some(exec) => exec.submit(new TaskSizeReceiverForLaunch(startGate, queue)) 
+      case None => throw new RuntimeException("No executor found!") 
+    }
   }
 
   override def afterAll {
-    executor.map {exec => exec.shutdown }
+    executor match {
+      case Some(exec) => exec.shutdown 
+      case None => throw new RuntimeException("No executor found!")
+    }
     super.afterAll
   } 
+
+  def taskAttemptIds(jobId: BSPJobID, size: Int): TaskAttemptIds = 
+    TaskAttemptIds((for(idx <- 1 to size) yield taskAttemptId(jobId, idx, 1)).
+                   toArray)
 
   def r(action: Action, id: TaskAttemptID, activeOrPassive: Boolean): Received =
     Received(action, id, 0, 0, emptySplit, 0, WAITING, SETUP, completed, 
              activeOrPassive, assigned, 8)
 
-  def jobWithActiveGrooms(ident: String, id: Int): Job = createJob(ident, id, 
-    jobName, activeGrooms, 8)
+  def jobWithActiveGrooms(ident: String, id: Int, 
+                          conf: HamaConfiguration): Job = 
+    createJob(ident, id, jobName, activeGrooms, 8).addConfiguration(conf)
 
   def taskAttemptId(jobId: BSPJobID, taskId: Int, attemptId: Int): 
     TaskAttemptID = createTaskAttemptId(jobId, taskId, attemptId)
 
-  def pickup: Int = rand.nextInt(passiveTaskSize) + 1 // 5 passive server
+  def pickup(n: Int): Int = rand.nextInt() + 1 
 
   def mkTasksState(size: Int, state: String): String = 
     (for(idx <- 0 until size) yield state).toArray.mkString("<", ", ", ">")
 
-  def getTaskSize(num: Int): Int = taskMapping.get("passive"+num).getOrElse(-1)
+  def getTaskSize(id: Int): Int = taskMapping.get("passive"+id).getOrElse(-1)
 
   def expectedJob(old: Job): UpdatedJob =
     UpdatedJob(old.getId, jobName, old.getMaxTaskAttempts, "RESTARTING",
@@ -630,39 +720,54 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     UpdatedTask(id.next, false, SystemInfo.Localhost, 50000, expectedTaskSize)
   }.toList
 
+  def randomPickup(n: Int, isPassive: Boolean = true): Values = {
+
+    var id = pickup(n)
+    var taskSize = getTaskSize(id)
+    
+    while(0 >= taskSize) { 
+      id = pickup(n)
+      taskSize = getTaskSize(id); 
+    }
+
+    assert(0 < taskSize)
+    assert(0 < id && n >= id) 
+
+    val values = Values(id, taskSize, isPassive)
+    val server = if(values.isPassive) "passive" else "active"
+    LOG.info("Random pickup {}{} groom with {} tasks", server, values.id, 
+             values.taskSize)
+    values
+  }
+
   it("test scheduling functions.") {
     val setting = Setting.master
-    val job = jobWithActiveGrooms("test", 2)
-
-    val taskAttemptId1 = taskAttemptId(job.getId, 1, 1)
-    val taskAttemptId2 = taskAttemptId(job.getId, 2, 1)
-    val taskAttemptId3 = taskAttemptId(job.getId, 3, 1)
-
-    val taskAttemptId4 = taskAttemptId(job.getId, 4, 1)
-    val taskAttemptId5 = taskAttemptId(job.getId, 5, 1)
-    val taskAttemptId6 = taskAttemptId(job.getId, 6, 1)
-    val taskAttemptId7 = taskAttemptId(job.getId, 7, 1)
-    val taskAttemptId8 = taskAttemptId(job.getId, 8, 1)
+    setting.hama.setInt("bsp.tasks.max.attempts", 10)
+    val job = jobWithActiveGrooms("test", 2, setting.hama)
+    assert(10 == job.getConfiguration.getInt("bsp.tasks.max.attempts", -1))
 
     val client = createWithArgs("mockClient", classOf[Client], tester)
     val receptionist = createWithArgs("mockReceptionist", classOf[R], client)
     receptionist ! J(job)
     val federator = createWithArgs("mockFederator", classOf[F], tester)
     val master = createWithArgs("mockMaster", classOf[Master], actives, 
-                                passives)
+                                passives, tester)
     val sched = createWithArgs("mockSched", classOf[MockScheduler], setting, 
                                master, receptionist, federator, 
                                tester)
 
-    val r1 = r(Launch, taskAttemptId1, active)
-    val r2 = r(Launch, taskAttemptId2, active)
-    val r3 = r(Launch, taskAttemptId3, active)
+    LOG.debug("Creat {} task attempt id ...", expectedTaskSize)
+    val ids = taskAttemptIds(job.getId, expectedTaskSize).ids
 
-    val r4 = r(Launch, taskAttemptId4, passive)
-    val r5 = r(Launch, taskAttemptId5, passive)
-    val r6 = r(Launch, taskAttemptId6, passive)
-    val r7 = r(Launch, taskAttemptId7, passive)
-    val r8 = r(Launch, taskAttemptId8, passive)
+    val r1 = r(Launch, ids(0), active)
+    val r2 = r(Launch, ids(1), active)
+    val r3 = r(Launch, ids(2), active)
+
+    val r4 = r(Launch, ids(3), passive)
+    val r5 = r(Launch, ids(4), passive)
+    val r6 = r(Launch, ids(5), passive)
+    val r7 = r(Launch, ids(6), passive)
+    val r8 = r(Launch, ids(7), passive)
 
     LOG.info("Waiting assigned/ scheduled task size to be calculated ...")
 
@@ -671,33 +776,37 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
       case Failure(cause) => throw cause
     }
 
-    LOG.info("Expect directives sent to active grooms ... ")
-    expectAnyOf(r1, r2, r3) 
-    expectAnyOf(r1, r2, r3) 
-    expectAnyOf(r1, r2, r3) 
+    LOG.info("Expect Received messages ...")
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
 
-    LOG.info("Expect directives sent to passive grooms ...")
-    expectAnyOf(r4, r5, r6, r7, r8)
-    expectAnyOf(r4, r5, r6, r7, r8)
-    expectAnyOf(r4, r5, r6, r7, r8)
-    expectAnyOf(r4, r5, r6, r7, r8)
-    expectAnyOf(r4, r5, r6, r7, r8)
-   
-    var num = pickup 
-    var taskSize = getTaskSize(num)
-    
-    while(0 >= taskSize) { 
-      num = pickup
-      taskSize = getTaskSize(num); 
-    }
+    val values = randomPickup(passiveTaskSize)  
 
-    LOG.info("Going to trigger offline groom 'passive{}' event where the "+
-             " target groom has {} tasks!", num, taskSize)
-    
-    assert(0 < taskSize)
-    // assert num value is between 1 - 5 (inclusive) as passive server.
-    assert( 0 < num && passiveTaskSize >= num) 
-    master ! OfflinePassive(num)
+    // single task failure
+    LOG.info("Start testing single task failure ...") 
+    master ! FailTask(values.id) // offline passive task
+
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+
+    LOG.info("Finish testing single task failure ...") 
+
+    //master ! FailTask(values.id, false) // offline active task
+
+/*
+    // single groom leave event
+    master ! OfflinePassive(values.id)
 
     expect(CurrentState(job.getId.toString, "RESTARTING", 
                         mkTasksState(taskSize, "FAILED")))
@@ -725,8 +834,9 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
     taskMapping = Map.empty[String, Int]
 
-    executor.map { exec => 
-      exec.submit(new TaskSizeReceiver1(resumeGate, queue)) 
+    executor.map { 
+      case Some(exec) => exec.submit(new TaskSizeReceiverForResume(resumeGate, queue)) 
+      case None => throw new RuntimeException("No executor found!")
     }
    
     // all tasks are successfully dispatch to grooms and they are all resume
@@ -735,17 +845,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
       case Success(ok) => LOG.info("[Resume] TaskSize mapping: {}", taskMapping)
       case Failure(cause) => throw cause
     }    
-
-   
-
-    // TODO: random pick up 1 passive groom to stop for simulating offline
-    //       then ask master sending GroomLeave event to sched
-    //       observe if active tasks are rescheduled to active grooms again, and
-    //       all passive tasks are reassigned as well. 
-    //       then ask one passive groom for task failure event (to sched)
-    //       observe if all tasks killed and rescheduled correctly.
-    //       then ask active groom task fail
-    //       observe if reject to client, set job to fail, and move job to finished, etc.
+*/
 
     LOG.info("Done testing scheduler functions!")
   }

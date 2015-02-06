@@ -51,6 +51,11 @@ public class HamaConfiguration extends Configuration {
     }
   }
 
+  public void addConfiguration(final Configuration ... confs) {
+    for(final Configuration conf: confs) 
+      for(Entry<String, String> e: conf) set(e.getKey(), e.getValue());
+  }
+
   /**
    * Adds Hama configuration files to a Configuration
    */

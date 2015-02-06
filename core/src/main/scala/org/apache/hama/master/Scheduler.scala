@@ -420,12 +420,16 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * @param job contains tasks to be scheduled.
    */
   protected def activeSchedule(job: Job) = job.targetGrooms match {
-    case null => 
+    case null => noActiveGroomsAreConfigured(job)
     case _ => job.targetGrooms.length match { 
-      case 0 => LOG.debug("No active scheduling is required for job {}", 
-                          job.getId)
+      case 0 => noActiveGroomsAreConfigured(job)
       case _ => schedule(job)
     }
+  }
+
+  protected def noActiveGroomsAreConfigured(job: Job) {
+    activeFinished = true
+    LOG.info("No active scheduling is required for job {}", job.getId)
   }
 
   // TODO: allow impl to obtain stats, etc. from tracker   
@@ -851,12 +855,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
            * Directly mark the job as restarting because active tasks can be 
            * rescheduled to the original groom, which is still online. 
            */
-          case false => {
-            markJobAsRestarting(s.get, j.get)   
-            val failed = j.get.findTaskBy(fault.taskAttemptId) 
-            val aliveGrooms = toSet[SystemInfo](j.get.tasksRunAtExcept(failed))
-            master ! FindTasksAliveGrooms(aliveGrooms)
-          }
+          case false => firstTaskFail(s.get, j.get, fault.taskAttemptId)
           case true => j.get.getState match {
             case KILLING => j.get.findTaskBy(fault.taskAttemptId) match {
               case null => throw new RuntimeException("No matched task for "+
@@ -892,16 +891,36 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
      * alive.
      */
     case TasksAliveGrooms(grooms) => jobManager.ticketAt match {
-      case (s: Some[Stage], t: Some[Ticket]) => grooms.foreach( groom => {
-        val job = t.get.job
-        val (host, port) = targetHostPort(groom)
-        job.findTasksBy(host, port).foreach ( taskToRestart => 
-          groom ! new Directive(Cancel, taskToRestart, setting.name) 
-        )
-      })
+      case (s: Some[Stage], t: Some[Ticket]) => 
+        tasksAliveGroomsFound(grooms, t.get.job, beforeCancelTask, 
+                              afterCancelTask)
       case (s@_, t@_) => LOG.error("Invalid stage {} or ticket {}!", s, t)
     }
   }
+
+  protected def firstTaskFail(stage: Stage, job: Job, faultId: TaskAttemptID) {
+    markJobAsRestarting(stage, job)  
+    val failed = job.findTaskBy(faultId) 
+    val aliveGrooms = toSet[SystemInfo](job.tasksRunAtExcept(failed))
+    master ! FindTasksAliveGrooms(aliveGrooms)
+  }
+
+  protected def beforeCancelTask(groom: ActorRef, forRestart: Task): 
+    (ActorRef, Task) = (groom, forRestart) 
+
+  protected def afterCancelTask(groom: ActorRef, forRestart: Task) { }
+
+  protected def tasksAliveGroomsFound(grooms: Set[ActorRef], job: Job,
+      b: (ActorRef, Task) => (ActorRef, Task), a: (ActorRef, Task) => Unit) = 
+    grooms.foreach( groom => {
+      val (host, port) = targetHostPort(groom)
+      job.findTasksBy(host, port).foreach ( taskToRestart => {
+        val (g, t) = b(groom, taskToRestart)
+        g ! new Directive(Cancel, t, setting.name)
+        a(g, t)
+      })
+    })
+
 
   /**
    * Mark the replied task attempt id as cancelled; then check if all tasks

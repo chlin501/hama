@@ -269,6 +269,17 @@ public final class Job implements Writable {
       return this;
     }
 
+    /**
+     * This may override previous setting if the key is the same.
+     * @param conf is the new configuration.
+     * @return Builder holds data required to create the job.
+     */
+    public Builder addConf(final HamaConfiguration conf) {
+      if(null == this.conf) this.conf = conf; 
+      else this.conf.addConfiguration(conf);
+      return this;
+    }
+
     public Builder setConf(final HamaConfiguration conf) {
       this.conf = conf;
       if(null == this.conf) 
@@ -627,8 +638,12 @@ public final class Job implements Writable {
     return this.conf;
   }
 
-  public Job newWithConfiguation(final HamaConfiguration conf) {
+  public Job newWithConfiguration(final HamaConfiguration conf) {
     return new Builder(this).setConf(conf).build(); 
+  }
+
+  public Job addConfiguration(final HamaConfiguration conf) {
+    return new Builder(this).addConf(conf).build(); 
   }
 
   protected TaskTable table() { 
