@@ -79,9 +79,9 @@ final case class JobId(jobId: String, from: String)
 final case class UpdatedJob(jobId: BSPJobID, jobName: String, 
                             maxTaskAttempts: Int, state: String,
                             latestCheckpoint: Long, activeGrooms: String)
-final case class UpdatedTask(jobId: TaskAttemptID, assigned: Boolean,
-                             assignedHost: String, assignedPort: Int,
-                             totalBSPTasks: Int)
+final case class UpdatedTasks(jobId: TaskAttemptID, assigned: Boolean,
+                              assignedHost: String, assignedPort: Int,
+                              totalBSPTasks: Int)
 final case class Values(id: Int, taskSize: Int, isPassive: Boolean = true)
 final case class TaskAttemptIds(ids: Array[TaskAttemptID])
 final case class Error(reason: String)
@@ -555,9 +555,9 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     LOG.info("Extracted job information: {}", updatedJob)
     tester ! updatedJob
     val tasksList = updated.allTasks.map { task => {
-      val updatedTask = UpdatedTask(task.getId, task.isAssigned, 
-                                    task.getAssignedHost, task.getAssignedPort,
-                                    task.getTotalBSPTasks)
+      val updatedTask = UpdatedTasks(task.getId, task.isAssigned, 
+                                     task.getAssignedHost, task.getAssignedPort,
+                                     task.getTotalBSPTasks)
       updatedTask
     }}.toList
     LOG.info("Extracted tasks information: {}", tasksList)
@@ -711,8 +711,8 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     UpdatedJob(old.getId, jobName, old.getMaxTaskAttempts, "RESTARTING",
                latestCheckpoint, old.targetGrooms.mkString(","))
 
-  def expectedTasks(ids: TaskAttemptID*): List[UpdatedTask] = ids.map { id =>
-    UpdatedTask(id.next, false, SystemInfo.Localhost, 50000, expectedTaskSize)
+  def expectedTasks(ids: TaskAttemptID*): List[UpdatedTasks] = ids.map { id =>
+    UpdatedTasks(id.next, false, SystemInfo.Localhost, 50000, expectedTaskSize)
   }.toList
 
   def randomPickup(n: Int, isPassive: Boolean = true): Values = {
@@ -858,8 +858,8 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
     expect(expectedJob(job))
 
-    //expectAnyOf(expectedTasks(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), 
-                              //ids(6), ids(7)))
+    expectAnyOf(expectedTasks(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), 
+                              ids(6), ids(7)))
 
     LOG.info("Finish testing single task failure ...") 
   }

@@ -419,6 +419,13 @@ public final class Task implements Writable { // TODO: change to immutable
     return this.currentSuperstep.get();
   }
 
+  /**
+   * When restarting a task, the superstep value is restored from checkpoint,
+   * whose superstep value is older (smaller) than the current superstep. So
+   * it's not correct to validate the superstep vlaue between current one and
+   * one that will apply to the newly created task.
+   * @param superstep is the value to be applied to the newly created task.
+   */
   public Task newWithSuperstep(long superstep) {
     if(0 >= superstep) 
       throw new IllegalArgumentException("Invalid superstep "+superstep);
