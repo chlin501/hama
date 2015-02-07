@@ -360,10 +360,16 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef],
         if(passive.path.name.equals(("passive"+id))) {
           LOG.debug("Instruct matached passive groom to offline task: {}", 
                     passive.path.name)
-          passive ! FailTask(id, isPassive)
+          passive ! FailTask(id, isPassive) // isPassive = true
         }
       )
-      case false => actives.foreach { active  => /* TODO: active */ }
+      case false => actives.foreach ( active  => 
+        if(active.path.name.equals(("active"+id))) {
+          LOG.debug("Instruct matached passive groom to offline task: {}", 
+                    active.path.name)
+          active ! FailTask(id, isPassive) // isPassive = false
+        }
+      )
     }
     case OfflinePassive(n) => {
       GroomName = "passive" + n
@@ -498,6 +504,8 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                     federator: ActorRef, tester: ActorRef) 
       extends Scheduler(setting, master, receptionist, federator) {
 
+  var testSingleTaskFailure = false
+
   import F._
 
   override def initializeServices { 
@@ -567,11 +575,16 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   override def beforeCancelTask(groom: ActorRef, failed: Task): 
       (ActorRef, Task) = {
-    failed.getConfiguration.setBoolean("test.task.failure", true)
-    LOG.debug("Failed task {} with test.task.failure set to {}", 
-             failed.getId, failed.getConfiguration.get("test.task.failure"))
+    if(testSingleTaskFailure) {
+      failed.getConfiguration.setBoolean("test.task.failure", true)  
+      LOG.debug("Failed task {} with test.task.failure set to {}", 
+                failed.getId, failed.getConfiguration.get("test.task.failure"))
+    }
     (groom, failed)
   }
+
+  override def afterCancelTask(groom: ActorRef, failed: Task) =
+    if(testSingleTaskFailure) testSingleTaskFailure = false
 
   override def firstTaskFail(stage: Stage, job: Job, faultId: TaskAttemptID) {
     super.firstTaskFail(stage, job, faultId)
@@ -584,7 +597,14 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     }
   }
 
-  override def receive = super.receive
+  def testMsg: Receive = {
+    case FailTask(id, isPassive) => {
+      testSingleTaskFailure = true
+      master ! FailTask(id, isPassive)
+    }
+  }
+
+  override def receive = testMsg orElse super.receive
 
 }
 
@@ -689,6 +709,10 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     TaskAttemptIds = TaskAttemptIds((for(idx <- 1 to size) 
     yield taskAttemptId(jobId, idx, attempt)).toArray)
 
+  def createUpdatedTasks(ids: Array[TaskAttemptID]): List[UpdatedTasks] = 
+    ids.map { id => UpdatedTasks(id, false, SystemInfo.Localhost, 50000, 8) }.
+        toList
+
   def r(action: Action, id: TaskAttemptID, activeOrPassive: Boolean): Received =
     Received(action, id, 0, 0, emptySplit, 0, WAITING, SETUP, completed, 
              activeOrPassive, assigned, 8)
@@ -762,10 +786,12 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     testLaunch(ids1) 
 
     val values = randomPickup(passiveTaskSize)  
-    master ! FailTask(values.id) // offline passive task
-    testSingleTaskFailure(ids1, job, sched.path.name)
+    sched ! FailTask(values.id) // offline passive task
+    val updatedTasks = createUpdatedTasks(taskAttemptIds(job.getId, 
+      expectedTaskSize, 2).ids)
+    testSingleTaskFailure(ids1, updatedTasks, job, sched.path.name) 
 
-    //master ! FailTask(values.id, false) // offline active task
+    //sched ! FailTask(values.id, false) // offline active task
 
 /*
     // single groom leave event
@@ -836,20 +862,28 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     LOG.info("All Received messages are verified ...")
   }
  
-  def testSingleTaskFailure(ids: Array[TaskAttemptID], job: Job, 
-                            schedName: String) {
+  def testSingleTaskFailure(ids1: Array[TaskAttemptID], 
+                            updatedTasks: List[UpdatedTasks],
+                            job: Job, schedName: String) {
 
     LOG.info("Start testing single task failure ...") 
 
     expect(SingleTaskFailJobState(Job.State.RESTARTING.toString))
 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
+                ids1(7)) 
+    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
+                ids1(7)) 
+    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
+                ids1(7)) 
+    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
+                ids1(7)) 
+    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
+                ids1(7)) 
+    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
+                ids1(7)) 
+    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
+                ids1(7)) 
 
     LOG.info("Waiting more 5 secs before updated job info is replied ...")
     Thread.sleep(5*1000)
@@ -858,8 +892,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
     expect(expectedJob(job))
 
-    expectAnyOf(expectedTasks(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), 
-                              ids(6), ids(7)))
+    expectAnyOf(updatedTasks)
 
     LOG.info("Finish testing single task failure ...") 
   }

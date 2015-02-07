@@ -485,7 +485,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       jobManager.moveToNextStage(ticket.job.getId) match {
         case (true, _) => if(jobManager.update(ticket.newWith(ticket.job.
                            newWithRunningState))) {
-          LOG.info("Job {} is running now!", ticket.job.getId) 
+          LOG.info("All tasks in job {} are scheduled!", ticket.job.getId) 
           true
         } else false
         case _ => { LOG.error("Unable to move job {} to next stage!", 
