@@ -355,22 +355,15 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef],
       actives.foreach { active => active forward CalculateGroomTaskSize }
       passives.foreach { passive => passive forward CalculateGroomTaskSize }
     }
-    case FailTask(id, isPassive) => isPassive match {
-      case true => passives.foreach ( passive => 
-        if(passive.path.name.equals(("passive"+id))) {
-          LOG.debug("Instruct matached passive groom to offline task: {}", 
-                    passive.path.name)
-          passive ! FailTask(id, isPassive) // isPassive = true
-        }
-      )
-      case false => actives.foreach ( active  => 
-        if(active.path.name.equals(("active"+id))) {
-          LOG.debug("Instruct matached passive groom to offline task: {}", 
-                    active.path.name)
-          active ! FailTask(id, isPassive) // isPassive = false
-        }
-      )
-    }
+/*
+          //passive ! FailTask(id, isPassive) // isPassive = true
+          //active ! FailTask(id, isPassive) // isPassive = false
+*/
+    case FailTask(id, isPassive) => (isPassive match {
+      case true => passives.filter { passive => passive.path.name.
+        equals(("passive"+id)) }
+      case false => actives.filter { active  => active.path.name.
+        equals(("active"+id)) } }).head !  FailTask(id, isPassive)
     case OfflinePassive(n) => {
       GroomName = "passive" + n
       LOG.info("########## Start groom {} offline event! ##########", GroomName)
@@ -631,6 +624,8 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
   val passive: Boolean = false
   val assigned: Boolean = true
   val completed: Boolean = false
+  val failPassiveTask = true
+  val failActiveTask = false
 
   val actives: Array[ActorRef] = Array(
     createWithArgs("active1", classOf[Active1], tester, queue),
@@ -741,12 +736,14 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
   def randomPickup(n: Int, isPassive: Boolean = true): Values = {
 
-    var id = pickup(n)
-    var taskSize = getTaskSize(id)
+    var id = 0 //pickup(n)
+    var taskSize = 0 // getTaskSize(id)
+    var flag = true
     
-    while(0 >= taskSize) { 
+    while(flag) {   //0 >= taskSize 
       id = pickup(n)
-      taskSize = getTaskSize(id); 
+      taskSize = getTaskSize(id)
+      if(id <= n && 0 < taskSize) flag = false
     }
 
     assert(0 < taskSize)
@@ -783,15 +780,24 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     }
 
     val ids1 = taskAttemptIds(job.getId, expectedTaskSize, 1).ids
-    testLaunch(ids1) 
+    testLaunch(ids1)  
 
-    val values = randomPickup(passiveTaskSize)  
-    sched ! FailTask(values.id) // offline passive task
-    val updatedTasks = createUpdatedTasks(taskAttemptIds(job.getId, 
-      expectedTaskSize, 2).ids)
-    testSingleTaskFailure(ids1, updatedTasks, job, sched.path.name) 
+    LOG.info("Start testing passive single task failure ...") 
+    val values1 = randomPickup(passiveTaskSize)  
+    sched ! FailTask(values1.id, failPassiveTask) 
+    val ids2 = taskAttemptIds(job.getId, expectedTaskSize, 2).ids
+    val updatedTasks1 = createUpdatedTasks(ids2)
+    testSingleTaskFailure(ids1, updatedTasks1, job, sched.path.name) 
+    LOG.info("Finish testing passive single task failure ...") 
 
-    //sched ! FailTask(values.id, false) // offline active task
+    LOG.info("Start testing active single task failure ...") 
+    val active = false
+    val values2 = randomPickup(activeTaskSize, active)
+    sched ! FailTask(values2.id, failActiveTask) 
+    val ids3 = taskAttemptIds(job.getId, expectedTaskSize, 3).ids
+    val updatedTasks2 = createUpdatedTasks(ids3)
+    testSingleTaskFailure(ids2, updatedTasks2, job, sched.path.name) 
+    LOG.info("Finish testing active single task failure ...") 
 
 /*
     // single groom leave event
@@ -839,6 +845,10 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     LOG.info("Done testing scheduler functions!")
   }
 
+  /**
+   * Test scheduler dispatching tasks to grooms functions, including assign and
+   * schedule.
+   */
   def testLaunch(ids: Array[TaskAttemptID]) {
     val r1 = r(Launch, ids(0), active)
     val r2 = r(Launch, ids(1), active)
@@ -866,7 +876,6 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
                             updatedTasks: List[UpdatedTasks],
                             job: Job, schedName: String) {
 
-    LOG.info("Start testing single task failure ...") 
 
     expect(SingleTaskFailJobState(Job.State.RESTARTING.toString))
 
@@ -894,7 +903,6 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
     expectAnyOf(updatedTasks)
 
-    LOG.info("Finish testing single task failure ...") 
   }
 
 }
