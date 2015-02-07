@@ -430,7 +430,7 @@ public final class Job implements Writable {
     // align numBSPTasks to # of splits calculated in TaskTable.
     final int actualNumBSPTasks = this.taskTable.getNumBSPTasks();
     conf.setInt("bsp.peers.num", actualNumBSPTasks); 
-    LOG.info("Align numBSPTasks to "+actualNumBSPTasks);
+    LOG.debug("Align numBSPTasks to "+actualNumBSPTasks);
 
     if(getNumBSPTasks() < targetGrooms().length) 
       throw new RuntimeException("Target GroomServer "+

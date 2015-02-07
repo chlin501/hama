@@ -85,7 +85,7 @@ final case class UpdatedTask(jobId: TaskAttemptID, assigned: Boolean,
 final case class Values(id: Int, taskSize: Int, isPassive: Boolean = true)
 final case class TaskAttemptIds(ids: Array[TaskAttemptID])
 final case class Error(reason: String)
-final case class TaskFailJobState(state: String)
+final case class SingleTaskFailJobState(state: String)
 
 trait MockTC extends Mock with Periodically {// task counsellor
 
@@ -178,17 +178,12 @@ trait MockTC extends Mock with Periodically {// task counsellor
 
   def doCancel(d: Directive) {
     d.task.getConfiguration.getBoolean("test.task.failure", false) match {
-      case true => { 
-        LOG.debug("Test task failure by cancelling task for {} ", d.task.getId)
-        tester.map { t => t ! d.task.getId }
-      } 
-      case false => {
-        LOG.debug("Cancel Task for non task failure!", d.task.getId)
-        tester.map { t => t ! AttemptId(d.task.getId.getId) }
-        scheduler.map { sched => sched ! TaskCancelled(d.task.getId.toString) }
-      }
+      case true => tester.map { t => t ! d.task.getId }
+      case false => tester.map { t => t ! AttemptId(d.task.getId.getId) }
     }
+    scheduler.map { sched => sched ! TaskCancelled(d.task.getId.toString) }
     remove(d.task)
+    LOG.debug("Task {} now is canceled by {}", d.task.getId, name)
   }
 
   def doResume(d: Directive) { 
@@ -553,7 +548,6 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   override def updateJob(jobId: BSPJobID, latest: Long): Job = {
     val updated = super.updateJob(jobId, latest)
-    LOG.debug("Job after updated: {}", updated)
     val updatedJob = UpdatedJob(updated.getId, updated.getName, 
                              updated.getMaxTaskAttempts, "RESTARTING",
                              latestCheckpoint, 
@@ -584,7 +578,7 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     jobManager.findJobById(job.getId) match {
       case (s: Some[Stage], j: Some[Job]) => {
         LOG.info("Task fails with job {}", job.getId)
-        //tester ! TaskFailJobState(j.get.getState.toString)
+        tester ! SingleTaskFailJobState(j.get.getState.toString)
       }
       case _ => tester ! Error("Can't find job "+job.getId)
     }
@@ -663,7 +657,8 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
         val groom = q.take   
         taskMapping += (groom.name -> groom.taskSize)
         LOG.debug("[For Resume] taskMapping {}", taskMapping) 
-        if(expectedTaskSize == taskMapping.values.sum) {
+        val totalTaskSize = taskMapping.values.sum
+        if(expectedTaskSize == totalTaskSize) {
           resumeGate.countDown
           Thread.currentThread.interrupt
         }
@@ -690,9 +685,9 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     super.afterAll
   } 
 
-  def taskAttemptIds(jobId: BSPJobID, size: Int): TaskAttemptIds = 
-    TaskAttemptIds((for(idx <- 1 to size) yield taskAttemptId(jobId, idx, 1)).
-                   toArray)
+  def taskAttemptIds(jobId: BSPJobID, size: Int, attempt: Int): 
+    TaskAttemptIds = TaskAttemptIds((for(idx <- 1 to size) 
+    yield taskAttemptId(jobId, idx, attempt)).toArray)
 
   def r(action: Action, id: TaskAttemptID, activeOrPassive: Boolean): Received =
     Received(action, id, 0, 0, emptySplit, 0, WAITING, SETUP, completed, 
@@ -756,19 +751,6 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
                                master, receptionist, federator, 
                                tester)
 
-    LOG.debug("Creat {} task attempt id ...", expectedTaskSize)
-    val ids = taskAttemptIds(job.getId, expectedTaskSize).ids
-
-    val r1 = r(Launch, ids(0), active)
-    val r2 = r(Launch, ids(1), active)
-    val r3 = r(Launch, ids(2), active)
-
-    val r4 = r(Launch, ids(3), passive)
-    val r5 = r(Launch, ids(4), passive)
-    val r6 = r(Launch, ids(5), passive)
-    val r7 = r(Launch, ids(6), passive)
-    val r8 = r(Launch, ids(7), passive)
-
     LOG.info("Waiting assigned/ scheduled task size to be calculated ...")
 
     Try(startGate.await) match {
@@ -776,31 +758,12 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
       case Failure(cause) => throw cause
     }
 
-    LOG.info("Expect Received messages ...")
-    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
-    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
-    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
-    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
-    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
-    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
-    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
-    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    val ids1 = taskAttemptIds(job.getId, expectedTaskSize, 1).ids
+    testLaunch(ids1) 
 
     val values = randomPickup(passiveTaskSize)  
-
-    // single task failure
-    LOG.info("Start testing single task failure ...") 
     master ! FailTask(values.id) // offline passive task
-
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
-
-    LOG.info("Finish testing single task failure ...") 
+    testSingleTaskFailure(ids1, job, sched.path.name)
 
     //master ! FailTask(values.id, false) // offline active task
 
@@ -848,6 +811,57 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 */
 
     LOG.info("Done testing scheduler functions!")
+  }
+
+  def testLaunch(ids: Array[TaskAttemptID]) {
+    val r1 = r(Launch, ids(0), active)
+    val r2 = r(Launch, ids(1), active)
+    val r3 = r(Launch, ids(2), active)
+
+    val r4 = r(Launch, ids(3), passive)
+    val r5 = r(Launch, ids(4), passive)
+    val r6 = r(Launch, ids(5), passive)
+    val r7 = r(Launch, ids(6), passive)
+    val r8 = r(Launch, ids(7), passive)
+
+    LOG.info("Expect Received messages after tasks are launched ...")
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    expectAnyOf(r1, r2, r3, r4, r5, r6, r7, r8)
+    LOG.info("All Received messages are verified ...")
+  }
+ 
+  def testSingleTaskFailure(ids: Array[TaskAttemptID], job: Job, 
+                            schedName: String) {
+
+    LOG.info("Start testing single task failure ...") 
+
+    expect(SingleTaskFailJobState(Job.State.RESTARTING.toString))
+
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+
+    LOG.info("Waiting more 5 secs before updated job info is replied ...")
+    Thread.sleep(5*1000)
+
+    expect(JobId(job.getId.toString, schedName))
+
+    expect(expectedJob(job))
+
+    //expectAnyOf(expectedTasks(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), 
+                              //ids(6), ids(7)))
+
+    LOG.info("Finish testing single task failure ...") 
   }
 
 }

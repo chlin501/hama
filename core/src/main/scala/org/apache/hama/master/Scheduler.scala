@@ -901,6 +901,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def firstTaskFail(stage: Stage, job: Job, faultId: TaskAttemptID) {
     markJobAsRestarting(stage, job)  
     val failed = job.findTaskBy(faultId) 
+    failed.failedState
     val aliveGrooms = toSet[SystemInfo](job.tasksRunAtExcept(failed))
     master ! FindTasksAliveGrooms(aliveGrooms)
   }
@@ -916,7 +917,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       val (host, port) = targetHostPort(groom)
       job.findTasksBy(host, port).foreach ( taskToRestart => {
         val (g, t) = b(groom, taskToRestart)
-        g ! new Directive(Cancel, t, setting.name)
+        if(!taskToRestart.isFailed) g ! new Directive(Cancel, t, setting.name)
         a(g, t)
       })
     })

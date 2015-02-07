@@ -420,7 +420,7 @@ public final class Task implements Writable { // TODO: change to immutable
   }
 
   public Task newWithSuperstep(long superstep) {
-    if(0 > superstep) 
+    if(0 >= superstep) 
       throw new IllegalArgumentException("Invalid superstep "+superstep);
     return new Builder(this).setCurrentSuperstep(superstep).build(); 
   }
