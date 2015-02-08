@@ -47,6 +47,7 @@ object TestEnv {
    * @return Config object.
    */
   def parseString(str: String): Config = ConfigFactory.parseString(str)
+
 }
 
 class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem) 
@@ -54,6 +55,8 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
                                            with ShouldMatchers 
                                            with BeforeAndAfterAll 
                                            with CommonLog {
+
+  import TestEnv._
 
   val probe = TestProbe()
   val conf = new HamaConfiguration()
@@ -175,6 +178,11 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
    */  
   protected def createWithoutArgs(name: String, clazz: Class[_]): ActorRef =
     system.actorOf(Props(clazz), name)
+
+  protected def createWithDispatcher(name: String, clazz: Class[_], 
+                                     disp: String, args: Any*): ActorRef = 
+    system.actorOf(Props(clazz, args:_*).withDispatcher(disp), 
+                              name)
 
   /**
    * Create testActor with testConfiguration.

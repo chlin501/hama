@@ -677,7 +677,7 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
       jobManager.moveToNextStage(ticket.job.getId) match { 
         case (true, _) => if(jobManager.update(ticket.
                              newWith(ticket.job.newWithRunningState))) {
-          LOG.info("Job {} is running!", ticket.job.getId); 
+          LOG.info("All tasks assigned, job {} is running!", ticket.job.getId)
           true 
         } else false
         case _ => { LOG.error("Unable to move job {} to next stage!", 
@@ -898,9 +898,19 @@ class Scheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     }
   }
 
+  /**
+   * Mark the job as restarting.
+   * Find corresponded task by task attempt id.
+   * Mark the task as failure.
+   * Find tasks alive on grooms where they are still running.
+   * Rest operation is dealt in TasksAliveGrooms.
+   */
   protected def firstTaskFail(stage: Stage, job: Job, faultId: TaskAttemptID) {
     markJobAsRestarting(stage, job)  
     val failed = job.findTaskBy(faultId) 
+    if(null == failed)
+      throw new NullPointerException("Not task found with failed id "+
+                                     faultId)
     failed.failedState
     val aliveGrooms = toSet[SystemInfo](job.tasksRunAtExcept(failed))
     master ! FindTasksAliveGrooms(aliveGrooms)
