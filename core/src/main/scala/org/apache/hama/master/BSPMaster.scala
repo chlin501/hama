@@ -181,7 +181,7 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
     val receptionist = getOrCreate(Receptionist.simpleName(conf), 
                                    classOf[Receptionist], setting, self, 
                                    federator) 
-    getOrCreate(Scheduler.simpleName(conf), classOf[Scheduler], 
+    getOrCreate(JobPlanner.simpleName(conf), classOf[JobPlanner], 
                 setting, self, receptionist, federator) 
   }
 

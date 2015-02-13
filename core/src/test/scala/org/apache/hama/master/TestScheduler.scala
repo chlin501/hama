@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.master
-
+/*
 import akka.actor.ActorRef
 import akka.actor.Terminated
 import com.typesafe.config.Config
@@ -70,7 +70,6 @@ final case class FailTask(groomId: Int, passive: Boolean = true)
 final case class CurrentState(jobId: String, jobState: String,
                               tasksState: String)
 final case class Groom(name: String, taskSize: Int)
-//final case object CalculateGroomTaskSize
 final case class AttemptId(id: Int)
 final case class JobId(jobId: String, from: String)
 final case class UpdatedJob(jobId: BSPJobID, jobName: String, 
@@ -79,12 +78,11 @@ final case class UpdatedJob(jobId: BSPJobID, jobName: String,
 final case class UpdatedTasks(jobId: TaskAttemptID, assigned: Boolean,
                               assignedHost: String, assignedPort: Int,
                               totalBSPTasks: Int)
-final case class Values(id: Int, taskSize: Int, isPassive: Boolean = true)
 final case class TaskAttemptIds(ids: Array[TaskAttemptID])
 final case class Error(reason: String)
-final case class SingleTaskFailJobState(state: String)
 final case object Await
 final case object TaskSize
+final case object TaskMapping
 
 trait MockTC extends Mock with Periodically {// task counsellor
 
@@ -101,7 +99,7 @@ trait MockTC extends Mock with Periodically {// task counsellor
 
   def tasksLength(): Int = tasks.size
 
-  override def preStart = tick(self, TaskRequest)
+  override def preStart = tick(self, TaskRequest, delay = 1.seconds)
 
   def testMsg: Receive = {
     case Refs(sched, m) => {
@@ -112,15 +110,19 @@ trait MockTC extends Mock with Periodically {// task counsellor
       case null => throw new RuntimeException("Directive shouldn't be null!")
       case d@_ => received(d)
     }
-    //case CalculateGroomTaskSize => inform(Groom(name, tasksLength))
     case FailTask(id, isPassive) => if(0 < tasksLength) {
+      LOG.debug("Currently {} has tasks {}", name, tasks.mkString(","))
       val failed = tasks.head
       remove(failed)
       scheduler.map { sched => 
-        LOG.info("Notify scheduler task {} fails ...", failed.getId)
+        LOG.debug("Notify scheduler task {} fails ...", failed.getId)
         sched ! TaskFailure(failed.getId, currentGroomStats) 
       } 
-    } else tester.map { t => t ! Error("No task exists at groom "+name+"!")}
+    } else tester.map { t => { 
+      LOG.debug("Expect 0 task! Currently {} has tasks {}.", name, 
+                tasks.mkString(","))
+      t ! Error("No task exists at groom "+name+"!")
+    }}
     case TaskSize => sender ! tasksLength
   }
 
@@ -128,7 +130,14 @@ trait MockTC extends Mock with Periodically {// task counsellor
     case TaskRequest => requestNewTask()
   }
 
-  def received(d: Directive) { }
+  def received(d: Directive) = {
+    LOG.debug("Groom {} receives action {} task {}!!! Total tasks now: {}", name, d.action, d.task.getId, tasks.mkString("<", ",", ">"))
+    d.action match { 
+      case Launch => doLaunch(d)
+      case Cancel => doCancel(d)
+      case Resume => doResume(d)
+    }
+  }
 
   def requestNewTask() = scheduler.map { sched => 
     sched ! RequestTask(currentGroomStats) 
@@ -202,13 +211,6 @@ class Passive1(t: ActorRef) extends MockTC {
      super.preStart
      tester = Option(t)
    }
-
-   override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d)
-     case Cancel => doCancel(d)
-     case Resume => doResume(d)
-   }
-
 }
 
 class Passive2(t: ActorRef) extends MockTC {
@@ -218,11 +220,6 @@ class Passive2(t: ActorRef) extends MockTC {
      tester = Option(t)
    }
 
-   override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d)
-     case Cancel => doCancel(d)
-     case Resume => doResume(d)
-   }
 }
 
 class Passive3(t: ActorRef) extends MockTC {
@@ -232,11 +229,6 @@ class Passive3(t: ActorRef) extends MockTC {
      tester = Option(t)
    }
 
-   override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d)
-     case Cancel => doCancel(d)
-     case Resume => doResume(d)
-   }
 }
 
 class Passive4(t: ActorRef) extends MockTC {
@@ -246,11 +238,6 @@ class Passive4(t: ActorRef) extends MockTC {
      tester = Option(t)
    }
 
-   override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d)
-     case Cancel => doCancel(d)
-     case Resume => doResume(d)
-   }
 }
 
 class Passive5(t: ActorRef) extends MockTC {
@@ -260,11 +247,6 @@ class Passive5(t: ActorRef) extends MockTC {
      tester = Option(t)
    }
 
-   override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d)
-     case Cancel => doCancel(d)
-     case Resume => doResume(d)
-   }
 }
 
 class Active1(t: ActorRef) extends MockTC {
@@ -272,12 +254,6 @@ class Active1(t: ActorRef) extends MockTC {
    override def preStart {
      super.preStart
      tester = Option(t)
-   }
-
-   override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d)
-     case Cancel => doCancel(d)
-     case Resume => doResume(d)
    }
 }
 
@@ -287,12 +263,6 @@ class Active2(t: ActorRef) extends MockTC {
      super.preStart
      tester = Option(t)
    }
-
-   override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d)
-     case Cancel => doCancel(d)
-     case Resume => doResume(d)
-   }
 }
 
 class Active3(t: ActorRef) extends MockTC {
@@ -300,12 +270,6 @@ class Active3(t: ActorRef) extends MockTC {
    override def preStart {
      super.preStart
      tester = Option(t)
-   }
-
-   override def received(d: Directive) = d.action match { 
-     case Launch => doLaunch(d)
-     case Cancel => doCancel(d)
-     case Resume => doResume(d)
    }
 }
 
@@ -325,14 +289,14 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef],
   def watch(actives: Array[ActorRef], passives: Array[ActorRef]) {
     actives.foreach(active => context watch active)
     passives.foreach(passive => context watch passive)
-    LOG.info("Watch actives grooms: {} passives grooms: {}", 
+    LOG.debug("Watch actives grooms: {} passives grooms: {}", 
              actives.map {a => a.path.name }.toArray.mkString("<", ", ", ">"), 
              passives.map { p=> p.path.name }.toArray.mkString("<", ", ", ">"))
   }
 
   def testMsg: Receive = {
     case GetTargetRefs(infos) => {
-      LOG.info("{} asks for active grooms {}!", sender.path.name, 
+      LOG.debug("{} asks for active grooms {}!", sender.path.name, 
                actives.map { a => a.path.name }.mkString(", "))
       sender ! TargetRefs(actives)
     }
@@ -342,19 +306,11 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef],
       actives.foreach { active => active ! Refs(sched, self) }
       passives.foreach { passive => passive ! Refs(sched, self) }
     }
-/*
-    case CalculateGroomTaskSize => {
-      nCount += 1
-      LOG.info("xxxxxxxxxxxxxxxxxxxxxxxx [{}] {} asks for calcuating grooms task size mapping!", nCount, sender.path.name)
-      actives.foreach { active => active forward CalculateGroomTaskSize }
-      passives.foreach { passive => passive forward CalculateGroomTaskSize }
-    }
-*/
     case FailTask(id, isPassive) => (isPassive match {
       case true => passives.filter { passive => passive.path.name.
         equals(("passive"+id)) }
       case false => actives.filter { active  => active.path.name.
-        equals(("active"+id)) } }).head !  FailTask(id, isPassive)
+        equals(("active"+id)) } }).head ! FailTask(id, isPassive)
     case OfflinePassive(n) => {
       GroomName = "passive" + n
       LOG.info("########## Start groom {} offline event! ##########", GroomName)
@@ -438,11 +394,13 @@ class Master(actives: Array[ActorRef], passives: Array[ActorRef],
 
 object F {
 
-  val latestCheckpoint: Long = 19241
+  val ckpt: Seq[Long] = Seq(11, 13, 17, 19, 23, 29, 51, 53, 57)
 
 }
 
 class F(tester: ActorRef) extends Mock { // federator
+
+  var pos = 0
 
   import F._
 
@@ -450,11 +408,14 @@ class F(tester: ActorRef) extends Mock { // federator
     case AskFor(recepiant: String, action: Any) => action match {
       case GetGroomCapacity(grooms: Array[ActorRef]) => {
         val capacity = GroomCapacity(grooms.map{ groom => (groom -> 3) }.toMap)
-        LOG.info("Artifical grooms capacity: {}", capacity)
+        LOG.debug("Artifical grooms capacity: {}", capacity)
         sender ! capacity
       }
       case FindLatestCheckpoint(jobId) => {
-        tester ! JobId(jobId.toString, sender.path.name)
+        val latestCheckpoint = ckpt(pos)
+        pos += 1
+        //LOG.debug("{} asks the latest checkpoint, which is {}, for job {}!", sender.path.name, latestCheckpoint, jobId)
+        //tester ! JobId(jobId.toString, sender.path.name)
         sender ! LatestCheckpoint(jobId, latestCheckpoint)
       }
       case _ => throw new RuntimeException("Unknown action "+action+"!")
@@ -488,7 +449,10 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
                     federator: ActorRef, tester: ActorRef) 
       extends Scheduler(setting, master, receptionist, federator) {
 
-  var testSingleTaskFailure = false
+  var taskMapping = Map.empty[String, Int]
+  var testTaskFailure = false
+
+  var pos = 0
 
   import F._
 
@@ -497,6 +461,22 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
     LOG.debug("Dispatch {} reference to grooms!", self.path.name)
     master ! Refs(self, null)
   }
+
+  override def afterAllTasksAssigned(ticket: Ticket) {
+    LOG.info("Task mapping now: {} ", taskMapping)
+  }
+ 
+  override def afterPassiveAssignTask(from: ActorRef, task: Task) = 
+    taskMapping.find { case (k, v) => from.path.name.equals(k) } match {
+      case Some((k, v)) => 
+      case None => taskMapping += (from.path.name -> 1)
+    }
+
+  override def afterActiveScheduleTask(ref: ActorRef, task: Task) = 
+    taskMapping.find { case (k, v) => ref.path.name.equals(k) } match {
+      case Some((k, v)) => 
+      case None => taskMapping += (ref.path.name -> 1)
+    }
 
   override def onlyPassiveTasksFail(host: String, port: Int, ticket: Ticket,
                                     failedTasks: java.util.List[Task]) {
@@ -530,20 +510,18 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   override def whenAllTasksAssigned(ticket: Ticket): Boolean = 
     super.whenAllTasksAssigned(ticket) match {
-      case true => {
-        LOG.debug("Inform master to calculate grooms task size mapping ...")
-        //master ! CalculateGroomTaskSize 
-        true
-      }
+      case true => true
       case false => false
     }  
 
   override def updateJob(jobId: BSPJobID, latest: Long): Job = {
     val updated = super.updateJob(jobId, latest)
+    taskMapping = Map.empty[String, Int]
     val updatedJob = UpdatedJob(updated.getId, updated.getName, 
                              updated.getMaxTaskAttempts, "RESTARTING",
-                             latestCheckpoint, 
+                             ckpt(pos), 
                              updated.targetGrooms.mkString(","))
+    pos += 1
     LOG.info("Extracted job information: {}", updatedJob)
     tester ! updatedJob
     val tasksList = updated.allTasks.map { task => {
@@ -559,7 +537,7 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   override def beforeCancelTask(groom: ActorRef, failed: Task): 
       (ActorRef, Task) = {
-    if(testSingleTaskFailure) {
+    if(testTaskFailure) {
       failed.getConfiguration.setBoolean("test.task.failure", true)  
       LOG.debug("Failed task {} with test.task.failure set to {}", 
                 failed.getId, failed.getConfiguration.get("test.task.failure"))
@@ -568,49 +546,22 @@ class MockScheduler(setting: Setting, master: ActorRef, receptionist: ActorRef,
   }
 
   override def afterCancelTask(groom: ActorRef, failed: Task) =
-    if(testSingleTaskFailure) testSingleTaskFailure = false
-
-  override def firstTaskFail(stage: Stage, job: Job, faultId: TaskAttemptID) {
-    super.firstTaskFail(stage, job, faultId)
-    jobManager.findJobById(job.getId) match {
-      case (s: Some[Stage], j: Some[Job]) => {
-        LOG.info("Task fails with job {} having state {}", 
-                 job.getId, j.get.getState.toString)
-        tester ! SingleTaskFailJobState(j.get.getState.toString)
-      }
-      case _ => tester ! Error("Can't find job "+job.getId)
-    }
-  }
+    if(testTaskFailure) testTaskFailure = false
 
   def testMsg: Receive = {
     case FailTask(id, isPassive) => {
-      testSingleTaskFailure = true
+      testTaskFailure = true
       master ! FailTask(id, isPassive)
     }
+    case TaskMapping => LOG.debug("Curent task mapping {}", taskMapping)
   }
 
   override def receive = testMsg orElse super.receive
 
 }
 
-object TestScheduler {
-
-  val dispatcher = "pinned-dispatcher"
-
-  val config: Config = ConfigFactory.parseString("""
-    pinned-dispatcher {
-      executor = "thread-pool-executor"
-      type = PinnedDispatcher
-    }
-  """)
-
-}
-
 @RunWith(classOf[JUnitRunner])
-class TestScheduler extends TestEnv("TestScheduler", TestScheduler.config) 
-                    with JobUtil {
-
-  import TestScheduler._
+class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
   import F._
 
@@ -630,16 +581,24 @@ class TestScheduler extends TestEnv("TestScheduler", TestScheduler.config)
   val completed: Boolean = false
   val failPassiveTask = true
   val failActiveTask = false
+  var pos = 0
 
-  val active1 = createWithDispatcher("active1", classOf[Active1], dispatcher, tester)
-  val active2 = createWithDispatcher("active2", classOf[Active2], dispatcher, tester) 
-  val active3 = createWithDispatcher("active3", classOf[Active3], dispatcher, tester) 
+  val active1 = createWithArgs("active1", classOf[Active1], tester)
+  val active2 = createWithArgs("active2", classOf[Active2], tester) 
+  val active3 = createWithArgs("active3", classOf[Active3], tester) 
 
-  val passive1 = createWithDispatcher("passive1", classOf[Passive1], dispatcher, tester)
-  val passive2 = createWithDispatcher("passive2", classOf[Passive2], dispatcher, tester) 
-  val passive3 = createWithDispatcher("passive3", classOf[Passive3], dispatcher, tester) 
-  val passive4 = createWithDispatcher("passive4", classOf[Passive4], dispatcher, tester) 
-  val passive5 = createWithDispatcher("passive5", classOf[Passive5], dispatcher, tester) 
+  val passive1 = createWithArgs("passive1", classOf[Passive1], tester)
+  val passive2 = createWithArgs("passive2", classOf[Passive2], tester) 
+  val passive3 = createWithArgs("passive3", classOf[Passive3], tester) 
+  val passive4 = createWithArgs("passive4", classOf[Passive4], tester) 
+  val passive5 = createWithArgs("passive5", classOf[Passive5], tester) 
+
+  var client: ActorRef = _
+  var receptionist: ActorRef = _
+  var sched: ActorRef = _
+  var master: ActorRef = _
+  var federator: ActorRef = _
+  var job: Job = _
 
   def actives: Array[ActorRef] = Array(active1, active2, active3)
 
@@ -669,142 +628,119 @@ class TestScheduler extends TestEnv("TestScheduler", TestScheduler.config)
   def mkTasksState(size: Int, state: String): String = 
     (for(idx <- 0 until size) yield state).toArray.mkString("<", ", ", ">")
 
-  def expectedJob(old: Job): UpdatedJob =
-    UpdatedJob(old.getId, jobName, old.getMaxTaskAttempts, "RESTARTING",
-               latestCheckpoint, old.targetGrooms.mkString(","))
+  def expectedJob(old: Job): UpdatedJob = {
+    val u = UpdatedJob(old.getId, jobName, old.getMaxTaskAttempts, "RESTARTING",
+               ckpt(pos), old.targetGrooms.mkString(","))
+    pos += 1
+    u
+  }
 
   def expectedTasks(ids: TaskAttemptID*): List[UpdatedTasks] = ids.map { id =>
     UpdatedTasks(id.next, false, SystemInfo.Localhost, 50000, expectedTaskSize)
   }.toList
 
-  def mapping(grooms: Array[ActorRef]): Map[String, Int] = grooms.map { g => {
-    val taskSize = await[Int](g, TaskSize) 
-LOG.info("task size {} found for {}", taskSize, g.path.name)
-    (g.path.name -> taskSize)
-  }}.toMap
+  def init() {
+    val setting = Setting.master
+    setting.hama.setInt("bsp.tasks.max.attempts", 10)
+    job = jobWithActiveGrooms("test", 2, setting.hama)
+    assert(10 == job.getConfiguration.getInt("bsp.tasks.max.attempts", -1))
 
-  def randomPickup(n: Int, isPassive: Boolean = true): Values = {
+    client = createWithArgs("mockClient", classOf[Client], tester)
+    receptionist = createWithArgs("mockReceptionist", classOf[R], client)
+    receptionist ! J(job)
+    federator = createWithArgs("mockFederator", classOf[F], tester)
+    master = createWithArgs("mockMaster", classOf[Master], actives, passives, tester)
+    sched = createWithArgs("mockSched", classOf[MockScheduler], setting, master, receptionist, federator, tester)
+  }
 
-    var id = 0 
-    var taskSize = 0 
-    val server = isPassive match {
-      case true => "passive" 
-      case false => "active"
-    }
-    var flag = true
-    val map = mapping(Array.concat(actives, passives)) 
-    LOG.info("Task size map foundi {}", map)
-    while(flag) {   
-      id = pickup(n)
-      taskSize = map.get(server+id).getOrElse(-1)
-      if(id <= n && 0 < taskSize) flag = false
-    }
-
-    assert(0 < taskSize)
-    assert(0 < id && n >= id) 
-
-    val values = Values(id, taskSize, isPassive)
-    LOG.info("Random pickup {}{} groom with {} tasks", server, values.id, 
-             values.taskSize)
-    values
+  def stopAll() {
+    system.stop(client)
+    system.stop(receptionist)
+    system.stop(federator)
+    system.stop(master)
+    system.stop(sched)
   }
 
   it("test scheduling functions.") {
-    val setting = Setting.master
-    setting.hama.setInt("bsp.tasks.max.attempts", 10)
-    val job = jobWithActiveGrooms("test", 2, setting.hama)
-    assert(10 == job.getConfiguration.getInt("bsp.tasks.max.attempts", -1))
 
-    val client = createWithDispatcher("mockClient", classOf[Client], 
-                                      dispatcher, tester)
-    val receptionist = createWithDispatcher("mockReceptionist", classOf[R], 
-                                            dispatcher, client)
-    receptionist ! J(job)
-    val federator = createWithDispatcher("mockFederator", classOf[F], 
-                                         dispatcher, tester)
-    val master = createWithDispatcher("mockMaster", classOf[Master], 
-                                dispatcher, actives, passives, tester)
-    val sched = createWithDispatcher("mockSched", classOf[MockScheduler], 
-                                     dispatcher, setting, master, receptionist,
-                                     federator, 
-                               tester)
+    init()
 
-    LOG.info("Wait 5 secs before test launch messages ...")
-    Thread.sleep(5*1000)
+    LOG.info("Wait 3 secs before test launch messages ...")
+    Thread.sleep(3*1000)
 
+    sched ! TaskMapping
+
+    LOG.info("Start testing to launch task ...")
     val ids1 = taskAttemptIds(job.getId, expectedTaskSize, 1).ids
     testLaunch(ids1)  
+    LOG.info("Finiah testing to launch task ...")
+
+    Thread.sleep(5*1000)
 
     LOG.info("Start testing passive single task failure ...") 
-    val values1 = randomPickup(passiveTaskSize)  
-    sched ! FailTask(values1.id, failPassiveTask) 
+    sched ! FailTask(3, failPassiveTask) 
     val ids2 = taskAttemptIds(job.getId, expectedTaskSize, 2).ids
     val updatedTasks1 = createUpdatedTasks(ids2)
-    testSingleTaskFailure(ids1, updatedTasks1, job, sched.path.name) 
+    testTaskFailure(ids1, updatedTasks1, job, sched) 
     LOG.info("Finish testing passive single task failure ...") 
 
+    Thread.sleep(5*1000)
+
     LOG.info("Start testing active single task failure ...") 
-    val active = false
-    val values2 = randomPickup(activeTaskSize, active)
-    sched ! FailTask(values2.id, failActiveTask) 
+    sched ! FailTask(2, failActiveTask) 
     val ids3 = taskAttemptIds(job.getId, expectedTaskSize, 3).ids
     val updatedTasks2 = createUpdatedTasks(ids3)
-    testSingleTaskFailure(ids2, updatedTasks2, job, sched.path.name) 
+    testTaskFailure(ids2, updatedTasks2, job, sched) 
     LOG.info("Finish testing active single task failure ...") 
 
-/*
-    LOG.info("Start testing multiple task failure ...")  
-    val values3 = randomPickup(activeTaskSize, active)
-    sched ! FailTask(values2.id, failActiveTask) 
-    val values3 = randomPickup(activeTaskSize, active)
-    LOG.info("Finish testing multiple task failure ...") 
-*/
+    Thread.sleep(10*1000)
 
-/*
-    // single groom leave event
-    master ! OfflinePassive(values.id)
+    LOG.info("Start testing multiple passive tasks failure ...") 
+    sched ! FailTask(4, failPassiveTask)  
+    sched ! FailTask(1, failPassiveTask)  
+    val ids4 = taskAttemptIds(job.getId, expectedTaskSize, 4).ids
+    val updatedTasks3 = createUpdatedTasks(ids4)
+    val multipleTasks = true
+    testTaskFailure(ids3, updatedTasks3, job, sched, multipleTasks) 
+    LOG.info("Finish testing multiple passive tasks failure ...") 
+  
 
-    expect(CurrentState(job.getId.toString, "RESTARTING", 
-                        mkTasksState(taskSize, "FAILED")))
 
-    // verify that cancel action is attempting to cancel 7 tasks (1 task fails)
-    // with attempt id value set 1 
-    expect(AttemptId(1))
-    expect(AttemptId(1))
-    expect(AttemptId(1))
-    expect(AttemptId(1))
-    expect(AttemptId(1))
-    expect(AttemptId(1))
-    expect(AttemptId(1))
-
-    // find latest checkpoint from federator
-    expect(JobId(job.getId.toString, sched.path.name))
-
-    // verify job after updateJob function
-    expect(expectedJob(job))
-
-    // verify tasks after updatedJob function
-    expectAnyOf(expectedTasks(taskAttemptId1, taskAttemptId2, taskAttemptId3, 
-                              taskAttemptId4, taskAttemptId5, taskAttemptId6, 
-                              taskAttemptId7, taskAttemptId8))
-
-    executor.map { 
-      case Some(exec) => exec.submit(new TaskSizeReceiverForResume(resumeGate, queue)) 
-      case None => throw new RuntimeException("No executor found!")
-    }
-   
-    // all tasks are successfully dispatch to grooms and they are all resume
-    // action.
-    
-*/
+//    // single groom leave event
+//    master ! OfflinePassive(values.id)
+//
+//    expect(CurrentState(job.getId.toString, "RESTARTING", 
+//                        mkTasksState(taskSize, "FAILED")))
+//
+//    // verify that cancel action is attempting to cancel 7 tasks (1 task fails)
+//    // with attempt id value set 1 
+//    expect(AttemptId(1))
+//    expect(AttemptId(1))
+//    expect(AttemptId(1))
+//    expect(AttemptId(1))
+//    expect(AttemptId(1))
+//    expect(AttemptId(1))
+//    expect(AttemptId(1))
+//
+//    // find latest checkpoint from federator
+//    expect(JobId(job.getId.toString, sched.path.name))
+//
+//    // verify job after updateJob function
+//    expect(expectedJob(job))
+//
+//    // verify tasks after updatedJob function
+//    expectAnyOf(expectedTasks(taskAttemptId1, taskAttemptId2, taskAttemptId3, 
+//                              taskAttemptId4, taskAttemptId5, taskAttemptId6, 
+//                              taskAttemptId7, taskAttemptId8))
+//   
+//    // all tasks are successfully dispatch to grooms and they are all resume
+//    // action.
+//    
+//
 
     LOG.info("Done testing scheduler functions!")
   }
 
-  /**
-   * Test scheduler dispatching tasks to grooms functions, including assign and
-   * schedule.
-   */
   def testLaunch(ids: Array[TaskAttemptID]) {
     val r1 = r(Launch, ids(0), active)
     val r2 = r(Launch, ids(1), active)
@@ -828,36 +764,30 @@ LOG.info("task size {} found for {}", taskSize, g.path.name)
     LOG.info("All Received messages are verified ...")
   }
  
-  def testSingleTaskFailure(ids1: Array[TaskAttemptID], 
-                            updatedTasks: List[UpdatedTasks],
-                            job: Job, schedName: String) {
+  def testTaskFailure(ids: Array[TaskAttemptID], 
+                      updatedTasks: List[UpdatedTasks],
+                      job: Job, sched: ActorRef, multiple: Boolean = false) {
 
-    expect(SingleTaskFailJobState(Job.State.RESTARTING.toString))
+    LOG.info("Wait 3 secs before testing task failure scenario ...")
+    Thread.sleep(3*1000)
 
-    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
-                ids1(7)) 
-    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
-                ids1(7)) 
-    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
-                ids1(7)) 
-    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
-                ids1(7)) 
-    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
-                ids1(7)) 
-    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
-                ids1(7)) 
-    expectAnyOf(ids1(0), ids1(1), ids1(2), ids1(3), ids1(4), ids1(5), ids1(6), 
-                ids1(7)) 
+    LOG.info("Expect task attempt id ... ")
+    // do cancel
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
+    expectAnyOf(ids(0), ids(1), ids(2), ids(3), ids(4), ids(5), ids(6), ids(7)) 
 
-    LOG.info("Waiting more 5 secs before updated job info is replied ...")
-    Thread.sleep(5*1000)
-
-    expect(JobId(job.getId.toString, schedName))
-
+    LOG.info("Expect updated job data ... ")
     expect(expectedJob(job))
 
+    LOG.info("Expect updated task data ... ")
     expectAnyOf(updatedTasks)
 
   }
 
 }
+*/
