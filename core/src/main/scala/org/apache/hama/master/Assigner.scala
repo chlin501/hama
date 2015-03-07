@@ -18,64 +18,52 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
-import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.GroomStats
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 object Assigner {
 
   val default = classOf[DefaultAssigner]
 
+  /**
+   * All instance should accept JobManager as parameter. 
+   */
   // TODO: change conf to setting. unify instance creation
-  def create(conf: HamaConfiguration, jobManager: JobManager): Assigner = 
-    conf.getClass("bsp.assigner.class", default, classOf[Assigner]) match {
-      case `default` => new DefaultAssigner(jobManager)
-      case clazz@_ => ReflectionUtils.newInstance(clazz, conf)
+  def create(conf: HamaConfiguration, jobManager: JobManager): Assigner = {
+    val cls = conf.getClass("assigner.class", default, classOf[Assigner])
+    Try(cls.getConstructor(classOf[JobManager]).newInstance(jobManager)) match {
+      case Success(instance) => instance
+      case Failure(cause) => throw cause 
     }
+  }
 
 }
 
 trait Assigner {
 
-  def receive(stats: GroomStats, target: ActorRef, 
-              before: (GroomStats, ActorRef) => Unit, 
-              aafter: (GroomStats, ActorRef) => Unit)
-
   def examine(jobManager: JobManager): Option[Ticket] 
+
+  def dropRequest(stats: GroomStats, target: ActorRef)
 
   def validate(job: Job, stats: GroomStats): Boolean 
 
-  def beforeAssign(from: ActorRef, task: Task): (ActorRef, Task)
+  def assignedTo(task: Task, host: String, port: Int)
 
-  def assign(ticket: Ticket, stats: GroomStats, target: ActorRef)
+  def assign(from: ActorRef, task: Task)
 
-  def internalAssign(target: ActorRef, task: Task): (ActorRef, Task)
-
-  def afterAssign(from: ActorRef, task: Task)
-
-  def finalize(ticket: Ticket): Boolean
-
-  def dropRequest(stats: GroomStats, target: ActorRef)
+  def finalize(ticket: Ticket)
 
 }
 
 protected[master] class DefaultAssigner(jobManager: JobManager) 
       extends Assigner with CommonLog {
-
-  override def receive(stats: GroomStats, target: ActorRef, 
-                       before: (GroomStats, ActorRef) => Unit, 
-                       after: (GroomStats, ActorRef) => Unit) { 
-    before(stats, target)
-    examine(jobManager) match {
-      case Some(ticket) => assign(ticket, stats, target)
-      case None => dropRequest(stats, target)
-    }
-    after(stats, target)
-  }
 
   override def dropRequest(stats: GroomStats, target: ActorRef) { }
 
@@ -91,13 +79,10 @@ protected[master] class DefaultAssigner(jobManager: JobManager)
     (allowed >= (current + 1))
   } 
 
-  override def beforeAssign(from: ActorRef, task: Task): (ActorRef, Task) = {
-    val host = from.path.address.host.getOrElse("")
-    val port = from.path.address.port.getOrElse(50000)
+  override def assignedTo(task: Task, host: String, port: Int) = 
     task.assignedTo(host, port)
-    (from, task)
-  }
 
+/*
   override def assign(ticket: Ticket, stats: GroomStats, target: ActorRef) =
     validate(ticket.job, stats) match { 
       case true => ticket.job.nextUnassignedTask match {
@@ -114,29 +99,22 @@ protected[master] class DefaultAssigner(jobManager: JobManager)
       }
       case false =>
     }
+*/
 
-  override def internalAssign(from: ActorRef, task: Task): (ActorRef, Task) = {
-    task.getId.getId match {
-      case id if 1 < id => from ! new Directive(Resume, task, "master") 
-      case _ => from ! new Directive(Launch, task, "master")
-    }
-    (from, task)
+  override def assign(from: ActorRef, task: Task) = task.getId.getId match {
+    case id if 1 < id => from ! new Directive(Resume, task, "master") 
+    case _ => from ! new Directive(Launch, task, "master")
   }
 
-  override def afterAssign(from: ActorRef, task: Task) { }
-
-  override def finalize(ticket: Ticket): Boolean = 
-    if(ticket.job.allTasksAssigned) {
-      LOG.debug("Tasks for job {} are all assigned!", ticket.job.getId)
-      jobManager.moveToNextStage(ticket.job.getId) match { 
-        case (true, _) => if(jobManager.update(ticket.
-                             newWith(ticket.job.newWithRunningState))) {
-          LOG.info("All tasks assigned, job {} is running!", ticket.job.getId)
-          true 
-        } else false
-        case _ => { LOG.error("Unable to move job {} to next stage!", 
-                              ticket.job.getId); false }
-      }
-    } else false
+  override def finalize(ticket: Ticket) = if(ticket.job.allTasksAssigned) {
+    LOG.debug("Tasks for job {} are all assigned!", ticket.job.getId)
+    jobManager.moveToNextStage(ticket.job.getId) match { 
+      case (true, _) => if(jobManager.update(ticket.newWith(ticket.job.
+                           newWithRunningState))) 
+        LOG.info("All tasks assigned, job {} is running!", ticket.job.getId)
+      case _ => LOG.error("Unable to move job {} to next stage!", 
+                          ticket.job.getId)
+    } 
+  }
  
 }

@@ -25,17 +25,22 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.SystemInfo
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.logging.CommonLog
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 object Scheduler {
 
   val default = classOf[DefaultScheduler]
 
   // TODO: change conf to setting; unify instance creation
-  def create(conf: HamaConfiguration, jobManager: JobManager): Scheduler = 
-    conf.getClass("bsp.scheduler.class", default, classOf[Scheduler]) match {
-      case `default` => new DefaultScheduler(jobManager)
-      case clazz@_ => ReflectionUtils.newInstance(clazz, conf)
+  def create(conf: HamaConfiguration, jobManager: JobManager): Scheduler = {
+    val cls = conf.getClass("scheduler.class", default, classOf[Scheduler])
+    Try(cls.getConstructor(classOf[JobManager]).newInstance(jobManager)) match {
+      case Success(instance) => instance
+      case Failure(cause) => throw cause
     }
+  }
 
 }
 

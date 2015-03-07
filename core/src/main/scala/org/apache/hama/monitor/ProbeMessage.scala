@@ -170,6 +170,16 @@ object GroomStats {
     stats
   }
 
+  def apply(host: String, port: Int, maxTasks: Int): GroomStats = 
+    apply(defaultGroom, host, port, maxTasks)
+
+  val defaultGroom = classOf[GroomServer].getSimpleName
+
+  val defaultHost = InetAddress.getLocalHost.getHostName
+
+  val defaultPort = 50000 
+
+  val defaultMaxTasks = 3
 }
 
 final class GroomStats extends Writable with ProbeMessage {
@@ -177,16 +187,16 @@ final class GroomStats extends Writable with ProbeMessage {
   import GroomStats._
 
   /* groom server's actor name */
-  protected[monitor] var n: String = classOf[GroomServer].getSimpleName
+  protected[monitor] var n: String = defaultGroom
 
   /* host */
-  protected[monitor] var h: String = InetAddress.getLocalHost.getHostName
+  protected[monitor] var h: String = defaultHost
 
   /* port */
-  protected[monitor] var p: Int = 50000 
+  protected[monitor] var p: Int = defaultPort
 
   /* max tasks */
-  protected[monitor] var mt: Int = 3
+  protected[monitor] var mt: Int = defaultMaxTasks
 
   /* slots */
   protected[monitor] var s: SlotStats = 
