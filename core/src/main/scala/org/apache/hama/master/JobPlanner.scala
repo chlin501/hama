@@ -579,7 +579,7 @@ class JobPlanner(setting: Setting, master: ActorRef, receptionist: ActorRef,
 
   // TODO: to avoid active scheduling to grooms with insufficient slots, due to
   //       delay reporting, probably changing to allow schduler to update slots
-  //       in tracker directly after assign() or schedule() executed.
+  //       in tracker directly after assign or schedule function executed.
   protected def preSlotUnavailable(notEnough: Set[ActorRef]) = 
     jobManager.ticketAt match {
       case (s: Some[Stage], t: Some[Ticket]) => {
