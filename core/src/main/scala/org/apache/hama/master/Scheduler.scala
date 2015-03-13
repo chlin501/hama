@@ -77,8 +77,7 @@ protected[master] class DefaultScheduler(jobManager: JobManager)
   override def examine(ticket: Ticket): Boolean = 
     ticket.job.targetGrooms match {
       case null | _ if ticket.job.targetGrooms.isEmpty => {
-        jobManager.markScheduleFinished
-        false
+        jobManager.markScheduleFinished; false
       }
       case _ => true
     } 
@@ -119,7 +118,7 @@ protected[master] class DefaultScheduler(jobManager: JobManager)
     case None => LOG.error("No ticket found at TaskAssign stage!")
   }; jobManager.markScheduleFinished }
 
-  // TODO: mark job failed, notify clinet, issue kill, then move job to finish queue?
+  // TODO: mark job fails. issue kill, then move job to finish queue?
   protected def failValidation(ticket: Ticket) = 
     LOG.error("Failing job validation!")
  

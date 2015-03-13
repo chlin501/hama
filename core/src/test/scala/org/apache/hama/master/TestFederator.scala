@@ -21,11 +21,11 @@ import akka.actor.Actor
 import akka.actor.ActorRef
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
+import org.apache.hama.MockClient
 import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.conf.Setting
 import org.apache.hama.logging.ActorLog
 import org.apache.hama.monitor.ListService
-//import org.apache.hama.monitor.ProbeMessage
 import org.apache.hama.monitor.master.TotalMaxTasks
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
@@ -134,13 +134,6 @@ class MockMaster(setting: Setting, tester: ActorRef)
 
 }
 
-class MockClient extends Actor with ActorLog {
-
-  override def receive = {
-    case msg@_ => LOG.info("{} receive msg: {}", getClass.getName, msg)
-  }
-}
-
 @RunWith(classOf[JUnitRunner])
 class TestFederator extends TestEnv("TestFederator") with JobUtil {
 
@@ -162,7 +155,7 @@ class TestFederator extends TestEnv("TestFederator") with JobUtil {
 
   it("test federator functions.") {
     val expectedServices = Seq(Federator.simpleName(masterSetting.hama))
-    val client = createWithArgs("mockclient", classOf[MockClient])
+    val client = createWithArgs("MockClient", classOf[MockClient])
     val receptionist = client // TODO: change receptionist to real one if needed
     val master = createWithArgs(masterSetting.name, masterSetting.main, 
                                masterSetting, tester)

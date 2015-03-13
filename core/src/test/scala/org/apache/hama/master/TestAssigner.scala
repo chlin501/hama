@@ -21,15 +21,12 @@ import akka.actor.ActorRef
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
+import org.apache.hama.MockClient
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
-
-class MockClient1 extends Agent { 
-  override def receive = unknown
-}
 
 @RunWith(classOf[JUnitRunner])
 class TestAssigner extends TestEnv("TestAssigner") with JobUtil {
@@ -46,7 +43,7 @@ class TestAssigner extends TestEnv("TestAssigner") with JobUtil {
 
   it("test task assign functions.") {
     val jobManager = JobManager()
-    val client = createWithArgs("MockClient", classOf[MockClient1])
+    val client = createWithArgs("MockClient", classOf[MockClient])
     val job = createJob("test", 3, "assigner-job", 2)
     val ticket = Ticket(client, job)
     jobManager.enqueue(ticket) 

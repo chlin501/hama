@@ -39,6 +39,8 @@ class Mock extends Agent {
 
 }
 
+class MockClient extends Mock 
+
 object TestEnv {
 
   /**

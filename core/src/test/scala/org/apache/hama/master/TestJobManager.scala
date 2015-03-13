@@ -18,25 +18,19 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
-import org.apache.hama.Agent
+import org.apache.hama.MockClient
 import org.apache.hama.TestEnv
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 
-class MockC1(tester: ActorRef) extends Agent {
-
-  override def receive = unknown
-}
-  
-
 @RunWith(classOf[JUnitRunner])
 class TestJobManager extends TestEnv("TestJobManager") with JobUtil {
 
   it("test job management functions.") {
     val job = createJob("test", 2, "test-job-manager", 3)
-    val client = createWithArgs("mockClient", classOf[MockC1], tester)
+    val client = createWithArgs("mockClient", classOf[MockClient], tester)
     val jobManager = JobManager()
     val readyToPull = jobManager.readyForNext
     LOG.info("Ready to pull next job? {}", readyToPull)
