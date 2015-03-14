@@ -18,14 +18,25 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
-import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.Mock
 import org.apache.hama.TestEnv
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
+
+class MockMaster2(tester: ActorRef) extends Mock {
+
+  def msgs: Receive = {
+    case GetTargetRefs(ary) => tester ! ary.map { e => 
+      e.getHost+":"+e.getPort 
+    }.mkString(",")
+  }
+
+  override def receive = msgs orElse super.receive 
+}
 
 @RunWith(classOf[JUnitRunner])
 class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
@@ -36,14 +47,25 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
   val host2 = "groom2"
   val port1 = 41231
   val port2 = 21941
+  val targetGrooms = Array[String](host1+":"+port1, host2+":"+port2)
 
   def stats(host: String, port: Int): GroomStats = 
     GroomStats(host, port, defaultMaxTasks)
 
   it("test task scheduling functions.") {
     val jobManager = JobManager()
- 
-    LOG.info("Done testing Assigner functions!")    
+    val job = createJob("test", 3, "test-job-sched", targetGrooms, 2)
+    val ticket = Ticket(client, job)
+    val scheduler = Scheduler.create(new HamaConfiguration, jobManager)
+    scheduler.receive(ticket)
+    assert(false == jobManager.allowPassiveAssign)
+    val hasTargetGrooms = scheduler.examine(ticket)
+    assert(true == hasTargetGrooms)
+    val master = createWithArgs("master", classOf[MockMaster2], tester)
+    scheduler.findGroomsFor(ticket, master)
+    expect(targetGrooms.mkString(","))
+
+    LOG.info("Done testing Scheduler functions!")    
   }
 
 }

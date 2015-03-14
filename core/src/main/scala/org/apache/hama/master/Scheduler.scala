@@ -69,7 +69,7 @@ trait Scheduler {
 protected[master] class DefaultScheduler(jobManager: JobManager) 
       extends Scheduler with CommonLog {
 
-  override def receive(ticket: Ticket) = {
+  override def receive(ticket: Ticket) {
     jobManager.rewindToBeforeSchedule
     jobManager.enqueue(ticket) 
   }

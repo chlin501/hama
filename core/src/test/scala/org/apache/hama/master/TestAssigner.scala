@@ -43,7 +43,6 @@ class TestAssigner extends TestEnv("TestAssigner") with JobUtil {
 
   it("test task assign functions.") {
     val jobManager = JobManager()
-    val client = createWithArgs("MockClient", classOf[MockClient])
     val job = createJob("test", 3, "assigner-job", 2)
     val ticket = Ticket(client, job)
     jobManager.enqueue(ticket) 

@@ -155,7 +155,6 @@ class TestFederator extends TestEnv("TestFederator") with JobUtil {
 
   it("test federator functions.") {
     val expectedServices = Seq(Federator.simpleName(masterSetting.hama))
-    val client = createWithArgs("MockClient", classOf[MockClient])
     val receptionist = client // TODO: change receptionist to real one if needed
     val master = createWithArgs(masterSetting.name, masterSetting.main, 
                                masterSetting, tester)

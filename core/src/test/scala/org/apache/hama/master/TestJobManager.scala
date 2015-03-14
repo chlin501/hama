@@ -30,7 +30,6 @@ class TestJobManager extends TestEnv("TestJobManager") with JobUtil {
 
   it("test job management functions.") {
     val job = createJob("test", 2, "test-job-manager", 3)
-    val client = createWithArgs("mockClient", classOf[MockClient], tester)
     val jobManager = JobManager()
     val readyToPull = jobManager.readyForNext
     LOG.info("Ready to pull next job? {}", readyToPull)
