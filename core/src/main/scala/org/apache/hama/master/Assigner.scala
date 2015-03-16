@@ -50,22 +50,14 @@ trait Assigner {
 
   def examine(jobManager: JobManager): Option[Ticket] 
 
-  def dropRequest(stats: GroomStats, target: ActorRef)
+  def validate(ticket: Ticket, stats: GroomStats): Boolean 
 
-  def validate(job: Job, stats: GroomStats): Boolean 
-
-  def assignedTo(task: Task, host: String, port: Int)
-
-  def assign(from: ActorRef, task: Task)
-
-  def finalize(ticket: Ticket)
+  def assign(ticket: Ticket, stats: GroomStats, target: ActorRef)
 
 }
 
 protected[master] class DefaultAssigner(jobManager: JobManager) 
       extends Assigner with CommonLog {
-
-  override def dropRequest(stats: GroomStats, target: ActorRef) { }
 
   override def examine(jobManager: JobManager): Option[Ticket] = 
     jobManager.allowPassiveAssign && !jobManager.isEmpty(TaskAssign) match {
@@ -73,48 +65,54 @@ protected[master] class DefaultAssigner(jobManager: JobManager)
       case false => None
     }
 
-  override def validate(job: Job, stats: GroomStats): Boolean = {
-    val current = job.getTaskCountFor(stats.hostPort)
+  override def validate(ticket: Ticket, stats: GroomStats): Boolean = {
+    val current = ticket.job.getTaskCountFor(stats.hostPort)
     val allowed = stats.maxTasks
     (allowed >= (current + 1))
   } 
 
-  override def assignedTo(task: Task, host: String, port: Int) = 
+  protected[master] def before(to: ActorRef, task: Task): (ActorRef, Task) = {
+    val (host, port) = resolve(to)
     task.assignedTo(host, port)
+    (to, task)
+  }
 
-/*
+  protected[master] def resolve(ref: ActorRef): (String, Int) = {
+    val host = ref.path.address.host.getOrElse("localhost")
+    val port = ref.path.address.port.getOrElse(50000)
+    (host, port)
+  }
+
   override def assign(ticket: Ticket, stats: GroomStats, target: ActorRef) =
-    validate(ticket.job, stats) match { 
-      case true => ticket.job.nextUnassignedTask match {
-        case null => 
-        case task@_ => {
-          val (g1, t1) = beforeAssign(target, task)
-          val (g2, t2) = internalAssign(g1, t1)
-          afterAssign(g2, t2)
-          finalize(ticket) match {
-            case true =>
-            case false =>
-          }
-        }
+    ticket.job.nextUnassignedTask match {
+      case null => 
+      case task@_ => {
+        val (g1, t1) = before(target, task)
+        val (g2, t2) = internal(g1, t1)
+        after(g2, t2)
+        finalize(ticket) 
       }
-      case false =>
     }
-*/
 
-  override def assign(from: ActorRef, task: Task) = task.getId.getId match {
-    case id if 1 < id => from ! new Directive(Resume, task, "master") 
-    case _ => from ! new Directive(Launch, task, "master")
+  protected[master] def internal(ref: ActorRef, t: Task): (ActorRef, Task) = {
+    t.getId.getId match {
+      case id if 1 < id => ref ! new Directive(Resume, t, "master") 
+      case _ => ref ! new Directive(Launch, t, "master")
+    }
+    (ref, t)
   }
 
-  override def finalize(ticket: Ticket) = if(ticket.job.allTasksAssigned) {
-    LOG.debug("Tasks for job {} are all assigned!", ticket.job.getId)
-    jobManager.moveToNextStage(ticket.job.getId) match { 
-      case (true, _) => if(jobManager.update(ticket.newWith(ticket.job.
-                           newWithRunningState))) 
-        LOG.info("All tasks assigned, job {} is running!", ticket.job.getId)
-      case _ => LOG.error("Unable to move job {} to next stage!", 
-                          ticket.job.getId)
-    } 
-  }
- 
+  protected[master] def after(ref: ActorRef, task: Task) { }
+
+  protected[master] def finalize(ticket: Ticket) = 
+    if(ticket.job.allTasksAssigned) {
+      LOG.debug("Tasks for job {} are all assigned!", ticket.job.getId)
+      jobManager.moveToNextStage(ticket.job.getId) match { 
+        case (true, _) => if(jobManager.update(ticket.newWith(ticket.job.
+                             newWithRunningState))) 
+          LOG.info("All tasks assigned, job {} is running!", ticket.job.getId)
+        case _ => LOG.error("Unable to move job {} to next stage!", 
+                            ticket.job.getId)
+      } 
+    }
 }

@@ -18,10 +18,9 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
-import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.Mock
 import org.apache.hama.TestEnv
-import org.apache.hama.MockClient
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.util.JobUtil
@@ -41,6 +40,8 @@ class TestAssigner extends TestEnv("TestAssigner") with JobUtil {
   def stats(host: String, port: Int): GroomStats = 
     GroomStats(host, port, defaultMaxTasks)
 
+  def mock(name: String): ActorRef = createWithArgs(name, classOf[Mock])
+
   it("test task assign functions.") {
     val jobManager = JobManager()
     val job = createJob("test", 3, "assigner-job", 2)
@@ -54,13 +55,14 @@ class TestAssigner extends TestEnv("TestAssigner") with JobUtil {
     assert(!None.equals(some))
     assert(3 == some.get.job.getId.getId)
     assert("assigner-job".equals(some.get.job.getName))
-    testAssign(assigner, jobManager, ticket, host1, port1)
+
+    doAssign(assigner, jobManager, ticket, "groom1", host1, port1)
     jobManager.findJobById(job.getId) match {
       case (s: Some[Stage], t: Some[Job]) => assert(TaskAssign.equals(s.get))
       case _ => throw new RuntimeException("Invalid stage for job "+job.getId)
     }
 
-    testAssign(assigner, jobManager, ticket, host2, port2)
+    doAssign(assigner, jobManager, ticket, "groom2", host2, port2)
     jobManager.findJobById(job.getId) match {
       case (s: Some[Stage], t: Some[Job]) => assert(Processing.equals(s.get))
       case _ => throw new RuntimeException("Invalid stage for job "+job.getId)
@@ -69,17 +71,10 @@ class TestAssigner extends TestEnv("TestAssigner") with JobUtil {
     LOG.info("Done testing Assigner functions!")    
   }
 
-  def testAssign(assigner: Assigner, jobManager: JobManager, ticket: Ticket, 
-                 host: String, port: Int) {
-    val validated = assigner.validate(ticket.job, stats(host, port))
+  def doAssign(assigner: Assigner, jobManager: JobManager, ticket: Ticket, 
+                 groom: String, host: String, port: Int) {
+    val validated = assigner.validate(ticket, stats(host, port))
     assert(true == validated)
-    val task = ticket.job.nextUnassignedTask
-    assert(null != task)
-    assigner.assignedTo(task, host, port)
-    val assignedHost = task.getAssignedHost
-    assert(host.equals(assignedHost))
-    val assignedPort = task.getAssignedPort
-    assert(port == assignedPort)
-    assigner.finalize(ticket) 
+    assigner.assign(ticket, stats(host, port), mock(groom))
   }
 }

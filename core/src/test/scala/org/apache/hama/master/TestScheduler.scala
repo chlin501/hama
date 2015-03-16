@@ -64,7 +64,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     val master = createWithArgs("master", classOf[MockMaster2], tester)
     scheduler.findGroomsFor(ticket, master)
     expect(targetGrooms.mkString(","))
-
+      
     LOG.info("Done testing Scheduler functions!")    
   }
 

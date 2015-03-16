@@ -52,17 +52,7 @@ trait Scheduler {
 
   def findGroomsFor(ticket: Ticket, master: ActorRef)
 
-  def validate(job: Job, actual: Array[ActorRef]): Boolean
-
-  def found(targetGrooms: Array[ActorRef])
-
-  def beforeSchedule(to: ActorRef, task: Task): (ActorRef, Task)
-
-  def internalSchedule(to: ActorRef, task: Task): (ActorRef, Task)
-
-  def afterSchedule(to: ActorRef, task: Task)
-
-  def finalize(ticket: Ticket): Boolean
+  def found(targets: Array[ActorRef]) 
 
 }
 
@@ -89,27 +79,33 @@ protected[master] class DefaultScheduler(jobManager: JobManager)
     master ! GetTargetRefs(infos)
   }
 
-  override def validate(job: Job, actual: Array[ActorRef]): Boolean = 
+  protected[master] def validate(job: Job, actual: Array[ActorRef]): Boolean = 
     job.targetInfos.size == actual.size
 
-  override def beforeSchedule(to: ActorRef, task: Task): (ActorRef, Task) = {
-    val host = to.path.address.host.getOrElse("")
-    val port = to.path.address.port.getOrElse(50000)
+
+  protected[master] def before(to: ActorRef, task: Task): (ActorRef, Task) = {
+    val (host, port) = resolve(to)
     task.scheduleTo(host, port)
     (to, task)
   }
 
-  protected def getTicket(): Option[Ticket] = 
+  protected[master] def resolve(ref: ActorRef): (String, Int) = {
+    val host = ref.path.address.host.getOrElse("localhost")
+    val port = ref.path.address.port.getOrElse(50000)
+    (host, port)
+  }
+
+  protected[master] def ticket(): Option[Ticket] = 
     if(!jobManager.isEmpty(TaskAssign)) jobManager.headOf(TaskAssign) else None
 
-  override def found(targets: Array[ActorRef]) = { getTicket match {
+  override def found(targets: Array[ActorRef]) = { ticket match {
     case Some(t) => validate(t.job, targets) match {
       case true => targets.foreach { groom => t.job.nextUnassignedTask match {
         case null =>
         case task@_ => {
-          val (g1, t1) = beforeSchedule(groom, task)
-          val (g2, t2) = internalSchedule(g1, t1) 
-          afterSchedule(g2, t2) 
+          val (g1, t1) = before(groom, task)
+          val (g2, t2) = schedule(g1, t1) 
+          after(g2, t2) 
           finalize(t)
         }
       }}
@@ -119,20 +115,20 @@ protected[master] class DefaultScheduler(jobManager: JobManager)
   }; jobManager.markScheduleFinished }
 
   // TODO: mark job fails. issue kill, then move job to finish queue?
-  protected def failValidation(ticket: Ticket) = 
+  protected[master] def failValidation(ticket: Ticket) = 
     LOG.error("Failing job validation!")
  
-  override def internalSchedule(ref: ActorRef, t: Task): (ActorRef, Task) = {
+  protected[master] def schedule(ref: ActorRef, t: Task): (ActorRef, Task) = {
     t.getId.getId match {
       case id if 1 < id => ref ! new Directive(Resume, t, "master")
       case _ => ref ! new Directive(Launch, t, "master")
     }
-    (ref, t)
+    (ref, t) 
   }
 
-  override def afterSchedule(a: ActorRef, t: Task) { }
+  protected[master] def after(to: ActorRef, task: Task) { }
 
-  override def finalize(ticket: Ticket): Boolean = 
+  protected[master] def finalize(ticket: Ticket): Boolean = 
     if(ticket.job.allTasksAssigned) {
       jobManager.moveToNextStage(ticket.job.getId) match {
         case (true, _) => if(jobManager.update(ticket.newWith(ticket.job.
@@ -144,6 +140,5 @@ protected[master] class DefaultScheduler(jobManager: JobManager)
                               ticket.job.getId); false }
       }
     } else false
-
   
 }
