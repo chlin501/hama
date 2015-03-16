@@ -22,6 +22,8 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.Mock
 import org.apache.hama.TestEnv
 import org.apache.hama.bsp.v2.Job
+import org.apache.hama.master.Directive.Action
+import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
@@ -38,6 +40,34 @@ class MockMaster2(tester: ActorRef) extends Mock {
   override def receive = msgs orElse super.receive 
 }
 
+final case class D(action: Action, id: String, host: String, port: Int)
+
+class MockGroom(tester: ActorRef) extends Mock {
+
+  def msgs: Receive = {
+    case d: Directive => {
+      val action = d.action
+      val id = d.task.getId.toString
+      val host = d.task.getAssignedHost
+      val port = d.task.getAssignedPort
+      tester ! D(action, id, host, port)
+    }
+  }
+
+  override def receive = msgs orElse super.receive 
+}
+
+class MockScheduler(jobManager: JobManager) 
+      extends DefaultScheduler(jobManager) {
+
+  override def resolve(ref: ActorRef): (String, Int) = ref.path.name match {
+    case "groom1" => ("groom1", 41231)
+    case "groom2" => ("groom2", 21941)
+    case _ => throw new RuntimeException("Unknown target groom server!")
+  }
+
+}
+
 @RunWith(classOf[JUnitRunner])
 class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
@@ -52,11 +82,24 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
   def stats(host: String, port: Int): GroomStats = 
     GroomStats(host, port, defaultMaxTasks)
 
+  def targets(names: String*): Array[ActorRef] = names.map { name => 
+    createWithArgs(name, classOf[MockGroom], tester)
+  }.toArray
+
+  def config: HamaConfiguration = {
+    val conf = new HamaConfiguration
+    conf.setClass("scheduler.class", classOf[MockScheduler], classOf[Scheduler])
+    conf
+  }
+
+  def d(taskId: Int, host: String, port: Int): D = 
+    D(Launch, createTaskAttemptIdString("test", 3, taskId, 1), host, port)
+
   it("test task scheduling functions.") {
     val jobManager = JobManager()
     val job = createJob("test", 3, "test-job-sched", targetGrooms, 2)
     val ticket = Ticket(client, job)
-    val scheduler = Scheduler.create(new HamaConfiguration, jobManager)
+    val scheduler = Scheduler.create(config, jobManager)
     scheduler.receive(ticket)
     assert(false == jobManager.allowPassiveAssign)
     val hasTargetGrooms = scheduler.examine(ticket)
@@ -64,7 +107,9 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     val master = createWithArgs("master", classOf[MockMaster2], tester)
     scheduler.findGroomsFor(ticket, master)
     expect(targetGrooms.mkString(","))
-      
+    scheduler.found(targets("groom1", "groom2"))
+    expectAnyOf(d(1, host1, port1) , d(2, host2, port2))
+    expectAnyOf(d(1, host1, port1) , d(2, host2, port2))
     LOG.info("Done testing Scheduler functions!")    
   }
 

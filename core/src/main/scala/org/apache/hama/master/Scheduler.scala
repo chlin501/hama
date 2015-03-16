@@ -104,7 +104,7 @@ protected[master] class DefaultScheduler(jobManager: JobManager)
         case null =>
         case task@_ => {
           val (g1, t1) = before(groom, task)
-          val (g2, t2) = schedule(g1, t1) 
+          val (g2, t2) = internal(g1, t1) 
           after(g2, t2) 
           finalize(t)
         }
@@ -118,7 +118,7 @@ protected[master] class DefaultScheduler(jobManager: JobManager)
   protected[master] def failValidation(ticket: Ticket) = 
     LOG.error("Failing job validation!")
  
-  protected[master] def schedule(ref: ActorRef, t: Task): (ActorRef, Task) = {
+  protected[master] def internal(ref: ActorRef, t: Task): (ActorRef, Task) = {
     t.getId.getId match {
       case id if 1 < id => ref ! new Directive(Resume, t, "master")
       case _ => ref ! new Directive(Launch, t, "master")
