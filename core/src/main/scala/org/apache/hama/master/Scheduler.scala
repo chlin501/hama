@@ -98,7 +98,7 @@ protected[master] class DefaultScheduler(jobManager: JobManager)
   protected[master] def ticket(): Option[Ticket] = 
     if(!jobManager.isEmpty(TaskAssign)) jobManager.headOf(TaskAssign) else None
 
-  override def found(targets: Array[ActorRef]) = { ticket match {
+  override def found(targets: Array[ActorRef]) = try { ticket match {
     case Some(t) => validate(t.job, targets) match {
       case true => targets.foreach { groom => t.job.nextUnassignedTask match {
         case null =>
@@ -111,12 +111,15 @@ protected[master] class DefaultScheduler(jobManager: JobManager)
       }}
       case false => failValidation(t)
     }
-    case None => LOG.error("No ticket found at TaskAssign stage!")
-  }; jobManager.markScheduleFinished }
+    case None => ticketNotFound
+  }} finally { jobManager.markScheduleFinished }
 
   // TODO: mark job fails. issue kill, then move job to finish queue?
   protected[master] def failValidation(ticket: Ticket) = 
-    LOG.error("Failing job validation!")
+    LOG.error("Failing validate job {}!", ticket.job.getId)
+  
+  protected[master] def ticketNotFound() =
+    LOG.error("No ticket found at TaskAssign stage!")
  
   protected[master] def internal(ref: ActorRef, t: Task): (ActorRef, Task) = {
     t.getId.getId match {

@@ -43,7 +43,7 @@ class TestAssigner extends TestEnv("TestAssigner") with JobUtil {
   def mock(name: String): ActorRef = createWithArgs(name, classOf[Mock])
 
   it("test task assign functions.") {
-    val jobManager = JobManager()
+    val jobManager = JobManager.create
     val job = createJob("test", 3, "assigner-job", 2)
     val ticket = Ticket(client, job)
     jobManager.enqueue(ticket) 

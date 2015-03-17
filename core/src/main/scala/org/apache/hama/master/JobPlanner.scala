@@ -109,12 +109,12 @@ sealed trait Stage
 final case object TaskAssign extends Stage
 final case object Processing extends Stage
 final case object Finished extends Stage
-
+  
 protected[master] object JobManager {
 
   protected val stages = List(TaskAssign, Processing, Finished)
 
-  def apply(): JobManager = new JobManager 
+  def create(): JobManager = new JobManager()
 
 }
 // TODO: refactor for more compact api?
@@ -343,6 +343,7 @@ protected[master] class JobManager extends CommonLog {
       }
       case _ => false
     } 
+
 }
 
 object JobPlanner {
@@ -376,7 +377,7 @@ final case class KillJob(reason: String) extends Command
 class JobPlanner(setting: Setting, master: ActorRef, receptionist: ActorRef,
                 federator: ActorRef) extends LocalService with Periodically {
 
-  protected val jobManager = JobManager()
+  protected val jobManager = JobManager.create
 
   /* a guard for checking if all active tasks are scheduled. */
   protected var activeFinished = false 

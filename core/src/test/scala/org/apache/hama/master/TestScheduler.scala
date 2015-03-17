@@ -96,7 +96,7 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     D(Launch, createTaskAttemptIdString("test", 3, taskId, 1), host, port)
 
   it("test task scheduling functions.") {
-    val jobManager = JobManager()
+    val jobManager = JobManager.create
     val job = createJob("test", 3, "test-job-sched", targetGrooms, 2)
     val ticket = Ticket(client, job)
     val scheduler = Scheduler.create(config, jobManager)
