@@ -26,7 +26,58 @@ import org.apache.hama.logging.CommonLog
 import org.apache.hama.util.Utils._
 import scala.collection.JavaConversions._
 
-trait EventHandler 
+trait EventHandler {
+
+  type Host = String
+  type Port = Int
+
+  protected def manager(): JobManager
+
+  protected[master] def allTasksKilled(ticket: Ticket) {
+    val job = ticket.job
+    val newJob = job.newWithFailedState.newWithFinishNow
+    manager.update(ticket.newWith(newJob))
+    val jobId = newJob.getId
+    //broadcastFinished(jobId)
+    manager.move(jobId)(Finished)
+    manager.getCommand(jobId.toString) match { // TODO: refactor
+      case Some(found) if found.isInstanceOf[KillJob] =>
+        ticket.client ! Reject(found.asInstanceOf[KillJob].reason)
+      case Some(found) if !found.isInstanceOf[KillJob] => {
+        LOG.warning("Unknown command {} to react for job {}", found,
+                    jobId)
+        ticket.client ! Reject("Job "+jobId.toString+" fails!")
+      }
+      case None => LOG.warning("No matched command for job {} in "+
+                               "reacting to cancelled event!", jobId)
+    }
+  }
+
+  protected[master] def beforeRestart(ticket: Ticket) { }
+    //federator ! AskFor(CheckpointIntegrator.fullName,
+                       //FindLatestCheckpoint(ticket.job.getId))
+
+
+  protected[master] def whenAllTasksStopped(ticket: Ticket) = 
+    ticket.job.getState match {
+      case KILLING => allTasksKilled(ticket)
+      case RESTARTING => beforeRestart(ticket)
+    }
+
+  // when receiving task cancelled event in planner. 
+  protected[master] def cancelled(ticket: Ticket, taskAttemptId: String) = 
+    ticket.job.markCancelledWith(taskAttemptId) match { 
+      case true => if(ticket.job.allTasksStopped) whenAllTasksStopped(ticket)
+      case false => LOG.error("Unable to mark task {} killed!", taskAttemptId)
+    }
+
+  protected[master] def resolve(ref: ActorRef): (Host, Port) = {
+    val host = ref.path.address.host.getOrElse("localhost")
+    val port = ref.path.address.port.getOrElse(50000)
+    (host, port)
+  }
+
+}
 
 protected[master] object GroomEventHandler {
 
@@ -44,53 +95,12 @@ protected[master] trait GroomEventHandler extends EventHandler {
    */
   def cancelTasks(matched: Set[ActorRef], nomatched: Set[String])
 
-  def confirmCancelled(taskAttemptId: String)
-
-  def renew(newest: Task)
-
 }
 
 protected[master] class DefaultGroomEventHandler(jobManager: JobManager) 
   extends GroomEventHandler with CommonLog {
 
-  protected[master] def resolve(ref: ActorRef): (String, Int) = {
-    val host = ref.path.address.host.getOrElse("localhost")
-    val port = ref.path.address.port.getOrElse(50000)
-    (host, port)
-  }
-
-  override def renew(newest: Task) = jobManager.ticketAt match {
-    case (s: Some[Stage], t: Some[Ticket]) => t.get.job.update(newest) match {
-      case true => if(t.get.job.allTasksSucceeded) {
-        val newJob = t.get.job.newWithSucceededState.newWithFinishNow
-        jobManager.update(t.get.newWith(newJob))
-        //broadcastFinished(newJob.getId) 
-        jobManager.move(newJob.getId)(Finished)
-        //notifyJobComplete(t.get.client, newJob.getId) 
-      }
-      case false => LOG.warning("Unable to update task {}!", newest.getId)
-    }
-    case _ => LOG.warning("No job existed!")
-  }
-
-  protected[master] def whenAllTasksStopped(ticket: Ticket) = 
-    ticket.job.getState match {
-      case KILLING => allTasksKilled(ticket)
-      case RESTARTING => beforeRestart(ticket)
-    }
-
-  protected[master] def confirm(ticket: Ticket, taskAttemptId: String) = 
-    ticket.job.markCancelledWith(taskAttemptId) match { 
-      case true => if(ticket.job.allTasksStopped) whenAllTasksStopped(ticket)
-      case false => LOG.error("Unable to mark task {} killed!", taskAttemptId)
-    }
-
-  override def confirmCancelled(taskAttemptId: String) = 
-    jobManager.ticketAt match {
-      case (stage: Some[Stage], t: Some[Ticket]) => 
-        confirm(t.get, taskAttemptId)
-      case _ => LOG.error("No ticket found at any Stage!")
-    }
+  override def manager(): JobManager = jobManager
 
   override def cancelTasks(matched: Set[ActorRef], nomatched: Set[String]) =
     nomatched.isEmpty match {
@@ -193,29 +203,7 @@ protected[master] class DefaultGroomEventHandler(jobManager: JobManager)
       case false => onlyPassiveTasksFail(host, port, ticket, failedTasks)
     }
 
-  protected[master] def allTasksKilled(ticket: Ticket) {
-    val job = ticket.job
-    val newJob = job.newWithFailedState.newWithFinishNow
-    jobManager.update(ticket.newWith(newJob))
-    val jobId = newJob.getId
-    //broadcastFinished(jobId)
-    jobManager.move(jobId)(Finished)
-    jobManager.getCommand(jobId.toString) match { // TODO: refactor
-      case Some(found) if found.isInstanceOf[KillJob] =>
-        ticket.client ! Reject(found.asInstanceOf[KillJob].reason)
-      case Some(found) if !found.isInstanceOf[KillJob] => {
-        LOG.warning("Unknown command {} to react for job {}", found,
-                    jobId)
-        ticket.client ! Reject("Job "+jobId.toString+" fails!")
-      }
-      case None => LOG.warning("No matched command for job {} in "+
-                               "reacting to cancelled event!", jobId)
-    }
-  }
 
-  protected[master] def beforeRestart(ticket: Ticket) { }
-    //federator ! AskFor(CheckpointIntegrator.fullName,
-                       //FindLatestCheckpoint(ticket.job.getId))
 
 }
 
@@ -232,6 +220,8 @@ protected[master] trait TaskEventHandler extends EventHandler {
 
 protected[master] class DefaultTaskEventHandler(jobManager: JobManager) 
   extends TaskEventHandler with CommonLog {
+
+  override def manager(): JobManager = jobManager
 
 }
 
