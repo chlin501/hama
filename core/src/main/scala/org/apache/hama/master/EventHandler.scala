@@ -203,8 +203,6 @@ protected[master] class DefaultGroomEventHandler(jobManager: JobManager)
       case false => onlyPassiveTasksFail(host, port, ticket, failedTasks)
     }
 
-
-
 }
 
 protected[master] object TaskEventHandler {
@@ -216,12 +214,30 @@ protected[master] object TaskEventHandler {
 
 protected[master] trait TaskEventHandler extends EventHandler {
 
+  def renew(newest: Task) 
+
 }
 
 protected[master] class DefaultTaskEventHandler(jobManager: JobManager) 
   extends TaskEventHandler with CommonLog {
 
   override def manager(): JobManager = jobManager
+
+  override def renew(newest: Task) = jobManager.ticketAt match {
+    case (s: Some[Stage], t: Some[Ticket]) => t.get.job.update(newest) match {
+      case true => if(t.get.job.allTasksSucceeded) {
+        val newJob = t.get.job.newWithSucceededState.newWithFinishNow
+        jobManager.update(t.get.newWith(newJob))
+        //broadcastFinished(newJob.getId) 
+        jobManager.move(newJob.getId)(Finished)
+        //notifyJobComplete(t.get.client, newJob.getId) 
+      }
+      case false => LOG.warning("Unable to update task {}!", newest.getId)
+    }
+    case _ => LOG.warning("No job existed!")
+  }
+ 
+  
 
 }
 
