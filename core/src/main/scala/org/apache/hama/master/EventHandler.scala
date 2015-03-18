@@ -19,6 +19,8 @@ package org.apache.hama.master
 
 import akka.actor.ActorRef
 import org.apache.hama.SystemInfo
+import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Job.State._
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.master.Directive.Action._
@@ -38,7 +40,7 @@ trait EventHandler {
     val newJob = job.newWithFailedState.newWithFinishNow
     manager.update(ticket.newWith(newJob))
     val jobId = newJob.getId
-    //broadcastFinished(jobId)
+    //broadcastFinished(jobId) TODO: 
     manager.move(jobId)(Finished)
     manager.getCommand(jobId.toString) match { // TODO: refactor
       case Some(found) if found.isInstanceOf[KillJob] =>
@@ -54,7 +56,7 @@ trait EventHandler {
   }
 
   protected[master] def beforeRestart(ticket: Ticket) { }
-    //federator ! AskFor(CheckpointIntegrator.fullName,
+    //federator ! AskFor(CheckpointIntegrator.fullName, TODO: 
                        //FindLatestCheckpoint(ticket.job.getId))
 
 
@@ -193,7 +195,7 @@ protected[master] class DefaultGroomEventHandler(jobManager: JobManager)
     )
     LOG.info("Grooms still alive when passive tasks at {}:{} fail => {}",
               host, port, groomsAlive)
-    //master ! FindGroomsToRestartTasks(groomsAlive)
+    //master ! FindGroomsToRestartTasks(groomsAlive) TODO: 
   }
 
   protected[master] def someTasksFail(host: String, port: Int, ticket: Ticket,
@@ -216,6 +218,8 @@ protected[master] trait TaskEventHandler extends EventHandler {
 
   def renew(newest: Task) 
 
+  def whenTaskFail(taskAttemptId: TaskAttemptID)
+
 }
 
 protected[master] class DefaultTaskEventHandler(jobManager: JobManager) 
@@ -228,16 +232,68 @@ protected[master] class DefaultTaskEventHandler(jobManager: JobManager)
       case true => if(t.get.job.allTasksSucceeded) {
         val newJob = t.get.job.newWithSucceededState.newWithFinishNow
         jobManager.update(t.get.newWith(newJob))
-        //broadcastFinished(newJob.getId) 
-        jobManager.move(newJob.getId)(Finished)
-        //notifyJobComplete(t.get.client, newJob.getId) 
+        //broadcastFinished(newJob.getId)  TODO: 
+        jobManager.move(newJob.getId)(Finished) 
+        //notifyJobComplete(t.get.client, newJob.getId)  TODO: 
       }
       case false => LOG.warning("Unable to update task {}!", newest.getId)
     }
     case _ => LOG.warning("No job existed!")
   }
- 
-  
+
+  override def whenTaskFail(taskAttemptId: TaskAttemptID) = 
+    jobManager.findJobById(taskAttemptId.getJobID) match {
+      case (s: Some[Stage], j: Some[Job]) => j.get.isRecovering match {
+        /**
+         * Directly mark the job as restarting because active tasks can be 
+         * rescheduled to the original groom, which is still online. 
+         */
+        case false => firstTaskFail(s.get, j.get, taskAttemptId)
+        case true => j.get.getState match {
+          case KILLING => j.get.findTaskBy(taskAttemptId) match {
+            case null => throw new RuntimeException("No matched task for "+
+                                                    taskAttemptId)
+            case task@_ => {
+              task.failedState
+              if(j.get.allTasksStopped) jobManager.ticketAt match {
+                case (s: Some[Stage], t: Some[Ticket]) =>
+                  allTasksKilled(t.get) 
+                case _ => throw new RuntimeException("No ticket found!")
+              }
+            }
+          }
+          case RESTARTING => j.get.findTaskBy(taskAttemptId) match { 
+            case null => throw new RuntimeException("No matched task for "+
+                                                    taskAttemptId)
+            case task@_ => {
+              task.failedState
+              if(j.get.allTasksStopped) jobManager.ticketAt match {
+                case (s: Some[Stage], t: Some[Ticket]) => beforeRestart(t.get)
+                case _ => throw new RuntimeException("No ticket found!")
+              }
+            }
+          }
+        }
+      }
+      case _ => LOG.error("No matched job: {}", taskAttemptId.getJobID)
+    }
+
+  protected[master] def firstTaskFail(stage: Stage, job: Job, 
+                                      faultId: TaskAttemptID) {
+    markJobAsRestarting(stage, job)
+    val failed = job.findTaskBy(faultId)
+    if(null == failed)
+      throw new NullPointerException("Not task found with failed id "+
+                                     faultId)
+    failed.failedState
+    val aliveGrooms = toSet[SystemInfo](job.tasksRunAtExcept(failed))
+    //master ! FindTasksAliveGrooms(aliveGrooms) TODO: 
+  }
+
+  protected[master] def markJobAsRestarting(stage: Stage, job: Job) =
+    jobManager.headOf(stage).map { ticket =>
+      jobManager.update(ticket.newWith(job.newWithRestartingState))
+    }
 
 }
 
