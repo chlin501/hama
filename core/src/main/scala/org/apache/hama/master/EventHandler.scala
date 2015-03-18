@@ -25,6 +25,7 @@ import org.apache.hama.master.Directive.Action._
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.util.Utils._
 import scala.collection.JavaConversions._
+
 trait EventHandler 
 
 protected[master] object GroomEventHandler {
@@ -45,6 +46,8 @@ protected[master] trait GroomEventHandler extends EventHandler {
 
   def confirmCancelled(taskAttemptId: String)
 
+  def renew(newest: Task)
+
 }
 
 protected[master] class DefaultGroomEventHandler(jobManager: JobManager) 
@@ -54,6 +57,20 @@ protected[master] class DefaultGroomEventHandler(jobManager: JobManager)
     val host = ref.path.address.host.getOrElse("localhost")
     val port = ref.path.address.port.getOrElse(50000)
     (host, port)
+  }
+
+  override def renew(newest: Task) = jobManager.ticketAt match {
+    case (s: Some[Stage], t: Some[Ticket]) => t.get.job.update(newest) match {
+      case true => if(t.get.job.allTasksSucceeded) {
+        val newJob = t.get.job.newWithSucceededState.newWithFinishNow
+        jobManager.update(t.get.newWith(newJob))
+        //broadcastFinished(newJob.getId) 
+        jobManager.move(newJob.getId)(Finished)
+        //notifyJobComplete(t.get.client, newJob.getId) 
+      }
+      case false => LOG.warning("Unable to update task {}!", newest.getId)
+    }
+    case _ => LOG.warning("No job existed!")
   }
 
   protected[master] def whenAllTasksStopped(ticket: Ticket) = 
