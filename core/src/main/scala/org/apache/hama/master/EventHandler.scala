@@ -17,9 +17,11 @@
  */
 package org.apache.hama.master
 
+import akka.actor.ActorRef
 import org.apache.hama.SystemInfo
 import org.apache.hama.bsp.v2.Job.State._
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.master.Directive.Action._
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.util.Utils._
 import scala.collection.JavaConversions._
@@ -36,12 +38,62 @@ protected[master] trait GroomEventHandler extends EventHandler {
 
   def whenGroomLeave(host: String, port: Int) 
 
+  /**
+   * React to GroomsToKillFound and GroomsToRestartFound.
+   */
+  def cancelTasks(matched: Set[ActorRef], nomatched: Set[String])
+
+  def confirmCancelled(taskAttemptId: String)
+
 }
 
 protected[master] class DefaultGroomEventHandler(jobManager: JobManager) 
   extends GroomEventHandler with CommonLog {
 
-  def whenGroomLeave(host: String, port: Int) = jobManager.ticketAt match {
+  protected[master] def resolve(ref: ActorRef): (String, Int) = {
+    val host = ref.path.address.host.getOrElse("localhost")
+    val port = ref.path.address.port.getOrElse(50000)
+    (host, port)
+  }
+
+  protected[master] def whenAllTasksStopped(ticket: Ticket) = 
+    ticket.job.getState match {
+      case KILLING => allTasksKilled(ticket)
+      case RESTARTING => beforeRestart(ticket)
+    }
+
+  protected[master] def confirm(ticket: Ticket, taskAttemptId: String) = 
+    ticket.job.markCancelledWith(taskAttemptId) match { 
+      case true => if(ticket.job.allTasksStopped) whenAllTasksStopped(ticket)
+      case false => LOG.error("Unable to mark task {} killed!", taskAttemptId)
+    }
+
+  override def confirmCancelled(taskAttemptId: String) = 
+    jobManager.ticketAt match {
+      case (stage: Some[Stage], t: Some[Ticket]) => 
+        confirm(t.get, taskAttemptId)
+      case _ => LOG.error("No ticket found at any Stage!")
+    }
+
+  override def cancelTasks(matched: Set[ActorRef], nomatched: Set[String]) =
+    nomatched.isEmpty match {
+      // TODO: kill tasks where grooms alive
+      case true => LOG.error("Some grooms {} not found!", 
+                             nomatched.mkString(","))  
+      case false => jobManager.ticketAt match {
+        case (s: Some[Stage], t: Some[Ticket]) => matched.foreach( ref => {
+          val (host, port) = resolve(ref)
+          t.get.job.findTasksBy(host, port).foreach ( task => 
+            if(!task.isFailed) ref ! new Directive(Cancel, task, "master") 
+          )
+        })
+        case (s@_, t@_) => throw new RuntimeException("Invalid stage "+s+
+                                                      " or ticket "+t+"!")
+      }
+    }
+
+  override def whenGroomLeave(host: String, 
+                              port: Int) = jobManager.ticketAt match {
     case (s: Some[Stage], t: Some[Ticket]) => t.get.job.isRecovering match {
       case false => toList(t.get.job.findTasksBy(host, port)) match {
         case list if list.isEmpty => 
@@ -147,8 +199,6 @@ protected[master] class DefaultGroomEventHandler(jobManager: JobManager)
   protected[master] def beforeRestart(ticket: Ticket) { }
     //federator ! AskFor(CheckpointIntegrator.fullName,
                        //FindLatestCheckpoint(ticket.job.getId))
-
-
 
 }
 
