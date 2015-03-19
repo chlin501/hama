@@ -19,30 +19,75 @@ package org.apache.hama.master
 
 import akka.actor.ActorRef
 import org.apache.hama.SystemInfo
+import org.apache.hama.bsp.BSPJobID
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Job.State._
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.master.Directive.Action._
+import org.apache.hama.client.JobComplete
+import org.apache.hama.conf.Setting
 import org.apache.hama.logging.CommonLog
+import org.apache.hama.master.Directive.Action._
+import org.apache.hama.monitor.master.CheckpointIntegrator
 import org.apache.hama.util.Utils._
 import scala.collection.JavaConversions._
 
-trait EventHandler {
+object PlannerEventHandler {
+
+  def create(setting: Setting, jobManager: JobManager, master: ActorRef,
+             federator: ActorRef): PlannerEventHandler = 
+    new DefaultPlannerEventHandler(setting, jobManager, master, federator)
+
+}
+
+trait PlannerEventHandler {
+
+  /**
+   * Groom leave event.
+   */
+  def whenGroomLeave(host: String, port: Int) 
+
+  /**
+   * Groom leave event.
+   * React to GroomsToKillFound and GroomsToRestartFound.
+   */
+  def cancelTasks(matched: Set[ActorRef], nomatched: Set[String])
+
+  /**
+   * Update task information.
+   */
+  def renew(newest: Task) 
+
+  /**
+   * Task failure event.
+   */
+  def whenTaskFail(taskAttemptId: TaskAttemptID)
+
+  /**
+   * Reply to FindTasksAliveGrooms message.
+   */
+  def tasksAliveAt(grooms: Set[ActorRef])
+
+}
+
+protected[master] class DefaultPlannerEventHandler(setting: Setting, 
+  jobManager: JobManager, master: ActorRef, federator: ActorRef) 
+  extends PlannerEventHandler with CommonLog {
 
   type Host = String
   type Port = Int
 
-  protected def manager(): JobManager
+  protected def broadcastFinished(jobId: BSPJobID) =  
+    federator ! JobFinishedMessage(jobId) 
 
-  protected[master] def allTasksKilled(ticket: Ticket) {
+  protected def allTasksKilled(ticket: Ticket) {
     val job = ticket.job
     val newJob = job.newWithFailedState.newWithFinishNow
-    manager.update(ticket.newWith(newJob))
+    jobManager.update(ticket.newWith(newJob))
     val jobId = newJob.getId
-    //broadcastFinished(jobId) TODO: 
-    manager.move(jobId)(Finished)
-    manager.getCommand(jobId.toString) match { // TODO: refactor
+    broadcastFinished(jobId) 
+    jobManager.move(jobId)(Finished)
+    jobManager.getCommand(jobId.toString) match { // TODO: refactor
       case Some(found) if found.isInstanceOf[KillJob] =>
         ticket.client ! Reject(found.asInstanceOf[KillJob].reason)
       case Some(found) if !found.isInstanceOf[KillJob] => {
@@ -55,54 +100,28 @@ trait EventHandler {
     }
   }
 
-  protected[master] def beforeRestart(ticket: Ticket) { }
-    //federator ! AskFor(CheckpointIntegrator.fullName, TODO: 
-                       //FindLatestCheckpoint(ticket.job.getId))
+  protected def beforeRestart(ticket: Ticket) =
+    federator ! AskFor(CheckpointIntegrator.fullName, 
+                       FindLatestCheckpoint(ticket.job.getId))
 
-
-  protected[master] def whenAllTasksStopped(ticket: Ticket) = 
+  protected def whenAllTasksStopped(ticket: Ticket) = 
     ticket.job.getState match {
       case KILLING => allTasksKilled(ticket)
       case RESTARTING => beforeRestart(ticket)
     }
 
   // when receiving task cancelled event in planner. 
-  protected[master] def cancelled(ticket: Ticket, taskAttemptId: String) = 
+  protected def cancelled(ticket: Ticket, taskAttemptId: String) = 
     ticket.job.markCancelledWith(taskAttemptId) match { 
       case true => if(ticket.job.allTasksStopped) whenAllTasksStopped(ticket)
       case false => LOG.error("Unable to mark task {} killed!", taskAttemptId)
     }
 
-  protected[master] def resolve(ref: ActorRef): (Host, Port) = {
+  protected def resolve(ref: ActorRef): (Host, Port) = {
     val host = ref.path.address.host.getOrElse("localhost")
     val port = ref.path.address.port.getOrElse(50000)
     (host, port)
   }
-
-}
-
-protected[master] object GroomEventHandler {
-
-  protected[master] def create(jobManager: JobManager): GroomEventHandler = 
-    new DefaultGroomEventHandler(jobManager)
-
-} 
-
-protected[master] trait GroomEventHandler extends EventHandler {
-
-  def whenGroomLeave(host: String, port: Int) 
-
-  /**
-   * React to GroomsToKillFound and GroomsToRestartFound.
-   */
-  def cancelTasks(matched: Set[ActorRef], nomatched: Set[String])
-
-}
-
-protected[master] class DefaultGroomEventHandler(jobManager: JobManager) 
-  extends GroomEventHandler with CommonLog {
-
-  override def manager(): JobManager = jobManager
 
   override def cancelTasks(matched: Set[ActorRef], nomatched: Set[String]) =
     nomatched.isEmpty match {
@@ -165,9 +184,8 @@ protected[master] class DefaultGroomEventHandler(jobManager: JobManager)
                         host, port)
   } 
 
-  protected[master] def whenActiveTasksFail(host: String, port: Int, 
-                                            ticket: Ticket, 
-                                            failedTasks: java.util.List[Task]) {
+  protected def whenActiveTasksFail(host: String, port: Int, ticket: Ticket, 
+                                    failedTasks: java.util.List[Task]) {
     val killing = ticket.job.newWithKillingState
     jobManager.update(ticket.newWith(killing))
     failedTasks.foreach( task => task.failedState)
@@ -178,12 +196,11 @@ protected[master] class DefaultGroomEventHandler(jobManager: JobManager)
     )
     LOG.debug("Grooms still alive when active tasks {}:{} fail => {}",
               host, port, groomsAlive)
-    //master ! FindGroomsToKillTasks(groomsAlive) TODO: 
+    master ! FindGroomsToKillTasks(groomsAlive) 
   }
 
-  protected[master] def onlyPassiveTasksFail(host: String, port: Int, 
-                                             ticket: Ticket,
-                                             failedTasks: java.util.List[Task]){
+  protected def onlyPassiveTasksFail(host: String, port: Int, ticket: Ticket,
+                                     failedTasks: java.util.List[Task]){
     val restarting = ticket.job.newWithRestartingState
     jobManager.update(ticket.newWith(restarting))
     failedTasks.foreach( task => task.failedState)
@@ -195,46 +212,24 @@ protected[master] class DefaultGroomEventHandler(jobManager: JobManager)
     )
     LOG.info("Grooms still alive when passive tasks at {}:{} fail => {}",
               host, port, groomsAlive)
-    //master ! FindGroomsToRestartTasks(groomsAlive) TODO: 
+    master ! FindGroomsToRestartTasks(groomsAlive) 
   }
 
-  protected[master] def someTasksFail(host: String, port: Int, ticket: Ticket,
-                                      stage: Stage, failedTasks: List[Task]) =
+  protected def someTasksFail(host: String, port: Int, ticket: Ticket,
+                              stage: Stage, failedTasks: List[Task]) =
     failedTasks.exists(task => task.isActive) match {
       case true => whenActiveTasksFail(host, port, ticket, failedTasks)
       case false => onlyPassiveTasksFail(host, port, ticket, failedTasks)
     }
-
-}
-
-protected[master] object TaskEventHandler {
-
-  protected[master] def create(jobManager: JobManager): TaskEventHandler = 
-    new DefaultTaskEventHandler(jobManager)
-
-}
-
-protected[master] trait TaskEventHandler extends EventHandler {
-
-  def renew(newest: Task) 
-
-  def whenTaskFail(taskAttemptId: TaskAttemptID)
-
-}
-
-protected[master] class DefaultTaskEventHandler(jobManager: JobManager) 
-  extends TaskEventHandler with CommonLog {
-
-  override def manager(): JobManager = jobManager
 
   override def renew(newest: Task) = jobManager.ticketAt match {
     case (s: Some[Stage], t: Some[Ticket]) => t.get.job.update(newest) match {
       case true => if(t.get.job.allTasksSucceeded) {
         val newJob = t.get.job.newWithSucceededState.newWithFinishNow
         jobManager.update(t.get.newWith(newJob))
-        //broadcastFinished(newJob.getId)  TODO: 
+        broadcastFinished(newJob.getId)  
         jobManager.move(newJob.getId)(Finished) 
-        //notifyJobComplete(t.get.client, newJob.getId)  TODO: 
+        notifyJobComplete(t.get.client, newJob.getId)  
       }
       case false => LOG.warning("Unable to update task {}!", newest.getId)
     }
@@ -278,7 +273,7 @@ protected[master] class DefaultTaskEventHandler(jobManager: JobManager)
       case _ => LOG.error("No matched job: {}", taskAttemptId.getJobID)
     }
 
-  protected[master] def firstTaskFail(stage: Stage, job: Job, 
+  protected def firstTaskFail(stage: Stage, job: Job, 
                                       faultId: TaskAttemptID) {
     markJobAsRestarting(stage, job)
     val failed = job.findTaskBy(faultId)
@@ -287,13 +282,30 @@ protected[master] class DefaultTaskEventHandler(jobManager: JobManager)
                                      faultId)
     failed.failedState
     val aliveGrooms = toSet[SystemInfo](job.tasksRunAtExcept(failed))
-    //master ! FindTasksAliveGrooms(aliveGrooms) TODO: 
+    master ! FindTasksAliveGrooms(aliveGrooms) 
   }
 
-  protected[master] def markJobAsRestarting(stage: Stage, job: Job) =
+  protected def markJobAsRestarting(stage: Stage, job: Job) =
     jobManager.headOf(stage).map { ticket =>
       jobManager.update(ticket.newWith(job.newWithRestartingState))
     }
+
+  override def tasksAliveAt(grooms: Set[ActorRef]) = jobManager.ticketAt match {
+    case (s: Some[Stage], t: Some[Ticket]) => tasksAliveGroomsFound(grooms, 
+      t.get.job)
+    case (s@_, t@_) => LOG.error("Invalid stage {} or ticket {}!", s, t)
+  }
+
+  protected def tasksAliveGroomsFound(grooms: Set[ActorRef], job: Job) = 
+    grooms.foreach( groom => {
+      val (host, port) = resolve(groom)
+      job.findTasksBy(host, port).foreach ( task => if(!task.isFailed) 
+        groom ! new Directive(Cancel, task, setting.name)
+      )
+    })
+
+  protected def notifyJobComplete(client: ActorRef, jobId: BSPJobID) =
+    client ! JobComplete(jobId)
 
 }
 
