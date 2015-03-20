@@ -24,6 +24,7 @@ import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Job.State._
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.bsp.v2.TaskMaxAttemptedException
 import org.apache.hama.client.JobComplete
 import org.apache.hama.conf.Setting
 import org.apache.hama.logging.CommonLog
@@ -31,12 +32,16 @@ import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.master.CheckpointIntegrator
 import org.apache.hama.util.Utils._
 import scala.collection.JavaConversions._
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 object PlannerEventHandler {
 
   def create(setting: Setting, jobManager: JobManager, master: ActorRef,
-             federator: ActorRef): PlannerEventHandler = 
-    new DefaultPlannerEventHandler(setting, jobManager, master, federator)
+             federator: ActorRef, scheduler: Scheduler): PlannerEventHandler = 
+    new DefaultPlannerEventHandler(setting, jobManager, master, federator,
+                                   scheduler)
 
 }
 
@@ -68,11 +73,16 @@ trait PlannerEventHandler {
    */
   def tasksAliveAt(grooms: Set[ActorRef])
 
+  /**
+   * Ask federator for the latest checkpoint.
+   */
+  def whenRestart(jobId: BSPJobID, latest: Long)
+
 }
 
 protected[master] class DefaultPlannerEventHandler(setting: Setting, 
-  jobManager: JobManager, master: ActorRef, federator: ActorRef) 
-  extends PlannerEventHandler with CommonLog {
+  jobManager: JobManager, master: ActorRef, federator: ActorRef, 
+  scheduler: Scheduler) extends PlannerEventHandler with CommonLog {
 
   type Host = String
   type Port = Int
@@ -307,5 +317,46 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
   protected def notifyJobComplete(client: ActorRef, jobId: BSPJobID) =
     client ! JobComplete(jobId)
 
+  override def whenRestart(jobId: BSPJobID, latest: Long) =
+    Try(updateJob(jobId, latest)) match {
+      case Success(ticket) => if(scheduler.examine(ticket)) 
+        scheduler.findGroomsFor(ticket, master)
+      case Failure(cause) => cause match {
+        case e: TaskMaxAttemptedException =>
+          jobManager.findTicketById(jobId) match {
+            case (s: Some[Stage], t: Some[Ticket]) => {
+              jobManager.update(t.get.newWith(t.get.job.newWithFailedState))
+              jobManager.move(jobId)(Finished)
+              t.get.client ! Reject(e.toString)
+            }
+            case _ => throw new RuntimeException("Can't find job "+jobId+
+                                                 " when updating job data.")
+          }
+        case e: Exception => throw e
+      }
+    }
+
+  protected def updateJob(jobId: BSPJobID, latest: Long): Ticket = {
+    jobManager.findTicketById(jobId) match {
+      case (s: Some[Stage], t: Some[Ticket]) => {
+        val jobWithLatestCheckpoint = t.get.job.newWithSuperstepCount(latest)
+        jobWithLatestCheckpoint.allTasks.map { task =>
+          jobWithLatestCheckpoint.newAttemptTask(task.withIdIncremented.
+                                                      newWithSuperstep(latest).
+                                                      newWithWaitingState.
+                                                      newWithRevoke)
+        }
+        val newTicket = t.get.newWith(jobWithLatestCheckpoint)
+        jobManager.update(newTicket)
+        jobManager.move(jobId)(TaskAssign) match {
+          case true => newTicket
+          case false => throw new RuntimeException("Unable to move job "+jobId)
+        }
+      }
+      case _ => throw new RuntimeException("Can't find job "+jobId+" when "+
+                                           "updating job data.")
+    }
+  }
+ 
 }
 

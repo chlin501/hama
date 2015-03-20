@@ -59,17 +59,14 @@ trait Scheduler {
 protected[master] class DefaultScheduler(jobManager: JobManager) 
       extends Scheduler with CommonLog {
 
-  override def receive(ticket: Ticket) {
-    jobManager.rewindToBeforeSchedule
-    jobManager.enqueue(ticket) 
-  }
+  override def receive(ticket: Ticket) = jobManager.enqueue(ticket) 
 
   override def examine(ticket: Ticket): Boolean = 
     ticket.job.targetGrooms match {
       case null | _ if ticket.job.targetGrooms.isEmpty => {
         jobManager.markScheduleFinished; false
       }
-      case _ => true
+      case _ => { jobManager.rewindToBeforeSchedule; true }
     } 
 
   override def findGroomsFor(ticket: Ticket, master: ActorRef) { 
@@ -81,7 +78,6 @@ protected[master] class DefaultScheduler(jobManager: JobManager)
 
   protected[master] def validate(job: Job, actual: Array[ActorRef]): Boolean = 
     job.targetInfos.size == actual.size
-
 
   protected[master] def before(to: ActorRef, task: Task): (ActorRef, Task) = {
     val (host, port) = resolve(to)
