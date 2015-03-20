@@ -38,10 +38,19 @@ import scala.util.Try
 
 object PlannerEventHandler {
 
+  val default = classOf[DefaultPlannerEventHandler]
+
   def create(setting: Setting, jobManager: JobManager, master: ActorRef,
-             federator: ActorRef, scheduler: Scheduler): PlannerEventHandler = 
-    new DefaultPlannerEventHandler(setting, jobManager, master, federator,
-                                   scheduler)
+             federator: ActorRef, scheduler: Scheduler): PlannerEventHandler = {
+    val cls = setting.hama.getClass("master.planner.handler", default,
+                                    classOf[PlannerEventHandler])
+    Try(cls.getConstructor(classOf[Setting], classOf[JobManager], 
+      classOf[ActorRef], classOf[ActorRef], classOf[Scheduler]). 
+      newInstance(setting, jobManager, master, federator, scheduler)) match {
+      case Success(instance) => instance
+      case Failure(cause) => throw cause
+    }
+  }
 
 }
 

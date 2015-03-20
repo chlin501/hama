@@ -35,7 +35,8 @@ object Scheduler {
 
   // TODO: change conf to setting; unify instance creation
   def create(conf: HamaConfiguration, jobManager: JobManager): Scheduler = {
-    val cls = conf.getClass("scheduler.class", default, classOf[Scheduler])
+    val cls = conf.getClass("master.scheduler.class", default, 
+                            classOf[Scheduler])
     Try(cls.getConstructor(classOf[JobManager]).newInstance(jobManager)) match {
       case Success(instance) => instance
       case Failure(cause) => throw cause

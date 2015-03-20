@@ -37,7 +37,7 @@ object Assigner {
    */
   // TODO: change conf to setting. unify instance creation
   def create(conf: HamaConfiguration, jobManager: JobManager): Assigner = {
-    val cls = conf.getClass("assigner.class", default, classOf[Assigner])
+    val cls = conf.getClass("master.assigner.class", default, classOf[Assigner])
     Try(cls.getConstructor(classOf[JobManager]).newInstance(jobManager)) match {
       case Success(instance) => instance
       case Failure(cause) => throw cause 

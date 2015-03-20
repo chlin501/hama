@@ -88,7 +88,8 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
 
   def config: HamaConfiguration = {
     val conf = new HamaConfiguration
-    conf.setClass("scheduler.class", classOf[MockScheduler], classOf[Scheduler])
+    conf.setClass("master.scheduler.class", classOf[MockScheduler], 
+                  classOf[Scheduler])
     conf
   }
 
