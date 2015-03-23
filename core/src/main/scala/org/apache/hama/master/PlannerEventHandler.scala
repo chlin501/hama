@@ -145,14 +145,13 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
   override def cancelTasks(matched: Set[ActorRef], nomatched: Set[String]) =
     nomatched.isEmpty match {
       // TODO: kill tasks where grooms alive
-      case true => LOG.error("Some grooms {} not found!", 
-                             nomatched.mkString(","))  
-      case false => jobManager.ticketAt match {
+      case false => LOG.error("Grooms {} not found!", nomatched.mkString(","))  
+      case true => jobManager.ticketAt match {
         case (s: Some[Stage], t: Some[Ticket]) => matched.foreach( ref => {
           val (host, port) = resolve(ref)
-          t.get.job.findTasksBy(host, port).foreach ( task => 
+          t.get.job.findTasksBy(host, port).foreach ( task => {
             if(!task.isFailed) ref ! new Directive(Cancel, task, "master") 
-          )
+          })
         })
         case (s@_, t@_) => throw new RuntimeException("Invalid stage "+s+
                                                       " or ticket "+t+"!")
@@ -224,7 +223,7 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
     jobManager.update(ticket.newWith(restarting))
     failedTasks.foreach( task => task.failedState)
     val infos = ticket.job.tasksRunAt
-    LOG.debug("Grooms on which tasks are currently running: {}. "+
+    LOG.debug("Tasks are currently running on {}. "+
              "And failed groom: {}:{}", infos.mkString(", "), host, port)
     val groomsAlive = toSet[SystemInfo](infos).filterNot( info =>
       ( host + port ).equals( info.getHost + info.getPort )

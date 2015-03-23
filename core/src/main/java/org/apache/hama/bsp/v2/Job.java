@@ -49,10 +49,6 @@ public final class Job implements Writable {
   /* Id for this job. */
   private BSPJobID id;
 
-/* The lastest superstep was successfully snapshotted. 
-  private IntWritable lastCheckpoint = new IntWritable(0);  
-*/
-
   /* Denote current job state. */
   private State state = State.PREP;
 
@@ -127,9 +123,6 @@ public final class Job implements Writable {
 
     private BSPJobID id; 
     private HamaConfiguration conf = new HamaConfiguration(); 
-/*
-    private int lastCheckpoint;
-*/
     private State state = State.PREP;
     private long progress;
     private long setupProgress;
@@ -156,9 +149,6 @@ public final class Job implements Writable {
                                            "values.");
       this.id = old.getId();
       this.conf = old.getConfiguration(); 
-/*
-      this.lastCheckpoint = old.getLastCheckpoint();
-*/
       this.state = old.getState();
       this.progress = old.getProgress();
       this.setupProgress = old.getSetupProgress();
@@ -196,13 +186,6 @@ public final class Job implements Writable {
         conf.set("bsp.jar", localJarFilePath);
       return this;
     }
-
-/*
-    public Builder setLastCheckpoint(final int lastCheckpoint) {
-      this.lastCheckpoint = lastCheckpoint;
-      return this;
-    }
-*/
 
     public Builder setNumBSPTasks(final int numBSPTasks) {
       if(1 < numBSPTasks) conf.setInt("bsp.peers.num", numBSPTasks);
@@ -364,9 +347,6 @@ public final class Job implements Writable {
 
     public Job build() {
       return new Job(id, 
-/*
-                     lastCheckpoint, 
-*/
                      state,
                      progress,
                      setupProgress,
@@ -387,9 +367,6 @@ public final class Job implements Writable {
   Job() {} // for Writable
 
   public Job(final BSPJobID id,
-/*
-             final int lastCheckpoint,
-*/
              final State state,
              final long progress,
              final long setupProgress,
@@ -403,14 +380,6 @@ public final class Job implements Writable {
     if(null == this.id) 
       throw new IllegalArgumentException("BSPJobID is not provided.");
     this.conf = (null == conf)? new HamaConfiguration(): conf;
-
-/*
-    if(0 < lastCheckpoint) {
-      this.lastCheckpoint = new IntWritable(lastCheckpoint);
-    } else {
-      this.lastCheckpoint = new IntWritable(0);
-    }
-*/
 
     this.state = state;
     if(null == this.state)
@@ -465,16 +434,6 @@ public final class Job implements Writable {
   public String getLocalJarFile() {
     return conf.get("bsp.jar");
   }
-
-/*
-  public int getLastCheckpoint() {
-    return this.lastCheckpoint.get();
-  }
-
-  public Job newWithLastCheckpoint(final int lastCheckpoint) {
-    return new Builder(this).setLastCheckpoint(lastCheckpoint).build(); 
-  }
-*/
 
   /**
    * Get the number of BSP tasks to run; default set to 1.
@@ -690,23 +649,6 @@ public final class Job implements Writable {
     return table().allTasks();
   }
 
-  /**
-   * Tasktable:  
-   * - Create a new task, with attempt id incremented, based on the old one.
-   * - Reset task to waiting state.
-   * - Revoke host port value from previously scheduled groom server.
-   * - Append the new task to the end of corresponded column.
-   * - Mark the old task as failure.
-  public Task rearrange(final Task old) {
-    final Task newTask = old.withIdIncremented(); 
-    newTask.waitingState();
-    newTask.revoke();
-    table().add(newTask);
-    old.failedState();
-    return newTask;
-  }
-   */
-
   public Job newAttemptTask(final Task idIncremented) {
     if(idIncremented.getId().getId() > getMaxTaskAttempts()) 
       throw new TaskMaxAttemptedException(getId(), getMaxTaskAttempts());
@@ -806,9 +748,6 @@ public final class Job implements Writable {
   @Override
   public void write(DataOutput out) throws IOException {
     id.write(out);
-/*
-    lastCheckpoint.write(out);
-*/
     WritableUtils.writeEnum(out, state);
     progress.write(out);
     setupProgress.write(out);
@@ -829,10 +768,6 @@ public final class Job implements Writable {
   public void readFields(DataInput in) throws IOException {
     this.id = new BSPJobID();
     this.id.readFields(in);
-/*
-    this.lastCheckpoint = new IntWritable(0);
-    this.lastCheckpoint.readFields(in);
-*/
     this.state = WritableUtils.readEnum(in, State.class);
     this.progress = new LongWritable();
     this.progress.readFields(in);
@@ -884,9 +819,6 @@ public final class Job implements Writable {
     return "Job("+ id.toString()+ "," +
                    getName() + "," +
                    getUser() + "," + 
-/*
-                   lastCheckpoint.toString() + "," +
-*/
                    getNumBSPTasks() + "," +
                    getMaster() + "," +
                    getMaxTaskAttempts() + "," +
