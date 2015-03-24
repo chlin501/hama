@@ -21,6 +21,7 @@ import akka.actor.ActorRef
 import org.apache.hama.Mock
 import org.apache.hama.TestEnv
 import org.apache.hama.bsp.v2.Task
+import org.apache.hama.bsp.v2.Task.State._
 import org.apache.hama.conf.Setting
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
@@ -138,6 +139,11 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
   val host4 = "groom4"
   val port4 = 4444
 
+  val hostPortMatched = true
+
+  val active = true
+  val passive = false
+
   def activeGrooms(): Array[String] = Array(host1+":"+port1, host2+":"+port2)
 
   it("test planner groom and task event.") {
@@ -168,11 +174,26 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     val groom3 = createWithArgs("groom3", classOf[Groom3], tester)
     val groom4 = createWithArgs("groom4", classOf[Groom4], tester)
     val matched = Set(groom2, groom3, groom4) 
+
     planner.cancelTasks(matched, Set[String]())
 
-    expectAnyOf(D1(Cancel, true, true), D1(Cancel, true, false), D1(Cancel, true, false))
-    expectAnyOf(D1(Cancel, true, true), D1(Cancel, true, false), D1(Cancel, true, false))
-    expectAnyOf(D1(Cancel, true, true), D1(Cancel, true, false), D1(Cancel, true, false))
+    expectAnyOf(D1(Cancel, hostPortMatched, active), 
+                D1(Cancel, hostPortMatched, passive), 
+                D1(Cancel, hostPortMatched, passive))
+    expectAnyOf(D1(Cancel, hostPortMatched, active), 
+                D1(Cancel, hostPortMatched, passive), 
+                D1(Cancel, hostPortMatched, passive))
+    expectAnyOf(D1(Cancel, hostPortMatched, active), 
+                D1(Cancel, hostPortMatched, passive), 
+                D1(Cancel, hostPortMatched, passive))
+   
+    val newTask3 = tasks(3).newWithCancelledState
+    planner.renew(newTask3)
+    val newTasks = job.findTasksBy(host4, port4)
+    assert(null != newTasks && 1 == newTasks.size)
+    LOG.info("Updated task {}", newTasks(0))
+    assert(CANCELLED.equals(newTasks(0).getState))
+
     LOG.info("Done testing Planner event handler!")    
   }
   
