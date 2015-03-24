@@ -189,10 +189,18 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
    
     val newTask3 = tasks(3).newWithCancelledState
     planner.renew(newTask3)
+
     val newTasks = job.findTasksBy(host4, port4)
     assert(null != newTasks && 1 == newTasks.size)
     LOG.info("Updated task {}", newTasks(0))
     assert(CANCELLED.equals(newTasks(0).getState))
+
+    val oldTasks = job.findTasksNotIn(host4, port4)
+    assert(null != oldTasks && 3 == oldTasks.size)
+    oldTasks.foreach( oldTask => oldTask.getId.getTaskID.getId match {
+      case 1 => assert(FAILED.equals(oldTask.getState)) 
+      case _ => assert(WAITING.equals(oldTask.getState))
+    })
 
     LOG.info("Done testing Planner event handler!")    
   }
