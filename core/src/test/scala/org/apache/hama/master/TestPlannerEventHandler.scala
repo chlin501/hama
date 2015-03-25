@@ -26,12 +26,12 @@ import org.apache.hama.bsp.v2.Task.State._
 import org.apache.hama.conf.Setting
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
+import org.apache.hama.monitor.master.CheckpointIntegrator
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
-case class Msg(msg: String)
 case class D1(action: Action, hostPortMatched: Boolean, active: Boolean)
 
 trait Helper { 
@@ -123,7 +123,7 @@ class MockMaster3(tester: ActorRef) extends Mock {
 class MockFederator1(tester: ActorRef) extends Mock {
 
   def msgs: Receive = {
-    case Msg(msg) => 
+    case askFor: AskFor => tester ! askFor
   } 
 
   override def receive = msgs orElse super.receive 
@@ -314,6 +314,9 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     planner.cancelled(ticket(jobManager), tasks(6).getId.toString)  
     allTasksStopped(jobManager, 7)
 
+    expect(AskFor(CheckpointIntegrator.fullName,
+                  FindLatestCheckpoint(job.getId)))
+
 /*
 
   
@@ -340,7 +343,7 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     }
 */
     
-    LOG.info("Done testing Planner event handler!")    
+    LOG.info("Done testing Planner event handler!")
   }
   
 }
