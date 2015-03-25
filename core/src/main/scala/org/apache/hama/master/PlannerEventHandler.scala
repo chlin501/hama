@@ -59,13 +59,18 @@ trait PlannerEventHandler {
   /**
    * Groom leave event.
    */
-  def whenGroomLeave(host: String, port: Int) 
+  def whenGroomLeaves(host: String, port: Int) 
 
   /**
    * Groom leave event.
    * React to GroomsToKillFound and GroomsToRestartFound.
    */
   def cancelTasks(matched: Set[ActorRef], nomatched: Set[String])
+
+  /**
+   * This happens when a groom replies the running task is cancelled.
+   */
+  def cancelled(ticket: Ticket, taskAttemptId: String)
 
   /**
    * Update task information.
@@ -75,7 +80,7 @@ trait PlannerEventHandler {
   /**
    * Task failure event.
    */
-  def whenTaskFail(taskAttemptId: TaskAttemptID)
+  def whenTaskFails(taskAttemptId: TaskAttemptID)
 
   /**
    * Reply to FindTasksAliveGrooms message.
@@ -129,8 +134,7 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
       case RESTARTING => beforeRestart(ticket)
     }
 
-  // when receiving task cancelled event in planner. 
-  protected def cancelled(ticket: Ticket, taskAttemptId: String) = 
+  override def cancelled(ticket: Ticket, taskAttemptId: String) = 
     ticket.job.markCancelledWith(taskAttemptId) match { 
       case true => if(ticket.job.allTasksStopped) whenAllTasksStopped(ticket)
       case false => LOG.error("Unable to mark task {} killed!", taskAttemptId)
@@ -158,7 +162,7 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
       }
     }
 
-  override def whenGroomLeave(host: String, 
+  override def whenGroomLeaves(host: String, 
                               port: Int) = jobManager.ticketAt match {
     case (s: Some[Stage], t: Some[Ticket]) => t.get.job.isRecovering match {
       case false => toList(t.get.job.findTasksBy(host, port)) match {
@@ -254,14 +258,14 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
     case _ => LOG.warning("No job existed!")
   }
 
-  override def whenTaskFail(taskAttemptId: TaskAttemptID) = 
+  override def whenTaskFails(taskAttemptId: TaskAttemptID) = 
     jobManager.findJobById(taskAttemptId.getJobID) match {
       case (s: Some[Stage], j: Some[Job]) => j.get.isRecovering match {
         /**
          * Directly mark the job as restarting because active tasks can be 
          * rescheduled to the original groom, which is still online. 
          */
-        case false => firstTaskFail(s.get, j.get, taskAttemptId)
+        case false => firstTaskFails(s.get, j.get, taskAttemptId)
         case true => j.get.getState match {
           case KILLING => j.get.findTaskBy(taskAttemptId) match {
             case null => throw new RuntimeException("No matched task for "+
@@ -291,13 +295,11 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
       case _ => LOG.error("No matched job: {}", taskAttemptId.getJobID)
     }
 
-  protected def firstTaskFail(stage: Stage, job: Job, 
-                                      faultId: TaskAttemptID) {
+  protected def firstTaskFails(stage: Stage, job: Job, faultId: TaskAttemptID) {
     markJobAsRestarting(stage, job)
     val failed = job.findTaskBy(faultId)
     if(null == failed)
-      throw new NullPointerException("Not task found with failed id "+
-                                     faultId)
+      throw new NullPointerException("Not task found with failed id "+ faultId)
     failed.failedState
     val aliveGrooms = toSet[SystemInfo](job.tasksRunAtExcept(failed))
     master ! FindTasksAliveGrooms(aliveGrooms) 
