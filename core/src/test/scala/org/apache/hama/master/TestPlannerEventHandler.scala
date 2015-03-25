@@ -193,6 +193,29 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
 
   def bind(host: String, port: Int): String = host + ":" + port
 
+  def verify(manager: JobManager, f:(Stage, Ticket) => Boolean) = 
+    manager.ticketAt match {
+      case (s: Some[Stage], t: Some[Ticket]) => assert(f(s.get, t.get))
+      case _ => throw new RuntimeException("Invalid ticket or stage!")
+    }
+
+  def ticket(jobManager: JobManager): Ticket = jobManager.ticketAt match {
+    case (s: Some[Stage], t: Some[Ticket]) => t.get
+    case _ => throw new RuntimeException("Invalid ticket or stage!")
+  }
+
+  def notAllTasksStopped(mgr: JobManager, n: Int) = verify(mgr, { (s, t) => {
+    val notAllStopped = !t.job.allTasksStopped
+    LOG.info("Check task #{}, not all task stopped? {}", n, notAllStopped)
+    notAllStopped 
+  }})
+
+  def allTasksStopped(mgr: JobManager, n: Int) = verify(mgr, { (s, t) => {
+    val allStopped = t.job.allTasksStopped
+    LOG.info("Check task #{}, all task stopped? {}", n, allStopped)
+    allStopped 
+  }})
+
   it("test planner groom and task event.") {
     val setting = Setting.master
     val jobManager = JobManager.create
@@ -233,11 +256,8 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     expectAnyOf(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
                 hostPort6, hostPort7)
 
-    jobManager.ticketAt match {
-      case (s: Some[Stage], t: Some[Ticket]) => assert(t.get.job.isRecovering &&
-        RESTARTING.equals(t.get.job.getState))
-      case _ => throw new RuntimeException("Invalid ticket or stage!")
-    }
+    verify(jobManager, { (s, t) => t.job.isRecovering && 
+      RESTARTING.equals(t.job.getState) })
 
     val groom1 = createWithArgs("groom1", classOf[Groom1], tester)
     val groom2 = createWithArgs("groom2", classOf[Groom2], tester)
@@ -278,6 +298,21 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
                 D1(Cancel, m, passive), D1(Cancel, m, passive),
                 D1(Cancel, m, passive), D1(Cancel, m, passive),
                 D1(Cancel, m, passive)) 
+   
+    planner.cancelled(ticket(jobManager), tasks(0).getId.toString)  
+    notAllTasksStopped(jobManager, 1)
+    planner.cancelled(ticket(jobManager), tasks(1).getId.toString)  
+    notAllTasksStopped(jobManager, 2)
+    planner.cancelled(ticket(jobManager), tasks(2).getId.toString)  
+    notAllTasksStopped(jobManager, 3)
+    planner.cancelled(ticket(jobManager), tasks(3).getId.toString)  
+    notAllTasksStopped(jobManager, 4)
+    planner.cancelled(ticket(jobManager), tasks(4).getId.toString)  
+    notAllTasksStopped(jobManager, 5)
+    planner.cancelled(ticket(jobManager), tasks(5).getId.toString)  
+    notAllTasksStopped(jobManager, 6)
+    planner.cancelled(ticket(jobManager), tasks(6).getId.toString)  
+    allTasksStopped(jobManager, 7)
 
 /*
 
