@@ -204,15 +204,15 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     case _ => throw new RuntimeException("Invalid ticket or stage!")
   }
 
-  def notAllTasksStopped(mgr: JobManager, n: Int) = verify(mgr, { (s, t) => {
+  def notAllTasksStopped(mgr: JobManager, idx: Int) = verify(mgr, { (s, t) => {
     val notAllStopped = !t.job.allTasksStopped
-    LOG.info("Check task #{}, not all task stopped? {}", n, notAllStopped)
+    LOG.info("Check task #{}, not all task stopped? {}", idx, notAllStopped)
     notAllStopped 
   }})
 
-  def allTasksStopped(mgr: JobManager, n: Int) = verify(mgr, { (s, t) => {
+  def allTasksStopped(mgr: JobManager, idx: Int) = verify(mgr, { (s, t) => {
     val allStopped = t.job.allTasksStopped
-    LOG.info("Check task #{}, all task stopped? {}", n, allStopped)
+    LOG.info("Check task #{}, all task stopped? {}", idx, allStopped)
     allStopped 
   }})
 
@@ -299,27 +299,24 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
                 D1(Cancel, m, passive), D1(Cancel, m, passive),
                 D1(Cancel, m, passive)) 
    
-    planner.cancelled(ticket(jobManager), tasks(0).getId.toString)  
-    notAllTasksStopped(jobManager, 1)
-    planner.cancelled(ticket(jobManager), tasks(1).getId.toString)  
-    notAllTasksStopped(jobManager, 2)
-    planner.cancelled(ticket(jobManager), tasks(2).getId.toString)  
-    notAllTasksStopped(jobManager, 3)
-    planner.cancelled(ticket(jobManager), tasks(3).getId.toString)  
-    notAllTasksStopped(jobManager, 4)
-    planner.cancelled(ticket(jobManager), tasks(4).getId.toString)  
-    notAllTasksStopped(jobManager, 5)
-    planner.cancelled(ticket(jobManager), tasks(5).getId.toString)  
-    notAllTasksStopped(jobManager, 6)
-    planner.cancelled(ticket(jobManager), tasks(6).getId.toString)  
-    allTasksStopped(jobManager, 7)
+    testCancelTasks(jobManager, tasks, planner, Seq(8))
 
     expect(AskFor(CheckpointIntegrator.fullName,
                   FindLatestCheckpoint(job.getId)))
 
-/*
+    planner.whenRestart(job.getId, 2)
 
-  
+    verify(jobManager, { (s, t) => 
+      RESTARTING.equals(t.job.getState) &&
+      (2 == t.job.getSuperstepCount) && 
+      !t.job.allTasks.map { task => (2 == task.getId.getId) }.exists(_ == false)
+    }) 
+
+    // assert job state, etc. 
+    // expect() reply when master receives GetTargetRefs  
+ 
+
+/*
     val newTask3 = tasks(3).newWithCancelledState
     planner.renew(newTask3)
 
@@ -345,5 +342,19 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     
     LOG.info("Done testing Planner event handler!")
   }
-  
+
+  def testCancelTasks(jobManager: JobManager, tasks: java.util.List[Task],
+                      planner: PlannerEventHandler, failed: Seq[Int]) {
+    val tasksSize = tasks.size - failed.size
+    for(idx <- 0 until tasksSize) idx match {
+      case i if (i == tasksSize - 1) => {
+        planner.cancelled(ticket(jobManager), tasks(i).getId.toString)  
+        allTasksStopped(jobManager, i)
+      }
+      case _ => {
+        planner.cancelled(ticket(jobManager), tasks(idx).getId.toString)  
+        notAllTasksStopped(jobManager, idx)
+      }
+    }
+  } 
 }
