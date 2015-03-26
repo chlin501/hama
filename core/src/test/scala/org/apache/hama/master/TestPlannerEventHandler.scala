@@ -198,7 +198,7 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
 
   val taskSize = 8
 
-  val m = true
+  val hostPortMatched = true
   val active = true
   val passive = false
 
@@ -267,38 +267,17 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     verify(jobManager, { (s, t) => t.job.isRecovering && 
       RESTARTING.equals(t.job.getState) })
 
-    val matched = Set(groom1, groom2, groom3, groom4, groom5, groom6, groom7) 
 
-    planner.cancelTasks(matched, Set[String]())
+    planner.cancelTasks(Set(groom1, groom2, groom3, groom4, groom5, groom6, 
+      groom7), Set[String]())
 
-    expectAnyOf(D1(Cancel, m, active), D1(Cancel, m, active), 
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive)) 
-    expectAnyOf(D1(Cancel, m, active), D1(Cancel, m, active), 
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive)) 
-    expectAnyOf(D1(Cancel, m, active), D1(Cancel, m, active), 
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive)) 
-    expectAnyOf(D1(Cancel, m, active), D1(Cancel, m, active), 
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive)) 
-    expectAnyOf(D1(Cancel, m, active), D1(Cancel, m, active), 
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive)) 
-    expectAnyOf(D1(Cancel, m, active), D1(Cancel, m, active), 
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive)) 
-    expectAnyOf(D1(Cancel, m, active), D1(Cancel, m, active), 
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive), D1(Cancel, m, passive),
-                D1(Cancel, m, passive)) 
+    expectD1(D1(Cancel, hostPortMatched, active), 
+             D1(Cancel, hostPortMatched, active), 
+             D1(Cancel, hostPortMatched, passive), 
+             D1(Cancel, hostPortMatched, passive),
+             D1(Cancel, hostPortMatched, passive), 
+             D1(Cancel, hostPortMatched, passive), 
+             D1(Cancel, hostPortMatched, passive))
    
     testCancelTasks(jobManager, tasks, planner, Seq(8))
 
@@ -326,6 +305,8 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     assert(1 == failedTasks.size)
     assert(2 == failedTasks(0).getId.getId) // attempt id  
     assert(Task.State.FAILED.equals(failedTasks(0).getState))
+
+    // TODO: cancelTasks(...)
 
 /*
     val newTask3 = tasks(3).newWithCancelledState
@@ -371,5 +352,7 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
 
   def expectHostPort(hostPorts: String*) = for(idx <- 0 until hostPorts.size) 
     expectAnyOf(hostPorts:_*)
+
+  def expectD1(d1s: D1*) = for(idx <- 0 until d1s.size) expectAnyOf(d1s:_*)
 
 }
