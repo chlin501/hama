@@ -1125,7 +1125,8 @@ class JobPlanner(setting: Setting, master: ActorRef, receptionist: ActorRef,
                                                       newWithWaitingState.
                                                       newWithRevoke)
         }
-        val newTicket = t.get.newWith(jobWithLatestCheckpoint)
+        val newTicket = t.get.newWith(jobWithLatestCheckpoint.
+          newWithRunningState)
         jobManager.update(newTicket) 
         jobManager.move(jobId)(TaskAssign) match {
           case true => newTicket.job

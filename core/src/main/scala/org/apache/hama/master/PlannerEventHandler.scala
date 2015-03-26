@@ -166,10 +166,20 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
                               port: Int) = jobManager.ticketAt match {
     case (s: Some[Stage], t: Some[Ticket]) => t.get.job.isRecovering match {
       case false => toList(t.get.job.findTasksBy(host, port)) match {
-        case list if list.isEmpty => 
+        case list if list.isEmpty => LOG.info("No failed tasks found at {}:{}!",
+          host, port)
+        /**
+         * First time when some tasks fail on a specific groom.
+         */
         case failedTasks if !failedTasks.isEmpty => someTasksFail(host, port, 
           t.get, s.get, failedTasks)
       }
+      /**
+       * Previously there was at least one groom fail, denoting Cancel command
+       * logically should have been sent to groom servers.
+       * Note if Cancel commands are not sent, that needs to be dealt in 
+       * seperated events when necessary.
+       */
       case true => t.get.job.getState match {
         case KILLING => toList(t.get.job.findTasksBy(host, port)) match {
           case list if list.isEmpty => 
@@ -179,7 +189,8 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
           }
         }
         case RESTARTING => toList(t.get.job.findTasksBy(host, port)) match {
-          case list if list.isEmpty => 
+          case list if list.isEmpty => LOG.info("No tasks fail at {}:{}!",
+            host, port)
           case tasks if !tasks.isEmpty => tasks.exists({ failed =>
             failed.isActive
           }) match {
@@ -194,6 +205,10 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
               jobManager.update(t.get.newWith(killing))
               if(t.get.job.allTasksStopped) allTasksKilled(t.get)
             }
+            /**
+             * Logically Cancel command should have been sent out to grooms, so
+             * merely marking tasks on failed grooms as failed.
+             */
             case false => {
               tasks.foreach( failed => failed.failedState )
               if(t.get.job.allTasksStopped) beforeRestart(t.get)
@@ -223,6 +238,7 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
 
   protected def onlyPassiveTasksFail(host: String, port: Int, ticket: Ticket,
                                      failedTasks: java.util.List[Task]){
+    LOG.debug("Only passive tasks fail. Groom fails at {}:{}", host, port)
     val restarting = ticket.job.newWithRestartingState
     jobManager.update(ticket.newWith(restarting))
     failedTasks.foreach( task => task.failedState)
@@ -232,7 +248,7 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
     val groomsAlive = toSet[SystemInfo](infos).filterNot( info =>
       ( host + port ).equals( info.getHost + info.getPort )
     )
-    LOG.info("Grooms still alive when passive tasks at {}:{} fail => {}",
+    LOG.debug("Grooms still alive when passive tasks at {}:{} fail => {}",
               host, port, groomsAlive)
     master ! FindGroomsToRestartTasks(groomsAlive) 
   }
@@ -356,7 +372,8 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
                                                       newWithWaitingState.
                                                       newWithRevoke)
         }
-        val newTicket = t.get.newWith(jobWithLatestCheckpoint)
+        val newTicket = t.get.newWith(jobWithLatestCheckpoint.
+          newWithRunningState)
         jobManager.update(newTicket)
         jobManager.move(jobId)(TaskAssign) match {
           case true => newTicket

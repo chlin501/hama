@@ -20,6 +20,7 @@ package org.apache.hama.master
 import akka.actor.ActorRef
 import org.apache.hama.Mock
 import org.apache.hama.TestEnv
+import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Job.State._
 import org.apache.hama.bsp.v2.Task
 import org.apache.hama.bsp.v2.Task.State._
@@ -35,7 +36,7 @@ import scala.collection.JavaConversions._
 case class D1(action: Action, hostPortMatched: Boolean, active: Boolean)
 
 trait Helper { 
-  def toD1(d: Directive, h1: String, p1: Int): D1 = {
+  def build(d: Directive, h1: String, p1: Int): D1 = {
     val action = d.action 
     val host = d.task.getAssignedHost
     val port = d.task.getAssignedPort
@@ -47,56 +48,56 @@ trait Helper {
 
 class Groom1(tester: ActorRef) extends Mock with Helper {
   def msgs: Receive = {
-    case d: Directive => tester ! toD1(d, "groom1", 1111)
+    case d: Directive => tester ! build(d, "groom1", 1111)
   }
   override def receive = msgs orElse super.receive
 }
 
 class Groom2(tester: ActorRef) extends Mock with Helper {
   def msgs: Receive = {
-    case d: Directive => tester ! toD1(d, "groom2", 2222)
+    case d: Directive => tester ! build(d, "groom2", 2222)
   }
   override def receive = msgs orElse super.receive
 }
 
 class Groom3(tester: ActorRef) extends Mock with Helper {
   def msgs: Receive = {
-    case d: Directive => tester ! toD1(d, "groom3", 3333)
+    case d: Directive => tester ! build(d, "groom3", 3333)
   }
   override def receive = msgs orElse super.receive
 }
 
 class Groom4(tester: ActorRef) extends Mock with Helper {
   def msgs: Receive = {
-    case d: Directive => tester ! toD1(d, "groom4", 4444)
+    case d: Directive => tester ! build(d, "groom4", 4444)
   }
   override def receive = msgs orElse super.receive
 }
 
 class Groom5(tester: ActorRef) extends Mock with Helper {
   def msgs: Receive = {
-    case d: Directive => tester ! toD1(d, "groom5", 5555)
+    case d: Directive => tester ! build(d, "groom5", 5555)
   }
   override def receive = msgs orElse super.receive
 }
 
 class Groom6(tester: ActorRef) extends Mock with Helper {
   def msgs: Receive = {
-    case d: Directive => tester ! toD1(d, "groom6", 6666)
+    case d: Directive => tester ! build(d, "groom6", 6666)
   }
   override def receive = msgs orElse super.receive
 }
 
 class Groom7(tester: ActorRef) extends Mock with Helper {
   def msgs: Receive = {
-    case d: Directive => tester ! toD1(d, "groom7", 7777)
+    case d: Directive => tester ! build(d, "groom7", 7777)
   }
   override def receive = msgs orElse super.receive
 }
 
 class Groom8(tester: ActorRef) extends Mock with Helper {
   def msgs: Receive = {
-    case d: Directive => tester ! toD1(d, "groom8", 8888)
+    case d: Directive => tester ! build(d, "groom8", 8888)
   }
   override def receive = msgs orElse super.receive
 }
@@ -154,6 +155,15 @@ class MockPlanner(setting: Setting, jobManager: JobManager, master: ActorRef,
 class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler") 
                               with JobUtil {
 
+  val groom1 = createWithArgs("groom1", classOf[Groom1], tester)
+  val groom2 = createWithArgs("groom2", classOf[Groom2], tester)
+  val groom3 = createWithArgs("groom3", classOf[Groom3], tester)
+  val groom4 = createWithArgs("groom4", classOf[Groom4], tester)
+  val groom5 = createWithArgs("groom5", classOf[Groom5], tester)
+  val groom6 = createWithArgs("groom6", classOf[Groom6], tester)
+  val groom7 = createWithArgs("groom7", classOf[Groom7], tester)
+  val groom8 = createWithArgs("groom8", classOf[Groom8], tester)
+ 
   val host1 = "groom1"
   val port1 = 1111
   val hostPort1 = bind(host1, port1)
@@ -186,8 +196,9 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
   val port8 = 8888
   val hostPort8 = bind(host8, port8)
 
-  val m = true
+  val taskSize = 8
 
+  val m = true
   val active = true
   val passive = false
 
@@ -218,12 +229,10 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     allStopped 
   }})
 
-  it("test planner groom and task event.") {
-    val setting = Setting.master
-    val jobManager = JobManager.create
-    val job = createJob("test", 2, "test-planner-job", activeGrooms, 8) 
-    val tasks = job.allTasks
-
+  def mapTasksToGrooms(tasks: java.util.List[Task], expectSize: Int) {
+    if(expectSize != tasks.size) 
+      throw new RuntimeException("Expect "+expectSize+" tasks, but "+
+                                 tasks.size+" exist!")
     tasks(0).scheduleTo(host1, port1)
     tasks(1).scheduleTo(host2, port2)
     tasks(2).assignedTo(host3, port3)
@@ -232,6 +241,15 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     tasks(5).assignedTo(host6, port6)
     tasks(6).assignedTo(host7, port7)
     tasks(7).assignedTo(host8, port8)
+  }
+
+  it("test planner groom and task event.") {
+    val setting = Setting.master
+    val jobManager = JobManager.create
+    val job = createJob("test", 2, "test-planner-job", activeGrooms, taskSize) 
+    val tasks = job.allTasks
+
+    mapTasksToGrooms(tasks, taskSize) 
 
     jobManager.enqueue(Ticket(client, job))
     val master = createWithArgs("mockMaster", classOf[MockMaster3], tester)
@@ -243,31 +261,12 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     val planner = PlannerEventHandler.create(setting, jobManager, master, 
                                              federator, scheduler)
     planner.whenGroomLeaves(host8, port8)
-    expectAnyOf(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
-                hostPort6, hostPort7)
-    expectAnyOf(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
-                hostPort6, hostPort7)
-    expectAnyOf(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
-                hostPort6, hostPort7)
-    expectAnyOf(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
-                hostPort6, hostPort7)
-    expectAnyOf(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
-                hostPort6, hostPort7)
-    expectAnyOf(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
-                hostPort6, hostPort7)
-    expectAnyOf(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
-                hostPort6, hostPort7)
+    expectHostPort(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
+                   hostPort6, hostPort7)
 
     verify(jobManager, { (s, t) => t.job.isRecovering && 
       RESTARTING.equals(t.job.getState) })
 
-    val groom1 = createWithArgs("groom1", classOf[Groom1], tester)
-    val groom2 = createWithArgs("groom2", classOf[Groom2], tester)
-    val groom3 = createWithArgs("groom3", classOf[Groom3], tester)
-    val groom4 = createWithArgs("groom4", classOf[Groom4], tester)
-    val groom5 = createWithArgs("groom5", classOf[Groom5], tester)
-    val groom6 = createWithArgs("groom6", classOf[Groom6], tester)
-    val groom7 = createWithArgs("groom7", classOf[Groom7], tester)
     val matched = Set(groom1, groom2, groom3, groom4, groom5, groom6, groom7) 
 
     planner.cancelTasks(matched, Set[String]())
@@ -310,12 +309,23 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
 
     expect(activeGrooms.toSeq) 
 
-    verify(jobManager, { (s, t) => 
-      RESTARTING.equals(t.job.getState) &&
+    verify(jobManager, { (s, t) => {
+      Job.State.RUNNING.equals(t.job.getState) &&
       (2 == t.job.getSuperstepCount) && 
-      // all task attempt id are 2
-      !t.job.allTasks.map { task => (2 == task.getId.getId) }.exists(_ == false)
-    }) 
+      // all task attempt id are 2 and in waiting state
+      !t.job.allTasks.map { task => (2 == task.getId.getId) && 
+        WAITING.equals(task.getState) }.exists(_ == false)
+    }}) 
+    
+    mapTasksToGrooms(ticket(jobManager).job.allTasks, taskSize) 
+    planner.whenGroomLeaves(host8, port8)
+    expectHostPort(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
+                   hostPort6, hostPort7)
+    planner.whenGroomLeaves(host7, port7)
+    val failedTasks = ticket(jobManager).job.findTasksBy(host7, port7)
+    assert(1 == failedTasks.size)
+    assert(2 == failedTasks(0).getId.getId) // attempt id  
+    assert(Task.State.FAILED.equals(failedTasks(0).getState))
 
 /*
     val newTask3 = tasks(3).newWithCancelledState
@@ -346,9 +356,9 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
 
   def testCancelTasks(jobManager: JobManager, tasks: java.util.List[Task],
                       planner: PlannerEventHandler, failed: Seq[Int]) {
-    val tasksSize = tasks.size - failed.size
-    for(idx <- 0 until tasksSize) idx match {
-      case i if (i == tasksSize - 1) => {
+    val size = tasks.size - failed.size
+    for(idx <- 0 until size) idx match {
+      case i if (i == size - 1) => {
         planner.cancelled(ticket(jobManager), tasks(i).getId.toString)  
         allTasksStopped(jobManager, i)
       }
@@ -358,4 +368,8 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
       }
     }
   } 
+
+  def expectHostPort(hostPorts: String*) = for(idx <- 0 until hostPorts.size) 
+    expectAnyOf(hostPorts:_*)
+
 }
