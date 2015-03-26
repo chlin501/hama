@@ -105,11 +105,13 @@ class MockMaster3(tester: ActorRef) extends Mock {
 
   def msgs: Receive = {
     case FindGroomsToKillTasks(infos) => infos.foreach { info => 
-      tester !  info.getHost + ":" + info.getPort
+      tester ! info.getHost + ":" + info.getPort
     }
     case FindGroomsToRestartTasks(infos) => infos.foreach { info => 
-      tester !  info.getHost + ":" + info.getPort
+      tester ! info.getHost + ":" + info.getPort
     }
+    case GetTargetRefs(infos) => 
+      tester ! infos.map { info => info.getHost + ":" + info.getPort }.toSeq
 /*
     case FindTasksAliveGrooms(infos) => infos.foreach { info => 
       tester !  info.getHost + ":" + info.getPort
@@ -306,15 +308,14 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
 
     planner.whenRestart(job.getId, 2)
 
+    expect(activeGrooms.toSeq) 
+
     verify(jobManager, { (s, t) => 
       RESTARTING.equals(t.job.getState) &&
       (2 == t.job.getSuperstepCount) && 
+      // all task attempt id are 2
       !t.job.allTasks.map { task => (2 == task.getId.getId) }.exists(_ == false)
     }) 
-
-    // assert job state, etc. 
-    // expect() reply when master receives GetTargetRefs  
- 
 
 /*
     val newTask3 = tasks(3).newWithCancelledState
