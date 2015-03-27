@@ -29,6 +29,7 @@ import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.master.CheckpointIntegrator
 import org.apache.hama.util.JobUtil
+import org.apache.hama.util.Utils
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
@@ -113,11 +114,9 @@ class MockMaster3(tester: ActorRef) extends Mock {
     }
     case GetTargetRefs(infos) => 
       tester ! infos.map { info => info.getHost + ":" + info.getPort }.toSeq
-/*
-    case FindTasksAliveGrooms(infos) => infos.foreach { info => 
-      tester !  info.getHost + ":" + info.getPort
-    }
-*/
+    case FindTasksAliveGrooms(infos) => 
+      tester ! infos.map { info => info.getHost + ":" + info.getPort }.toSeq.
+                     sorted
   } 
 
   override def receive = msgs orElse super.receive 
@@ -202,7 +201,18 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
   val active = true
   val passive = false
 
-  def activeGrooms(): Array[String] = Array(host1+":"+port1, host2+":"+port2)
+  def mkGrooms(idxs: Int*): Array[String] = idxs.map { idx => 
+    "groom%s:%d%d%d%d".format(idx, idx, idx, idx, idx)
+  }.toArray
+
+  def activeGrooms(): Array[String] = 
+    mkGrooms((for(idx <- 1 to 2) yield idx):_*) 
+
+  def passiveGrooms(): Array[String] = 
+    mkGrooms((for(idx <- 3 to 8) yield idx):_*) 
+
+  def allGrooms(excluded: Array[String]): Seq[String] = (activeGrooms ++ 
+    passiveGrooms).filterNot( groom => excluded.contains(groom) ).toSeq.sorted
 
   def bind(host: String, port: Int): String = host + ":" + port
 
@@ -268,7 +278,6 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     verify(jobManager, { (s, t) => t.job.isRecovering && 
       RESTARTING.equals(t.job.getState) })
 
-
     LOG.info("Test cancelling tasks running on groom1 ~ groom7 ...")
     planner.cancelTasks(Set(groom1, groom2, groom3, groom4, groom5, groom6, 
       groom7), Set[String]())
@@ -286,16 +295,15 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     expect(AskFor(CheckpointIntegrator.fullName,
                   FindLatestCheckpoint(job.getId)))
 
-    LOG.info("Test when restarting job {} ...", job.getId)
-    planner.whenRestart(job.getId, 2)
-
+    val attemptId2, ckptAt2 = 2
+    LOG.info("Test restarting job {} with attempt id {} ...", job.getId, 
+             attemptId2)
+    planner.whenRestart(job.getId, ckptAt2)
     expect(activeGrooms.toSeq) 
-
     verify(jobManager, { (s, t) => {
       Job.State.RUNNING.equals(t.job.getState) &&
-      (2 == t.job.getSuperstepCount) && 
-      // all task attempt id are 2 and in waiting state
-      !t.job.allTasks.map { task => (2 == task.getId.getId) && 
+      (ckptAt2 == t.job.getSuperstepCount) && 
+      !t.job.allTasks.map { task => (attemptId2 == task.getId.getId) && 
         WAITING.equals(task.getState) }.exists(_ == false)
     }}) 
     
@@ -308,7 +316,7 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     planner.whenGroomLeaves(host7, port7)
     val failedTasks = ticket(jobManager).job.findTasksBy(host7, port7)
     assert(1 == failedTasks.size)
-    assert(2 == failedTasks(0).getId.getId) // attempt id  
+    assert(attemptId2 == failedTasks(0).getId.getId) 
     assert(Task.State.FAILED.equals(failedTasks(0).getState))
 
     LOG.info("Test cancelling tasks running on groom1 ~ groom6 ...")
@@ -321,7 +329,32 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
              D1(Cancel, hostPortMatched, passive), 
              D1(Cancel, hostPortMatched, passive)) 
     testCancelTasks(jobManager, tasksAttemptId2, planner, Seq(8, 7))
- 
+    expect(AskFor(CheckpointIntegrator.fullName,
+                  FindLatestCheckpoint(job.getId)))
+
+    val attemptId3, ckptAt3 = 3
+    LOG.info("Test restarting job {} with attempt id {} ...", job.getId, 
+             attemptId3)
+    planner.whenRestart(job.getId, ckptAt3)
+    expect(activeGrooms.toSeq) 
+    verify(jobManager, { (s, t) => {
+      Job.State.RUNNING.equals(t.job.getState) &&
+      (ckptAt3 == t.job.getSuperstepCount) && 
+      !t.job.allTasks.map { task => (attemptId3 == task.getId.getId) && 
+        WAITING.equals(task.getState) }.exists(_ == false)
+    }}) 
+
+    val tasksAttemptId3 = ticket(jobManager).job.allTasks
+    mapTasksToGrooms(tasksAttemptId3, taskSize) 
+    val value = Utils.random(activeGrooms.length + 1, taskSize)
+    val failed = tasksAttemptId3.filter( task => task.getId.getTaskID.getId == 
+      value)
+    LOG.info("Failed task picked up: {}", failed)
+    assert(null != failed && !failed.isEmpty)
+    LOG.info("Test when the task {} fails  ...", failed(0).getId)
+    planner.whenTaskFails(failed(0).getId)
+    expect(allGrooms(mkGrooms(value)))
+
     // TODO: 
     //       test 1 task failure
     //       test 2 tasks failure

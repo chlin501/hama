@@ -162,11 +162,11 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
       }
     }
 
-  override def whenGroomLeaves(host: String, 
+  override def whenGroomLeaves(host: String, // TODO: further refinement
                               port: Int) = jobManager.ticketAt match {
     case (s: Some[Stage], t: Some[Ticket]) => t.get.job.isRecovering match {
       case false => toList(t.get.job.findTasksBy(host, port)) match {
-        case list if list.isEmpty => LOG.info("No failed tasks found at {}:{}!",
+        case list if list.isEmpty => LOG.info("No failed tasks run at {}:{}!",
           host, port)
         /**
          * First time when some tasks fail on a specific groom.
@@ -182,7 +182,8 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
        */
       case true => t.get.job.getState match {
         case KILLING => toList(t.get.job.findTasksBy(host, port)) match {
-          case list if list.isEmpty => 
+          case list if list.isEmpty => LOG.info("Tasks doesn't fail at {}:{}!", 
+            host, port) 
           case failedTasks if !failedTasks.isEmpty => {
             failedTasks.foreach( failed => failed.failedState )
             if(t.get.job.allTasksStopped) allTasksKilled(t.get)
@@ -274,7 +275,7 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
     case _ => LOG.warning("No job existed!")
   }
 
-  override def whenTaskFails(taskAttemptId: TaskAttemptID) = 
+  override def whenTaskFails(taskAttemptId: TaskAttemptID) = // TODO: refinement
     jobManager.findJobById(taskAttemptId.getJobID) match {
       case (s: Some[Stage], j: Some[Job]) => j.get.isRecovering match {
         /**
@@ -318,6 +319,8 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
       throw new NullPointerException("Not task found with failed id "+ faultId)
     failed.failedState
     val aliveGrooms = toSet[SystemInfo](job.tasksRunAtExcept(failed))
+    LOG.info("Grooms with tasks running are still alive: {}", 
+             aliveGrooms.mkString(","))
     master ! FindTasksAliveGrooms(aliveGrooms) 
   }
 

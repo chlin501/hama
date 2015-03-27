@@ -28,6 +28,7 @@ import org.apache.hadoop.io.NullWritable
 import org.apache.hama.ProxyInfo
 import org.apache.hama.SystemInfo
 import org.apache.hama.logging.CommonLog
+import scala.collection.JavaConversions._
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.concurrent.duration.DurationInt
@@ -37,10 +38,11 @@ import scala.reflect.ClassTag
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
-import scala.collection.JavaConversions._
+import scala.util.Random
 
 object Utils extends CommonLog {
 
+  @volatile lazy val rand = new Random()
 
   def await[R <: Any: ClassTag](caller: ActorRef, message: Any, 
                                 defaultTimeout: FiniteDuration = 10.seconds,
@@ -94,5 +96,12 @@ object Utils extends CommonLog {
   def toList[A](jlist: java.util.List[A]): List[A] = asScalaBuffer(jlist).toList
 
   def toSet[A](jset: java.util.Set[A]): Set[A] = asScalaSet(jset).toSet
+
+  def random(upperBound: Int): Int = rand.nextInt(upperBound)
+
+  def random(min: Int, max: Int): Int = {
+    val range = min to max
+    range(rand.nextInt(range.length))
+  }
 }
 
