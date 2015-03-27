@@ -247,9 +247,9 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     val setting = Setting.master
     val jobManager = JobManager.create
     val job = createJob("test", 2, "test-planner-job", activeGrooms, taskSize) 
-    val tasks = job.allTasks
+    val tasksAttemptId1 = job.allTasks
 
-    mapTasksToGrooms(tasks, taskSize) 
+    mapTasksToGrooms(tasksAttemptId1, taskSize) 
 
     jobManager.enqueue(Ticket(client, job))
     val master = createWithArgs("mockMaster", classOf[MockMaster3], tester)
@@ -260,6 +260,7 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
                           classOf[PlannerEventHandler])
     val planner = PlannerEventHandler.create(setting, jobManager, master, 
                                              federator, scheduler)
+    LOG.info("Test when the groom8 leaves ...")
     planner.whenGroomLeaves(host8, port8)
     expectHostPort(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
                    hostPort6, hostPort7)
@@ -268,6 +269,7 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
       RESTARTING.equals(t.job.getState) })
 
 
+    LOG.info("Test cancelling tasks running on groom1 ~ groom7 ...")
     planner.cancelTasks(Set(groom1, groom2, groom3, groom4, groom5, groom6, 
       groom7), Set[String]())
 
@@ -279,11 +281,12 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
              D1(Cancel, hostPortMatched, passive), 
              D1(Cancel, hostPortMatched, passive))
    
-    testCancelTasks(jobManager, tasks, planner, Seq(8))
+    testCancelTasks(jobManager, tasksAttemptId1, planner, Seq(8))
 
     expect(AskFor(CheckpointIntegrator.fullName,
                   FindLatestCheckpoint(job.getId)))
 
+    LOG.info("Test when restarting job {} ...", job.getId)
     planner.whenRestart(job.getId, 2)
 
     expect(activeGrooms.toSeq) 
@@ -296,7 +299,9 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
         WAITING.equals(task.getState) }.exists(_ == false)
     }}) 
     
-    mapTasksToGrooms(ticket(jobManager).job.allTasks, taskSize) 
+    LOG.info("Test when groom8 and groom7 leave ...")
+    val tasksAttemptId2 = ticket(jobManager).job.allTasks
+    mapTasksToGrooms(tasksAttemptId2, taskSize) 
     planner.whenGroomLeaves(host8, port8)
     expectHostPort(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
                    hostPort6, hostPort7)
@@ -306,7 +311,21 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     assert(2 == failedTasks(0).getId.getId) // attempt id  
     assert(Task.State.FAILED.equals(failedTasks(0).getState))
 
-    // TODO: cancelTasks(...)
+    LOG.info("Test cancelling tasks running on groom1 ~ groom6 ...")
+    planner.cancelTasks(Set(groom1, groom2, groom3, groom4, groom5, groom6), 
+                        Set[String]())
+    expectD1(D1(Cancel, hostPortMatched, active), 
+             D1(Cancel, hostPortMatched, active), 
+             D1(Cancel, hostPortMatched, passive), 
+             D1(Cancel, hostPortMatched, passive),
+             D1(Cancel, hostPortMatched, passive), 
+             D1(Cancel, hostPortMatched, passive)) 
+    testCancelTasks(jobManager, tasksAttemptId2, planner, Seq(8, 7))
+ 
+    // TODO: 
+    //       test 1 task failure
+    //       test 2 tasks failure
+    //       test active task failure or groom has active task failure
 
 /*
     val newTask3 = tasks(3).newWithCancelledState
@@ -338,16 +357,11 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
   def testCancelTasks(jobManager: JobManager, tasks: java.util.List[Task],
                       planner: PlannerEventHandler, failed: Seq[Int]) {
     val size = tasks.size - failed.size
-    for(idx <- 0 until size) idx match {
-      case i if (i == size - 1) => {
-        planner.cancelled(ticket(jobManager), tasks(i).getId.toString)  
-        allTasksStopped(jobManager, i)
-      }
-      case _ => {
-        planner.cancelled(ticket(jobManager), tasks(idx).getId.toString)  
-        notAllTasksStopped(jobManager, idx)
-      }
-    }
+    val f = planner.cancelled(ticket(jobManager), _: String)  
+    for(idx <- 0 until size) { val tid = tasks(idx).getId.toString; idx match {
+      case i if (i == size - 1) => { f(tid); allTasksStopped(jobManager, i) }
+      case _ => { f(tid); notAllTasksStopped(jobManager, idx) }
+    }}
   } 
 
   def expectHostPort(hostPorts: String*) = for(idx <- 0 until hostPorts.size) 
