@@ -994,7 +994,7 @@ class JobPlanner(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def cancelTask(ticket: Ticket, taskAttemptId: String) = 
     ticket.job.markCancelledWith(taskAttemptId) match { 
       case true => if(ticket.job.allTasksStopped) whenAllTasksStopped(ticket)
-      case false => LOG.error("Unable to mark task {} killed!", taskAttemptId)
+      case false => LOG.error("Fail marking task {} cancelled!", taskAttemptId)
     }
 
   protected def whenAllTasksStopped(ticket: Ticket) = 

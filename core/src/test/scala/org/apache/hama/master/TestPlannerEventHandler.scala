@@ -205,6 +205,21 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     "groom%s:%d%d%d%d".format(idx, idx, idx, idx, idx)
   }.toArray
 
+  def excludeIdxs(idxs: Int*): Seq[Int] = (for(idx <- 1 to taskSize if
+    (!idxs.contains(idx))) yield idx).toSeq
+
+  def mkD1s(idxs: Int*): Seq[D1] = idxs.map { idx => idx match {
+    case i if (i <= 2) => D1(Cancel, hostPortMatched, active) 
+    case i if (i > 2 && i <= taskSize) => D1(Cancel, hostPortMatched, passive) 
+    case i@_ => throw new RuntimeException("Can't build D1 for index "+i+"!")
+  }}.toSeq
+
+  def grooms(): Set[ActorRef] = Set(groom1, groom2, groom3, groom4, groom5, 
+    groom6, groom7, groom8) 
+
+  def grooms(excluded: Int*): Set[ActorRef] = grooms.filterNot( groom =>
+    excluded.map("groom"+_).contains(groom.path.name))
+
   def activeGrooms(): Array[String] = 
     mkGrooms((for(idx <- 1 to 2) yield idx):_*) 
 
@@ -353,10 +368,17 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     assert(null != failed && !failed.isEmpty)
     LOG.info("Test when the task {} fails  ...", failed(0).getId)
     planner.whenTaskFails(failed(0).getId)
-    expect(allGrooms(mkGrooms(value)))
+    val alive = allGrooms(mkGrooms(value))
+    expect(alive)
+
+    LOG.info("Test cancelling tasks at {} ...", alive)
+    planner.cancelTasks(grooms(value), Set[String]())
+    expectD1(mkD1s(excludeIdxs(value):_*):_*)
+    testCancelTasks(jobManager, tasksAttemptId3, planner, Seq(value)) 
+    expect(AskFor(CheckpointIntegrator.fullName,
+                  FindLatestCheckpoint(job.getId)))
 
     // TODO: 
-    //       test 1 task failure
     //       test 2 tasks failure
     //       test active task failure or groom has active task failure
 
