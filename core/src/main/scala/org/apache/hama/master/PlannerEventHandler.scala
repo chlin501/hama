@@ -285,25 +285,25 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
         case false => firstTaskFails(s.get, j.get, taskAttemptId)
         case true => j.get.getState match {
           case KILLING => j.get.findTaskBy(taskAttemptId) match {
-            case null => throw new RuntimeException("No matched task for "+
-                                                    taskAttemptId)
+            case null => throw new RuntimeException("Dangling task "+
+                                                    taskAttemptId+"!")
             case task@_ => {
               task.failedState
               if(j.get.allTasksStopped) jobManager.ticketAt match {
                 case (s: Some[Stage], t: Some[Ticket]) =>
                   allTasksKilled(t.get) 
-                case _ => throw new RuntimeException("No ticket found!")
+                case _ => throw new RuntimeException("Invalid ticket or stage!")
               }
             }
           }
           case RESTARTING => j.get.findTaskBy(taskAttemptId) match { 
-            case null => throw new RuntimeException("No matched task for "+
-                                                    taskAttemptId)
+            case null => throw new RuntimeException("Dangling task "+
+                                                    taskAttemptId+" found!")
             case task@_ => {
               task.failedState
               if(j.get.allTasksStopped) jobManager.ticketAt match {
                 case (s: Some[Stage], t: Some[Ticket]) => beforeRestart(t.get)
-                case _ => throw new RuntimeException("No ticket found!")
+                case _ => throw new RuntimeException("Invalid ticket or stage!")
               }
             }
           }
@@ -354,14 +354,14 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
         case e: TaskMaxAttemptedException =>
           jobManager.findTicketById(jobId) match {
             case (s: Some[Stage], t: Some[Ticket]) => {
+              LOG.error("Fail updating job because {}!", cause)
               jobManager.update(t.get.newWith(t.get.job.newWithFailedState))
               jobManager.move(jobId)(Finished)
               t.get.client ! Reject(e.toString)
             }
-            case _ => throw new RuntimeException("Can't find job "+jobId+
-                                                 " when updating job data.")
+            case _ => throw cause
           }
-        case e: Exception => throw e
+        case e: Exception => throw e // TODO: client ! Reject(e.toString)
       }
     }
 

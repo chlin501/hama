@@ -242,18 +242,6 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     case _ => throw new RuntimeException("Invalid ticket or stage!")
   }
 
-  def notAllTasksStopped(mgr: JobManager, idx: Int) = verify(mgr, { (s, t) => {
-    val notAllStopped = !t.job.allTasksStopped
-    LOG.info("Check task #{}, not all task stopped? {}", idx, notAllStopped)
-    notAllStopped 
-  }})
-
-  def allTasksStopped(mgr: JobManager, idx: Int) = verify(mgr, { (s, t) => {
-    val allStopped = t.job.allTasksStopped
-    LOG.info("Check task #{}, all task stopped? {}", idx, allStopped)
-    allStopped 
-  }})
-
   def mapTasksToGrooms(tasks: java.util.List[Task], expectSize: Int) {
     if(expectSize != tasks.size) 
       throw new RuntimeException("Expect "+expectSize+" tasks, but "+
@@ -270,8 +258,10 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
 
   it("test planner groom and task event.") {
     val setting = Setting.master
+    setting.hama.setInt("bsp.tasks.max.attempts", 20)
     val jobManager = JobManager.create
-    val job = createJob("test", 2, "test-planner-job", activeGrooms, taskSize) 
+    val job = createJob("test", 2, "test-planner-job", activeGrooms, taskSize)
+    job.addConfiguration(setting.hama)
     val tasksAttemptId1 = job.allTasks
 
     mapTasksToGrooms(tasksAttemptId1, taskSize) 
@@ -285,7 +275,7 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
                           classOf[PlannerEventHandler])
     val planner = PlannerEventHandler.create(setting, jobManager, master, 
                                              federator, scheduler)
-    LOG.info("Test when the groom8 leaves ...")
+    LOG.info("Test when only groom8 leaves ...")
     planner.whenGroomLeaves(host8, port8)
     expectHostPort(hostPort1, hostPort2, hostPort3, hostPort4, hostPort5, 
                    hostPort6, hostPort7)
@@ -310,14 +300,15 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     expect(AskFor(CheckpointIntegrator.fullName,
                   FindLatestCheckpoint(job.getId)))
 
-    val attemptId2, ckptAt2 = 2
+    val attemptId2 = 2 
+    val ckptAt1 = 1
     LOG.info("Test restarting job {} with attempt id {} ...", job.getId, 
              attemptId2)
-    planner.whenRestart(job.getId, ckptAt2)
+    planner.whenRestart(job.getId, ckptAt1)
     expect(activeGrooms.toSeq) 
     verify(jobManager, { (s, t) => {
       Job.State.RUNNING.equals(t.job.getState) &&
-      (ckptAt2 == t.job.getSuperstepCount) && 
+      (ckptAt1 == t.job.getSuperstepCount) && 
       !t.job.allTasks.map { task => (attemptId2 == task.getId.getId) && 
         WAITING.equals(task.getState) }.exists(_ == false)
     }}) 
@@ -347,14 +338,15 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     expect(AskFor(CheckpointIntegrator.fullName,
                   FindLatestCheckpoint(job.getId)))
 
-    val attemptId3, ckptAt3 = 3
+    val attemptId3 = 3
+    val ckptAt2 = 2 
     LOG.info("Test restarting job {} with attempt id {} ...", job.getId, 
              attemptId3)
-    planner.whenRestart(job.getId, ckptAt3)
+    planner.whenRestart(job.getId, ckptAt2)
     expect(activeGrooms.toSeq) 
     verify(jobManager, { (s, t) => {
       Job.State.RUNNING.equals(t.job.getState) &&
-      (ckptAt3 == t.job.getSuperstepCount) && 
+      (ckptAt2 == t.job.getSuperstepCount) && 
       !t.job.allTasks.map { task => (attemptId3 == task.getId.getId) && 
         WAITING.equals(task.getState) }.exists(_ == false)
     }}) 
@@ -364,7 +356,7 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     val value = Utils.random(activeGrooms.length + 1, taskSize)
     val failed = tasksAttemptId3.filter( task => task.getId.getTaskID.getId == 
       value)
-    LOG.info("Failed task picked up: {}", failed)
+    LOG.info("Pick up task for simulataing task failure: {}", failed)
     assert(null != failed && !failed.isEmpty)
     LOG.info("Test when the task {} fails  ...", failed(0).getId)
     planner.whenTaskFails(failed(0).getId)
@@ -377,6 +369,19 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     testCancelTasks(jobManager, tasksAttemptId3, planner, Seq(value)) 
     expect(AskFor(CheckpointIntegrator.fullName,
                   FindLatestCheckpoint(job.getId)))
+
+    val attemptId4 = 4
+    val ckptAt3 = 3
+    LOG.info("Test restarting job {} with attempt id {} ...", job.getId, 
+             attemptId4)
+    planner.whenRestart(job.getId, ckptAt3)
+    expect(activeGrooms.toSeq) 
+    verify(jobManager, { (s, t) => {
+      Job.State.RUNNING.equals(t.job.getState) &&
+      (ckptAt3 == t.job.getSuperstepCount) && 
+      !t.job.allTasks.map { task => (attemptId4 == task.getId.getId) && 
+        WAITING.equals(task.getState) }.exists(_ == false)
+    }}) 
 
     // TODO: 
     //       test 2 tasks failure
@@ -411,12 +416,16 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
 
   def testCancelTasks(jobManager: JobManager, tasks: java.util.List[Task],
                       planner: PlannerEventHandler, failed: Seq[Int]) {
-    val size = tasks.size - failed.size
-    val f = planner.cancelled(ticket(jobManager), _: String)  
-    for(idx <- 0 until size) { val tid = tasks(idx).getId.toString; idx match {
-      case i if (i == size - 1) => { f(tid); allTasksStopped(jobManager, i) }
-      case _ => { f(tid); notAllTasksStopped(jobManager, idx) }
-    }}
+    for(idx <- 0 until tasks.size) failed.contains((idx+1)) match {
+      case true => 
+      case false => planner.cancelled(ticket(jobManager), 
+        tasks(idx).getId.toString) 
+    }
+    verify(jobManager, { (s, t) => {
+      val stoppedOrNot = t.job.allTasksStopped
+      LOG.info("Are all tasks stopped? {}", stoppedOrNot)
+      stoppedOrNot 
+    }})
   } 
 
   def expectHostPort(hostPorts: String*) = for(idx <- 0 until hostPorts.size) 
