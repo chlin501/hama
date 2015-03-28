@@ -256,6 +256,14 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     tasks(7).assignedTo(host8, port8)
   }
 
+  def rand(prev: Int, start: Int, end: Int): Int = {
+    var value: Int = prev
+    do {
+      value = Utils.random(start, end)
+    } while(prev == value)
+    value
+  }
+
   it("test planner groom and task event.") {
     val setting = Setting.master
     setting.hama.setInt("bsp.tasks.max.attempts", 20)
@@ -382,6 +390,36 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
       !t.job.allTasks.map { task => (attemptId4 == task.getId.getId) && 
         WAITING.equals(task.getState) }.exists(_ == false)
     }}) 
+
+    val tasksAttemptId4 = ticket(jobManager).job.allTasks
+    mapTasksToGrooms(tasksAttemptId4, taskSize) 
+    val value1 = Utils.random(activeGrooms.length + 1, taskSize)
+    val value2 = rand(value1, activeGrooms.length + 1, taskSize) 
+    val failedlist = tasksAttemptId4.filter( task => 
+      task.getId.getTaskID.getId == value1 || 
+      task.getId.getTaskID.getId == value2)
+    LOG.info("Pick up task for simulataing task failure: {}",  
+             failedlist.mkString(","))
+    assert(null != failedlist && !failedlist.isEmpty)
+    LOG.info("Test when tasks {} fails  ...", failedlist.map { f => f.getId }.
+             mkString(", "))
+    val firstValue = failedlist.zipWithIndex.map { case (f, idx) => { 
+      planner.whenTaskFails(f.getId)
+      idx match { 
+        case 0 => f.getId.getTaskID.getId match {
+          case `value1` => value1
+          case `value2` => value2 
+        }
+        case _ => -1
+      }
+    }}.filterNot(-1==_)(0)
+    // only grooms when the frist task fails will be directed to cancel tasks.
+    // the second task that fails will only be marked as failed because the 
+    // groom hosting the second task will detect and report task failure event.
+    // if the directive received by the groom after the task failure, simply
+    // log should be ok.
+    val aliveGrooms = allGrooms(mkGrooms(firstValue)) 
+    expect(aliveGrooms)
 
     // TODO: 
     //       test 2 tasks failure
