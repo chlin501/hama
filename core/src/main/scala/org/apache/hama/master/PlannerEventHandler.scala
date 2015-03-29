@@ -319,7 +319,7 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
       throw new NullPointerException("Not task found with failed id "+ faultId)
     failed.failedState
     val aliveGrooms = toSet[SystemInfo](job.tasksRunAtExcept(failed))
-    LOG.info("Grooms with tasks running are still alive: {}", 
+    LOG.debug("Grooms with tasks running are still alive: {}", 
              aliveGrooms.mkString(","))
     master ! FindTasksAliveGrooms(aliveGrooms) 
   }

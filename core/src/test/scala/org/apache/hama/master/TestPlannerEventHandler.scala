@@ -36,8 +36,10 @@ import scala.collection.JavaConversions._
 
 case class D1(action: Action, hostPortMatched: Boolean, active: Boolean)
 
-trait Helper { 
+trait Helper { self: Mock => 
+
   def build(d: Directive, h1: String, p1: Int): D1 = {
+    LOG.debug("{} replies receiving Directive!", name)
     val action = d.action 
     val host = d.task.getAssignedHost
     val port = d.task.getAssignedPort
@@ -264,6 +266,25 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     value
   }
 
+  def testCancelTasks(jobManager: JobManager, tasks: java.util.List[Task],
+                      planner: PlannerEventHandler, failed: Seq[Int]) {
+    for(idx <- 0 until tasks.size) failed.contains((idx+1)) match {
+      case true => 
+      case false => planner.cancelled(ticket(jobManager), 
+        tasks(idx).getId.toString) 
+    }
+    verify(jobManager, { (s, t) => {
+      val stoppedOrNot = t.job.allTasksStopped
+      LOG.info("Are all tasks stopped? {}", stoppedOrNot)
+      stoppedOrNot 
+    }})
+  } 
+
+  def expectHostPort(hostPorts: String*) = for(idx <- 0 until hostPorts.size) 
+    expectAnyOf(hostPorts:_*)
+
+  def expectD1(d1s: D1*) = for(idx <- 0 until d1s.size) expectAnyOf(d1s:_*)
+
   it("test planner groom and task event.") {
     val setting = Setting.master
     setting.hama.setInt("bsp.tasks.max.attempts", 20)
@@ -371,7 +392,7 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     val alive = allGrooms(mkGrooms(value))
     expect(alive)
 
-    LOG.info("Test cancelling tasks at {} ...", alive)
+    LOG.info("Test cancelling tasks at {} ...", alive.mkString(", "))
     planner.cancelTasks(grooms(value), Set[String]())
     expectD1(mkD1s(excludeIdxs(value):_*):_*)
     testCancelTasks(jobManager, tasksAttemptId3, planner, Seq(value)) 
@@ -399,7 +420,7 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
       task.getId.getTaskID.getId == value1 || 
       task.getId.getTaskID.getId == value2)
     LOG.info("Pick up task for simulataing task failure: {}",  
-             failedlist.mkString(","))
+             failedlist.map{ f => f.getId } .mkString(", "))
     assert(null != failedlist && !failedlist.isEmpty)
     LOG.info("Test when tasks {} fails  ...", failedlist.map { f => f.getId }.
              mkString(", "))
@@ -421,9 +442,17 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     val aliveGrooms = allGrooms(mkGrooms(firstValue)) 
     expect(aliveGrooms)
 
-    // TODO: 
-    //       test 2 tasks failure
-    //       test active task failure or groom has active task failure
+    LOG.info("Test cancelling tasks at {} ...", aliveGrooms.mkString(", "))
+    planner.cancelTasks(grooms(firstValue), Set[String]())
+    expectD1(mkD1s(excludeIdxs(value1, value2):_*):_*)
+    testCancelTasks(jobManager, tasksAttemptId4, planner, Seq(value1, value2)) 
+    expect(AskFor(CheckpointIntegrator.fullName,
+                  FindLatestCheckpoint(job.getId)))
+ 
+
+    // TODO: test single active task failure 
+    //       test two active tasks failure
+    //       test two active grooms failure (can't restart)
 
 /*
     val newTask3 = tasks(3).newWithCancelledState
@@ -448,27 +477,7 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
       case _ => throw new RuntimeException("Invalid ticket or stage!")
     }
 */
-    
     LOG.info("Done testing Planner event handler!")
   }
-
-  def testCancelTasks(jobManager: JobManager, tasks: java.util.List[Task],
-                      planner: PlannerEventHandler, failed: Seq[Int]) {
-    for(idx <- 0 until tasks.size) failed.contains((idx+1)) match {
-      case true => 
-      case false => planner.cancelled(ticket(jobManager), 
-        tasks(idx).getId.toString) 
-    }
-    verify(jobManager, { (s, t) => {
-      val stoppedOrNot = t.job.allTasksStopped
-      LOG.info("Are all tasks stopped? {}", stoppedOrNot)
-      stoppedOrNot 
-    }})
-  } 
-
-  def expectHostPort(hostPorts: String*) = for(idx <- 0 until hostPorts.size) 
-    expectAnyOf(hostPorts:_*)
-
-  def expectD1(d1s: D1*) = for(idx <- 0 until d1s.size) expectAnyOf(d1s:_*)
 
 }
