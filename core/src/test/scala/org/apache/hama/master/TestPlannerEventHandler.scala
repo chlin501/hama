@@ -480,8 +480,20 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     expect(AskFor(CheckpointIntegrator.fullName,
                   FindLatestCheckpoint(job.getId)))
 
+    val attemptId6 = 6
+    val ckptAt5 = 5 
+    LOG.info("Test restarting job {} with attempt id {} ...", job.getId, 
+             attemptId6)
+    planner.whenRestart(job.getId, ckptAt5)
+    expect(activeGrooms.toSeq) 
+    verify(jobManager, { (s, t) => {
+      Job.State.RUNNING.equals(t.job.getState) &&
+      (ckptAt5 == t.job.getSuperstepCount) && 
+      !t.job.allTasks.map { task => (attemptId6 == task.getId.getId) && 
+        WAITING.equals(task.getState) }.exists(_ == false)
+    }})
 
-    // TODO: test single active task failure 
+    // TODO: 
     //       test two active tasks failure
     //       test two active grooms failure (can't restart)
 
