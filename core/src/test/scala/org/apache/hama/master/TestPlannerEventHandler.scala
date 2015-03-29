@@ -462,35 +462,29 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
         WAITING.equals(task.getState) }.exists(_ == false)
     }}) 
 
- 
+    LOG.info("Test when an active task, at groom1, fails ...") 
+    val tasksAttemptId5 = ticket(jobManager).job.allTasks
+    mapTasksToGrooms(tasksAttemptId5, taskSize) 
+    val tasklist = tasksAttemptId5.filter( t => 1 == t.getId.getTaskID.getId) 
+    assert(null != tasklist && 1 == tasklist.size)
+    val task1 = tasklist(0)
+    planner.whenTaskFails(task1.getId)
+    val task1Id = task1.getId.getTaskID.getId
+    val restGrooms = allGrooms(mkGrooms(task1Id)) 
+    expect(restGrooms)
+
+    LOG.info("Test cancelling tasks at {} ...", restGrooms.mkString(", "))
+    planner.cancelTasks(grooms(task1Id), Set[String]())
+    expectD1(mkD1s(excludeIdxs(task1Id):_*):_*)
+    testCancelTasks(jobManager, tasksAttemptId5, planner, Seq(task1Id)) 
+    expect(AskFor(CheckpointIntegrator.fullName,
+                  FindLatestCheckpoint(job.getId)))
+
 
     // TODO: test single active task failure 
     //       test two active tasks failure
     //       test two active grooms failure (can't restart)
 
-/*
-    val newTask3 = tasks(3).newWithCancelledState
-    planner.renew(newTask3)
-
-    val newTasks = job.findTasksBy(host4, port4)
-    assert(null != newTasks && 1 == newTasks.size)
-    LOG.info("Updated task {}", newTasks(0))
-    assert(CANCELLED.equals(newTasks(0).getState))
-
-    val oldTasks = job.findTasksNotIn(host4, port4)
-    assert(null != oldTasks && 3 == oldTasks.size)
-    oldTasks.foreach( oldTask => oldTask.getId.getTaskID.getId match {
-      case 1 => assert(FAILED.equals(oldTask.getState)) 
-      case _ => assert(WAITING.equals(oldTask.getState))
-    })
-
-    planner.whenTaskFails(tasks(1).getId)
-    jobManager.ticketAt match {
-      case (s: Some[Stage], t: Some[Ticket]) => 
-        LOG.info("Job state is {}", t.get.job.getState)
-      case _ => throw new RuntimeException("Invalid ticket or stage!")
-    }
-*/
     LOG.info("Done testing Planner event handler!")
   }
 
