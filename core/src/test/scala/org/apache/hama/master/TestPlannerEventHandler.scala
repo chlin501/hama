@@ -453,11 +453,11 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
         case _ => -1
       }
     }}.filterNot(-1==_)(0)
-    // only grooms when the frist task fails will be directed to cancel tasks.
-    // the second task that fails will only be marked as failed because the 
-    // groom hosting the second task will detect and report task failure event.
-    // if the directive received by the groom after the task failure, simply
-    // log should be ok.
+    // Note: only grooms when the frist task fails will be directed to cancel 
+    // tasks. the second task that fails will only be marked as failed because 
+    // the groom hosting the second task will detect and report task failure 
+    // event. if the directive received by the groom after the task failure, 
+    // simply log should be ok.
     val aliveGrooms = allGrooms(mkGrooms(firstValue)) 
     expect(aliveGrooms)
 
@@ -512,8 +512,8 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
         WAITING.equals(task.getState) }.exists(_ == false)
     }})
 
-    // need not testing two active tasks failure because it's the same as 
-    // passive tasks failure. Active tasks can be restarted at the groom 
+    // Note: need not testing two active tasks failure because it's the same as 
+    // passive tasks failure where active tasks can be restarted at the groom 
     // servers without a problem.
 
     LOG.info("Test when groom1 where active task is running fails ...") 
@@ -541,8 +541,6 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     expectD1(mkD1s(excludeIdxs(task1failed, task5failed):_*):_*) 
     testReject(jobManager, tasksAttemptId6, planner, Seq(task1failed, 
                task5failed))
-
-    // TODO: test two active grooms failure (can't restart)
 
     LOG.info("Done testing Planner event handler!")
   }
