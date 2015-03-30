@@ -112,8 +112,10 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
     broadcastFinished(jobId) 
     jobManager.move(jobId)(Finished)
     jobManager.getCommand(jobId.toString) match { // TODO: refactor
-      case Some(found) if found.isInstanceOf[KillJob] =>
+      case Some(found) if found.isInstanceOf[KillJob] => {
+        LOG.debug("Kill job {} and send back to client!", jobId)
         ticket.client ! Reject(found.asInstanceOf[KillJob].reason)
+      }
       case Some(found) if !found.isInstanceOf[KillJob] => {
         LOG.warning("Unknown command {} to react for job {}", found,
                     jobId)
@@ -296,6 +298,10 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
               }
             }
           }
+          /**
+           * Active tasks can be restarted at GroomSerers without a problem, so
+           * checking if task is active or not is not necessary.
+           */
           case RESTARTING => j.get.findTaskBy(taskAttemptId) match { 
             case null => throw new RuntimeException("Dangling task "+
                                                     taskAttemptId+" found!")

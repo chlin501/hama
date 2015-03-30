@@ -266,6 +266,25 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     value
   }
 
+  def testReject(jobManager: JobManager, tasks: java.util.List[Task],
+                      planner: PlannerEventHandler, failed: Seq[Int]) {
+    for(idx <- 0 until tasks.size) failed.contains((idx+1)) match {
+      case true => 
+      case false => planner.cancelled(ticket(jobManager), 
+        tasks(idx).getId.toString) 
+    }
+    val jobId = tasks(0).getId.getJobID
+    jobManager.findTicketById(jobId) match {
+      case (s: Some[Stage], t: Some[Ticket]) => {
+        assert(Finished.equals(s.get))
+        val allTasksStopped = t.get.job.allTasksStopped
+        LOG.info("Are all tasks stopped for job {}? {}", jobId, allTasksStopped)
+        assert(allTasksStopped)
+      }
+      case _ => throw new RuntimeException("Invalid ticket or stage!")
+    }
+  }
+
   def testCancelTasks(jobManager: JobManager, tasks: java.util.List[Task],
                       planner: PlannerEventHandler, failed: Seq[Int]) {
     for(idx <- 0 until tasks.size) failed.contains((idx+1)) match {
@@ -493,9 +512,37 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
         WAITING.equals(task.getState) }.exists(_ == false)
     }})
 
-    // TODO: 
-    //       test two active tasks failure
-    //       test two active grooms failure (can't restart)
+    // need not testing two active tasks failure because it's the same as 
+    // passive tasks failure. Active tasks can be restarted at the groom 
+    // servers without a problem.
+
+    LOG.info("Test when groom1 where active task is running fails ...") 
+    val tasksAttemptId6 = ticket(jobManager).job.allTasks
+    mapTasksToGrooms(tasksAttemptId6, taskSize) 
+    val activeTasks = tasksAttemptId6.filter( t => 1 == t.getId.getTaskID.getId)
+    assert(null != activeTasks && 1 == activeTasks.size)
+    val activeTask = activeTasks(0)
+    val task1failed = activeTask.getId.getTaskID.getId
+
+    planner.whenGroomLeaves(host1, port1)
+    expectHostPort(hostPort2, hostPort3, hostPort4, hostPort5, hostPort6, 
+                   hostPort7, hostPort8)
+    val task5failed = 5
+    planner.whenGroomLeaves(host5, port5)
+    val activeFailed = ticket(jobManager).job.findTasksBy(host5, port5) 
+    assert(1 == activeFailed.size)
+    assert(attemptId6 == activeFailed(0).getId.getId) 
+    assert(Task.State.FAILED.equals(activeFailed(0).getState))
+
+    LOG.info("Test cancelling tasks running on groom2 ~ groom8 ...")
+    planner.cancelTasks(Set(groom2, groom3, groom4, groom5, groom6, groom7,
+                            groom8), 
+                        Set[String]())
+    expectD1(mkD1s(excludeIdxs(task1failed, task5failed):_*):_*) 
+    testReject(jobManager, tasksAttemptId6, planner, Seq(task1failed, 
+               task5failed))
+
+    // TODO: test two active grooms failure (can't restart)
 
     LOG.info("Done testing Planner event handler!")
   }
