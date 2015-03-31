@@ -70,7 +70,8 @@ trait PlannerEventHandler {
   /**
    * This happens when a groom replies the running task is cancelled.
    */
-  def cancelled(ticket: Ticket, taskAttemptId: String)
+// TODO: ticket should be obtained from jobManager inside the impl object.
+  def cancelled(ticket: Ticket, taskAttemptId: String) 
 
   /**
    * Update task information.
@@ -91,6 +92,11 @@ trait PlannerEventHandler {
    * Ask federator for the latest checkpoint.
    */
   def whenRestart(jobId: BSPJobID, latest: Long)
+
+  /**
+   * Groom replies on behalf of TaskCounsellor that slots are all occupied.
+   */
+  def noFreeSlot(groom: ActorRef, d: Directive)
 
 }
 
@@ -136,6 +142,7 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
       case RESTARTING => beforeRestart(ticket)
     }
 
+// TODO: ticket should be obtained from jobManager inside the impl object.
   override def cancelled(ticket: Ticket, taskAttemptId: String) = 
     ticket.job.markCancelledWith(taskAttemptId) match { 
       case true => if(ticket.job.allTasksStopped) whenAllTasksStopped(ticket)
@@ -393,6 +400,28 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
                                            "updating job data.")
     }
   }
- 
+
+  override def noFreeSlot(groom: ActorRef, d: Directive) = 
+    jobManager.ticketAt match {
+      case (s: Some[Stage], t: Some[Ticket]) => 
+        t.get.job.findTaskBy(d.task.getId) match {
+          case null => throw new RuntimeException("No matched task "+
+                                                  d.task.getId+" for reply "+
+                                                  " from "+groom.path.name)
+          case task@_ => {
+            val (host, port) = resolve(groom)
+            val killing = t.get.job.newWithKillingState
+            jobManager.update(t.get.newWith(killing)) 
+            task.failedState
+            jobManager.cacheCommand(t.get.job.getId.toString, 
+                                    KillJob(host, port))
+            val grooms = t.get.job.tasksRunAtExcept(task)
+            val groomsAlive = toSet[SystemInfo](grooms)
+            master ! FindGroomsToKillTasks(groomsAlive)
+          }
+        } 
+      case (s@_, t@_) => throw new RuntimeException("Invalid ticket " + t +
+                                                    " or stage " + s + "!") 
+    }
 }
 

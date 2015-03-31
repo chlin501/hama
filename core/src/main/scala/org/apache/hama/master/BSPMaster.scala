@@ -181,8 +181,14 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
     val receptionist = getOrCreate(Receptionist.simpleName(conf), 
                                    classOf[Receptionist], setting, self, 
                                    federator) 
-    getOrCreate(JobPlanner.simpleName(conf), classOf[JobPlanner], 
-                setting, self, receptionist, federator) 
+    val jobManager = JobManager.create
+    val scheduler = Scheduler.create(setting.hama, jobManager)
+    val assigner = Assigner.create(setting.hama, jobManager)
+    val event = PlannerEventHandler.create(setting, jobManager, self, federator,
+                                           scheduler)
+    getOrCreate(Planner.simpleName(conf), classOf[Planner], setting, self, 
+                receptionist, federator, scheduler, assigner, jobManager, 
+                event) 
   }
 
   protected def cleaner() = spawn(FileSystemCleaner.simpleName(setting.hama), 

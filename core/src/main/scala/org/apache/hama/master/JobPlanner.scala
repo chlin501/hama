@@ -349,7 +349,7 @@ protected[master] class JobManager extends CommonLog {
 object JobPlanner {
 
   def simpleName(conf: HamaConfiguration): String = conf.get(
-    "master.scheduler.name",
+    "master.jobplanner.name",
     classOf[JobPlanner].getSimpleName
   )
 
