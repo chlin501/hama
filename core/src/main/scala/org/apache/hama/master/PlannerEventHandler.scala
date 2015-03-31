@@ -200,8 +200,8 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
     }
 
 // TODO: further refinement
-  override def whenGroomLeaves(host: String, port: Int) = 
-    jobManager.ticket({ (stage, ticket)=> ticket.job.isRecovering match {
+  override def whenGroomLeaves(host: String, port: Int): Unit = 
+    jobManager.ticket({ (stage, ticket) => ticket.job.isRecovering match {
       case false => toList(ticket.job.findTasksBy(host, port)) match {
         case list if list.isEmpty => LOG.info("No failed tasks run at {}:{}!",
           host, port)
@@ -222,23 +222,23 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
           case list if list.isEmpty => LOG.info("Tasks doesn't fail at {}:{}!", 
             host, port) 
           case failedTasks if !failedTasks.isEmpty => {
-            failedTasks.foreach( failed => failed.failedState )
+            failedTasks.foreach(failed => failed.failedState)
             if(ticket.job.allTasksStopped) allTasksKilled(ticket)
           }
         }
         case RESTARTING => toList(ticket.job.findTasksBy(host, port)) match {
           case list if list.isEmpty => LOG.info("No tasks fail at {}:{}!",
             host, port)
-          case tasks if !tasks.isEmpty => tasks.exists({ failed =>
+          case tasks if !tasks.isEmpty => tasks.exists( failed =>
             failed.isActive
-          }) match {
+          ) match {
             /**
              * Failed groom contains active tasks, the system is unable to
              * restart those tasks at the failed groom. So switch to killing
              * state.
              */
-            case true => {
-              tasks.foreach( failed => failed.failedState )
+            case true => { 
+              tasks.foreach(failed => failed.failedState)
               val killing = ticket.job.newWithKillingState
               jobManager.update(ticket.newWith(killing))
               if(ticket.job.allTasksStopped) allTasksKilled(ticket)
@@ -247,13 +247,13 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
              * Logically Cancel command should have been sent out to grooms, so
              * merely marking tasks on failed grooms as failed.
              */
-            case false => {
-              tasks.foreach( failed => failed.failedState )
-              if(ticket.job.allTasksStopped) beforeRestart(ticket)
+            case false => { 
+              tasks.foreach( failed => failed.failedState)
+               if(ticket.job.allTasksStopped) beforeRestart(ticket) 
             }
-          }
-        }
-      }
+          } 
+        } 
+      } 
     }
   })
 
@@ -310,42 +310,37 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
   })
 
   override def whenTaskFails(taskAttemptId: TaskAttemptID) = // TODO: refinement
-    jobManager.findJobById(taskAttemptId.getJobID) match {
-      case (s: Some[Stage], j: Some[Job]) => j.get.isRecovering match {
+    jobManager.findTicketById(taskAttemptId.getJobID, { (s: Stage, t: Ticket) =>
+      t.job.isRecovering match {
         /**
          * Directly mark the job as restarting because active tasks can be 
          * rescheduled to the original groom, which is still online. 
          */
-        case false => firstTaskFails(s.get, j.get, taskAttemptId)
-        case true => j.get.getState match {
-          case KILLING => j.get.findTaskBy(taskAttemptId) match {
+        case false => firstTaskFails(s, t.job, taskAttemptId)
+        case true => t.job.getState match {
+          case KILLING => t.job.findTaskBy(taskAttemptId) match {
             case null => throw new RuntimeException("Dangling task "+
                                                     taskAttemptId+"!")
             case task@_ => {
               task.failedState
-              if(j.get.allTasksStopped) jobManager.ticket({ (stage, ticket) =>
-                allTasksKilled(ticket) 
-              })
+              if(t.job.allTasksStopped) allTasksKilled(t) 
             }
           }
           /**
            * Active tasks can be restarted at GroomSerers without a problem, so
            * checking if task is active or not is not necessary.
            */
-          case RESTARTING => j.get.findTaskBy(taskAttemptId) match { 
+          case RESTARTING => t.job.findTaskBy(taskAttemptId) match { 
             case null => throw new RuntimeException("Dangling task "+
                                                     taskAttemptId+" found!")
             case task@_ => {
               task.failedState
-              if(j.get.allTasksStopped) jobManager.ticket({ (stage, ticket) =>
-                beforeRestart(ticket)
-              })
+              if(t.job.allTasksStopped) beforeRestart(t)
             }
           }
         }
       }
-      case _ => LOG.error("No matched job: {}", taskAttemptId.getJobID)
-    }
+    })
 
   protected def firstTaskFails(stage: Stage, job: Job, faultId: TaskAttemptID) {
     markJobAsRestarting(stage, job)
@@ -386,41 +381,32 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
         scheduler.findGroomsFor(ticket, master)
       case Failure(cause) => cause match {
         case e: TaskMaxAttemptedException =>
-          jobManager.findTicketById(jobId) match {
-            case (s: Some[Stage], t: Some[Ticket]) => {
-              LOG.error("Fail updating job because {}!", cause)
-              jobManager.update(t.get.newWith(t.get.job.newWithFailedState))
-              jobManager.move(jobId)(Finished)
-              t.get.client ! Reject(e.toString)
-            }
-            case _ => throw cause
-          }
+          jobManager.findTicketById(jobId, { (s: Stage, t: Ticket) => {
+            LOG.error("Fail updating job because {}!", cause)
+            jobManager.update(t.newWith(t.job.newWithFailedState))
+            jobManager.move(jobId)(Finished)
+            t.client ! Reject(e.toString)
+          }})
         case e: Exception => throw e // TODO: client ! Reject(e.toString)
       }
     }
 
-  protected def updateJob(jobId: BSPJobID, latest: Long): Ticket = {
-    jobManager.findTicketById(jobId) match {
-      case (s: Some[Stage], t: Some[Ticket]) => {
-        val jobWithLatestCheckpoint = t.get.job.newWithSuperstepCount(latest)
-        jobWithLatestCheckpoint.allTasks.map { task =>
-          jobWithLatestCheckpoint.newAttemptTask(task.withIdIncremented.
-                                                      newWithSuperstep(latest).
-                                                      newWithWaitingState.
-                                                      newWithRevoke)
-        }
-        val newTicket = t.get.newWith(jobWithLatestCheckpoint.
-          newWithRunningState)
-        jobManager.update(newTicket)
-        jobManager.move(jobId)(TaskAssign) match {
-          case true => newTicket
-          case false => throw new RuntimeException("Unable to move job "+jobId)
-        }
+  protected def updateJob(jobId: BSPJobID, latest: Long): Ticket = 
+    jobManager.findTicketById[Ticket](jobId, { (s: Stage, t: Ticket) => {
+      val jobWithLatestCheckpoint = t.job.newWithSuperstepCount(latest)
+      jobWithLatestCheckpoint.allTasks.map { task =>
+        jobWithLatestCheckpoint.newAttemptTask(task.withIdIncremented.
+                                                    newWithSuperstep(latest).
+                                                    newWithWaitingState.
+                                                    newWithRevoke)
       }
-      case _ => throw new RuntimeException("Can't find job "+jobId+" when "+
-                                           "updating job data.")
-    }
-  }
+      val newTicket = t.newWith(jobWithLatestCheckpoint.newWithRunningState)
+      jobManager.update(newTicket)
+      jobManager.move(jobId)(TaskAssign) match {
+        case true => newTicket
+        case false => throw new RuntimeException("Unable to move job "+jobId)
+      }
+    }})
 
   override def noFreeSlot(groom: ActorRef, d: Directive) = 
     jobManager.ticket({ (stage, ticket) => 

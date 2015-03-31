@@ -203,6 +203,13 @@ protected[master] class JobManager extends CommonLog {
       None
   }
 
+  protected[master] def findJobById(jobId: BSPJobID, f: (Stage, Job) => Unit):  
+    Unit = findJobById(jobId) match {
+      case (s: Some[Stage], j: Some[Job]) => f(s.get, j.get)
+      case (s@_, j@_) => throw new RuntimeException("No job "+j+" found at "+
+                                                    "stage "+s+"!")
+    }
+
   protected[master] def findJobById(jobId: BSPJobID): 
     (Option[Stage], Option[Job]) = findJobBy(TaskAssign, jobId) match {
       case Some(job) => (Option(TaskAssign), Option(job))
@@ -230,6 +237,18 @@ protected[master] class JobManager extends CommonLog {
       if(job.getId.equals(jobId)) Option(job) else None
     } else None 
   }
+
+  protected[master] def findTicketById(jobId: BSPJobID, 
+    f: (Stage, Ticket) => Unit): Unit = findTicketById[Unit](jobId, { (s, t) =>
+      f(s, t) 
+    })
+
+  protected[master] def findTicketById[R <: Any](jobId: BSPJobID, 
+    f: (Stage, Ticket) => R): R = findTicketById(jobId) match {
+      case (s: Some[Stage], t: Some[Ticket]) => f(s.get, t.get)
+      case (s@_, t@_) => throw new RuntimeException("No ticket "+t+" found at "+
+                                                    "stage "+s+"!")
+    }
 
   protected[master] def findTicketById(jobId: BSPJobID): 
     (Option[Stage], Option[Ticket]) = findTicketBy(TaskAssign, jobId) match {
