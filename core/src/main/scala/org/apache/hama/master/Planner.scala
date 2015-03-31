@@ -293,19 +293,10 @@ class Planner(setting: Setting, master: ActorRef, receptionist: ActorRef,
      * alive.
      */
     // TODO: call event.cancelTasks instead
-    case TasksAliveGrooms(grooms) => jobManager.ticketAt match {
-      case (s: Some[Stage], t: Some[Ticket]) => 
-        //tasksAliveGroomsFound(grooms, t.get.job, beforeCancelTask, 
-                              //afterCancelTask)
-      case (s@_, t@_) => LOG.error("Invalid stage {} or ticket {}!", s, t)
-    }
+    case TasksAliveGrooms(grooms) => event.cancelTasks(grooms, Set[String]())
   }
 
 /*
-  protected def beforeCancelTask(groom: ActorRef, forRestart: Task): 
-    (ActorRef, Task) = (groom, forRestart) 
-
-  protected def afterCancelTask(groom: ActorRef, forRestart: Task) { }
 
   protected def tasksAliveGroomsFound(grooms: Set[ActorRef], job: Job,
       b: (ActorRef, Task) => (ActorRef, Task), a: (ActorRef, Task) => Unit) = 
