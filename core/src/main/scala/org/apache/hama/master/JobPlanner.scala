@@ -171,6 +171,12 @@ protected[master] class JobManager extends CommonLog {
     case Processing => processingQueue = processingQueue.enqueue(ticket)
     case Finished => finishedQueue = finishedQueue.enqueue(ticket)
   }
+
+  protected[master] def ticket(f:(Stage, Ticket) => Unit) = ticketAt match {
+    case (s: Some[Stage], t: Some[Ticket]) => f(s.get, t.get)
+    case (s@_, t@_) => throw new RuntimeException("Invalde stage "+s+" or "+
+                                                  "stage "+t)
+  }
   
   /**
    * Tickets in Finished stage aren't removed at the moment, so it's not shown

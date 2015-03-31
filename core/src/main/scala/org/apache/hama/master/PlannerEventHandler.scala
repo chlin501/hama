@@ -98,6 +98,18 @@ trait PlannerEventHandler {
    */
   def noFreeSlot(groom: ActorRef, d: Directive)
 
+  /**
+   * When checking GroomCapacity federator replies that not enough slots 
+   * available.
+   */
+  def slotUnavailable(notEnough: Set[ActorRef]) 
+
+  // below cache active grooms references TODO: move to job manager?
+
+  def cacheActiveGrooms(refs: Array[ActorRef])
+
+  def activeGroomsCached(): Array[ActorRef]
+
 }
 
 protected[master] class DefaultPlannerEventHandler(setting: Setting, 
@@ -106,6 +118,25 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
 
   type Host = String
   type Port = Int
+
+ /**
+   * A cache when asking tracker the num of free slots available per active
+   * groom.
+   * Note that it's an array because multiple tasks may be dispatched to the
+   * same groom server.
+   */
+  // TODO: move to cached related object (job manager?).
+  protected var activeGrooms: Option[Array[ActorRef]] = None
+
+  protected def cleanCachedActiveGrooms() = activeGrooms = None
+
+  override def cacheActiveGrooms(refs: Array[ActorRef]) =
+    activeGrooms = Option(refs)
+
+  override def activeGroomsCached(): Array[ActorRef] = activeGrooms match {
+    case Some(ref) => ref
+    case None => throw new RuntimeException("Active grooms is missing!")
+  }
 
   protected def broadcastFinished(jobId: BSPJobID) =  
     federator ! JobFinishedMessage(jobId) 
@@ -157,31 +188,28 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
 
   override def cancelTasks(matched: Set[ActorRef], nomatched: Set[String]) =
     nomatched.isEmpty match {
-      // TODO: kill tasks where grooms alive
-      case false => LOG.error("Grooms {} not found!", nomatched.mkString(","))  
-      case true => jobManager.ticketAt match {
-        case (s: Some[Stage], t: Some[Ticket]) => matched.foreach( ref => {
+      case false => LOG.error("Grooms {} not found!", nomatched.mkString(",")) // TODO: kill tasks where grooms alive
+      case true => jobManager.ticket({ (stage, ticket) => 
+        matched.foreach( ref => {
           val (host, port) = resolve(ref)
-          t.get.job.findTasksBy(host, port).foreach ( task => {
+          ticket.job.findTasksBy(host, port).foreach ( task => {
             if(!task.isFailed) ref ! new Directive(Cancel, task, "master") 
           })
         })
-        case (s@_, t@_) => throw new RuntimeException("Invalid stage "+s+
-                                                      " or ticket "+t+"!")
-      }
+      })
     }
 
-  override def whenGroomLeaves(host: String, // TODO: further refinement
-                              port: Int) = jobManager.ticketAt match {
-    case (s: Some[Stage], t: Some[Ticket]) => t.get.job.isRecovering match {
-      case false => toList(t.get.job.findTasksBy(host, port)) match {
+// TODO: further refinement
+  override def whenGroomLeaves(host: String, port: Int) = 
+    jobManager.ticket({ (stage, ticket)=> ticket.job.isRecovering match {
+      case false => toList(ticket.job.findTasksBy(host, port)) match {
         case list if list.isEmpty => LOG.info("No failed tasks run at {}:{}!",
           host, port)
         /**
          * First time when some tasks fail on a specific groom.
          */
         case failedTasks if !failedTasks.isEmpty => someTasksFail(host, port, 
-          t.get, s.get, failedTasks)
+          ticket, stage, failedTasks)
       }
       /**
        * Previously there was at least one groom fail, denoting Cancel command
@@ -189,16 +217,16 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
        * Note if Cancel commands are not sent, that needs to be dealt in 
        * seperated events when necessary.
        */
-      case true => t.get.job.getState match {
-        case KILLING => toList(t.get.job.findTasksBy(host, port)) match {
+      case true => ticket.job.getState match {
+        case KILLING => toList(ticket.job.findTasksBy(host, port)) match {
           case list if list.isEmpty => LOG.info("Tasks doesn't fail at {}:{}!", 
             host, port) 
           case failedTasks if !failedTasks.isEmpty => {
             failedTasks.foreach( failed => failed.failedState )
-            if(t.get.job.allTasksStopped) allTasksKilled(t.get)
+            if(ticket.job.allTasksStopped) allTasksKilled(ticket)
           }
         }
-        case RESTARTING => toList(t.get.job.findTasksBy(host, port)) match {
+        case RESTARTING => toList(ticket.job.findTasksBy(host, port)) match {
           case list if list.isEmpty => LOG.info("No tasks fail at {}:{}!",
             host, port)
           case tasks if !tasks.isEmpty => tasks.exists({ failed =>
@@ -211,9 +239,9 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
              */
             case true => {
               tasks.foreach( failed => failed.failedState )
-              val killing = t.get.job.newWithKillingState
-              jobManager.update(t.get.newWith(killing))
-              if(t.get.job.allTasksStopped) allTasksKilled(t.get)
+              val killing = ticket.job.newWithKillingState
+              jobManager.update(ticket.newWith(killing))
+              if(ticket.job.allTasksStopped) allTasksKilled(ticket)
             }
             /**
              * Logically Cancel command should have been sent out to grooms, so
@@ -221,15 +249,13 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
              */
             case false => {
               tasks.foreach( failed => failed.failedState )
-              if(t.get.job.allTasksStopped) beforeRestart(t.get)
+              if(ticket.job.allTasksStopped) beforeRestart(ticket)
             }
           }
         }
       }
     }
-    case _ => LOG.error("Unable to find corresponded ticket when {}:{} leaves",
-                        host, port)
-  } 
+  })
 
   protected def whenActiveTasksFail(host: String, port: Int, ticket: Ticket, 
                                     failedTasks: java.util.List[Task]) {
@@ -270,19 +296,18 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
       case false => onlyPassiveTasksFail(host, port, ticket, failedTasks)
     }
 
-  override def renew(newest: Task) = jobManager.ticketAt match {
-    case (s: Some[Stage], t: Some[Ticket]) => t.get.job.update(newest) match {
-      case true => if(t.get.job.allTasksSucceeded) {
-        val newJob = t.get.job.newWithSucceededState.newWithFinishNow
-        jobManager.update(t.get.newWith(newJob))
+  override def renew(newest: Task) = jobManager.ticket({ (stage, ticket) =>
+    ticket.job.update(newest) match {
+      case true => if(ticket.job.allTasksSucceeded) {
+        val newJob = ticket.job.newWithSucceededState.newWithFinishNow
+        jobManager.update(ticket.newWith(newJob))
         broadcastFinished(newJob.getId)  
         jobManager.move(newJob.getId)(Finished) 
-        notifyJobComplete(t.get.client, newJob.getId)  
+        notifyJobComplete(ticket.client, newJob.getId)  
       }
       case false => LOG.warning("Unable to update task {}!", newest.getId)
     }
-    case _ => LOG.warning("No job existed!")
-  }
+  })
 
   override def whenTaskFails(taskAttemptId: TaskAttemptID) = // TODO: refinement
     jobManager.findJobById(taskAttemptId.getJobID) match {
@@ -298,11 +323,9 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
                                                     taskAttemptId+"!")
             case task@_ => {
               task.failedState
-              if(j.get.allTasksStopped) jobManager.ticketAt match {
-                case (s: Some[Stage], t: Some[Ticket]) =>
-                  allTasksKilled(t.get) 
-                case _ => throw new RuntimeException("Invalid ticket or stage!")
-              }
+              if(j.get.allTasksStopped) jobManager.ticket({ (stage, ticket) =>
+                allTasksKilled(ticket) 
+              })
             }
           }
           /**
@@ -314,10 +337,9 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
                                                     taskAttemptId+" found!")
             case task@_ => {
               task.failedState
-              if(j.get.allTasksStopped) jobManager.ticketAt match {
-                case (s: Some[Stage], t: Some[Ticket]) => beforeRestart(t.get)
-                case _ => throw new RuntimeException("Invalid ticket or stage!")
-              }
+              if(j.get.allTasksStopped) jobManager.ticket({ (stage, ticket) =>
+                beforeRestart(ticket)
+              })
             }
           }
         }
@@ -342,11 +364,10 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
       jobManager.update(ticket.newWith(job.newWithRestartingState))
     }
 
-  override def tasksAliveAt(grooms: Set[ActorRef]) = jobManager.ticketAt match {
-    case (s: Some[Stage], t: Some[Ticket]) => tasksAliveGroomsFound(grooms, 
-      t.get.job)
-    case (s@_, t@_) => LOG.error("Invalid stage {} or ticket {}!", s, t)
-  }
+  override def tasksAliveAt(grooms: Set[ActorRef]) = 
+    jobManager.ticket({ (stage, ticket) => 
+      tasksAliveGroomsFound(grooms, ticket.job)
+    })
 
   protected def tasksAliveGroomsFound(grooms: Set[ActorRef], job: Job) = 
     grooms.foreach( groom => {
@@ -402,26 +423,39 @@ protected[master] class DefaultPlannerEventHandler(setting: Setting,
   }
 
   override def noFreeSlot(groom: ActorRef, d: Directive) = 
-    jobManager.ticketAt match {
-      case (s: Some[Stage], t: Some[Ticket]) => 
-        t.get.job.findTaskBy(d.task.getId) match {
-          case null => throw new RuntimeException("No matched task "+
-                                                  d.task.getId+" for reply "+
-                                                  " from "+groom.path.name)
-          case task@_ => {
-            val (host, port) = resolve(groom)
-            val killing = t.get.job.newWithKillingState
-            jobManager.update(t.get.newWith(killing)) 
-            task.failedState
-            jobManager.cacheCommand(t.get.job.getId.toString, 
-                                    KillJob(host, port))
-            val grooms = t.get.job.tasksRunAtExcept(task)
-            val groomsAlive = toSet[SystemInfo](grooms)
-            master ! FindGroomsToKillTasks(groomsAlive)
-          }
-        } 
-      case (s@_, t@_) => throw new RuntimeException("Invalid ticket " + t +
-                                                    " or stage " + s + "!") 
-    }
+    jobManager.ticket({ (stage, ticket) => 
+      ticket.job.findTaskBy(d.task.getId) match {
+        case null => throw new RuntimeException("No matched task "+
+                                                d.task.getId+" for reply "+
+                                                " from "+groom.path.name)
+        case task@_ => {
+          val (host, port) = resolve(groom)
+          val killing = ticket.job.newWithKillingState
+          jobManager.update(ticket.newWith(killing)) 
+          task.failedState
+          jobManager.cacheCommand(ticket.job.getId.toString, 
+                                  KillJob(host, port))
+          val grooms = ticket.job.tasksRunAtExcept(task)
+          val groomsAlive = toSet[SystemInfo](grooms)
+          master ! FindGroomsToKillTasks(groomsAlive)
+        }
+      } 
+    })
+
+  // TODO: to avoid active scheduling to grooms with insufficient slots, due to
+  //       delay reporting, probably changing to allow schduler to update slots
+  //       in tracker directly after assign or schedule function executed.
+  override def slotUnavailable(notEnough: Set[ActorRef]) = 
+    jobManager.ticket({ (stage, ticket) => {
+      val grooms = notEnough.map { ref => val (host, port) = resolve(ref);
+        host+":"+port }.toArray.mkString(",")
+      val newTicket = ticket.newWith(ticket.job.newWithFailedState)
+      jobManager.update(newTicket)
+      jobManager.move(newTicket.job.getId)(Finished)
+      newTicket.client ! Reject("Grooms "+grooms+" do not have free slots!")
+      cleanCachedActiveGrooms
+      jobManager.rewindToBeforeSchedule
+    }})
+
 }
 

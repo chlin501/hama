@@ -74,9 +74,9 @@ class Planner(setting: Setting, master: ActorRef, receptionist: ActorRef,
    * groom. 
    * Note that it's an array because multiple tasks may be dispatched to the
    * same groom server. 
-   */
   // TODO: move to cached related object.
   protected var activeGrooms: Option[Array[ActorRef]] = None
+   */
 
   override def initializeServices = {
     master ! SubscribeEvent(GroomLeaveEvent, RequestTaskEvent, TaskFailureEvent)
@@ -115,6 +115,7 @@ class Planner(setting: Setting, master: ActorRef, receptionist: ActorRef,
     }
   }
  
+/*
   // TODO: move to cache related object.
   protected def cleanCachedActiveGrooms() = activeGrooms = None
 
@@ -125,6 +126,7 @@ class Planner(setting: Setting, master: ActorRef, receptionist: ActorRef,
     case Some(ref) => ref
     case None => throw new RuntimeException("Active grooms is missing!")
   }
+*/
 
   /**
    * During TaskAssign Stage, master replies scheduler's requesting groom 
@@ -133,7 +135,7 @@ class Planner(setting: Setting, master: ActorRef, receptionist: ActorRef,
   // TODO: merge SomeMatched to TargetRefs 
   protected def activeTargets: Receive = { 
     case TargetRefs(refs) => {
-      cacheActiveGrooms(refs) 
+      event.cacheActiveGrooms(refs) 
       federator ! AskFor(GroomsTracker.fullName, GetGroomCapacity(refs))
     }
     case SomeMatched(matched, nomatched) => if(!jobManager.isEmpty(TaskAssign))
@@ -148,17 +150,17 @@ class Planner(setting: Setting, master: ActorRef, receptionist: ActorRef,
      */
     case GroomCapacity(mapping: Map[ActorRef, Int]) =>  
       allGroomsHaveFreeSlots(mapping) match {
-        case yes if yes.isEmpty => scheduler.found(activeGroomsCached)
-        case no if !no.isEmpty => //preSlotUnavailable(no) 
+        case yes if yes.isEmpty => scheduler.found(event.activeGroomsCached)
+        case no if !no.isEmpty => event.slotUnavailable(no) 
       }
   }
 
-  /**
-   * When the GroomServer (actually TaskCounsellor) finds no free slots, it 
-   * replies with NoFreeSlot message, denoteing the directive dispatched can't 
-   * be executed.
-   */
   protected def msgs: Receive = {
+    /**
+     * When the GroomServer (actually TaskCounsellor) finds no free slots, it 
+     * replies with NoFreeSlot message, denoteing the directive dispatched 
+     * can't be executed.
+     */    
     case msg: NoFreeSlot => msg.directive.task.isActive match {
       case true => event.noFreeSlot(sender, msg.directive)  
       /**
@@ -170,8 +172,8 @@ class Planner(setting: Setting, master: ActorRef, receptionist: ActorRef,
                               sender.path.address.hostPort) 
     }
     /**
-     * beforeRestart function calls to FindLatestCheckpoint. Tracker replies
-     * LatestCheckpoint message.
+     * {@link PlannerEventHandler#beforeRestart} function calls to 
+     * FindLatestCheckpoint. Tracker then replies LatestCheckpoint message.
      */
     case LatestCheckpoint(jobId: BSPJobID, superstep: Long) => 
       event.whenRestart(jobId, superstep)
@@ -180,36 +182,6 @@ class Planner(setting: Setting, master: ActorRef, receptionist: ActorRef,
   protected def allGroomsHaveFreeSlots(mapping: Map[ActorRef, Int]): 
     Set[ActorRef] = mapping.filter { case (k, v) => v == 0 }.
                             map { case (k, v) => k }.toSet
-
-/*
-  // TODO: to avoid active scheduling to grooms with insufficient slots, due to
-  //       delay reporting, probably changing to allow schduler to update slots
-  //       in tracker directly after assign or schedule function executed.
-  protected def preSlotUnavailable(notEnough: Set[ActorRef]) = 
-    jobManager.ticketAt match {
-      case (s: Some[Stage], t: Some[Ticket]) => {
-        val grooms = notEnough.map { ref => 
-          val (host, port) = targetHostPort(ref) 
-          host+":"+port
-        }.toArray.mkString(",")
-        val ticket = t.get
-        val newTicket = ticket.newWith(ticket.job.newWithFailedState)
-        jobManager.update(newTicket)
-        jobManager.move(newTicket.job.getId)(Finished)
-        newTicket.client ! Reject("Grooms "+grooms+" do not have free slots!")
-        cleanCachedActiveGrooms 
-        activeFinished = false
-      }
-      case (s@_, t@_) => throw new RuntimeException("Invalid ticket " + t +
-                                                    " or stage " + s + "!") 
-    }
-
-  protected def targetHostPort(ref: ActorRef): (String, Int) = {
-    val host = ref.path.address.host.getOrElse("")
-    val port = ref.path.address.port.getOrElse(50000)
-    (host, port)
-  }
-*/
 
   /**
    * GroomServer's TaskCounsellor requests for assigning a task.
@@ -288,36 +260,12 @@ class Planner(setting: Setting, master: ActorRef, receptionist: ActorRef,
      */
     case fault: TaskFailure => event.whenTaskFails(fault.taskAttemptId)
     /**
-     * Send Cancel directive with old task to groom when a task fail. 
+     * Send Cancel directive to groom when a task fail. 
      * Wait for TaskCancelled messages replied by grooms where tasks still 
      * alive.
      */
-    // TODO: call event.cancelTasks instead
     case TasksAliveGrooms(grooms) => event.cancelTasks(grooms, Set[String]())
   }
-
-/*
-
-  protected def tasksAliveGroomsFound(grooms: Set[ActorRef], job: Job,
-      b: (ActorRef, Task) => (ActorRef, Task), a: (ActorRef, Task) => Unit) = 
-    grooms.foreach( groom => {
-      val (host, port) = targetHostPort(groom)
-      job.findTasksBy(host, port).foreach ( taskToRestart => {
-        val (g, t) = b(groom, taskToRestart)
-        if(!taskToRestart.isFailed) g ! new Directive(Cancel, t, setting.name)
-        a(g, t)
-      })
-    })
-*/
-
-  /**
-   * This function is called when a job if finished its execution.
-   */
-  protected def broadcastFinished(jobId: BSPJobID) =  
-    federator ! JobFinishedMessage(jobId) 
-
-  protected def notifyJobComplete(client: ActorRef, jobId: BSPJobID) =
-    client ! JobComplete(jobId)
 
   override def receive = events orElse tickMessage orElse requestTask orElse dispense orElse activeTargets orElse msgs orElse unknown
 
