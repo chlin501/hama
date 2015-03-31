@@ -69,15 +69,6 @@ class Planner(setting: Setting, master: ActorRef, receptionist: ActorRef,
               jobManager: JobManager, event: PlannerEventHandler) 
       extends LocalService with Periodically {
 
-  /** 
-   * A cache when asking tracker the num of free slots available per active 
-   * groom. 
-   * Note that it's an array because multiple tasks may be dispatched to the
-   * same groom server. 
-  // TODO: move to cached related object.
-  protected var activeGrooms: Option[Array[ActorRef]] = None
-   */
-
   override def initializeServices = {
     master ! SubscribeEvent(GroomLeaveEvent, RequestTaskEvent, TaskFailureEvent)
     federator ! SubscribeEvent(TaskArrivalEvent) 
@@ -114,19 +105,6 @@ class Planner(setting: Setting, master: ActorRef, receptionist: ActorRef,
       }
     }
   }
- 
-/*
-  // TODO: move to cache related object.
-  protected def cleanCachedActiveGrooms() = activeGrooms = None
-
-  protected def cacheActiveGrooms(refs: Array[ActorRef]) = 
-    activeGrooms = Option(refs) 
-  
-  protected def activeGroomsCached(): Array[ActorRef] = activeGrooms match {
-    case Some(ref) => ref
-    case None => throw new RuntimeException("Active grooms is missing!")
-  }
-*/
 
   /**
    * During TaskAssign Stage, master replies scheduler's requesting groom 
