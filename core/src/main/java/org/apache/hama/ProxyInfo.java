@@ -60,7 +60,7 @@ public final class ProxyInfo extends SystemInfo implements Writable {
       super.conf = new HamaConfiguration(conf);
 
       super.actorSystemName = super.conf.get("master.actor-system.name", 
-                                 "MasterSystem");
+                                 "BSPSystem");
       try {
         super.host = super.conf.get("master.host", 
                                     InetAddress.getLocalHost().getHostName());
@@ -89,7 +89,7 @@ public final class ProxyInfo extends SystemInfo implements Writable {
       super.conf = new HamaConfiguration(conf);
 
       super.actorSystemName = super.conf.get("groom.actor-system.name", 
-                                             "GroomSystem");
+                                             "BSPSystem");
       try {
         super.host = super.conf.get("groom.host", 
                                     InetAddress.getLocalHost().getHostName());

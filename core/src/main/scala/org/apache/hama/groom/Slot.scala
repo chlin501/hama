@@ -36,7 +36,7 @@ object Slot {
   /**
    * An initial state slot.   
    */
-  def emptySlot(seq: Int): Slot = Slot(seq, None, "", None, None)
+  def emptySlot(seq: Int): Slot = Slot(seq, None, "master", None, None)
 
   def apply(seq: Int, taskAttemptId: Option[TaskAttemptID], master: String,
             executor: Option[ActorRef], container: Option[ActorRef]): Slot = {

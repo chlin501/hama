@@ -61,19 +61,18 @@ object Peer {
 
   /**
    * Format address data. 
+   * Information is the same as {@link Container}
    * @param conf is common configuraiton contains host, port, and slot seq info.
    * @return address in a form of ${actor-system}${seq}_${host}_${port}.
    */
-  def nameFrom(conf: HamaConfiguration): String = {
-    val host = conf.get("bsp.peer.hostname")
-    if(null == host) 
-      throw new IllegalArgumentException("Host value is not specified!")
-    val port = conf.getInt("bsp.peer.port", -1)
-    if(-1 == port) 
-      throw new IllegalArgumentException("Port value is not specified!")
-    val seq = conf.getInt("bsp.child.slot.seq", -1)
-    if(-1 == seq) 
-      throw new IllegalArgumentException("Slot seq value is not specified!")
+// TODO: change to read from setting
+  def nameFrom(conf: HamaConfiguration): String = { 
+    val host = conf.get("container.host")
+    require(null != host, "Host value is not specified!")
+    val port = conf.getInt("container.port", -1)
+    require(-1 != port, "Port value is not specified!")
+    val seq = conf.getInt("conainer.slot.seq", -1) 
+    require(-1 != seq, "Slot seq value is not specified!")
     "BSPPeerSystem%d_%s_%d".format(seq, host, port) 
   }
 }

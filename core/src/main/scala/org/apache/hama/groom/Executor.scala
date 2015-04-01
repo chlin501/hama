@@ -19,7 +19,6 @@ package org.apache.hama.groom
 
 import akka.actor.Actor
 import akka.actor.ActorRef
-import akka.actor.OneForOneStrategy
 import akka.actor.SupervisorStrategy.Stop
 import java.io.BufferedReader
 import java.io.BufferedWriter
@@ -40,6 +39,7 @@ import org.apache.hama.Service
 import org.apache.hama.Spawnable
 import org.apache.hama.conf.Setting
 import org.apache.hama.fs.Operation
+import org.apache.hama.logging.CommonLog
 import org.apache.hama.util.BSPNetUtils
 import scala.collection.immutable.Queue
 import scala.collection.JavaConversions._
@@ -52,13 +52,6 @@ import scala.util.Try
 sealed trait ExecutorMessage
 final case class Instances(process: Process, stdout: ActorRef, 
                            stderr: ActorRef) extends ExecutorMessage
-
-/**
- * {@link TaskCounsellor} notifies {@link Executor} to stop
- * {@link Container}.
-private[groom] final case object StopProcess extends ExecutorMessage
- */
-
 
 sealed trait ExecutorException extends RuntimeException {
 
@@ -101,6 +94,8 @@ final class ProcessFailureException(seq: Int) extends ExecutorException {
 
   def slotSeq(): Int = seq
 
+  override def toString(): String = "Fail creating process for slot "+seq+"!"
+
 }
 
 
@@ -116,7 +111,10 @@ trait ExecutorLog { // TODO: refactor this after all log is switched Logging
         case _ => logWith(conf, logPath, executor, input, ext) 
       }
     } catch { 
-      case e: Exception => error("Fail reading "+name, e) 
+      case e: Exception => {
+        error("Fail reading "+name, e) 
+        throw e
+      }
     } finally { 
       input.close 
     }
@@ -160,17 +158,17 @@ class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
   }
 }
 
-object Executor {
+object Executor extends CommonLog {
 
   val javaHome = System.getProperty("java.home")
-  val hamaHome = System.getProperty("hama.home.dir")
-  val javacp: String  = System.getProperty("java.class.path")
-  val logPath: String = System.getProperty("hama.log.dir")
+  val hamaHome = System.getProperty("hama.home.dir")   
+  val javacp: String  = System.getProperty("java.class.path") 
+  val logPath: String = System.getProperty("hama.log.dir") 
 
-  def java(): String = 
-    new File(new File(javaHome, "bin"), "java").getCanonicalPath
+  def javabin(): String = new File(new File(javaHome, "bin"), "java").
+    getCanonicalPath
 
-  def defaultOpts(conf: HamaConfiguration): String = 
+  def javaOpts(conf: HamaConfiguration): String = 
     conf.get("container.java.opts", "-Xmx200m")
 
   def simpleName(conf: HamaConfiguration): String = 
@@ -181,15 +179,18 @@ object Executor {
 
 /**
  * An actor forks a child process for executing tasks.
- * @param setting cntains necessary setting for launching the child process.
+ * @param groomSetting contains values for child process.
  */
-class Executor(setting: Setting, slotSeq: Int) extends Service with Spawnable {
+class Executor(groomSetting: Setting, slotSeq: Int) extends Service 
+                                                       with Spawnable {
 
   import Executor._
 
+  protected val containerSetting = Setting.container(slotSeq)
+
   protected var instances: Option[Instances] = None
 
-  override def initializeServices() = fork(slotSeq) 
+  override def initializeServices() = fork(containerSetting) 
 
   /**
    * Pick up a port value configured in HamaConfiguration object. Otherwise
@@ -205,18 +206,15 @@ class Executor(setting: Setting, slotSeq: Int) extends Service with Spawnable {
   /**
    * Assemble java command for launching the child process.  
    * @param cp is the classpath.
-   * @param slotSeq indicates to which slot this process belongs.
-   * @param child is the class used to launced the process.
-   * @return Seq[String] is the command for launching the process.
+   * @param setting is the container setting.
    */
-  protected def javaArgs(cp: String, slotSeq: Int, child: Class[_]): 
-      Seq[String] = {
-    val opts = defaultOpts(setting.hama)
-    val bspClassName = child.getName
+  protected def javaArgs(cp: String, setting: Setting): Seq[String] = {
+    val opts = javaOpts(setting.hama)
+    val bspClassName = setting.main.getName 
     val actorSysName = setting.sys
-    // decide to which address the peer will listen, default to 0.0.0.0 
+    // decide to which address the peer will listen, default to 0.0.0.0 (?)
     val listeningTo = setting.host
-    val command = Seq(java) ++ Seq(opts) ++  
+    val command = Seq(javabin) ++ Seq(opts) ++  
                   Seq("-classpath") ++ Seq(classpath(hamaHome, cp)) ++
                   Seq(bspClassName) ++ Seq(actorSysName) ++ 
                   Seq(listeningTo) ++ Seq(taskPort) ++ Seq(slotSeq.toString)
@@ -234,7 +232,12 @@ class Executor(setting: Setting, slotSeq: Int) extends Service with Spawnable {
     if(null == hamaHome)  // TODO: find better to handle side effect 
       throw ClasspathException(slotSeq, "Variable hama.home.dir is not set!")
     var cp = "./:%s:%s/conf".format(parentClasspath, hamaHome)
-    val lib = new File(hamaHome, "lib")
+    val lib = new File(hamaHome, "lib") // TODO: when test move to test classpath?
+    if(!lib.exists) {
+      LOG.warning("Create hama lib path because it doesn't exist: {}", 
+                  lib.getAbsolutePath)
+      lib.mkdirs
+    }
     lib.listFiles(new FilenameFilter {
       def accept(dir: File, name: String): Boolean = true
     }).foreach( jar => { cp += ":"+jar })
@@ -242,22 +245,24 @@ class Executor(setting: Setting, slotSeq: Int) extends Service with Spawnable {
     cp
   }
 
+/*
   protected def containerClass(): Class[Container] = {
-    val clazz = setting.hama.getClass("container.main", classOf[Container])
-    LOG.info("Container class to be instantiated: {}", clazz.getName)
+    val clazz = groomSetting.hama.getClass("container.main", classOf[Container])
+    LOG.debug("Container class to be instantiated: {}", clazz.getName)
     clazz.asInstanceOf[Class[Container]]
   }
+*/
 
   /**
    * Fork a child process based on command assembled.
-   * @param slotSeq indicate which seq the slot is.
    */
-  protected def fork(slotSeq: Int) {
-    val cmd = javaArgs(javacp, slotSeq, containerClass)
-    newContainer(slotSeq, cmd, setting.hama) match {
+  protected def fork(containerSetting: Setting) {
+    val cmd = javaArgs(javacp, containerSetting) 
+    newContainer(containerSetting, cmd) match {
       case Success(instances) => 
         LOG.info("Container process with slot {} exits normally!", slotSeq)
       case Failure(cause) => {
+        LOG.error("Can't fork child process because {}", cause)
         cleanupInstances
         throw ProcessFailureException(slotSeq, cause)
       }
@@ -266,29 +271,29 @@ class Executor(setting: Setting, slotSeq: Int) extends Service with Spawnable {
 
   /**
    * Create container subprocess.
+   * @param setting is the container setting.
    * @param cmd is the command to excute the process.
-   * @param conf contains related information for creating process.
    */
-  protected def newContainer(seq: Int, cmd: Seq[String], 
-                             conf: HamaConfiguration): Try[Int] = try { 
-    val builder = new ProcessBuilder(seqAsJavaList(cmd))
-    builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
-    val process = builder.start
-    val stdout = spawn("stdout%s".format(seq), classOf[StdOut], 
-                       process.getInputStream, conf, self)
-                                
-    val stderr = spawn("stderr%s".format(seq), classOf[StdErr], 
-                       process.getErrorStream, conf, self)
-    LOG.info("Container process for slot seq {} is forked ...", seq)
-    this.instances = Option(Instances(process, stdout, stderr))
-    val exitValue = process.waitFor // blocking call
-    LOG.info("Conainer process exits with value {}", exitValue)
-    if(0 != exitValue) 
-      throw new RuntimeException("Non 0 exit value: "+exitValue)
-    Success(exitValue)
-  } catch {
-    case e: Exception => Failure(e)
-  }
+  protected def newContainer(setting: Setting, cmd: Seq[String]): Try[Int] = 
+    try { 
+      val conf = setting.hama
+      require(null != conf, "Container configuration not found!")
+      val seq = setting.hama.getInt("container.slot.seq", -1)
+      require(-1 != seq, "Invalid container slot seq!")
+      val builder = new ProcessBuilder(seqAsJavaList(cmd))
+      builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
+      val process = builder.start
+      val stdout = spawn("stdout%s".format(seq), classOf[StdOut], 
+                         process.getInputStream, conf, self)
+      val stderr = spawn("stderr%s".format(seq), classOf[StdErr], 
+                         process.getErrorStream, conf, self)
+      this.instances = Option(Instances(process, stdout, stderr))
+      val exitValue = process.waitFor // blocking call
+      require(0 == exitValue, "Non 0 exit value found: "+exitValue)
+      Success(exitValue)
+    } catch {
+      case e: Exception => Failure(e)
+    }
 
   protected def cleanupInstances() = { 
     instances.map { o => {

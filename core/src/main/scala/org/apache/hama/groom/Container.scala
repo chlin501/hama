@@ -51,12 +51,16 @@ import org.apache.hama.util.TaskCounsellorLocator
 import org.apache.zookeeper.CreateMode
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration.DurationInt
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 object Container extends CommonLog {
 
   def hamaHome: String = System.getProperty("hama.home.dir")
 
   def customize(setting: Setting, args: Array[String]): Setting = {
+    LOG.info("Arguments include {}", args.mkString(","))
     require(4 == args.length, "Some arguments are missing! Arguments: "+
                               args.mkString(","))
     val sys = args(0)
@@ -80,6 +84,7 @@ object Container extends CommonLog {
 
   @throws(classOf[Throwable])
   def main(args: Array[String]) = try {
+    if(null != args) LOG.debug("Process arguments: {}", args.mkString(","))
     require(null != args && 0 < args.length, "Arguments not supplied!")
     initialize(args)
     LOG.info("Container process is started!")
@@ -101,11 +106,14 @@ protected[groom] class Pinger(setting: Setting) extends RemoteService
 
   protected val TaskCounsellorName = TaskCounsellor.simpleName(setting.hama)
 
-  val seq: Int = setting.hama.getInt("container.slot.seq", -1)
+  protected val seq: Int = setting.hama.getInt("container.slot.seq", -1)
 
-  override def initializeServices =
-    lookup(TaskCounsellorName, locate(TaskCounsellorLocator(setting.hama)))
+  override def initializeServices = lookup(TaskCounsellorName, 
+      locate(TaskCounsellorLocator(setting.hama)))
 
+  /**
+   * After linking to groom server, `stop' pinger itself!
+   */
   override def afterLinked(proxy: ActorRef) = proxy.path.name match {
     case `TaskCounsellorName` => {
       proxy ! ProcessReady(seq)
@@ -155,8 +163,12 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
    */
   override val supervisorStrategy = 
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 3 minutes) {
-      case e: InstantiationFailure => Restart
-      case _: Exception => {  
+      case e: InstantiationFailure => {
+        LOG.error("Fail to instantiate child because {}", e)
+        Restart
+      }
+      case e: Exception => {  
+        LOG.error("Unknown exception: {}", e)
         stopChildren
         Stop 
       }
@@ -207,7 +219,7 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
   def doLaunch(task: Task) { 
     // TODO: group child actors together for management?
     val log = spawn("taskLogger%s".format(slotSeq), classOf[TaskLogger], 
-                    hamaHome, task.getId, slotSeq)
+                    hamaHome, task.getId/*, slotSeq*/)
     context watch log 
     tasklog = Option(log)
 
@@ -267,10 +279,7 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
   def postCancel(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = 
     from ! new CancelAck(slotSeq, taskAttemptId)
 
-  override def stopServices() {
-    stopChildren
-    super.postStop
-  }
+  override def stopServices() =  stopChildren
 
   /**
    * Shutdown the entire system. The spawned process will be stopped as well.
@@ -294,8 +303,10 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
    * @param target may be {@link TaskCounsellor}, {@link Coordinator}, etc.
    */
   override def offline(target: ActorRef) = 
-    if(nameEquals(Option(taskCounsellor), target) ||
-       nameEquals(tasklog, target) || nameEquals(messenger, target) ||
+    if(nameEquals(Option(taskCounsellor), target)) {
+      LOG.error("{} is offline, Shutdown {}!", target.path.name, name)
+      self ! ShutdownContainer
+    } else if(nameEquals(tasklog, target) || nameEquals(messenger, target) ||
        nameEquals(peer, target) || nameEquals(coordinator, target)) {
       stopChildren
       stop  // TODO: replaced by reporting task failure to task counsellor?

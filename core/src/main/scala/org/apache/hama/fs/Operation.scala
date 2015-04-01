@@ -29,8 +29,9 @@ import org.apache.hadoop.fs.Path
 import org.apache.hadoop.fs.permission.FsPermission
 import org.apache.hadoop.util.ReflectionUtils
 import org.apache.hama.HamaConfiguration
+import org.apache.hama.logging.CommonLog
 
-object Operation {
+object Operation extends CommonLog {
 
   /**
    * Create sys dir with permission set to rwx-wx-wx
@@ -71,18 +72,16 @@ object Operation {
    * Obtain default working directory provided with configuration.
    * @param conf contains setting for particular file system operation.
    */ 
-  def defaultWorkingDirectory(conf: HamaConfiguration): String = {
-    var workDir = conf.get("bsp.working.dir")
-    workDir match {
+  def defaultWorkingDirectory(conf: HamaConfiguration): String = 
+    conf.get("bsp.working.dir") match {
       case null => {
-        val fsDir = Operation.get(conf).getWorkingDirectory
+        val fsDir = Operation.get(conf).getWorkingDirectory.toUri.toURL.getPath
         conf.set("bsp.working.dir", fsDir.toString)
-        workDir = fsDir.toString
+        LOG.debug("Working dir is set to {}", fsDir.toString)
+        fsDir.toString
       }
-      case _ =>
+      case workDir@_ => workDir
     }
-    workDir
-  }
 
   /**
    * Obtain an operation that owns the given path.

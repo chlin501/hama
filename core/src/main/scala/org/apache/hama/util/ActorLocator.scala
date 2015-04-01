@@ -67,7 +67,7 @@ object ActorPathMagnet {
        val groomName = GroomServer.simpleName(locator.conf)
        new ProxyInfo.GroomBuilder(taskCounsellorName, locator.conf).
                     createActorPath.
-                    appendChildPath(groomName).
+                    appendRootPath(groomName). 
                     appendChildPath(taskCounsellorName).
                     build.
                     getPath

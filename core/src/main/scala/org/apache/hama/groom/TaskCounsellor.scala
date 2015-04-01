@@ -17,6 +17,7 @@
  */
 package org.apache.hama.groom
 
+import akka.actor.ActorInitializationException
 import akka.actor.ActorRef
 import akka.actor.Address
 import akka.actor.Deploy
@@ -142,10 +143,22 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   type TaskAttemptID = String
 
   override val supervisorStrategy = OneForOneStrategy() {
-    /**
-     * Executor throws exception.
-     */
-    case ee: ExecutorException => { unwatchContainerWith(ee.slotSeq); Stop }
+    case e: ActorInitializationException => e.getCause match {
+      /**
+       * Executor throws exception.
+       */
+      case ee: ExecutorException => { 
+        LOG.error("Executor exception: {}", ee)
+        unwatchContainerWith(ee.slotSeq)
+        Stop 
+      }
+      case cause@_ => { 
+        LOG.error("Fail creating child because {}", cause); Stop 
+      }
+    }
+    case e: Exception => { 
+      LOG.error("Unknown exception is thrown: {} ", e); Stop 
+    }
   }
 
   protected val slotManager = SlotManager(defaultMaxTasks)
@@ -175,15 +188,17 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     if(requestTask) tick(self, TaskRequest)
   }
 
-  protected def deployContainer(seq: Int): Option[ActorRef] = { 
-    setting.hama.setInt("container.slot.seq", seq) 
-    val info = setting.info
-    // TODO: move to trait ProcessManager#deploy(name, class, addr, setting)
+  protected def deployContainer(seq: Int): Option[ActorRef] = {  
+    val containerSetting = Setting.container(seq)
+    val info = containerSetting.info
+    // TODO: move to trait ProcessManager#deploy(name, class, addr, containerSetting)
     val addr = Address(info.getProtocol.toString, info.getActorSystemName, 
                        info.getHost, info.getPort)
-    Option(context.actorOf(Props(classOf[Container], setting, seq, self).
-                             withDeploy(Deploy(scope = RemoteScope(addr))),
-                           Container.simpleName(setting.hama)))
+    val container = context.actorOf(Props(classOf[Container], containerSetting,
+      seq, self).withDeploy(Deploy(scope = RemoteScope(addr))),
+      Container.simpleName(containerSetting.hama))
+    context watch container
+    Option(container)
   }  
 
   protected def requestTask(): Boolean = 
@@ -227,14 +242,14 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   }
 
   protected def dispatch(d: Directive)(slot: Slot) = d.action match {
-    case Launch => slot.container.map { container => 
+    case Launch => slot.container.map { container => {
       container ! new LaunchTask(d.task) 
       slotManager.book(slot.seq, d.task.getId, container) 
-    }
-    case Resume => slot.executor.map { container => 
+    }}
+    case Resume => slot.executor.map { container => {
       container ! new ResumeTask(d.task) 
       slotManager.book(slot.seq, d.task.getId, container)
-    }
+    }}
     case _ => LOG.error("Action Cancel by {} shouldn't be here for slot " +
                         "{} for container does not exist!", d, slot.seq)
   }
@@ -282,7 +297,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected def whenReceive(d: Directive)(from: ActorRef) =
     if(slotManager.hasFreeSlot(directiveQueue.size)) d.action match {
-      case Launch | Resume => initializeOrDispatch(d) 
+      case Launch | Resume => {
+        initializeOrDispatch(d) 
+      }
       case Cancel => slotManager.findSlotBy(d.task.getId) match { 
         case Some(slot) => slot.container match { 
           case Some(container) => container ! new CancelTask(d.task.getId)  
@@ -356,9 +373,13 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     case _ => LOG.warning("Unknown supervisee {} offline!", from.path.name)
   }
 
+  // TODO: check if exceeding max retry?
   protected def whenExecutorOffline(name: String) = name.split("_") match {
     case ary if (ary.size == 3) => extractSeq(ary(2), { seq => 
-      matchSlot(seq, { slot => checkIfRetry(slot, { seq => newExecutor(seq) })})
+      matchSlot(seq, { slot => checkIfRetry(slot, { seq => {
+        LOG.warning("{} is offline, recreating a new one!", name)
+        newExecutor(seq) 
+      }})})
     })
     case _ => LOG.error("Invalid executor name", name)
   }
@@ -435,30 +456,31 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @return Receive is partial function.
    */
   protected def processReady: Receive = {  
-    case ProcessReady(seq) => deployContainer(seq).map { container => 
+    case ProcessReady(seq) => deployContainer(seq).map { container => {
       slotManager.updateContainer(seq, Option(container)) 
       dispatchDirective(seq, container)
-    }
+    }}
   }
 
   protected def dispatchDirective(seq: Int, container: ActorRef) = 
     if(!directiveQueue.isEmpty) {
-      LOG.info("{} is asking for task execution...", container.path.name)
+      LOG.info("Direcive queue is not empty and container {} is asking for "+
+               "task execution!", container.path.name)
       val (d, rest) = directiveQueue.dequeue
       d.action match {
         case Launch => {
-          LOG.info("{} requests for LaunchTask.", container.path.name)
+          LOG.debug("{} requests for LaunchTask.", container.path.name)
           pushToLaunch(seq, d, container)  
         }
         case Resume => {
-          LOG.info("{} requests for ResumeTask.", container.path.name)
+          LOG.debug("{} requests for ResumeTask.", container.path.name)
           pushToResume(seq, d, container)
         }
-        case _ => LOG.error("Container {} shouldn't request Cancel action!", 
-                            container.path.name)
+        case _ => LOG.warning("Container {} shouldn't request Cancel action!", 
+                              container.path.name)
       }
       directiveQueue = rest
-    }
+    } 
 
   protected def escalate: Receive = {
     case finished: TaskFinished => {

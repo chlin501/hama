@@ -205,7 +205,7 @@ object TaskLogger {
 //       - message detail with prefix 
 //       or better mechanism
 class TaskLogger(hamaHome: String, taskAttemptId: TaskAttemptID,
-                           console: Boolean) 
+                 console: Boolean) 
     extends Actor with akka.actor.ActorLogging {
 
   import TaskLogging._

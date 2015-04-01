@@ -58,14 +58,17 @@ trait RemoteService extends Service {
    * @param target denotes the remote target actor name.
    * @param path indicate the path of target actor.
    */
-  protected def lookup(target: String, path: String,
+// TODO: setup max lookup value, so the child can decide what to do e.g. shutdown when exceeding max lookup.
+  protected def lookup(target: String, path: String, 
                        timeout: FiniteDuration = 5.seconds) {
     proxies.find(p => p.path.name.equals(target)) match {
       case Some(found) => {
+LOG.info("%%%%%%%%%%%%%%% lookup finds {}", found)
         proxies -= found 
         refreshProxy(target, path)
       }
       case None => {
+LOG.info("%%%%%%%%%%%%%%% lookup finds None!")
         refreshProxy(target, path)
         proxiesCount += 1
       }
@@ -144,9 +147,9 @@ trait RemoteService extends Service {
    * Timeout reply when looking up a specific remote proxy.
    * @param Receive is partial function.
    */
-  protected def timeout: Receive = {
+  protected def timeout: Receive = {  
     case Timeout(proxy, path) => {
-      LOG.debug("Timeout when looking up proxy {} ", proxy)
+      LOG.debug("Timeout when looking up proxy {} at path {}", proxy, path)
       proxies.find(p => p.path.name.equals(proxy)) match {
         case Some(found) => LOG.debug("Proxy {} is already been found!", proxy)
         case None => lookup(proxy, path)
@@ -160,11 +163,10 @@ trait RemoteService extends Service {
    * @param actor is the instance of ActoRef.
    */
   protected def actorReply: Receive = {
-    case ActorIdentity(target, Some(actor)) => {
-      remoteReply(target.toString, actor)
-    }
+    case ActorIdentity(target, Some(actor)) => remoteReply(target.toString, 
+      actor)
     case ActorIdentity(target, None) => LOG.debug("{} is not yet available!",
-                                                    target)
+                                                 target)
   }
 
 

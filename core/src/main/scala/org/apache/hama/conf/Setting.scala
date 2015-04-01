@@ -106,6 +106,12 @@ object Setting {
 
   def container(): Setting = container(new HamaConfiguration)
 
+  def container(slotSeq: Int): Setting = {
+    val conf = new HamaConfiguration 
+    conf.setInt("container.slot.seq", slotSeq) 
+    container(conf)
+  }
+
   def container(conf: HamaConfiguration): Setting = new ContainerSetting(conf)
 
   def client(): Setting = client(new HamaConfiguration)
@@ -238,6 +244,7 @@ class ContainerSetting(conf: HamaConfiguration) extends Setting{
   override def sys(): String = conf.get("container.actor-system.name", 
     "BSPSystem")
 
+  // TODO: default listening to 0.0.0.0 ?
   override def host(): String = conf.get("container.host", 
                                          InetAddress.getLocalHost.getHostName)
 
