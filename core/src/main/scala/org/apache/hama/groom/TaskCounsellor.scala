@@ -188,16 +188,17 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     if(requestTask) tick(self, TaskRequest)
   }
 
-  protected def deployContainer(seq: Int): Option[ActorRef] = {  
-    val containerSetting = Setting.container(seq)
-    val info = containerSetting.info
-    // TODO: move to trait ProcessManager#deploy(name, class, addr, containerSetting)
-    val addr = Address(info.getProtocol.toString, info.getActorSystemName, 
-                       info.getHost, info.getPort)
-    val container = context.actorOf(Props(classOf[Container], containerSetting,
-      seq, self).withDeploy(Deploy(scope = RemoteScope(addr))),
-      Container.simpleName(containerSetting.hama))
-    context watch container
+  protected def deploy(sys: String, seq: Int, host: String, port: Int): 
+    Option[ActorRef] = {  
+      val conf = Setting.container(sys, seq, host, port)
+      val info = conf.info
+      // TODO: move to trait ProcessManager#deploy(name, class, addr, conf)
+      val addr = Address(info.getProtocol.toString, info.getActorSystemName, 
+                         info.getHost, info.getPort)
+      val container = context.actorOf(Props(classOf[Container], sys, seq, host,
+        port, self).withDeploy(Deploy(scope = RemoteScope(addr))), 
+        Container.simpleName(conf.hama))
+      context watch container
     Option(container)
   }  
 
@@ -396,12 +397,25 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       case s@_ => LOG.error("Invalid container {} offline!", name)
     }
 
+  protected def resolve(ref: Option[ActorRef]): (String, String, Int) = 
+    ref match {
+      case Some(r) => {
+        val sys = r.path.address.system
+        val host = r.path.address.host.getOrElse("localhost")
+        val port = r.path.address.port.getOrElse(61000)
+        (sys, host, port)
+      }
+      case None => ("BSPSystem", "localhost", 61000)
+    }
+
   // TODO: move to ProcessManager trait?
-  protected def redeploy(slot: Slot) = 
-    deployContainer(slot.seq).map { container =>
+  protected def redeploy(slot: Slot) = { 
+    val (sys, host, port) = resolve(slot.container) 
+    deploy(sys, slot.seq, host, port).map { container =>
       slotManager.updateContainer(slot.seq, Option(container))
       dispatchDirective(slot.seq, container) 
     }
+  }
  
   protected def checkIfRetry(old: Slot, 
                              f:(Int) => Unit) = retries.get(old.seq) match {
@@ -455,11 +469,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * - Dispatch to container.
    * @return Receive is partial function.
    */
-  protected def processReady: Receive = {  
-    case ProcessReady(seq) => deployContainer(seq).map { container => {
-      slotManager.updateContainer(seq, Option(container)) 
-      dispatchDirective(seq, container)
-    }}
+  protected def processReady: Receive = { 
+    case ProcessReady(sys, seq, host, port) => 
+      deploy(sys, seq, host, port).map { container => {
+        slotManager.updateContainer(seq, Option(container)) 
+        dispatchDirective(seq, container)
+      }}
   }
 
   protected def dispatchDirective(seq: Int, container: ActorRef) = 

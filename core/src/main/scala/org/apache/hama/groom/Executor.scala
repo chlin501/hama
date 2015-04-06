@@ -197,11 +197,7 @@ class Executor(groomSetting: Setting, slotSeq: Int) extends Service
    * use default 50001.
    * @param String of the port value.
    */
-  protected def taskPort(): String = {
-    val port = BSPNetUtils.getFreePort(50002).toString
-    LOG.debug("Port value to be used is {}", port)
-    port
-  }
+  protected def taskPort(): String = BSPNetUtils.getFreePort(61000).toString
 
   /**
    * Assemble java command for launching the child process.  
@@ -211,13 +207,16 @@ class Executor(groomSetting: Setting, slotSeq: Int) extends Service
   protected def javaArgs(cp: String, setting: Setting): Seq[String] = {
     val opts = javaOpts(setting.hama)
     val bspClassName = setting.main.getName 
-    val actorSysName = setting.sys
+    val sys = setting.sys
     // decide to which address the peer will listen, default to 0.0.0.0 (?)
     val listeningTo = setting.host
+    val port = taskPort
+    LOG.debug("Container process will be created at {}{}@{}:{}", sys, slotSeq, 
+              listeningTo, port)
     val command = Seq(javabin) ++ Seq(opts) ++  
                   Seq("-classpath") ++ Seq(classpath(hamaHome, cp)) ++
-                  Seq(bspClassName) ++ Seq(actorSysName) ++ 
-                  Seq(listeningTo) ++ Seq(taskPort) ++ Seq(slotSeq.toString)
+                  Seq(bspClassName) ++ Seq(sys) ++ 
+                  Seq(listeningTo) ++ Seq(port) ++ Seq(slotSeq.toString)
     LOG.debug("Java command to be executed: {}", command.mkString(" "))
     command
   }
@@ -232,7 +231,8 @@ class Executor(groomSetting: Setting, slotSeq: Int) extends Service
     if(null == hamaHome)  // TODO: find better to handle side effect 
       throw ClasspathException(slotSeq, "Variable hama.home.dir is not set!")
     var cp = "./:%s:%s/conf".format(parentClasspath, hamaHome)
-    val lib = new File(hamaHome, "lib") // TODO: when test move to test classpath?
+    // TODO: when testing, mkdir lib under test classpath?
+    val lib = new File(hamaHome, "lib") 
     if(!lib.exists) {
       LOG.warning("Create hama lib path because it doesn't exist: {}", 
                   lib.getAbsolutePath)
@@ -245,22 +245,16 @@ class Executor(groomSetting: Setting, slotSeq: Int) extends Service
     cp
   }
 
-/*
-  protected def containerClass(): Class[Container] = {
-    val clazz = groomSetting.hama.getClass("container.main", classOf[Container])
-    LOG.debug("Container class to be instantiated: {}", clazz.getName)
-    clazz.asInstanceOf[Class[Container]]
-  }
-*/
-
   /**
    * Fork a child process based on command assembled.
    */
   protected def fork(containerSetting: Setting) {
     val cmd = javaArgs(javacp, containerSetting) 
     newContainer(containerSetting, cmd) match {
-      case Success(instances) => 
-        LOG.info("Container process with slot {} exits normally!", slotSeq)
+      case Success(instance) => {
+        LOG.info("Container {} exists normally!", slotSeq)
+        this.instances = None
+      }
       case Failure(cause) => {
         LOG.error("Can't fork child process because {}", cause)
         cleanupInstances

@@ -412,9 +412,11 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   //TODO: should the task's superstep be confiured to 0 instead?
   protected def firstSync(task: Task) {
+LOG.info("###### first time syncing to zk BEG ... ")
     Utils.await[PeerClientMessage](syncClient, Enter(task.getCurrentSuperstep)) 
     Utils.await[PeerClientMessage](syncClient, Leave(task.getCurrentSuperstep)) 
     task.incrementSuperstep
+LOG.info("###### first time syncing to zk END ... ")
   }
 
   /**

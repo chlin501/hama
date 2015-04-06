@@ -19,7 +19,7 @@ package org.apache.hama.util
 
 import akka.event.Logging
 import org.apache.hama.Agent
-import org.apache.hama.HamaConfiguration
+import org.apache.hama.conf.Setting
 import org.apache.hama.logging.CommonLog
 import org.apache.curator.framework.CuratorFramework
 import org.apache.curator.framework.CuratorFrameworkFactory
@@ -41,14 +41,14 @@ object Curator extends CommonLog {
                                     retryPolicy(new RetryNTimes(retryN, delay)).
                                     connectString(servers).build
 
-  def build(conf: HamaConfiguration): CuratorFramework = {
-    val servers = conf.get("hama.zookeeper.property.connectString", 
-                           "localhost:2181")
-    val sessionTimeout = conf.getInt("hama.zookeeper.session.timeout",
-                                     threeMinutes)
-    val retryN = conf.getInt("bsp.zookeeper.client.retry_n_times", 10)
-    val sleepBeforeRetry =
-      conf.getInt("bsp.zookeeper.client.sleep_before_retry", 1000)
+  def build(setting: Setting): CuratorFramework = {
+    val servers = setting.hama.get("hama.zookeeper.property.connectString", 
+                                   "localhost:2181")
+    val sessionTimeout = setting.hama.getInt("hama.zookeeper.session.timeout",
+                                             threeMinutes)
+    val retryN = setting.hama.getInt("bsp.zookeeper.client.retry_n_times", 10)
+    val sleepBeforeRetry = setting.hama.
+      getInt("bsp.zookeeper.client.sleep_before_retry", 1000)
     LOG.info("Properties for ZooKeeper connection contain servers: {},"+
              "sessionTimeout: {}, retriesN: {}, sleepBeforeRetry: {}.",
              servers, sessionTimeout, retryN, sleepBeforeRetry)
@@ -76,8 +76,8 @@ trait Curator extends Conversion with CommonLog {
   // TODO: create instance from factory method. and singleton.
   protected var curatorFramework: Option[CuratorFramework] = None 
 
-  def startCurator(conf: HamaConfiguration): Boolean = curatorFramework match {
-    case None => { initializeCurator(conf); true }
+  def startCurator(setting: Setting): Boolean = curatorFramework match {
+    case None => { initializeCurator(setting); true }
     case Some(client) => true
   }
 
@@ -88,15 +88,15 @@ trait Curator extends Conversion with CommonLog {
 
   /**
    * Initialize curator instance.
-   * @param conf contains information for connecting to ZooKeeper, including
-   *             connectString, sessionTimeout, retriesN, and 
-   *             sleepBetweenRetries.
+   * @param setting should contain information for connecting to ZooKeeper, 
+   *                including connectString, sessionTimeout, retriesN, and 
+   *                sleepBetweenRetries.
    */
-  def initializeCurator(conf: HamaConfiguration): Option[CuratorFramework] = 
+  def initializeCurator(setting: Setting): Option[CuratorFramework] = 
     curatorFramework match { 
       case Some(client) => { start(client); curatorFramework }
       case None => {
-        val client = build(conf)
+        val client = build(setting)
         curatorFramework = Option(client)
         start(client)
         curatorFramework

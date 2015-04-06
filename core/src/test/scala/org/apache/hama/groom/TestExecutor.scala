@@ -19,7 +19,6 @@ package org.apache.hama.groom
 
 import akka.actor.ActorRef
 import com.typesafe.config.Config
-import java.net.InetAddress
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Mock
@@ -30,6 +29,7 @@ import org.apache.hama.master.Directive
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.util.JobUtil
+import org.apache.hama.util.Utils
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
@@ -82,8 +82,8 @@ object TestExecutor {
 
   val actorSystemName = "BSPSystem"
 
-  val localhost = InetAddress.getLocalHost.getHostName
-
+  val localhost = Utils.hostname
+ 
   def content(): String = content(localhost)
 
   def content(host: String): String = s"""

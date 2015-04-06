@@ -23,7 +23,8 @@ import org.apache.hama.bsp.v2.Task
 
 sealed trait GroomMessage
 
-private[groom] final case class ProcessReady(seq: Int) extends GroomMessage
+private[groom] final case class ProcessReady(sys: String, seq: Int, 
+  host: String, port: Int) extends GroomMessage
 
 private[groom] final case class PullForExecution(
   slotSeq: Int

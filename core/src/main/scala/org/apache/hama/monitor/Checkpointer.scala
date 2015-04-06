@@ -23,12 +23,13 @@ import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.MapWritable
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
+import org.apache.hama.Close
+import org.apache.hama.HamaConfiguration
+import org.apache.hama.LocalService
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Superstep
-import org.apache.hama.LocalService
-import org.apache.hama.Close
+import org.apache.hama.conf.Setting
 import org.apache.hama.fs.Operation
-import org.apache.hama.HamaConfiguration
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.Combiner
 import org.apache.hama.message.compress.BSPMessageCompressor
@@ -50,8 +51,8 @@ object Checkpointer {
    * Root path to external storage.
    * @param conf is task configuration.
    */
-  def root(conf: HamaConfiguration): String = 
-    conf.get("bsp.checkpoint.root.path", "/checkpoint") 
+  def root(setting: Setting): String = 
+    setting.hama.get("bsp.checkpoint.root.path", "/checkpoint") 
 
   def jobId(taskAttemptId: TaskAttemptID): String = 
     taskAttemptId.getJobID.toString
@@ -61,14 +62,14 @@ object Checkpointer {
 
   /**
    * Checkpoint path with suffix supplied.
-   * @param commConf is common configuration.
+   * @param setting is common configuration.
    * @param superstep is current superstep value for checkpointing.
    * @param id is task attempt id.
    * @param suffix denotes either its message or superstep data.
    */
-  def ckptPath(commConf: HamaConfiguration, superstep: Long, id: TaskAttemptID, 
+  def ckptPath(setting: Setting, superstep: Long, id: TaskAttemptID, 
                suffix: String): String = 
-    "%s/%s%s%s".format(dir(root(commConf), jobId(id), superstep), 
+    "%s/%s%s%s".format(dir(root(setting), jobId(id), superstep), 
                       id.toString, dot, suffix)
 
 }
@@ -80,7 +81,7 @@ object Checkpointer {
  * same task.
  * Note: Checkpointer will not be recovered because we assume at least some   
  *       checkpoints will success.
- * @param commConf is common configuration.
+ * @param setting is common configuration.
  * @param taskConf contains configuration specific to a task.
  * @param taskAttemptId denotes with which task content this checkpointer will
  *                      save.
@@ -88,7 +89,7 @@ object Checkpointer {
  */
 // TODO: task also needs to be saved so that after recovery, task related 
 //       setting can be recovered as well.
-class Checkpointer(commConf: HamaConfiguration, 
+class Checkpointer(setting: Setting, 
                    taskConf: HamaConfiguration, 
                    taskAttemptId: TaskAttemptID, 
                    superstepCount: Long, 
@@ -119,10 +120,8 @@ class Checkpointer(commConf: HamaConfiguration,
    * Set to true when map and next is successfully written to external storage.
    */
   protected var mapNextStatus = false
- 
-  //override def configuration(): HamaConfiguration = commConf
 
-  override def initializeServices = initializeCurator(commConf)
+  override def initializeServices = initializeCurator(setting)
 
   // TODO: we may need to divide <superstep> into sub category because 
   //       more than 10k znodes may lead to performance slow down for zk 
@@ -177,9 +176,9 @@ class Checkpointer(commConf: HamaConfiguration,
     }
   }
 
-  def dest(commConf: HamaConfiguration, superstep: Long, 
+  def dest(setting: Setting, superstep: Long, 
            taskAttemptId: TaskAttemptID, ext: String): String = 
-    "%s/%s%s%s".format(dir(root(commConf), jobId(taskAttemptId), 
+    "%s/%s%s%s".format(dir(root(setting), jobId(taskAttemptId), 
                        superstepCount), taskAttemptId.toString, dot, ext)
 
   /**
@@ -187,8 +186,8 @@ class Checkpointer(commConf: HamaConfiguration,
    */
   protected def markIfFinish(): Boolean = if(msgsReceived && mapNextReceived) { 
     (msgsStatus && mapNextStatus) match {  // decide fail or success
-      case true => create(dest(commConf, superstepCount, taskAttemptId, "ok"))
-      case false => create(dest(commConf, superstepCount, taskAttemptId,"fail"))
+      case true => create(dest(setting, superstepCount, taskAttemptId, "ok"))
+      case false => create(dest(setting, superstepCount, taskAttemptId,"fail"))
     }
     true
   } else false
@@ -210,7 +209,7 @@ class Checkpointer(commConf: HamaConfiguration,
   }
 
   protected def pathToMsg(): Path = 
-    new Path(ckptPath(commConf, superstepCount, taskAttemptId, msgSuffix)) 
+    new Path(ckptPath(setting, superstepCount, taskAttemptId, msgSuffix)) 
 
   protected def writeMessages(messages: List[Writable]): Boolean = 
     write(pathToMsg(), (out) => { 
@@ -225,15 +224,15 @@ class Checkpointer(commConf: HamaConfiguration,
     })
 
   protected def toBundle(messages: List[Writable]): 
-    Option[BSPMessageBundle[Writable]] = Combiner.get(Option(commConf)) match {
+    Option[BSPMessageBundle[Writable]] = Combiner.get(Option(setting.hama)) match {
     case None => {
-      val compressor = BSPMessageCompressor.get(commConf)
+      val compressor = BSPMessageCompressor.get(setting.hama)
       val bundle = getBundle(compressor)
       messages.foreach( msg => bundle.addMessage(msg))
       Option(bundle)
     } 
     case Some(combiner) => {
-      val compressor = BSPMessageCompressor.get(commConf) 
+      val compressor = BSPMessageCompressor.get(setting.hama) 
       val bundle = getBundle(compressor)
       messages.foreach( msg => bundle.addMessage(msg))
       val combined = getBundle(compressor)
@@ -247,7 +246,7 @@ class Checkpointer(commConf: HamaConfiguration,
       BSPMessageBundle[Writable] = {
     val bundle = new BSPMessageBundle[Writable]()
     bundle.setCompressor(compressor, 
-                         BSPMessageCompressor.threshold(Option(commConf)))
+                         BSPMessageCompressor.threshold(Option(setting.hama)))
     bundle
   }
 
@@ -262,7 +261,7 @@ class Checkpointer(commConf: HamaConfiguration,
   }
 
   protected def pathToSuperstep(): Path = 
-    new Path(ckptPath(commConf, superstepCount, taskAttemptId, supSuffix))
+    new Path(ckptPath(setting, superstepCount, taskAttemptId, supSuffix))
 
   protected def writeMapNext(map: Map[String, Writable], next: Class[_]): 
     Boolean = write(pathToSuperstep(), (out) => { 

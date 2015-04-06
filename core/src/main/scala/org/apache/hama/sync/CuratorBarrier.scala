@@ -18,8 +18,8 @@
 package org.apache.hama.sync
 
 import org.apache.curator.framework.recipes.barriers.DistributedDoubleBarrierV1
-import org.apache.hama.HamaConfiguration
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.conf.Setting
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.util.Curator
 
@@ -27,17 +27,17 @@ object CuratorBarrier {
 
   /**
    * Create barrier instance implemented by curator.
-   * @param conf is common conf that contains curator information.
+   * @param setting is container setting.
    * @param taskAttemptId 
    * @param numBSPTasks are tasks that will meet at the barrier path.
    */  
-  def apply(conf: HamaConfiguration, taskAttemptId: TaskAttemptID, 
-            numBSPTasks: Int): CuratorBarrier = Curator.build(conf) match {
+  def apply(setting: Setting, taskAttemptId: TaskAttemptID, numBSPTasks: Int): 
+    CuratorBarrier = Curator.build(setting) match {
       case null => 
         throw new RuntimeException("Can't initialize CuratorFramework!")
       case client@_ => {
         Curator.start(client)
-        val root = conf.get("bsp.zookeeper.root.path", "/sync")
+        val root = setting.hama.get("bsp.zookeeper.root.path", "/sync")
         new CuratorBarrier(new DistributedDoubleBarrierV1(client, root, 
                            taskAttemptId, numBSPTasks))
       }

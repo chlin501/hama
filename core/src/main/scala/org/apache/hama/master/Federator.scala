@@ -84,14 +84,14 @@ class Federator(setting: Setting, master: ActorRef)
     LOG.debug("Listening to groom leave and stats arrival events!")
 
     val defaultClasses = defaultTrackers.mkString(",")
-    load(setting.hama, defaultClasses).foreach( probe => { 
+    load(setting, defaultClasses).foreach( probe => { 
        LOG.debug("Default trakcer to be instantiated: {}", probe.name)
        getOrCreate(probe.name, classOf[WrappedTracker], self, probe) 
     })
     LOG.debug("Finish loading default trackers ...")
 
     val classes = setting.hama.get("federator.probe.classes")
-    val nonDefault = load(setting.hama, classes)
+    val nonDefault = load(setting, classes)
     nonDefault.foreach( probe => {
        LOG.debug("Non default trakcer to be instantiated: {}", probe.name)
        getOrCreate(probe.name, classOf[WrappedTracker], self, probe) 

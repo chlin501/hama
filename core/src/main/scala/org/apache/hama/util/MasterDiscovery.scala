@@ -61,7 +61,7 @@ trait MasterDiscovery extends RemoteService with Curator {
     "/%s/%s_%s@%s:%s".format("masters", setting.name, sys, host, port)
   }
 
-  protected def register() = if(needRegister) startCurator(setting.hama) match {
+  protected def register() = if(needRegister) startCurator(setting) match {
     case true => {
       val path = mkPath
       LOG.debug("Master znode will be registered at {}", path)
@@ -76,7 +76,7 @@ trait MasterDiscovery extends RemoteService with Curator {
     case m: Array[ProxyInfo] if 1 == m.size => m(0) 
   }
 
-  protected def masters(): Array[ProxyInfo] = startCurator(setting.hama) match {
+  protected def masters(): Array[ProxyInfo] = startCurator(setting) match {
     case true => list("/masters").map { child => {
       LOG.debug("Master znode found: {}", child)
       val conf = new HamaConfiguration

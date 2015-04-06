@@ -18,15 +18,18 @@
 package org.apache.hama.conf
 
 import akka.actor.Actor
-import java.net.InetAddress
+import java.io.DataInput
+import java.io.DataOutput
+import java.io.IOException
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.SystemInfo
-import org.apache.hama.master.BSPMaster
+import org.apache.hama.client.Submitter
 import org.apache.hama.groom.GroomServer
 import org.apache.hama.groom.Container
-import org.apache.hama.client.Submitter
+import org.apache.hama.master.BSPMaster
+import org.apache.hama.util.Utils
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
@@ -46,9 +49,9 @@ protected trait Akka {
     s""" provider = "$string" """
 
   protected def actor(provider: String): String = 
-   " actor { " + provider + serialization + " } "
+   " actor { " + provider + serializers + " } "
 
-  protected def serialization(): String = """
+  protected def serializers(): String = """
     serializers {
       java = "akka.serialization.JavaSerializer"
       proto = "akka.remote.serialization.ProtobufSerializer"
@@ -106,6 +109,19 @@ object Setting {
 
   def container(): Setting = container(new HamaConfiguration)
 
+  def container(sys: String, seq: Int, host: String, port: Int): Setting = {
+    val conf = new HamaConfiguration
+    require(null != sys && !"".equals(sys) , "Container system name is empty!")
+    conf.set("container.actor-system.name", sys)
+    require(-1 != seq , "Container slot seq should't be -1!")
+    conf.setInt("container.slot.seq", seq) 
+    require(null != host && !"".equals(host) , "Container host is empty!")
+    conf.set("container.host", host)
+    require(0 < port && 65535 >= port, "Invalud container port value: "+port)
+    conf.setInt("container.port", port)
+    container(conf)
+  }
+
   def container(slotSeq: Int): Setting = {
     val conf = new HamaConfiguration 
     conf.setInt("container.slot.seq", slotSeq) 
@@ -149,6 +165,15 @@ trait Setting extends Akka {
   protected def toClass[A <: Actor](name: String): Try[Class[A]] = 
     Try(Class.forName(name).asInstanceOf[Class[A]])
 
+  def get(key: String, default: String): String = hama.get(key, default)
+
+  def getInt(key: String, default: Int): Int = hama.getInt(key, default)
+
+  def getBoolean(key: String, default: Boolean): Boolean = 
+    hama.getBoolean(key, default)
+
+  // TODO: def configuration.getXXXXX e.g. getClass, etc.
+
 }
 
 class MasterSetting(conf: HamaConfiguration) extends Setting {
@@ -177,8 +202,7 @@ class MasterSetting(conf: HamaConfiguration) extends Setting {
 
   override def sys(): String = conf.get("master.actor-system.name", "BSPSystem")
 
-  override def host(): String = conf.get("master.host", 
-                                         InetAddress.getLocalHost.getHostName)
+  override def host(): String = conf.get("master.host", Utils.hostname)
 
   override def port(): Int = conf.getInt("master.port", 40000)
 
@@ -210,14 +234,13 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
 
   override def sys(): String = conf.get("groom.actor-system.name", "BSPSystem")
 
-  override def host(): String = conf.get("groom.host", 
-                                         InetAddress.getLocalHost.getHostName)
+  override def host(): String = conf.get("groom.host", Utils.hostname)
 
   override def port(): Int = conf.getInt("groom.port", 50000)
 
 }
 
-class ContainerSetting(conf: HamaConfiguration) extends Setting{
+class ContainerSetting(conf: HamaConfiguration) extends Setting {
 
   import Setting._
 
@@ -231,25 +254,24 @@ class ContainerSetting(conf: HamaConfiguration) extends Setting{
 
   override def info(): SystemInfo = info(sys, host, port)
 
-  override def name(): String = Container.simpleName(conf)
+  override def name(): String = Container.simpleName(hama)
 
   override def main(): Class[Actor] = {
-    val m = conf.get("container.main", classOf[Container].getName)
+    val m = hama.get("container.main", classOf[Container].getName)
     toClass[Container](m) match {
       case Success(clazz) => clazz.asInstanceOf[Class[Actor]] 
       case Failure(cause) => classOf[Container].asInstanceOf[Class[Actor]] 
     }
   }
 
-  override def sys(): String = conf.get("container.actor-system.name", 
+  override def sys(): String = hama.get("container.actor-system.name", 
     "BSPSystem")
 
   // TODO: default listening to 0.0.0.0 ?
-  override def host(): String = conf.get("container.host", 
-                                         InetAddress.getLocalHost.getHostName)
+  override def host(): String = hama.get("container.host", Utils.hostname)
 
-  override def port(): Int = conf.getInt("container.port", 61000)
-  
+  override def port(): Int = hama.getInt("container.port", 61000)
+ 
 }
 
 class ClientSetting(conf: HamaConfiguration) extends Setting {
@@ -279,8 +301,7 @@ class ClientSetting(conf: HamaConfiguration) extends Setting {
   override def sys(): String = conf.get("client.actor-system.name", 
     "BSPSystem")
 
-  override def host(): String = conf.get("client.host", 
-                                         InetAddress.getLocalHost.getHostName)
+  override def host(): String = conf.get("client.host", Utils.hostname)
 
   override def port(): Int = conf.getInt("client.port", 1947)
   

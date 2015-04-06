@@ -18,18 +18,19 @@
 package org.apache.hama.sync
 
 import akka.actor.ActorRef
-import java.net.InetAddress
-import org.apache.hama.bsp.BSPJobID
-import org.apache.hama.bsp.TaskAttemptID
-import org.apache.hama.bsp.v2.Task
 import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Close
+import org.apache.hama.bsp.BSPJobID
+import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.bsp.v2.Task
+import org.apache.hama.conf.Setting
 import org.apache.hama.logging.Logging
 import org.apache.hama.logging.LoggingAdapter
 import org.apache.hama.logging.TaskLog
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.logging.TaskLogging
+import org.apache.hama.util.Utils
 
 sealed trait PeerClientMessage
 final case object Register extends PeerClientMessage
@@ -49,13 +50,13 @@ final case object ExitBarrier extends PeerClientMessage
 /**
  * An wrapper that help deal with barrier synchronization and post/ retrieve
  * peer name, etc. information.
- * @param conf denotes comon conf that contains actor system, etc. information.
+ * @param setting is container setting.
  * @param taskAttemptId denotes to which id this peer is bound.
  * @param syncer provides barrier synchronization functions.
  * @param registrator deals with peer data registration and retrievation. 
  * @param tasklog logs task info.
  */
-class PeerClient(conf: HamaConfiguration, 
+class PeerClient(setting: Setting, 
                  taskAttemptId: TaskAttemptID,
                  syncer: Barrier,
                  registrator: PeerRegistrator, 
@@ -65,13 +66,12 @@ class PeerClient(conf: HamaConfiguration,
 
   protected def register: Receive = {
     case Register => {
-      val seq = conf.getInt("bsp.child.slot.seq", -1)  
+      val seq = setting.hama.getInt("container.slot.seq", -1)  
       if(-1 == seq) throw new RuntimeException("Peer's slot seq `-1' is not "+
                                                "correctly configured!")
-      val sys = conf.get("bsp.child.actor-system.name", "BSPPeerSystem"+seq)
-      val host = conf.get("bsp.peer.hostname", 
-                          InetAddress.getLocalHost.getHostName)
-      val port = conf.getInt("bsp.peer.port", 61000)
+      val sys = setting.hama.get("container.actor-system.name", "BSPPeerSystem"+seq)
+      val host = setting.hama.get("container.host", Utils.hostname)
+      val port = setting.hama.getInt("container.port", 61000)
       LOG.debug("ActorSystem {}, host {}, port {} is going to be registered!", 
                 sys, host, port)  
       registrator.register(taskAttemptId, sys, host, port)

@@ -19,7 +19,6 @@ package org.apache.hama.message
 
 import akka.actor.ActorRef
 import java.io.IOException
-import java.net.InetAddress
 import java.util.{ Iterator => Iter }
 import java.util.Map.Entry
 import org.apache.hadoop.io.Writable
@@ -28,6 +27,7 @@ import org.apache.hama.ProxyInfo
 import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.conf.Setting
 import org.apache.hama.logging.Logging
 import org.apache.hama.logging.LoggingAdapter
 import org.apache.hama.logging.TaskLog
@@ -40,11 +40,13 @@ import org.apache.hama.monitor.GetLocalQueueMsgs
 import org.apache.hama.monitor.LocalQueueMessages
 import org.apache.hama.monitor.NotViewableQueue
 import org.apache.hama.util.LRUCache
+import org.apache.hama.util.Utils
 import scala.collection.JavaConversions._
 
 sealed trait MessengerMessage
 final case class SetCoordinator(peer: ActorRef) extends MessengerMessage
-final case class Send(peerName: String, msg: Writable) extends MessengerMessage
+final case class Send(peerString: String, msg: Writable) 
+      extends MessengerMessage
 final case object GetCurrentMessage extends MessengerMessage
 final case class CurrentMessage[M <: Writable](msg: M) extends MessengerMessage
 final case object GetNumCurrentMessages extends MessengerMessage
@@ -71,10 +73,10 @@ object MessageExecutive {
  * Provide default functionality of {@link MessageExecutive}.
  * It realizes message communication by java object, and send messages through
  * actor via {@link akka.actor.TypedActor}.
- * @param conf is the common configuration, not specific for task.
+ * @param setting is the container setting, not specific for task.
  */
 // TODO: separate messenger logic from actor and move writable to messenger.
-class MessageExecutive[M <: Writable](conf: HamaConfiguration,
+class MessageExecutive[M <: Writable](setting: Setting,
                                       slotSeq: Int,
                                       taskAttemptId: TaskAttemptID,
                                       container: ActorRef,
@@ -96,19 +98,7 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   override def stopServices() = close 
 
-  //override def configuration(): HamaConfiguration = conf
-
-  /**
-   * Indicate the local peer.
-   */
-  protected def currentPeer(conf: HamaConfiguration): ProxyInfo = {
-    val host = conf.get("bsp.peer.hostname", 
-                        InetAddress.getLocalHost.getHostName) 
-    val port = conf.getInt("bsp.peer.port", 61000)
-    val addr = "BSPPeerSystem%d@%s:%d".format(slotSeq, host, port)
-    LOG.debug("Current peer address is "+addr)
-    Peer.at(addr)
-  }
+  def conf: HamaConfiguration  = setting.hama
 
   /**
    * Default implementation is {@link MemoryQueue}.
@@ -174,13 +164,13 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
    */
   // TODO: report stats
   @throws(classOf[IOException])
-  protected def send(peerName: String, msg: M) = { 
-    LOG.debug("Message {} will be sent to {}", msg, peerName)
-    outgoingMessageManager.addMessage(Peer.at(peerName), msg); 
+  protected def send(peerString: String, msg: M) = { 
+    LOG.debug("Message {} will be sent to {}", msg, peerString)
+    outgoingMessageManager.addMessage(Peer.at(peerString), msg); 
   }
 
   protected def sendMessage: Receive = {
-    case Send(peerName, msg) => send(peerName, msg.asInstanceOf[M])
+    case Send(peerString, msg) => send(peerString, msg.asInstanceOf[M])
   }
 
   protected def transferMessages: Receive = {
@@ -329,11 +319,11 @@ class MessageExecutive[M <: Writable](conf: HamaConfiguration,
 
   // TODO: report stats
   @throws(classOf[IOException])
-  protected def loopBackMessage(message: Writable) {
+  protected def loopBackMessage(message: Writable) =  
     localQueue.add(message.asInstanceOf[M])
-  } 
 
-  protected def getListenerAddress(): ProxyInfo = currentPeer(conf) 
+  protected def getListenerAddress(): ProxyInfo = ProxyInfo.fromString(self.
+    path.toString)
 
   protected def listenerAddress: Receive = {
     case GetListenerAddress => sender ! getListenerAddress

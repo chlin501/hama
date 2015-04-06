@@ -27,7 +27,7 @@ import org.apache.hama.ProxyInfo
  * module can correctly dispatch message to the actor as long as the peer 
  * host:port vlaue matches the target.
  */
-object Peer {
+object Peer { // TODO: move functions to MessageExecutives then remove!!!
 
   /**
    * Create remote Peer's Proxy infomation for MessageManager.
@@ -36,13 +36,11 @@ object Peer {
    * @param port is the port value of the remote host.
    * @return ProxyInfo contains related peer information.
    */
-  def at(actorSystem: String, host: String, port: Int): ProxyInfo = {
-    val identifier = actorSystem+"@"+host+":"+port
+  def at(actorSystemName: String, host: String, port: Int): ProxyInfo = {
+    val identifier = actorSystemName+"@"+host+":"+port
     ProxyInfo.fromString("akka.tcp://"+identifier+"/user/container/messenger-"+
                          identifier.replaceAll("@", "_").replaceAll(":", "_"))
   }
-
-  
 
   /**
    * Create Peer's Proxy information for MessageManager.
@@ -65,14 +63,14 @@ object Peer {
    * @param conf is common configuraiton contains host, port, and slot seq info.
    * @return address in a form of ${actor-system}${seq}_${host}_${port}.
    */
-// TODO: change to read from setting
   def nameFrom(conf: HamaConfiguration): String = { 
     val host = conf.get("container.host")
     require(null != host, "Host value is not specified!")
     val port = conf.getInt("container.port", -1)
     require(-1 != port, "Port value is not specified!")
-    val seq = conf.getInt("conainer.slot.seq", -1) 
+    val seq = conf.getInt("container.slot.seq", -1) 
     require(-1 != seq, "Slot seq value is not specified!")
     "BSPPeerSystem%d_%s_%d".format(seq, host, port) 
   }
+
 }

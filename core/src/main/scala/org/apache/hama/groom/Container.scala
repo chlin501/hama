@@ -59,14 +59,19 @@ object Container extends CommonLog {
 
   def hamaHome: String = System.getProperty("hama.home.dir")
 
+  /**
+   * Configure command line arguments to setting.
+   * @param setting is the container setting.
+   * @param args is the arguments passed in from command line.
+   */
   def customize(setting: Setting, args: Array[String]): Setting = {
-    LOG.info("Arguments include {}", args.mkString(","))
     require(4 == args.length, "Some arguments are missing! Arguments: "+
                               args.mkString(","))
     val sys = args(0)
     val listeningTo = args(1) // Note: it may binds to 0.0.0.0 for all inet.
     val port = args(2).toInt
     val seq = args(3).toInt
+    LOG.info("Process is launched at {}{}@{}:{}", sys, seq, listeningTo, port)
     require( seq > 0, "Invalid slot seq "+seq+" when forking a child process!")
     setting.hama.set("container.actor-system.name", sys)
     setting.hama.get("container.host", listeningTo)
@@ -74,7 +79,6 @@ object Container extends CommonLog {
     setting.hama.setInt("container.slot.seq", seq)
     setting
   }
-
 
   def initialize(args: Array[String]) {
     val setting = customize(Setting.container, args)
@@ -90,7 +94,7 @@ object Container extends CommonLog {
     LOG.info("Container process is started!")
   } catch {
     case e: Exception => { 
-      LOG.error("Fail launching peer process because {}", e);
+      LOG.error("Exception {}", e);
       System.exit(-1);
     }
   }
@@ -101,27 +105,38 @@ object Container extends CommonLog {
 
 }
 
+/**
+ * Notify {@link TaskCounsellor} that the child process is up.
+ * @param setting is the container setting.
+ */
 protected[groom] class Pinger(setting: Setting) extends RemoteService  
                                                    with ActorLocator {
 
   protected val TaskCounsellorName = TaskCounsellor.simpleName(setting.hama)
 
-  protected val seq: Int = setting.hama.getInt("container.slot.seq", -1)
-
   override def initializeServices = lookup(TaskCounsellorName, 
-      locate(TaskCounsellorLocator(setting.hama)))
+    locate(TaskCounsellorLocator(setting.hama)))
 
   /**
    * After linking to groom server, `stop' pinger itself!
    */
   override def afterLinked(proxy: ActorRef) = proxy.path.name match {
     case `TaskCounsellorName` => {
-      proxy ! ProcessReady(seq)
-      LOG.info("Process with slot seq {} replies ready to {}!", seq, 
+      val seq = setting.hama.getInt("container.slot.seq", -1)
+      require( -1 != seq, "Container process's slot seq shouldn't be -1!")
+      proxy ! ProcessReady(setting.sys, seq, setting.host, setting.port) 
+      LOG.debug("Process with slot seq {} replies ready to {}!", seq, 
                proxy.path.name)
-      stop
     } 
     case _ => LOG.warning("Unknown target {} is linked!", proxy.path.name)
+  }
+
+  override def offline(target: ActorRef)  = target.path.name match {
+    case `TaskCounsellorName` => { 
+      LOG.warning("Shutdown because {} is offline!", target.path.name)
+      shutdown
+    }
+    case _ => LOG.warning("Unknown remote {} offline!", target.path.name)
   }
 
   override def receive = actorReply orElse timeout orElse unknown
@@ -141,11 +156,12 @@ trait Computation extends LocalService {
  */
 // TODO: when coordinator finishes its execution. notify task counsellor and
 //       update slot's task attempt id to none.
-class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef) 
-      extends LocalService {
+class Container(sys: String, slotSeq: Int, host: String, port: Int, 
+                taskCounsellor: ActorRef) extends LocalService {
 
   import Container._
 
+  protected var setting = Setting.container(sys, slotSeq, host, port) 
   protected var tasklog: Option[ActorRef] = None
   protected var messenger: Option[ActorRef] = None
   protected var peer: Option[ActorRef] = None
@@ -217,7 +233,7 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
    * @param task that is supplied to be executed.
    */
   def doLaunch(task: Task) { 
-    // TODO: group child actors together for management?
+    // TODO: group child actors together for management
     val log = spawn("taskLogger%s".format(slotSeq), classOf[TaskLogger], 
                     hamaHome, task.getId/*, slotSeq*/)
     context watch log 
@@ -225,19 +241,19 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
 
     val mgr = spawn(MessageExecutive.simpleName(setting.hama), 
                     classOf[MessageExecutive[BSPMessageBundle[Writable]]],
-                    slotSeq, task.getId, self, log)
+                    setting, slotSeq, task.getId, self, log)
     context watch mgr 
     messenger = Option(mgr)
 
-    val p = spawn("syncer", classOf[PeerClient], setting.hama, task.getId,
-                  CuratorBarrier(setting.hama, task.getId, 
-                  task.getTotalBSPTasks),
-                  CuratorRegistrator(setting.hama), log)
-    context watch p 
-    peer = Option(p)
+    val syncer = spawn("syncer", classOf[PeerClient], setting, task.getId,
+                 CuratorBarrier(setting, task.getId, task.getTotalBSPTasks),
+                 CuratorRegistrator(setting), log)
+    context watch syncer
+    peer = Option(syncer)
+    LOG.info("############ spawned syncer: {}", syncer.path.name)
 
-    val c = spawn("coordinator", classOf[Coordinator], setting.hama, slotSeq, 
-                  task, self, mgr, p, log)
+    val c = spawn("coordinator", classOf[Coordinator], setting.hama, task, 
+                  self, mgr, syncer, log)
 
     context watch c 
     coordinator = Option(c)
@@ -287,7 +303,7 @@ class Container(setting: Setting, slotSeq: Int, taskCounsellor: ActorRef)
    */
   def shutdownContainer: Receive = {
     case ShutdownContainer => {
-      context.unwatch(taskCounsellor) 
+      context.unwatch(taskCounsellor)
       LOG.warning("Going to shutdown the entire system! ")
       shutdown
     }

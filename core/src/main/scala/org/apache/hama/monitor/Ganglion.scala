@@ -26,14 +26,15 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.Agent
 import org.apache.hama.Event
 import org.apache.hama.EventListener
-import org.apache.hama.SubscribeEvent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.Periodically
 import org.apache.hama.Spawnable
+import org.apache.hama.SubscribeEvent
 import org.apache.hama.Tick
 import org.apache.hama.Ticker
-import org.apache.hama.master.GroomLeave
+import org.apache.hama.conf.Setting
 import org.apache.hama.logging.CommonLog
+import org.apache.hama.master.GroomLeave
 import org.apache.hama.util.Utils._
 import scala.concurrent.duration.DurationLong
 import scala.concurrent.duration.FiniteDuration
@@ -173,7 +174,7 @@ class WrappedTracker(federator: ActorRef, tracker: Tracker)
 
 trait Probe extends CommonLog { 
 
-  protected var conf: HamaConfiguration = new HamaConfiguration
+  protected var _setting: Option[Setting] = None
 
   protected[monitor] var wrapper: Option[ActorRef] = None
 
@@ -226,18 +227,17 @@ trait Probe extends CommonLog {
   def initialize() { }
 
   /**
-   * Common configuration of the groom server.
-   * @return HamaConfiguration is the groom common configuration.
+   * Setting of the groom server.
+   * @return Setting is the groom setting.
    */
-  def configuration(): HamaConfiguration = conf
+  def setting(): Setting = _setting.getOrElse(null)
 
   /**
-   * Common configuration of the groom server. 
-   * @param conf is common configuration updating one held by this probe
-   *             during instantiation. 
+   * Setting of the groom server. 
+   * @param setting is either master or groom setting.
    */
-  protected[monitor] def setConfiguration(conf: HamaConfiguration) = 
-    this.conf = conf
+  protected[monitor] def setSetting(setting: Setting) = this._setting = 
+    Option(setting)
 
   /**
    * A reference - either WrappedCollector or WrappedTracker - that wraps this
@@ -338,11 +338,11 @@ trait Ganglion {
 
   /**
    * Load probe instances found under monitor package.
-   * @param conf is common configuration, either for master or groom. 
+   * @param setting is either master or groom setting.
    * @param classes string of probe.
    * @return a seq of probe instances.
    */
-  protected def load(conf: HamaConfiguration, classes: String): Seq[Probe] =
+  protected def load(setting: Setting, classes: String): Seq[Probe] =
     if(null == classes || classes.isEmpty) Seq()
     else {
       val classNames = classes.split(",")
@@ -351,7 +351,7 @@ trait Ganglion {
         classOf[Probe] isAssignableFrom clazz match {
           case true => {
             val instance = clazz.asInstanceOf[Class[Probe]].newInstance
-            instance.setConfiguration(conf)
+            instance.setSetting(setting)
             Option(instance)
           }
           case false => None

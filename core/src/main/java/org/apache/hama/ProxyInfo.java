@@ -20,14 +20,13 @@ package org.apache.hama;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
+import org.apache.hama.util.Utils;
 
 /**
  * Actor location information, including
@@ -61,12 +60,7 @@ public final class ProxyInfo extends SystemInfo implements Writable {
 
       super.actorSystemName = super.conf.get("master.actor-system.name", 
                                  "BSPSystem");
-      try {
-        super.host = super.conf.get("master.host", 
-                                    InetAddress.getLocalHost().getHostName());
-      } catch(UnknownHostException uhe) {
-        throw new RuntimeException("Unknown master host!", uhe); 
-      }
+      super.host = super.conf.get("master.host", Utils.hostname());
       super.port = super.conf.getInt("master.port", 40000);
       LOG.debug("Master proxy "+actorName+" is at "+host+":"+port+" with path "+
                 actorPathBuilder.toString());
@@ -90,12 +84,7 @@ public final class ProxyInfo extends SystemInfo implements Writable {
 
       super.actorSystemName = super.conf.get("groom.actor-system.name", 
                                              "BSPSystem");
-      try {
-        super.host = super.conf.get("groom.host", 
-                                    InetAddress.getLocalHost().getHostName());
-      } catch(UnknownHostException uhe) {
-        throw new RuntimeException("Unknown groom host!", uhe); 
-      }
+      super.host = super.conf.get("groom.host", Utils.hostname());
       super.port = super.conf.getInt("groom.port", 50000);
       LOG.debug("Groom proxy "+actorName+" is at "+host+":"+port+" with path "+ 
                 actorPathBuilder.toString());
@@ -282,23 +271,23 @@ public final class ProxyInfo extends SystemInfo implements Writable {
   public static ProxyInfo fromString(final String address) { //TODO: use regex?
     final String[] protoWithRest = address.split("://");
     if(2 != protoWithRest.length) 
-      throw new RuntimeException("Invalid protocol format: "+address);
+      throw new IllegalArgumentException("Invalid protocol format: "+address);
     Protocol proto = Protocol.Remote;
     if(!Protocol.Remote.toString().equals(protoWithRest[0])) 
       proto = Protocol.Local;
     if(Protocol.Remote.equals(proto)) {
       final String[] actorSysWithRest = protoWithRest[1].split("@");
       if(2 != actorSysWithRest.length)
-        throw new RuntimeException("Invalid actor system name format: "+
-                                   address);
+        throw new IllegalArgumentException("Invalid actor system name : " +
+                                            address);
       final String actorSysName = actorSysWithRest[0]; 
       final String[] hostWithRest = actorSysWithRest[1].split(":");
       if(2 != hostWithRest.length)
-        throw new RuntimeException("Invalid host format: "+address);
+        throw new IllegalArgumentException("Invalid host format: "+address);
       final String host = hostWithRest[0];
       final String[] portAndActorPath = hostWithRest[1].split("/user/");
       if(2 != portAndActorPath.length)
-      throw new RuntimeException("Invalid port format: "+address);
+      throw new IllegalArgumentException("Invalid port format: "+address);
       final int port = new Integer(portAndActorPath[0]).intValue();
       final String actorPath = portAndActorPath[1];
       final String[] actors = actorPath.split("/");
@@ -312,7 +301,8 @@ public final class ProxyInfo extends SystemInfo implements Writable {
     } else {
       final String[] actorSysWithRest = protoWithRest[1].split("/user/");
       if(2 != actorSysWithRest.length) 
-        throw new RuntimeException("Invalid actor sys format: "+address);
+        throw new IllegalArgumentException("Invalid actor system name: "+
+                                           address);
       final String actorSysName = actorSysWithRest[0];
       final String actorPath = actorSysWithRest[1];
       final String[] actors = actorSysWithRest[1].split("/");

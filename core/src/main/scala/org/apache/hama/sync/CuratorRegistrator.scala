@@ -19,19 +19,18 @@ package org.apache.hama.sync
 
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.SystemInfo
-import org.apache.hama.HamaConfiguration
 import org.apache.hama.util.Curator
+import org.apache.hama.conf.Setting
 import org.apache.hama.logging.CommonLog
 
 object CuratorRegistrator {
 
-  def apply(conf: HamaConfiguration): CuratorRegistrator = 
-    new CuratorRegistrator(conf)
+  def apply(setting: Setting): CuratorRegistrator = 
+    new CuratorRegistrator(setting)
 }
 
-class CuratorRegistrator(conf: HamaConfiguration) extends PeerRegistrator 
-                                                  with Curator 
-                                                  with CommonLog {
+class CuratorRegistrator(setting: Setting) extends PeerRegistrator with Curator 
+  with CommonLog {
 
   import PeerRegistrator._
 
@@ -63,7 +62,7 @@ class CuratorRegistrator(conf: HamaConfiguration) extends PeerRegistrator
 
   override def register(taskAttemptId: TaskAttemptID, actorSystem: String, 
                         host: String, port: Int) {
-    initializeCurator(conf)
+    initializeCurator(setting)
     val p = toPeer(actorSystem, host, port)
     peer = Option(p)
     val znodePath = peerPath(pathTo(taskAttemptId.getJobID.toString), 

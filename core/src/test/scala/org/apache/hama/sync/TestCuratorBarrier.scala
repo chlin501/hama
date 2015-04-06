@@ -22,6 +22,7 @@ import org.apache.hama.Agent
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.conf.Setting
 import org.apache.hama.util.JobUtil
 import org.apache.hama.util.ZkUtil._
 import org.apache.hama.zk.LocalZooKeeper
@@ -69,10 +70,12 @@ class TestCuratorBarrier extends TestEnv("TestCuratorBarrier")
     val taskId1 = createTaskAttemptId("test", 1, 1, 1)
     val taskId2 = createTaskAttemptId("test", 1, 2, 1)
  
-    val b1 = CuratorBarrier(testConfiguration, taskId1, numBSPTasks)
+    val setting1 = Setting.container
+    val b1 = CuratorBarrier(setting1, taskId1, numBSPTasks)
     val barrier1 = createWithArgs("barrier1", classOf[MockBarrier], b1, tester)
 
-    val b2 = CuratorBarrier(testConfiguration, taskId2, numBSPTasks)
+    val setting2 = Setting.container
+    val b2 = CuratorBarrier(setting2, taskId2, numBSPTasks)
     val barrier2 = createWithArgs("barrier2", classOf[MockBarrier], b2, tester)
 
     for (superstep <- 1 to 16) {

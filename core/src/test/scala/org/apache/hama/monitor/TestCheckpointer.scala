@@ -33,6 +33,7 @@ import org.apache.hama.bsp.v2.Superstep
 import org.apache.hama.bsp.v2.BSPPeer
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
+import org.apache.hama.conf.Setting
 import org.apache.hama.fs.Operation
 import org.apache.hama.message.BSPMessageBundle
 import org.apache.hama.message.Combiner
@@ -55,25 +56,17 @@ object MockCheckpointer {
 
 }
 
-class MockCheckpointer(commConf: HamaConfiguration,
+class MockCheckpointer(setting: Setting,
                        taskConf: HamaConfiguration,
                        taskAttemptId: TaskAttemptID,
                        superstep: Long,
                        messenger: ActorRef,
                        superstepWorker: ActorRef,
                        tester: ActorRef) 
-      extends Checkpointer(commConf, taskConf, taskAttemptId, superstep, 
+      extends Checkpointer(setting, taskConf, taskAttemptId, superstep, 
                            messenger, superstepWorker) {
 
   import MockCheckpointer._
-
-/*
-  override def root(taskConf: HamaConfiguration): String = {
-    val path = taskConf.get("bsp.checkpoint.root.path", tmpRootPath) 
-    LOG.info("Checkpoint file will be writtent to {} directory.", path)
-    path 
-  }
-*/
 
   override def markIfFinish(): Boolean = {
     val finishOrNot = super.markIfFinish 
@@ -102,7 +95,7 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
                                                            with JobUtil {
   val superstepCount: Long = 1654
   val threshold = BSPMessageCompressor.threshold(Option(testConfiguration))
-  val commConf = testConfiguration
+  val setting = Setting.container
   val taskConf = {
     val conf = new HamaConfiguration
     conf.set("bsp.checkpoint.root.path", MockCheckpointer.tmpRootPath) 
@@ -128,14 +121,14 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
 
   def bundle(): BSPMessageBundle[Writable] = {
     val bundle = new BSPMessageBundle[Writable]()
-    bundle.setCompressor(BSPMessageCompressor.get(commConf), 
-                         BSPMessageCompressor.threshold(Option(commConf)))
+    bundle.setCompressor(BSPMessageCompressor.get(setting.hama), 
+                         BSPMessageCompressor.threshold(Option(setting.hama)))
     bundle
   }
 
   it("test checkpointer.") {
     val ckpt = createWithArgs("checkpointer", classOf[MockCheckpointer], 
-                              commConf, taskConf, taskAttemptId, superstepCount,
+                              setting, taskConf, taskAttemptId, superstepCount,
                               messenger, superstepWorker, tester)
 
     ckpt ! LocalQueueMessages(messages)
@@ -153,7 +146,7 @@ class TestCheckpointer extends TestEnv("TestCheckpointer") with LocalZooKeeper
     LOG.info("Does path to {} exist? {}", supPath, supPath.exists)
     assert(supPath.exists) 
 
-    val operation = Operation.get(commConf)
+    val operation = Operation.get(setting.hama)
       
     val msgBundle = bundle
     val msg4Read = operation.open(new Path(msgPath.getPath))

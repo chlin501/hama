@@ -30,6 +30,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.bsp.v2.Task.Phase._
+import org.apache.hama.conf.Setting
 import org.apache.hama.groom.Container
 import org.apache.hama.message.MessageExecutive
 import org.apache.hama.sync.CuratorBarrier
@@ -260,14 +261,18 @@ class TestCoordinator extends TestEnv("TestCoordinator")
                                     testConfiguration, 2, taskAttemptId2, 
                                     container, tasklog)
 
-    val syncer1 = CuratorBarrier(conf1, taskAttemptId1, numBSPTasks)
-    val reg1 = CuratorRegistrator(conf1)
-    val peer1 = createWithArgs("peer1", classOf[PeerClient], conf1, 
+    val setting1 = Setting.container
+    setting1.hama.addConfiguration(conf1)
+    val syncer1 = CuratorBarrier(setting1, taskAttemptId1, numBSPTasks)
+    val reg1 = CuratorRegistrator(setting1)
+    val peer1 = createWithArgs("peer1", classOf[PeerClient], setting1, 
                                taskAttemptId1, syncer1, reg1, tasklog) 
 
-    val syncer2 = CuratorBarrier(conf2, taskAttemptId2, numBSPTasks)
-    val reg2 = CuratorRegistrator(conf2)
-    val peer2 = createWithArgs("peer2", classOf[PeerClient], conf2, 
+    val setting2 = Setting.container
+    setting2.hama.addConfiguration(conf2)
+    val syncer2 = CuratorBarrier(setting2, taskAttemptId2, numBSPTasks)
+    val reg2 = CuratorRegistrator(setting2)
+    val peer2 = createWithArgs("peer2", classOf[PeerClient], setting2, 
                                taskAttemptId2, syncer2, reg2, tasklog) 
 
     val sequencer1 = createWithArgs("seq-for-task1", classOf[Sequencer], 

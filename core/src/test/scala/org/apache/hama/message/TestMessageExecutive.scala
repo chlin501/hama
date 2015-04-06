@@ -24,10 +24,11 @@ import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.LongWritable
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
-import org.apache.hama.bsp.TaskAttemptID
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.ProxyInfo
 import org.apache.hama.TestEnv
+import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.conf.Setting
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.message.compress.BSPMessageCompressor
 import org.apache.hama.util.JobUtil
@@ -39,15 +40,15 @@ import scala.concurrent.duration.DurationInt
 
 final case object GetSentMessage
 
-class MockMessageExecutive[M <: Writable](conf: HamaConfiguration,
+class MockMessageExecutive[M <: Writable](setting: Setting,
                                           slotSeq: Int,
                                           taskAttemptId: TaskAttemptID,
                                           container: ActorRef,
                                           tasklog: ActorRef,
                                           target: ProxyInfo,
                                           tester: ActorRef)
-      extends MessageExecutive[M](conf, slotSeq, taskAttemptId, container, 
-                                  tasklog) {
+  extends MessageExecutive[M](setting, slotSeq, taskAttemptId, container, 
+                              tasklog) {
 
   def getSentMessage: Receive = {
     case GetSentMessage => { 
@@ -147,7 +148,8 @@ class TestMessageExecutive extends TestEnv(TestMessageExecutive.sysName)
   def messengerOf(name: String, slotSeq: Int, taskAttemptId: TaskAttemptID, 
                   tasklog: ActorRef, proxy: ProxyInfo): ActorRef = {
     val container: ActorRef = null
-    createWithArgs(name, classOf[MockMessageExecutive[Writable]], testConfiguration, slotSeq, taskAttemptId, container, tasklog, proxy, tester) 
+    val setting = Setting.container
+    createWithArgs(name, classOf[MockMessageExecutive[Writable]], setting, slotSeq, taskAttemptId, container, tasklog, proxy, tester) 
   }
 
   it("test message executive functions.") {

@@ -17,11 +17,11 @@
  */
 package org.apache.hama.sync
 
-import java.net.InetAddress
-import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.conf.Setting
 import org.apache.hama.util.JobUtil
+import org.apache.hama.util.Utils
 import org.apache.hama.util.ZkUtil._
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
@@ -33,7 +33,7 @@ class TestCuratorRegistrator extends TestEnv("TestCuratorRegistrator")
                         with LocalZooKeeper 
                         with JobUtil {
 
-  val host = InetAddress.getLocalHost.getHostName
+  val host = Utils.hostname
 
   override def beforeAll {
     super.beforeAll
@@ -49,10 +49,11 @@ class TestCuratorRegistrator extends TestEnv("TestCuratorRegistrator")
     val taskId1 = createTaskAttemptId("test", 1, 1, 1)
     val taskId2 = createTaskAttemptId("test", 1, 2, 1)
  
-    val operator1 = CuratorRegistrator(conf)
+    val setting = Setting.container
+    val operator1 = CuratorRegistrator(setting)
     operator1.register(taskId1, "BSPPeerSystem1", "host12", 12398)
 
-    val operator2 = CuratorRegistrator(conf)
+    val operator2 = CuratorRegistrator(setting)
     operator2.register(taskId2, "BSPPeerSystem3", "dummy2", 3192)
 
     val peersFoundByOp1 = operator1.getAllPeerNames(taskId1)

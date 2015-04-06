@@ -21,7 +21,6 @@ import akka.actor.ActorRef
 import java.io.DataInput
 import java.io.DataOutput
 import java.io.IOException
-import java.net.InetAddress
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.ArrayWritable
 import org.apache.hadoop.io.IntWritable
@@ -35,7 +34,7 @@ import org.apache.hama.conf.Setting
 import org.apache.hama.groom.GroomServer
 import org.apache.hama.groom.TaskReportEvent
 import org.apache.hama.groom.Slot
-import org.apache.hama.util.Utils._
+import org.apache.hama.util.Utils
 import scala.collection.immutable.Queue
 
 /**
@@ -175,7 +174,7 @@ object GroomStats {
 
   val defaultGroom = classOf[GroomServer].getSimpleName
 
-  val defaultHost = InetAddress.getLocalHost.getHostName
+  val defaultHost = Utils.hostname
 
   val defaultPort = 50000 
 

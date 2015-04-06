@@ -174,7 +174,7 @@ class Planner(setting: Setting, master: ActorRef, receptionist: ActorRef,
         if(assigner.validate(ticket, stats)) 
           assigner.assign(ticket, stats, sender)
       }
-      case None => LOG.warning("Can't find ticket!")
+      case None => LOG.debug("No ticket found. Maybe not at TaskAssign stage!")
     } 
   } 
 

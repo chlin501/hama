@@ -18,6 +18,7 @@
 package org.apache.hama.conf
 
 import org.apache.hama.TestEnv
+import org.apache.hama.util.Utils
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 
@@ -46,7 +47,7 @@ class TestSetting extends TestEnv("TestSetting") {
     LOG.info("Default sys {}, host {}, port {}", 
              defaultSys, defaultHost, defaultPort)
     assert("BSPSystem".equals(defaultSys))
-    assert(java.net.InetAddress.getLocalHost.getHostName.equals(defaultHost))
+    assert(Utils.hostname.equals(defaultHost))
     assert(50000 == defaultPort)
     
     setting.hama.set("groom.actor-system.name", "TestGroomActorSystem")

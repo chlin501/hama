@@ -18,29 +18,29 @@
 package org.apache.hama.sync
 
 import akka.actor.ActorRef
-import java.net.InetAddress
 import org.apache.hadoop.io.IntWritable
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.io.Writable
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.TestEnv
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.conf.Setting
 import org.apache.hama.logging.TaskLogger
 import org.apache.hama.util.JobUtil
-import org.apache.hama.util.ZkUtil._
+import org.apache.hama.util.ZkUtil
 import org.apache.hama.util.Utils
 import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.collection.JavaConversions._
 
-class MockPeerClient(conf: HamaConfiguration,
+class MockPeerClient(setting: Setting,
                      taskAttemptId: TaskAttemptID, 
                      syncer: Barrier,
                      operator: PeerRegistrator, 
                      tasklog: ActorRef,
                      tester: ActorRef)
-      extends PeerClient(conf, taskAttemptId, syncer, operator, tasklog) {
+  extends PeerClient(setting, taskAttemptId, syncer, operator, tasklog) {
 
   override def withinBarrier(from: ActorRef) = {
     println("Notify "+from+" now is WithinBerrirer!")
@@ -59,7 +59,7 @@ class TestPeerClient extends TestEnv("TestPeerClient")
                         with LocalZooKeeper 
                         with JobUtil {
 
-  val host = InetAddress.getLocalHost.getHostName
+  val host = Utils.hostname
 
   val slotSeq = 1
 
@@ -67,9 +67,9 @@ class TestPeerClient extends TestEnv("TestPeerClient")
   val sys2 = "BSPPeerSystem%s@%s:61100".format(slotSeq, host)
 
   // common conf for client 1
-  val conf1 = config(host)
+  val conf1 = ZkUtil.config(host)
   // common conf for client 2
-  val conf2 = config(host, port = 61100)
+  val conf2 = ZkUtil.config(host, port = 61100)
 
   val superstep = 0
   val numBSPTasks = 2
@@ -90,13 +90,17 @@ class TestPeerClient extends TestEnv("TestPeerClient")
 
     val tasklog = createWithArgs("tasklog", classOf[TaskLogger], "/tmp/hama/log", taskId1, true)
 
-    val syncer1 = CuratorBarrier(conf1, taskId1, numBSPTasks) 
-    val operator1 = CuratorRegistrator(conf1) 
-    val client1 = createWithArgs("client1", classOf[MockPeerClient], conf1, taskId1, syncer1, operator1, tasklog, tester)
+    val setting1 = Setting.container
+    setting1.hama.addConfiguration(conf1)
+    val syncer1 = CuratorBarrier(setting1, taskId1, numBSPTasks) 
+    val operator1 = CuratorRegistrator(setting1) 
+    val client1 = createWithArgs("client1", classOf[MockPeerClient], setting1, taskId1, syncer1, operator1, tasklog, tester)
 
-    val syncer2 = CuratorBarrier(conf2, taskId2, numBSPTasks) 
-    val operator2 = CuratorRegistrator(conf2) 
-    val client2 = createWithArgs("client2", classOf[MockPeerClient], conf2, taskId2, syncer2, operator2, tasklog, tester)
+    val setting2 = Setting.container
+    setting2.hama.addConfiguration(conf2)
+    val syncer2 = CuratorBarrier(setting2, taskId2, numBSPTasks) 
+    val operator2 = CuratorRegistrator(setting2) 
+    val client2 = createWithArgs("client2", classOf[MockPeerClient], setting2, taskId2, syncer2, operator2, tasklog, tester)
 
     LOG.info("Peer registers itself to ZooKeeper ...")
     client1 ! Register

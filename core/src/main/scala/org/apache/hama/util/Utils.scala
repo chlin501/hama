@@ -24,6 +24,7 @@ import akka.actor.ChildActorPath
 import akka.actor.RootActorPath
 import akka.pattern.ask
 import akka.util.Timeout
+import java.net.InetAddress
 import org.apache.hadoop.io.NullWritable
 import org.apache.hama.ProxyInfo
 import org.apache.hama.SystemInfo
@@ -102,6 +103,11 @@ object Utils extends CommonLog {
   def random(min: Int, max: Int): Int = {
     val range = min to max
     range(rand.nextInt(range.length))
+  }
+
+  def hostname(): String = Try(InetAddress.getLocalHost.getHostName) match {
+    case Success(address) => address
+    case Failure(cause) => "localhost"
   }
 }
 

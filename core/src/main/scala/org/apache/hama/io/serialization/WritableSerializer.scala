@@ -28,6 +28,9 @@ import org.apache.hadoop.io.Writable
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.io.serialization.WritableSerializer.CurrentSystem
 import scala.util.DynamicVariable
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 
 object WritableSerializer {
 
@@ -37,6 +40,7 @@ object WritableSerializer {
 
     def withValue[S](value: ExtendedActorSystem, callable: Callable[S]): S = 
       super.withValue[S](value)(callable.call)
+
   }
 }
 
@@ -63,39 +67,33 @@ class WritableSerializer(val system: ExtendedActorSystem) extends Serializer
     bout.toByteArray
   }
 
-  override def fromBinary(bytes: Array[Byte], clazz: Option[Class[_]]): 
-      AnyRef = {
+  // TODO: instantiate with dynamic constructor?
+  protected def initialize(bytes: Array[Byte], clz: Class[_]): Writable = {
     val bin = new ByteArrayInputStream(bytes)
-    val in = new DataInputStream(bin)
+    val in = new DataInputStream(bin) 
+    val cls = Class.forName(clz.getName)
+    LOG.debug("Instantiate class {} ...", cls)
+    val instance = cls.newInstance
+    if(!instance.isInstanceOf[Writable])   
+      throw new RuntimeException("Not Writable class "+clz.getName+"!")
     var writable: Writable = null
-    clazz match {
-      case Some(clz) => {
-        try { // TODO: switch to functional Try()
-          val cls = Class.forName(clz.getName)
-          val instance = cls.newInstance
-          if(!instance.isInstanceOf[Writable])   
-            throw new RuntimeException("Not Writable class "+clz.getName)
-          WritableSerializer.currentSystem.withValue(system) { 
-            writable = instance.asInstanceOf[Writable]
-            writable.readFields(in)
-          }
-        } catch {
-          case cnfe: ClassNotFoundException => 
-            LOG.error("Can't find class "+clz.getName, cnfe)
-          case ie: InstantiationException => 
-            LOG.error("Can't initialize "+clz.getName, ie)
-          case iae: IllegalAccessException => 
-            LOG.error("Illegal access "+clz.getName, iae)
-          case re: RuntimeException => 
-            LOG.error("Runtime error for "+clz.getName, re) 
-          case e: Exception => 
-            LOG.error("Unknown exception for "+clz.getName, e)
-        } finally {
-          in.close
+    WritableSerializer.currentSystem.withValue(system) { 
+      writable = instance.asInstanceOf[Writable]
+      writable.readFields(in)
+    }
+    try {} finally { in.close }
+    writable
+  }
+
+  override def fromBinary(bytes: Array[Byte], clazz: Option[Class[_]]): 
+    AnyRef = clazz match {
+      case Some(clz) => Try(initialize(bytes, clz)) match {
+        case Success(writable) => writable
+        case Failure(cause) => {
+          LOG.error("Fail instantiating {} because {}", clz.getName, cause)
+          throw cause
         }
       }
       case None => throw new ClassNotFoundException("Class not found!")
     }
-    writable
-  }
 }
