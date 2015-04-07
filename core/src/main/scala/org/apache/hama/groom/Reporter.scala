@@ -51,7 +51,7 @@ object Reporter {
   val defaultCollectors = Seq(TaskStatsCollector.fullName,
     GroomStatsCollector.fullName, JvmStatsCollector.fullName)
 
-  def simpleName(conf: HamaConfiguration): String = conf.get(
+  def simpleName(setting: Setting): String = setting.get(
     "groom.reporter.name" ,
     classOf[Reporter].getSimpleName
   )

@@ -54,7 +54,7 @@ final case object DirectiveArrivalEvent extends Event
 
 object GroomServer {
 
-  def simpleName(conf: HamaConfiguration): String = conf.get(
+  def simpleName(setting: Setting): String = setting.get(
     "groom.name",
     classOf[GroomServer].getSimpleName
   )
@@ -76,9 +76,9 @@ class GroomServer(setting: Setting) extends LocalService
 
   override def initializeServices {
     retry("discover", 10, discover)
-    val reporter = getOrCreate(Reporter.simpleName(setting.hama),
+    val reporter = getOrCreate(Reporter.simpleName(setting),
                                classOf[Reporter], setting, self) 
-    getOrCreate(TaskCounsellor.simpleName(setting.hama), 
+    getOrCreate(TaskCounsellor.simpleName(setting), 
                 classOf[TaskCounsellor], setting, self, reporter)
   }
 

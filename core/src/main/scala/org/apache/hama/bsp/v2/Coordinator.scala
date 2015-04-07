@@ -32,6 +32,7 @@ import org.apache.hama.HamaConfiguration
 import org.apache.hama.LocalService
 import org.apache.hama.ProxyInfo
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.conf.Setting
 import org.apache.hama.fs.CacheService
 import org.apache.hama.fs.Operation
 import org.apache.hama.logging.Logging
@@ -96,6 +97,12 @@ final case class TaskFinished(taskAttemptId: String) extends CoordinatorMessage
 object Coordinator {
 
   val emptyVariables = Map.empty[String, Writable]
+
+  def simpleName(setting: Setting): String = {
+    val seq = setting.getInt("conainer.slot.seq", -1)
+    require(-1 != seq, "Slot seq shouldn't be -1!")
+    classOf[Coordinator].getSimpleName + seq
+  }
 }
 
 /**

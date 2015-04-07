@@ -126,7 +126,7 @@ final class NoFreeSlot extends Writable {
 
 object TaskCounsellor {
 
-  def simpleName(conf: HamaConfiguration): String = conf.get(
+  def simpleName(setting: Setting): String = setting.get(
     "groom.taskcounsellor.name",
     classOf[TaskCounsellor].getSimpleName
   )
@@ -190,14 +190,15 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def deploy(sys: String, seq: Int, host: String, port: Int): 
     Option[ActorRef] = {  
-      val conf = Setting.container(sys, seq, host, port)
-      val info = conf.info
-      // TODO: move to trait ProcessManager#deploy(name, class, addr, conf)
+      val containerSetting = Setting.container(sys, seq, host, port)
+      val info = containerSetting.info
+      // TODO: move to trait ProcessManager#deploy(name, class, addr, 
+      //                                           containerSetting)
       val addr = Address(info.getProtocol.toString, info.getActorSystemName, 
                          info.getHost, info.getPort)
       val container = context.actorOf(Props(classOf[Container], sys, seq, host,
         port, self).withDeploy(Deploy(scope = RemoteScope(addr))), 
-        Container.simpleName(conf.hama))
+        Container.simpleName(containerSetting))
       context watch container
     Option(container)
   }  
@@ -271,10 +272,12 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   // TODO: move to ProcessManager trait?
   protected def newExecutor(slotSeq: Int): ActorRef = { 
-    val executorConf = new HamaConfiguration(setting.hama)
-    executorConf.setInt("groom.executor.slot.seq", slotSeq)
-    val executorName = Executor.simpleName(executorConf)
-    val executor = spawn(executorName, classOf[Executor], setting, slotSeq)
+    val executorSetting = Setting.groom
+    executorSetting.hama.addConfiguration(setting.hama)
+    executorSetting.setInt("groom.executor.slot.seq", slotSeq)
+    val executorName = Executor.simpleName(executorSetting)
+    val executor = spawn(executorName, classOf[Executor], executorSetting, 
+                         slotSeq)
     context watch executor
     executor
   }

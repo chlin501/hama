@@ -62,7 +62,7 @@ object Federator {
   val defaultTrackers = Seq(GroomsTracker.fullName, 
     JobTasksTracker.fullName, JvmStatsTracker.fullName)
 
-  def simpleName(conf: HamaConfiguration): String = conf.get(
+  def simpleName(setting: Setting): String = setting.get(
     "master.federator.name", 
     classOf[Federator].getSimpleName
   )

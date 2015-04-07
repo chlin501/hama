@@ -167,10 +167,16 @@ trait Setting extends Akka {
 
   def get(key: String, default: String): String = hama.get(key, default)
 
+  def set(key: String, value: String) = hama.set(key, value)
+
   def getInt(key: String, default: Int): Int = hama.getInt(key, default)
+
+  def setInt(key: String, value: Int) = hama.setInt(key, value)
 
   def getBoolean(key: String, default: Boolean): Boolean = 
     hama.getBoolean(key, default)
+
+  def setBoolean(key: String, value: Boolean) = hama.setBoolean(key, value)
 
   // TODO: def configuration.getXXXXX e.g. getClass, etc.
 
@@ -190,7 +196,7 @@ class MasterSetting(conf: HamaConfiguration) extends Setting {
 
   override def info(): SystemInfo = info(sys, host, port)
 
-  override def name(): String = BSPMaster.simpleName(conf)
+  override def name(): String = BSPMaster.simpleName(this)
 
   override def main(): Class[Actor] = {
     val m = conf.get("master.main", classOf[BSPMaster].getName)
@@ -222,7 +228,7 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
 
   override def info(): SystemInfo = info(sys, host, port)
 
-  override def name(): String = GroomServer.simpleName(conf)
+  override def name(): String = GroomServer.simpleName(this)
 
   override def main(): Class[Actor] = {
     val m = conf.get("groom.main", classOf[GroomServer].getName)
@@ -254,7 +260,7 @@ class ContainerSetting(conf: HamaConfiguration) extends Setting {
 
   override def info(): SystemInfo = info(sys, host, port)
 
-  override def name(): String = Container.simpleName(hama)
+  override def name(): String = Container.simpleName(this)
 
   override def main(): Class[Actor] = {
     val m = hama.get("container.main", classOf[Container].getName)
@@ -288,7 +294,7 @@ class ClientSetting(conf: HamaConfiguration) extends Setting {
 
   override def info(): SystemInfo = info(sys, host, port)
 
-  override def name(): String = Submitter.simpleName(conf)
+  override def name(): String = Submitter.simpleName(this)
 
   override def main(): Class[Actor] = {
     val m = conf.get("client.main", classOf[Submitter].getName)

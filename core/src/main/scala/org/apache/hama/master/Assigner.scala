@@ -18,9 +18,10 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
+import org.apache.hama.HamaConfiguration
 import org.apache.hama.bsp.v2.Job
 import org.apache.hama.bsp.v2.Task
-import org.apache.hama.HamaConfiguration
+import org.apache.hama.conf.Setting
 import org.apache.hama.logging.CommonLog
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.GroomStats
@@ -35,9 +36,10 @@ object Assigner {
   /**
    * All instance should accept JobManager as parameter. 
    */
-  // TODO: change conf to setting. unify instance creation
-  def create(conf: HamaConfiguration, jobManager: JobManager): Assigner = {
-    val cls = conf.getClass("master.assigner.class", default, classOf[Assigner])
+  // TODO: add setting.getClass(...)
+  def create(setting: Setting, jobManager: JobManager): Assigner = {
+    val cls = setting.hama.getClass("master.assigner.class", default, 
+                                    classOf[Assigner])
     Try(cls.getConstructor(classOf[JobManager]).newInstance(jobManager)) match {
       case Success(instance) => instance
       case Failure(cause) => throw cause 

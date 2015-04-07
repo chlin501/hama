@@ -50,9 +50,9 @@ class MockGroom(setting: Setting, tester: ActorRef)
   override protected lazy val cluster = null.asInstanceOf[akka.cluster.Cluster]
 
   override def initializeServices {
-    val reporter = getOrCreate(Reporter.simpleName(setting.hama),
+    val reporter = getOrCreate(Reporter.simpleName(setting),
                                classOf[MockReporter], setting, self, tester) 
-    getOrCreate(TaskCounsellor.simpleName(setting.hama), 
+    getOrCreate(TaskCounsellor.simpleName(setting), 
                 classOf[TaskCounsellor], setting, self, reporter)
   }
 
@@ -71,7 +71,7 @@ class MockGroom(setting: Setting, tester: ActorRef)
 
   def listCollector: Receive = {
     case ListCollector => 
-      findServiceBy(Reporter.simpleName(setting.hama)).map { reporter => 
+      findServiceBy(Reporter.simpleName(setting)).map { reporter => 
         reporter ! ListCollector
       }
   }
@@ -96,7 +96,7 @@ class MockGroom(setting: Setting, tester: ActorRef)
 
   def forwardStatsData: Receive = {
     case ForwardStats(stats) => 
-      findServiceBy(Reporter.simpleName(setting.hama)).map { service =>
+      findServiceBy(Reporter.simpleName(setting)).map { service =>
         service ! stats
       }
   }
@@ -116,8 +116,8 @@ class TestReporter extends TestEnv("TestReporter") {
   }
 
   it("test reporting stats functions.") {
-    val expectedServices = Seq(Reporter.simpleName(groomSetting.hama),
-                               TaskCounsellor.simpleName(groomSetting.hama)).
+    val expectedServices = Seq(Reporter.simpleName(groomSetting),
+                               TaskCounsellor.simpleName(groomSetting)).
                            sorted
     val groom = createWithArgs(groomSetting.name, groomSetting.main, 
                                groomSetting, tester)

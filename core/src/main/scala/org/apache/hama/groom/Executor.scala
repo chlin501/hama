@@ -171,9 +171,9 @@ object Executor extends CommonLog {
   def javaOpts(conf: HamaConfiguration): String = 
     conf.get("container.java.opts", "-Xmx200m")
 
-  def simpleName(conf: HamaConfiguration): String = 
-    GroomServer.simpleName(conf) + "_executor_" + 
-    conf.getInt("groom.executor.slot.seq", -1)
+  def simpleName(setting: Setting): String = 
+    GroomServer.simpleName(setting) + "_executor_" + 
+    setting.getInt("groom.executor.slot.seq", -1)
 
 }
 

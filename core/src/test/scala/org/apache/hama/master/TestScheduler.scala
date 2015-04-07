@@ -18,10 +18,10 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
-import org.apache.hama.HamaConfiguration
 import org.apache.hama.Mock
 import org.apache.hama.TestEnv
 import org.apache.hama.bsp.v2.Job
+import org.apache.hama.conf.Setting
 import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.monitor.GroomStats
@@ -86,11 +86,11 @@ class TestScheduler extends TestEnv("TestScheduler") with JobUtil {
     createWithArgs(name, classOf[MockGroom], tester)
   }.toArray
 
-  def config: HamaConfiguration = {
-    val conf = new HamaConfiguration
-    conf.setClass("master.scheduler.class", classOf[MockScheduler], 
-                  classOf[Scheduler])
-    conf
+  def config: Setting = {
+    val setting = Setting.master
+    setting.hama.setClass("master.scheduler.class", classOf[MockScheduler], 
+                          classOf[Scheduler])
+    setting
   }
 
   def d(taskId: Int, host: String, port: Int): D = 

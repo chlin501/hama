@@ -86,14 +86,13 @@ class MockMaster(setting: Setting, tester: ActorRef)
       extends BSPMaster(setting, "test-identifier") {
 
   override def initializeServices {
-    val conf = setting.hama
-    getOrCreate(Federator.simpleName(conf), classOf[MockFederator], setting, 
+    getOrCreate(Federator.simpleName(setting), classOf[MockFederator], setting, 
                 self, tester) 
   }
 
   def listTracker: Receive = {
     case ListTracker => 
-      findServiceBy(Federator.simpleName(setting.hama)).map { fed => 
+      findServiceBy(Federator.simpleName(setting)).map { fed => 
         fed ! ListTracker
       }
   }
@@ -111,7 +110,7 @@ class MockMaster(setting: Setting, tester: ActorRef)
 
   def doValidate: Receive = {
     case DoValidate(validate) => 
-      findServiceBy(Federator.simpleName(setting.hama)).map { fed =>
+      findServiceBy(Federator.simpleName(setting)).map { fed =>
         fed ! validate
       }
   }
@@ -124,7 +123,7 @@ class MockMaster(setting: Setting, tester: ActorRef)
 
   def getValidation: Receive = {
     case GetValidation => 
-      findServiceBy(Federator.simpleName(setting.hama)).map { fed => {
+      findServiceBy(Federator.simpleName(setting)).map { fed => {
         LOG.info("Forward GetValidation to federator ...")
         fed forward GetValidation
       }}
@@ -154,7 +153,7 @@ class TestFederator extends TestEnv("TestFederator") with JobUtil {
   }
 
   it("test federator functions.") {
-    val expectedServices = Seq(Federator.simpleName(masterSetting.hama))
+    val expectedServices = Seq(Federator.simpleName(masterSetting))
     val receptionist = client // TODO: change receptionist to real one if needed
     val master = createWithArgs(masterSetting.name, masterSetting.main, 
                                masterSetting, tester)

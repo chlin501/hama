@@ -17,7 +17,7 @@
  */
 package org.apache.hama.util
 
-import org.apache.hama.HamaConfiguration
+import org.apache.hama.conf.Setting
 import org.apache.hama.groom.GroomServer
 import org.apache.hama.groom.TaskCounsellor
 import org.apache.hama.ProxyInfo
@@ -53,7 +53,7 @@ trait ActorLocator {
 
 }
 
-final case class TaskCounsellorLocator(conf: HamaConfiguration)
+final case class TaskCounsellorLocator(setting: Setting)
 
 object ActorPathMagnet {
 
@@ -63,9 +63,9 @@ object ActorPathMagnet {
       new ActorPathMagnet {
     type Path = String
     def apply(): Path = {
-       val taskCounsellorName = TaskCounsellor.simpleName(locator.conf)
-       val groomName = GroomServer.simpleName(locator.conf)
-       new ProxyInfo.GroomBuilder(taskCounsellorName, locator.conf).
+       val taskCounsellorName = TaskCounsellor.simpleName(locator.setting)
+       val groomName = GroomServer.simpleName(locator.setting)
+       new ProxyInfo.GroomBuilder(taskCounsellorName, locator.setting.hama).
                     createActorPath.
                     appendRootPath(groomName). 
                     appendChildPath(taskCounsellorName).

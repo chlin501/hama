@@ -117,7 +117,7 @@ final class Reject extends Writable with ReceptionistMessage {
 
 object Receptionist {
 
-  def simpleName(conf: HamaConfiguration): String = conf.get(
+  def simpleName(setting: Setting): String = setting.get(
     "master.receptionist.name",
     classOf[Receptionist].getSimpleName
   )

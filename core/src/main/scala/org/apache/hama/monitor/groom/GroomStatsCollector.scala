@@ -42,7 +42,7 @@ final class GroomStatsCollector extends Collector {
 
   import Collector._
   
-  private val targetService = TaskCounsellor.simpleName(setting.hama)
+  private val targetService = TaskCounsellor.simpleName(setting)
 
   private var taskCounsellor: Option[ActorRef] = None
 

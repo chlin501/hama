@@ -15,7 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.hama.client
+package org.apache.hama.client // TODO: move to bsp.v2 package?
 
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
@@ -78,8 +78,9 @@ object Submitter extends CommonLog {
     }}
   }
 
-  def simpleName(conf: HamaConfiguration): String = 
-    conf.get("client.name", classOf[Submitter].getSimpleName) + Random.nextInt  
+  def simpleName(setting: Setting): String = 
+    setting.get("client.name", classOf[Submitter].getSimpleName) + 
+    Random.nextInt  
 
   /**
    * Submit an assembled bsp job through submitter before actually submitting

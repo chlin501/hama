@@ -47,6 +47,15 @@ final case object WithinBarrier extends PeerClientMessage
 final case class Leave(superstep: Long) extends PeerClientMessage
 final case object ExitBarrier extends PeerClientMessage
 
+object PeerClient {
+
+  def simpleName(setting: Setting): String = {
+    val seq = setting.getInt("container.slot.seq", -1)
+    require(-1 != seq, "Slot seq shouldn't be -1!")
+    classOf[PeerClient].getSimpleName + seq
+  }
+}
+
 /**
  * An wrapper that help deal with barrier synchronization and post/ retrieve
  * peer name, etc. information.

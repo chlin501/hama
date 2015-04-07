@@ -26,6 +26,7 @@ import java.io.FileWriter
 import org.apache.commons.logging.Log
 import org.apache.commons.logging.LogFactory
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.conf.Setting
 import scala.util.Try
 import scala.util.Success
 import scala.util.Failure
@@ -192,6 +193,12 @@ trait CommonLog extends HamaLog {
 object TaskLogger {
 
   val tasklogsPath = "/logs/taskslogs"
+
+  def simpleName(setting: Setting): String = {
+    val seq = setting.getInt("container.slot.seq", -1) 
+    require(-1 != seq, "Slot seq shouldn't be -1!")
+    classOf[TaskLogger].getSimpleName + seq
+  }
 
 }
 

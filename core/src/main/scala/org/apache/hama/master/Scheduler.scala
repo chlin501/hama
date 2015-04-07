@@ -19,10 +19,11 @@ package org.apache.hama.master
 
 import akka.actor.ActorRef
 import org.apache.hadoop.util.ReflectionUtils
-import org.apache.hama.bsp.v2.Task
-import org.apache.hama.bsp.v2.Job
 import org.apache.hama.HamaConfiguration
 import org.apache.hama.SystemInfo
+import org.apache.hama.bsp.v2.Task
+import org.apache.hama.bsp.v2.Job
+import org.apache.hama.conf.Setting
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.logging.CommonLog
 import scala.util.Failure
@@ -33,10 +34,10 @@ object Scheduler {
 
   val default = classOf[DefaultScheduler]
 
-  // TODO: change conf to setting; unify instance creation
-  def create(conf: HamaConfiguration, jobManager: JobManager): Scheduler = {
-    val cls = conf.getClass("master.scheduler.class", default, 
-                            classOf[Scheduler])
+  // TODO: add Setting.getClass(...)
+  def create(setting: Setting, jobManager: JobManager): Scheduler = {
+    val cls = setting.hama.getClass("master.scheduler.class", default, 
+                                    classOf[Scheduler])
     Try(cls.getConstructor(classOf[JobManager]).newInstance(jobManager)) match {
       case Success(instance) => instance
       case Failure(cause) => throw cause

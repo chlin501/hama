@@ -88,7 +88,7 @@ object BSPMaster {
     return new SimpleDateFormat("yyyyMMddHHmm").format(new Date())
   }
 
-  def simpleName(conf: HamaConfiguration): String = conf.get(
+  def simpleName(setting: Setting): String = setting.get(
     "master.name",
     classOf[BSPMaster].getSimpleName
   )
@@ -103,7 +103,7 @@ object BSPMaster {
 
 object FileSystemCleaner {
 
-  def simpleName(conf: HamaConfiguration): String = conf.get(
+  def simpleName(setting: Setting): String = setting.get(
     "master.fs.cleaner", classOf[FileSystemCleaner].getSimpleName)
 
 }
@@ -115,11 +115,11 @@ protected[master] class FileSystemCleaner(setting: Setting, master: ActorRef)
 
   protected val operation = Operation.get(setting.hama)
 
-  override def initializeServices = if(setting.hama.getBoolean(
+  override def initializeServices = if(setting.getBoolean(
     "master.fs.cleaner.start", true)) retry("clean", 10, clean)
 
   protected def systemDir(): Path = new Path(operation.makeQualified(new Path(
-    setting.hama.get("bsp.system.dir", "/tmp/hadoop/bsp/system"))))
+    setting.get("bsp.system.dir", "/tmp/hadoop/bsp/system"))))
 
   protected def clean(): Boolean = 
     operation.remove(systemDir) && operation.mkdirs(systemDir, sysDirPermission)
@@ -175,23 +175,22 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
     register
     join(seedNodes)
     subscribe(self)
-    val conf = setting.hama
-    val federator = getOrCreate(Federator.simpleName(conf), classOf[Federator],
-                                setting, self) 
-    val receptionist = getOrCreate(Receptionist.simpleName(conf), 
+    val federator = getOrCreate(Federator.simpleName(setting), 
+                                classOf[Federator], setting, self) 
+    val receptionist = getOrCreate(Receptionist.simpleName(setting), 
                                    classOf[Receptionist], setting, self, 
                                    federator) 
     val jobManager = JobManager.create
-    val scheduler = Scheduler.create(setting.hama, jobManager)
-    val assigner = Assigner.create(setting.hama, jobManager)
+    val scheduler = Scheduler.create(setting, jobManager)
+    val assigner = Assigner.create(setting, jobManager)
     val event = PlannerEventHandler.create(setting, jobManager, self, federator,
                                            scheduler)
-    getOrCreate(Planner.simpleName(conf), classOf[Planner], setting, self, 
+    getOrCreate(Planner.simpleName(setting), classOf[Planner], setting, self, 
                 receptionist, federator, scheduler, assigner, jobManager, 
                 event) 
   }
 
-  protected def cleaner() = spawn(FileSystemCleaner.simpleName(setting.hama), 
+  protected def cleaner() = spawn(FileSystemCleaner.simpleName(setting), 
     classOf[FileSystemCleaner], setting, self)
 
   override def stopServices = {
@@ -307,7 +306,7 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
     val jobId = newJobId
     clientRequest += (jobId -> ResponseForClient(from,
       systemDir.getOrElse(null), -1))
-    findServiceBy(Federator.simpleName(setting.hama)) match {
+    findServiceBy(Federator.simpleName(setting)) match {
       case Some(federator)  => federator ! AskFor(GroomsTracker.fullName, 
         ClientMaxTasksAllowed(jobId)) 
       case None =>

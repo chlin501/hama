@@ -306,10 +306,10 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
 
   it("test planner groom and task event.") {
     val setting = Setting.master
-    setting.hama.setInt("bsp.tasks.max.attempts", 20)
+    setting.setInt("bsp.tasks.max.attempts", 20)
     val jobManager = JobManager.create
     val job = createJob("test", 2, "test-planner-job", activeGrooms, taskSize)
-    job.addConfiguration(setting.hama)
+    job.addConfiguration(setting.hama) // preserve customized setting above
     val tasksAttemptId1 = job.allTasks
 
     mapTasksToGrooms(tasksAttemptId1, taskSize) 
@@ -318,7 +318,7 @@ class TestPlannerEventHandler extends TestEnv("TestPlannerEventHandler")
     val master = createWithArgs("mockMaster", classOf[MockMaster3], tester)
     val federator = createWithArgs("mockFederator", classOf[MockFederator1], 
                                    tester)
-    val scheduler = Scheduler.create(setting.hama, jobManager)
+    val scheduler = Scheduler.create(setting, jobManager)
     setting.hama.setClass("master.planner.handler", classOf[MockPlanner], 
                           classOf[PlannerEventHandler])
     val planner = PlannerEventHandler.create(setting, jobManager, master, 

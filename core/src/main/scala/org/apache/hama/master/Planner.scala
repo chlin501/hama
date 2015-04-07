@@ -57,7 +57,7 @@ import scala.util.Try
 
 object Planner {
 
-  def simpleName(conf: HamaConfiguration): String = conf.get(
+  def simpleName(setting: Setting): String = setting.get(
     "master.planner.name", 
     classOf[Planner].getSimpleName
   )

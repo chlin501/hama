@@ -18,10 +18,10 @@
 package org.apache.hama.master
 
 import akka.actor.ActorRef
-import org.apache.hama.HamaConfiguration
 import org.apache.hama.Mock
 import org.apache.hama.TestEnv
 import org.apache.hama.bsp.v2.Job
+import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.GroomStats
 import org.apache.hama.util.JobUtil
 import org.junit.runner.RunWith
@@ -47,7 +47,7 @@ class TestAssigner extends TestEnv("TestAssigner") with JobUtil {
     val job = createJob("test", 3, "assigner-job", 2)
     val ticket = Ticket(client, job)
     jobManager.enqueue(ticket) 
-    val assigner = Assigner.create(new HamaConfiguration, jobManager)
+    val assigner = Assigner.create(Setting.master, jobManager)
     val none = assigner.examine(jobManager)
     assert(None.equals(none))
     jobManager.markScheduleFinished

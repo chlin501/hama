@@ -41,7 +41,7 @@ class MockGroom1(setting: Setting, reporter: ActorRef, tester: ActorRef)
   protected var counsellor: Option[ActorRef] = None
 
   override def preStart = {
-    counsellor = Option(spawn(TaskCounsellor.simpleName(setting.hama), 
+    counsellor = Option(spawn(TaskCounsellor.simpleName(setting), 
       classOf[MockTaskCounsellor], setting, self, reporter, tester))
     LOG.info("Spawning task counsellor {}", counsellor)
   }
@@ -148,7 +148,7 @@ class TestExecutor extends TestEnv(TestExecutor.actorSystemName,
     config(setting.hama)
 
     val reporter = createWithArgs("reporter", classOf[Mock])
-    val groom = createWithArgs(GroomServer.simpleName(setting.hama), 
+    val groom = createWithArgs(GroomServer.simpleName(setting), 
       classOf[MockGroom1], setting, reporter, tester) 
  
     /* jobid, taskId, taskAttemptId */

@@ -80,9 +80,9 @@ class TestReceptionist extends TestEnv("TestReceptionist") with JobUtil {
   it("test submit job to receptionist") {
     val setting = Setting.master
     val master = createWithArgs(setting.name, classOf[MockMaster1], setting)
-    val fed = createWithArgs(Federator.simpleName(setting.hama),
+    val fed = createWithArgs(Federator.simpleName(setting),
                              classOf[MockFed], setting, master)
-    val receptionist = createWithArgs(Receptionist.simpleName(setting.hama), 
+    val receptionist = createWithArgs(Receptionist.simpleName(setting),
                                       classOf[MockReceptionist], setting, 
                                       master, fed, tester)
     val jobId = createJobId("test-receptionist", 1533)

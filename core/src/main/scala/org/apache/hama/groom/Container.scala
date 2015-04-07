@@ -57,7 +57,8 @@ import scala.util.Try
 
 object Container extends CommonLog {
 
-  def hamaHome: String = System.getProperty("hama.home.dir")
+  // TODO: group for global attribute setting
+  def hamaHome: String = System.getProperty("hama.home.dir") 
 
   /**
    * Configure command line arguments to setting.
@@ -99,9 +100,11 @@ object Container extends CommonLog {
     }
   }
   
-  def simpleName(conf: HamaConfiguration): String = 
-    conf.get("container.name", classOf[Container].getSimpleName) + 
-    conf.getInt("container.slot.seq", -1)
+  def simpleName(setting: Setting): String = {
+    val seq = setting.getInt("container.slot.seq", -1)
+    require(-1 != seq, "Slot seq shouldn't be -1!")
+    setting.get("container.name", classOf[Container].getSimpleName) + seq
+  }
 
 }
 
@@ -112,10 +115,10 @@ object Container extends CommonLog {
 protected[groom] class Pinger(setting: Setting) extends RemoteService  
                                                    with ActorLocator {
 
-  protected val TaskCounsellorName = TaskCounsellor.simpleName(setting.hama)
+  protected val TaskCounsellorName = TaskCounsellor.simpleName(setting)
 
   override def initializeServices = lookup(TaskCounsellorName, 
-    locate(TaskCounsellorLocator(setting.hama)))
+    locate(TaskCounsellorLocator(setting)))
 
   /**
    * After linking to groom server, `stop' pinger itself!
@@ -234,8 +237,8 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
    */
   def doLaunch(task: Task) { 
     // TODO: group child actors together for management
-    val log = spawn("taskLogger%s".format(slotSeq), classOf[TaskLogger], 
-                    hamaHome, task.getId/*, slotSeq*/)
+    val log = spawn(TaskLogger.simpleName(setting), classOf[TaskLogger], 
+                    hamaHome, task.getId)
     context watch log 
     tasklog = Option(log)
 
@@ -245,15 +248,15 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
     context watch mgr 
     messenger = Option(mgr)
 
-    val syncer = spawn("syncer", classOf[PeerClient], setting, task.getId,
+    val syncer = spawn(PeerClient.simpleName(setting), classOf[PeerClient], 
+                 setting, task.getId, 
                  CuratorBarrier(setting, task.getId, task.getTotalBSPTasks),
                  CuratorRegistrator(setting), log)
     context watch syncer
     peer = Option(syncer)
-    LOG.info("############ spawned syncer: {}", syncer.path.name)
 
-    val c = spawn("coordinator", classOf[Coordinator], setting.hama, task, 
-                  self, mgr, syncer, log)
+    val c = spawn(Coordinator.simpleName(setting), classOf[Coordinator], 
+                  setting.hama, task, self, mgr, syncer, log)
 
     context watch c 
     coordinator = Option(c)
