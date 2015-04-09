@@ -242,7 +242,7 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
     context watch log 
     tasklog = Option(log)
 
-    val mgr = spawn(MessageExecutive.simpleName(setting.hama), 
+    val mgr = spawn(MessageExecutive.simpleName(setting), 
                     classOf[MessageExecutive[BSPMessageBundle[Writable]]],
                     setting, slotSeq, task.getId, self, log)
     context watch mgr 

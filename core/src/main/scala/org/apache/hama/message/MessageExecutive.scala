@@ -65,8 +65,9 @@ final protected[message] case class MessageFrom(
 
 object MessageExecutive {
 
-  def simpleName(conf: HamaConfiguration): String = 
-    "messenger-"+Peer.nameFrom(conf)
+  val prefix = "messenger-"
+
+  def simpleName(setting: Setting): String = prefix+Peer.nameFrom(setting.hama)
 }
 
 /**
