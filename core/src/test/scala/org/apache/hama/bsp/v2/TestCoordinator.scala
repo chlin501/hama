@@ -49,13 +49,13 @@ import scala.concurrent.duration.DurationInt
 
 final case class Store(msg: Any)
 
-class MockCoordinator(conf: HamaConfiguration, 
+class MockCoordinator(setting: Setting, 
                       task: Task, 
                       container: ActorRef,
                       messenger: ActorRef, 
                       peer: ActorRef, 
                       tasklog: ActorRef, sequencer: ActorRef)
-    extends Coordinator(conf, task, container, messenger, peer, tasklog) {
+  extends Coordinator(setting, task, container, messenger, peer, tasklog) {
 
   override def startExecute() {
     super.startExecute
@@ -186,31 +186,9 @@ class Sequencer(taskAttemptId: String, tester: ActorRef) extends Agent {
   override def receive = store orElse retrieve orElse unknown
 }
 
-/*
-object Setting {
-
-  import TestEnv._
-
-  def toConfig(): Config = parseString("""
-    testCoordinator {
-      akka.actor.my-pinned-dispatcher {
-        type = PinnedDispatcher
-        executor = "thread-pool-executor"
-      }
-    }
-  """)
-}
-
 @RunWith(classOf[JUnitRunner])
-class TestCoordinator extends TestEnv("TestCoordinator", Setting.toConfig.
-                                      getConfig("testCoordinator")) 
-                      with JobUtil with LocalZooKeeper {
-*/
-@RunWith(classOf[JUnitRunner])
-class TestCoordinator extends TestEnv("TestCoordinator") 
-                      with JobUtil with LocalZooKeeper {
-
-  //val pinned = "akka.actor.my-pinned-dispatcher"
+class TestCoordinator extends TestEnv("TestCoordinator") with LocalZooKeeper 
+                         with JobUtil {
 
   val numBSPTasks = 2
 

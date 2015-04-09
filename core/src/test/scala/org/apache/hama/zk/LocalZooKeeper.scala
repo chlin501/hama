@@ -19,21 +19,42 @@ package org.apache.hama.zk
 
 import org.apache.curator.test.TestingServer
 import org.apache.hama.logging.CommonLog
+import scala.util.Failure
+import scala.util.Success 
+import scala.util.Try
+
+object LocalZooKeeper {
+
+  val zkPort = 2181
+
+}
 
 trait LocalZooKeeper extends CommonLog {
 
-  protected var server: TestingServer = _
+  import LocalZooKeeper._
+
+  protected var server: Option[TestingServer] = None
   
   def launchZk {
-    server = new TestingServer(2181)
-    LOG.info("Curator TestingServer is launched at port 2181.")
+    server = Option(new TestingServer(zkPort))
+    LOG.info("Curator TestingServer is launched at port {}.", zkPort)
   }
 
-  def launchZk(port: Int) {
-    server = new TestingServer(port)
-    LOG.info("Curator TestingServer is launched at port %s.".format(port))
+  def launchZk(port: Int) = (0 < port && 65535 >= port) match {
+    case true => {
+      server = Option(new TestingServer(port))
+      LOG.info("Curator TestingServer is launched at port {}.",port)
+    }
+    case false => throw new IllegalArgumentException(
+      "Invalid ZooKeeper port value "+port)
   }
 
-  def closeZk = if(null != server) server.close
+  def closeZk = server match {
+    case None => LOG.warning("ZooKeeper instance not exist!")
+    case Some(srv) => Try(srv.close) match {
+      case Success(ok) =>
+      case Failure(cause) => throw cause
+    }
+  }
 
 }

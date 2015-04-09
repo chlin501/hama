@@ -27,6 +27,7 @@ import org.apache.hama.ProxyInfo
 import org.apache.hama.LocalService
 import org.apache.hama.RemoteService
 import org.apache.hama.bsp.TaskAttemptID
+import org.apache.hama.bsp.v2.Coordinator
 import org.apache.hama.conf.Setting
 import org.apache.hama.logging.Logging
 import org.apache.hama.logging.LoggingAdapter
@@ -44,7 +45,7 @@ import org.apache.hama.util.Utils
 import scala.collection.JavaConversions._
 
 sealed trait MessengerMessage
-final case class SetCoordinator(peer: ActorRef) extends MessengerMessage
+final case object SetCoordinator extends MessengerMessage
 final case class Send(peerString: String, msg: Writable) 
       extends MessengerMessage
 final case object GetCurrentMessage extends MessengerMessage
@@ -331,7 +332,17 @@ class MessageExecutive[M <: Writable](setting: Setting,
   }
 
   protected def setCoordinator: Receive = {
-    case SetCoordinator(bspPeer) => coordinator = Option(bspPeer)
+    case SetCoordinator => {
+      val CoordinatorName = Coordinator.simpleName(setting) 
+      val actual = sender.path.name 
+      actual match {
+        case `CoordinatorName` => coordinator = Option(sender)
+        case _ => {
+          LOG.error("Expect coordinator {} but {}!", CoordinatorName, actual)
+          shutdown 
+        }
+      }
+    }
   }
 
   override def receive = setCoordinator orElse sendMessage orElse currentMessage orElse numberCurrentMessages orElse transferMessages orElse clear orElse putMessagesToLocal orElse listenerAddress orElse actorReply orElse timeout orElse superviseeOffline orElse getLocalQueueMsgs orElse unknown 

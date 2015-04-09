@@ -99,8 +99,8 @@ object Coordinator {
   val emptyVariables = Map.empty[String, Writable]
 
   def simpleName(setting: Setting): String = {
-    val seq = setting.getInt("conainer.slot.seq", -1)
-    require(-1 != seq, "Slot seq shouldn't be -1!")
+    val seq = setting.getInt("container.slot.seq", -1)
+    require(-1 != seq, "Slot seq shouldn't be "+seq+"!")
     classOf[Coordinator].getSimpleName + seq
   }
 }
@@ -112,7 +112,16 @@ object Coordinator {
  * - sync
  */
 // TODO: coordinator life cycle trait e.g. startExecute, whenFinished -> notify container? etc.
-class Coordinator(conf: HamaConfiguration,  // common conf
+/**
+ * This is the peer that runs a specific task. 
+ * @param setting is container setting.
+ * @param task to be executed with specific {@link Setting} for task execution.
+ * @param container is that hosts this unit for task execution.
+ * @param messenger is responsible for message transmission between peers.
+ * @param syncClient is the responsible for barrier sync.
+ * @param tasklog records information to file.
+ */
+class Coordinator(setting: Setting,  
                   task: Task,
                   container: ActorRef, 
                   messenger: ActorRef, 
@@ -155,14 +164,14 @@ class Coordinator(conf: HamaConfiguration,  // common conf
   override def LOG: LoggingAdapter = Logging[TaskLogger](tasklog)
 
   override def initializeServices() {
-    localize(conf)
+    localize(setting.hama)
     settingFor(task)  
     firstSync(task)  
     configMessenger
     // startExecute // TODO: container will restored data from ckpt. then coordinator will be inited with restored data supplied. then coordinator will start executeFrom (superstep, variables) left in the last checkpoint.
   }
 
-  protected def configMessenger() = messenger ! SetCoordinator(self)
+  protected def configMessenger() = messenger ! SetCoordinator
 
   protected def startExecute() {  
     task.markTaskStarted
@@ -401,7 +410,7 @@ class Coordinator(conf: HamaConfiguration,  // common conf
    */
   protected def settingFor(task: Task) = {
     val taskConf = task.getConfiguration
-    val libjars = CacheService.moveJarsAndGetClasspath(conf) 
+    val libjars = CacheService.moveJarsAndGetClasspath(setting.hama) 
     libjars match {
       case null => LOG.warning("No jars to be included for task {}", task.getId)
       case _ => {
@@ -526,7 +535,7 @@ LOG.info("###### first time syncing to zk END ... ")
   }
 
   protected def isCheckpointEnabled(): Boolean = {
-    val isEnabled = conf.getBoolean("bsp.checkpoint.enabled", true)
+    val isEnabled = setting.getBoolean("bsp.checkpoint.enabled", true)
     LOG.debug("Is checkpoint enabled for task {}? {}", task.getId, isEnabled)
     isEnabled
   }
@@ -537,7 +546,7 @@ LOG.info("###### first time syncing to zk END ... ")
   protected def createCheckpointer(): Option[ActorRef] = currentSuperstep.map {
     (current) => spawn(checkpointerName,
                        classOf[Checkpointer], 
-                       conf, // common conf
+                       setting.hama, // container setting
                        task.getConfiguration, 
                        task.getId, 
                        task.getCurrentSuperstep.asInstanceOf[Long], 

@@ -482,7 +482,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def dispatchDirective(seq: Int, container: ActorRef) = 
     if(!directiveQueue.isEmpty) {
-      LOG.info("Direcive queue is not empty and container {} is asking for "+
+      LOG.info("Directive queue is not empty and container {} is asking for "+
                "task execution!", container.path.name)
       val (d, rest) = directiveQueue.dequeue
       d.action match {

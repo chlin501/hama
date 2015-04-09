@@ -102,7 +102,7 @@ object Container extends CommonLog {
   
   def simpleName(setting: Setting): String = {
     val seq = setting.getInt("container.slot.seq", -1)
-    require(-1 != seq, "Slot seq shouldn't be -1!")
+    require(-1 != seq, "Slot seq shouldn't be "+seq+"!")
     setting.get("container.name", classOf[Container].getSimpleName) + seq
   }
 
@@ -121,7 +121,8 @@ protected[groom] class Pinger(setting: Setting) extends RemoteService
     locate(TaskCounsellorLocator(setting)))
 
   /**
-   * After linking to groom server, `stop' pinger itself!
+   * Ping with related information once successfully linking to rmeote 
+   * {@link TaskCounsellor}.
    */
   override def afterLinked(proxy: ActorRef) = proxy.path.name match {
     case `TaskCounsellorName` => {
@@ -134,6 +135,10 @@ protected[groom] class Pinger(setting: Setting) extends RemoteService
     case _ => LOG.warning("Unknown target {} is linked!", proxy.path.name)
   }
 
+  /**
+   * Shutdown the entire system, inclusive of process, when detecting remote
+   * {@link TaskCounsellor} offline.
+   */
   override def offline(target: ActorRef)  = target.path.name match {
     case `TaskCounsellorName` => { 
       LOG.warning("Shutdown because {} is offline!", target.path.name)
@@ -146,10 +151,11 @@ protected[groom] class Pinger(setting: Setting) extends RemoteService
 
 }
 
-trait Computation extends LocalService {
- // TODO: group tasklog, messenger, peer sync, coordinator for consistent 
- //       management e.g. watch child actor, etc.
- //       slotseq, hamaHome, task.
+// TODO: group tasklog, messenger, peer sync, coordinator for consistent 
+//       management e.g. watch child actor, etc.
+//       slotseq, hamaHome, task.
+trait Computation extends LocalService { self: Container => 
+  
 }
 
 /**
@@ -235,8 +241,9 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
    * Start executing the task in another actor.
    * @param task that is supplied to be executed.
    */
+  // TODO: group child actors together for management
   def doLaunch(task: Task) { 
-    // TODO: group child actors together for management
+      
     val log = spawn(TaskLogger.simpleName(setting), classOf[TaskLogger], 
                     hamaHome, task.getId)
     context watch log 

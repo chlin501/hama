@@ -109,22 +109,22 @@ object Setting {
 
   def container(): Setting = container(new HamaConfiguration)
 
+  def container(slotSeq: Int): Setting = {
+    val conf = new HamaConfiguration 
+    conf.setInt("container.slot.seq", slotSeq) 
+    container(conf)
+  }
+
   def container(sys: String, seq: Int, host: String, port: Int): Setting = {
     val conf = new HamaConfiguration
     require(null != sys && !"".equals(sys) , "Container system name is empty!")
     conf.set("container.actor-system.name", sys)
-    require(-1 != seq , "Container slot seq should't be -1!")
+    require(-1 != seq , "Container slot seq should't be "+seq+"!")
     conf.setInt("container.slot.seq", seq) 
     require(null != host && !"".equals(host) , "Container host is empty!")
     conf.set("container.host", host)
     require(0 < port && 65535 >= port, "Invalud container port value: "+port)
     conf.setInt("container.port", port)
-    container(conf)
-  }
-
-  def container(slotSeq: Int): Setting = {
-    val conf = new HamaConfiguration 
-    conf.setInt("container.slot.seq", slotSeq) 
     container(conf)
   }
 

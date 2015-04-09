@@ -30,6 +30,7 @@ import org.apache.hama.master.Directive.Action
 import org.apache.hama.master.Directive.Action._
 import org.apache.hama.util.JobUtil
 import org.apache.hama.util.Utils
+import org.apache.hama.zk.LocalZooKeeper
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import scala.concurrent.duration.DurationInt
@@ -60,14 +61,14 @@ class MockTaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef,
   override def pushToLaunch(seq: Int, directive: Directive, from: ActorRef) {
     super.pushToLaunch(seq, directive, from)
     val id = directive.task.getId.toString
-    LOG.info("When pulling for launching task, id is {} ...", id)
+    LOG.info("Push for launcing task {} to {} ...", id, from.path.name)
     tester ! id 
   }
 
   override def pushToResume(seq: Int, directive: Directive, from: ActorRef) {
     super.pushToResume(seq, directive, from)
     val id = directive.task.getId.toString
-    LOG.info("When pulling for resuming task, id is {} ...", id)
+    LOG.info("Push for resuming task {} to {} ...", id, from.path.name)
     tester ! id 
   }
 
@@ -117,18 +118,26 @@ object TestExecutor {
 
 @RunWith(classOf[JUnitRunner])
 class TestExecutor extends TestEnv(TestExecutor.actorSystemName, 
-                                   TestExecutor.config) with JobUtil {
+                                   TestExecutor.config) 
+                      with LocalZooKeeper with JobUtil {
 
-  override def beforeAll = System.getProperty("hama.home.dir") match {
-    case null => {
-      val pwd = System.getProperty("user.dir")
-      LOG.info("Configure `hama.home.dir' to {}", pwd)
-      System.setProperty("hama.home.dir", pwd)
+  override def beforeAll { 
+    super.beforeAll
+    System.getProperty("hama.home.dir") match {
+      case null => {
+        val pwd = System.getProperty("user.dir")
+        LOG.info("Configure `hama.home.dir' to {}", pwd)
+        System.setProperty("hama.home.dir", pwd)
+      }
+      case pwd@_ => LOG.info("`hama.home.dir' is configured to {}", pwd)
     }
-    case pwd@_ => LOG.info("`hama.home.dir' is configured to {}", pwd)
+    launchZk 
   }
 
-  override def afterAll { }
+  override def afterAll = {
+    closeZk 
+    // super.afterAll
+  }
 
   def newDirective(action: Directive.Action, task: Task): Directive = 
     new Directive(action, task, "testMaster")
@@ -164,12 +173,14 @@ class TestExecutor extends TestEnv(TestExecutor.actorSystemName,
     LOG.info("Task2's id is {}", task2.getId) // attempt_test_0003_000001_3
 */
 
+    expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_3")
+/*
     val waitTime = 30.seconds
 
     LOG.info("Wait for {} secs ...", waitTime)
     sleep(waitTime)
+*/
 /*
-    expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_3")
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_3")
 */
 
