@@ -174,7 +174,10 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def unwatchContainerWith(seq: Int) = 
     slotManager.findThenMap({ slot => (slot.seq == seq)})({ found => 
-      found.container.map { container => context unwatch container }
+      found.container.map { container => { 
+        context unwatch container
+        context stop container 
+      }}
     }) 
 
   protected def defaultMaxTasks(): Int = 
@@ -283,17 +286,6 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
   }
 
   /**
-   * Receive {@link Directive} from Scheduler, deciding what to do next.
-   * @return Receive is partial function.
-   */
-  protected def receiveDirective: Receive = {
-    case directive: Directive => directive match {
-      case null => LOG.error("Directive from {} is null!", sender.path.name)
-      case _ => whenReceive(directive)(sender) 
-    }
-  }
-
-  /**
    * Initialize child process if no executor found; otherwise dispatch action 
    * to child process directly.
    * When directive is cancelled, slot update will be done after ack is 
@@ -315,27 +307,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       }
     } else from ! NoFreeSlot(d)
 
-  /**
-   * Executor ack for Cancel action.
-   * Verify corresponded task is with Cancel action and correct taskAttemptId.
-   * @param Receive is partial function.
-   */
-  protected def cancelAck: Receive = {
-    case action: CancelAck => {
-      preCancelAck(action)
-      doCancelAck(action)
-      postCancelAck(action)
-    }
-  }
 
-  protected def preCancelAck(ack: CancelAck) { }
-
-  /**
-   * Notify master the task with specific task attempt id is cancelled.
-   */
-  protected def postCancelAck(ack: CancelAck) { 
-    groom ! TaskCancelled(ack.taskAttemptId.toString)
-  }
 
   /**
    * - Find corresponded slot seq and task attempt id replied from 
@@ -420,6 +392,9 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     }
   }
  
+  /**
+   * This happens when executor is offline.
+   */
   protected def checkIfRetry(old: Slot, 
                              f:(Int) => Unit) = retries.get(old.seq) match {
       case Some(retryCount) if (retryCount < maxRetries) => { 
@@ -471,14 +446,10 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * - Update slot with corresponded container. 
    * - Dispatch to container.
    * @return Receive is partial function.
-   */
   protected def processReady: Receive = { 
-    case ProcessReady(sys, seq, host, port) => 
-      deploy(sys, seq, host, port).map { container => {
-        slotManager.updateContainer(seq, Option(container)) 
-        dispatchDirective(seq, container)
-      }}
+    
   }
+   */
 
   protected def dispatchDirective(seq: Int, container: ActorRef) = 
     if(!directiveQueue.isEmpty) {
@@ -500,13 +471,40 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
       directiveQueue = rest
     } 
 
-  protected def escalate: Receive = {
+  protected def msgs: Receive = {
+    case ProcessReady(sys, seq, host, port) => 
+      deploy(sys, seq, host, port).map { container => {
+        slotManager.updateContainer(seq, Option(container)) 
+        dispatchDirective(seq, container)
+      }}
+    case directive: Directive => directive match {
+      case null => LOG.error("Directive from {} is null!", sender.path.name)
+      case _ => whenReceive(directive)(sender) 
+    }
     case finished: TaskFinished => {
       groom ! finished
       slotManager.clearTaskAttemptId(finished.taskAttemptId)
     }
+    case action: CancelAck => {
+      preCancelAck(action)
+      doCancelAck(action)
+      postCancelAck(action)
+    }
+    case ShutdownContainer(seq) => slotManager.clear(seq, { slot => {
+      slot.container.map { c => c ! StopOperations(seq) }
+      slot.executor.map { e => e forward Destroy(seq) }
+    }})
   }
 
-  override def receive = escalate orElse collectorMsgs orElse processReady orElse tickMessage orElse cancelAck orElse receiveDirective orElse superviseeOffline orElse unknown
+  protected def preCancelAck(ack: CancelAck) { }
+
+  /**
+   * Notify master the task with specific task attempt id is cancelled.
+   */
+  protected def postCancelAck(ack: CancelAck) { 
+    groom ! TaskCancelled(ack.taskAttemptId.toString)
+  }
+
+  override def receive = msgs orElse collectorMsgs orElse tickMessage orElse superviseeOffline orElse unknown
 
 }

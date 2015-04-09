@@ -49,6 +49,10 @@ class MockGroom1(setting: Setting, reporter: ActorRef, tester: ActorRef)
 
   protected def msgs: Receive = {
     case d: Directive => counsellor.map { c => c forward d }
+    case ShutdownContainer(seq) => counsellor.map { c => {
+      LOG.info("Shutdown container process!")
+      c forward ShutdownContainer(seq)
+    }}
   }
  
   override def receive = msgs orElse super.receive
@@ -166,23 +170,21 @@ class TestExecutor extends TestEnv(TestExecutor.actorSystemName,
     groom ! directive1
     LOG.info("Task1's id is {}", task1.getId) // attempt_test_0001_000007_2
 
-/*
+    Thread.sleep(5*1000)
+
     val task2 = createTask("test", 3, 1, 3) 
     val directive2 = newDirective(Resume, task2) // resume task
-    taskCounsellor ! directive2
+    groom ! directive2
     LOG.info("Task2's id is {}", task2.getId) // attempt_test_0003_000001_3
-*/
+
+    Thread.sleep(5*1000)
 
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_3")
-/*
-    val waitTime = 30.seconds
-
-    LOG.info("Wait for {} secs ...", waitTime)
-    sleep(waitTime)
-*/
-/*
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_3")
-*/
+
+
+    groom ! ShutdownContainer(1)
+    groom ! ShutdownContainer(2)
 
     LOG.info("Done TestExecutor!")
   }

@@ -24,9 +24,9 @@ sealed trait ContainerMessage
  */
 final case class StopOperations(seq: Int) extends ContainerMessage
 
-final case class OperationsStopped(seq: Int) extends ContainerMessage
+//final case class OperationsStopped(seq: Int) extends ContainerMessage
 
 /**
  * Shutdown {@link Container} system.
  */
-final case object ShutdownContainer extends ContainerMessage
+final case class ShutdownContainer(seq: Int) extends ContainerMessage

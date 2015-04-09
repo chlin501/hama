@@ -17,6 +17,7 @@
  */
 package org.apache.hama.groom
 
+import akka.actor.Actor
 import akka.actor.ActorSystem
 import akka.actor.ActorRef
 import akka.actor.Cancellable
@@ -160,7 +161,7 @@ protected[groom] class Pinger(setting: Setting) extends RemoteService
 
 }
 
-trait Computation extends LocalService { self: Container => 
+trait Computation extends LocalService { self: Actor => 
 
   protected var tasklog: Option[ActorRef] = None
   protected var messenger: Option[ActorRef] = None
@@ -168,7 +169,7 @@ trait Computation extends LocalService { self: Container =>
   protected var coordinator: Option[ActorRef] = None
 
   protected def initialize(setting: Setting, task: Task, hamaHome: String,
-                           seq: Int) {
+                           seq: Int, container: ActorRef) {
     val log = spawn(TaskLogger.simpleName(setting), classOf[TaskLogger], 
                     hamaHome, task.getId)
     context watch log 
@@ -176,7 +177,7 @@ trait Computation extends LocalService { self: Container =>
 
     val mgr = spawn(MessageExecutive.simpleName(setting), 
                     classOf[MessageExecutive[BSPMessageBundle[Writable]]],
-                    setting, seq, task.getId, self, log)
+                    setting, seq, task.getId, container, log)
     context watch mgr 
     messenger = Option(mgr)
 
@@ -188,7 +189,7 @@ trait Computation extends LocalService { self: Container =>
     peer = Option(syncer)
 
     val c = spawn(Coordinator.simpleName(setting), classOf[Coordinator], 
-                  setting.hama, task, self, mgr, syncer, log)
+                  setting, task, container, mgr, syncer, log)
 
     context watch c 
     coordinator = Option(c)
@@ -277,7 +278,7 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
    * Start executing the task in another actor.
    * @param task that is supplied to be executed.
    */
-  def doLaunch(task: Task) =  initialize(setting, task, hamaHome, slotSeq)   
+  def doLaunch(task: Task) = initialize(setting, task, hamaHome, slotSeq, self)
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) {}
 
@@ -316,17 +317,17 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
   def postCancel(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = 
     from ! new CancelAck(slotSeq, taskAttemptId)
 
-  override def stopServices() =  destroy
+  override def stopServices() = destroy
 
-  /**
-   * Shutdown the entire system. The spawned process will be stopped as well.
-   * @return Receive is a partial function.
-   */
-  def shutdownContainer: Receive = {
-    case ShutdownContainer => {
-      context.unwatch(taskCounsellor)
-      LOG.warning("Going to shutdown the entire system! ")
-      shutdown
+  protected def stopOperations: Receive = {
+    case StopOperations(seq) => (seq == slotSeq) match { 
+      case true => {
+        context.unwatch(taskCounsellor)
+        destroy
+        stop
+      }
+      case false => LOG.error("Can't stop operation for slot seq {} expected, "+
+                              " but {} found!", slotSeq, seq)
     }
   }
 
@@ -357,6 +358,6 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
     case taskReport: TaskReport => taskCounsellor ! taskReport 
   }
 
-  override def receive = launchTask orElse resumeTask orElse cancelTask orElse shutdownContainer orElse superviseeOffline orElse taskFinished orElse taskReport orElse unknown
+  override def receive = launchTask orElse resumeTask orElse cancelTask orElse stopOperations orElse superviseeOffline orElse taskFinished orElse taskReport orElse unknown
 
 }

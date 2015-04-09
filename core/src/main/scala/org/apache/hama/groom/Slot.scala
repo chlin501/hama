@@ -220,10 +220,15 @@ class SlotManager extends CommonLog {
       slots += newSlot
     })
 
-  protected[groom] def clear(seq: Int) = slots.find( slot =>  
+  protected[groom] def clear(seq: Int): Unit = clear(seq, { slot => })
+
+  protected[groom] def clear(seq: Int, op:(Slot) => Unit) = slots.find( slot => 
     (slot.seq == seq)
   ) match {
-    case Some(found) => update(found.seq, None, found.master, None, None)
+    case Some(found) => {
+      op(found)
+      update(found.seq, None, found.master, None, None)
+    }
     case None => throw new RuntimeException("No matched slot for seq "+seq)
   }
 
@@ -303,5 +308,3 @@ class SlotManager extends CommonLog {
   )
 
 }
-
- 

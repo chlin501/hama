@@ -52,6 +52,7 @@ import scala.util.Try
 sealed trait ExecutorMessage
 final case class Instances(process: Process, stdout: ActorRef, 
                            stderr: ActorRef) extends ExecutorMessage
+final case class Destroy(seq: Int) extends ExecutorMessage
 
 sealed trait ExecutorException extends RuntimeException {
 
@@ -298,6 +299,14 @@ class Executor(groomSetting: Setting, slotSeq: Int) extends Service
     instances = None
   }
 
-  override def receive = unknown
+  protected def destroy: Receive = {
+    case Destroy(seq) => (seq == slotSeq) match {
+      case true => cleanupInstances
+      case false => LOG.error("Can't stop process because slot seq {} "+
+                              "expected, but {} found!", slotSeq, seq)
+    } 
+  }
+
+  override def receive = destroy orElse unknown
      
 }
