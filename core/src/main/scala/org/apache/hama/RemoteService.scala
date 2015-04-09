@@ -63,12 +63,10 @@ trait RemoteService extends Service {
                        timeout: FiniteDuration = 5.seconds) {
     proxies.find(p => p.path.name.equals(target)) match {
       case Some(found) => {
-LOG.info("%%%%%%%%%%%%%%% lookup finds {}", found)
         proxies -= found 
         refreshProxy(target, path)
       }
       case None => {
-LOG.info("%%%%%%%%%%%%%%% lookup finds None!")
         refreshProxy(target, path)
         proxiesCount += 1
       }

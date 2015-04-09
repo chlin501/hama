@@ -84,7 +84,7 @@ object Container extends CommonLog {
   def initialize(args: Array[String]) {
     val setting = customize(Setting.container, args)
     val sys = ActorSystem(setting.sys, setting.config)
-    sys.actorOf(Props(classOf[Pinger], setting), "pinger")
+    sys.actorOf(Props(classOf[Pinger], setting), Pinger.simpleName(setting))
   }
 
   @throws(classOf[Throwable])
@@ -105,6 +105,15 @@ object Container extends CommonLog {
     require(-1 != seq, "Slot seq shouldn't be "+seq+"!")
     setting.get("container.name", classOf[Container].getSimpleName) + seq
   }
+
+}
+
+object Pinger {
+
+  def simpleName(setting: Setting): String = setting.get(
+    "container.pinger.name", 
+    classOf[Pinger].getSimpleName
+  )
 
 }
 
@@ -129,7 +138,7 @@ protected[groom] class Pinger(setting: Setting) extends RemoteService
       val seq = setting.hama.getInt("container.slot.seq", -1)
       require( -1 != seq, "Container process's slot seq shouldn't be -1!")
       proxy ! ProcessReady(setting.sys, seq, setting.host, setting.port) 
-      LOG.debug("Process with slot seq {} replies ready to {}!", seq, 
+      LOG.info("Container process with slot seq {} replies ready to {}!", seq, 
                proxy.path.name)
     } 
     case _ => LOG.warning("Unknown target {} is linked!", proxy.path.name)
@@ -147,7 +156,7 @@ protected[groom] class Pinger(setting: Setting) extends RemoteService
     case _ => LOG.warning("Unknown remote {} offline!", target.path.name)
   }
 
-  override def receive = actorReply orElse timeout orElse unknown
+  override def receive = actorReply orElse timeout orElse superviseeOffline orElse unknown
 
 }
 
