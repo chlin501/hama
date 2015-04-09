@@ -165,6 +165,8 @@ trait Setting extends Akka {
   protected def toClass[A <: Actor](name: String): Try[Class[A]] = 
     Try(Class.forName(name).asInstanceOf[Class[A]])
 
+  def get(key: String): String = hama.get(key, null)
+
   def get(key: String, default: String): String = hama.get(key, default)
 
   def set(key: String, value: String) = hama.set(key, value)
@@ -172,6 +174,10 @@ trait Setting extends Akka {
   def getInt(key: String, default: Int): Int = hama.getInt(key, default)
 
   def setInt(key: String, value: Int) = hama.setInt(key, value)
+
+  def getLong(key: String, default: Long): Long = hama.getLong(key, default)
+
+  def setLong(key: String, value: Long) = hama.setLong(key, value)
 
   def getBoolean(key: String, default: Boolean): Boolean = 
     hama.getBoolean(key, default)

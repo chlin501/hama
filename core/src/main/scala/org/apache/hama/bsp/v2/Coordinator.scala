@@ -248,8 +248,9 @@ class Coordinator(setting: Setting,
       instantiate(className, taskConf) match {
         case Success(superstep) => { 
           // TODO: save task as well so after recovery sys knows where to restart 
-          val actor = spawn("superstep-"+className, classOf[SuperstepWorker],
-                            /* task, */superstep, self)
+          setting.set("superstep.class.name", className)
+          val actor = spawn(SuperstepWorker.simpleName(setting), 
+                            classOf[SuperstepWorker], superstep, self) 
           actor ! Setup(bspPeer) 
           supersteps ++= Map(className -> Spawned(superstep, actor))
         }
@@ -313,13 +314,6 @@ class Coordinator(setting: Setting,
       case None => throw new RuntimeException("Superstep "+className+ " is "+
                                               "missing for task "+ task.getId +
                                               "!") 
-      /*{
-        LOG.error("Can't execute, superstep {} is missing for task {}!", 
-                  className, task.getId)
-        failedState
-        container ! SuperstepNotFoundFailure(className)
-        None
-      }*/
     }
 
   protected def beforeCompute(peer: BSPPeer, superstep: ActorRef,
@@ -428,11 +422,9 @@ class Coordinator(setting: Setting,
    */
   //TODO: should the task's superstep be confiured to 0 instead?
   protected def firstSync(task: Task) {
-LOG.info("###### first time syncing to zk BEG ... ")
     Utils.await[PeerClientMessage](syncClient, Enter(task.getCurrentSuperstep)) 
     Utils.await[PeerClientMessage](syncClient, Leave(task.getCurrentSuperstep)) 
     task.incrementSuperstep
-LOG.info("###### first time syncing to zk END ... ")
   }
 
   /**
@@ -468,11 +460,6 @@ LOG.info("###### first time syncing to zk END ... ")
   protected def transfer() = messenger ! Transfer
 
   /**
-   * Obtain message bundles sent by calling {@link BSPPeer#send} function.
-  protected def getBundles() = messenger ! GetOutgoingBundles
-   */
-
-  /**
    * Clear messenger's outgoing bundle queue.
    * Leave barrier sync. 
    */
@@ -492,10 +479,6 @@ LOG.info("###### first time syncing to zk END ... ")
     case TransferredFailure => throw new RuntimeException(
       "Unable to transfer messages for task "+task.getId+"!" 
     )
-    /*{
-      failedState
-      container ! TransferredFailure 
-    }*/
   }
  
   protected def leave: Receive = {
@@ -539,20 +522,17 @@ LOG.info("###### first time syncing to zk END ... ")
     LOG.debug("Is checkpoint enabled for task {}? {}", task.getId, isEnabled)
     isEnabled
   }
-  
-  protected def checkpointerName = 
-    "checkpointer-"+task.getCurrentSuperstep+"-"+task.getId.toString 
 
-  protected def createCheckpointer(): Option[ActorRef] = currentSuperstep.map {
-    (current) => spawn(checkpointerName,
-                       classOf[Checkpointer], 
-                       setting.hama, // container setting
-                       task.getConfiguration, 
-                       task.getId, 
-                       task.getCurrentSuperstep.asInstanceOf[Long], 
-                       messenger, 
-                       current) 
-  }
+  protected def createCheckpointer(): Option[ActorRef] = 
+    currentSuperstep.map { current => {
+        setting.setLong("monitor.checkpointer.superstep", 
+                        task.getCurrentSuperstep)
+        setting.set("monitor.checkpointer.task.id", task.getId.toString)
+        spawn(Checkpointer.simpleName(setting), classOf[Checkpointer], 
+              setting.hama, task.getConfiguration, task.getId, 
+              task.getCurrentSuperstep.asInstanceOf[Long], messenger, current) 
+      }
+    }
 
   protected def beforeNextSuperstep() = retrieveVariables 
 
@@ -769,23 +749,6 @@ LOG.info("###### first time syncing to zk END ... ")
     task.succeededState
     reportTask
   }
-
-/*
-  protected def failedState() { 
-    //task.failedState instead of reporting failure, exception is thrown!
-    reportTask 
-  }
-
-  protected def killedState() {
-    task.killedState
-    reportTask
-  }
-
-  protected def stoppedState() {
-    task.stoppedState
-    reportTask
-  }
-*/
 
   protected def reportTask() = container ! TaskReport(task.copyTask)
 

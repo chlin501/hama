@@ -160,10 +160,53 @@ protected[groom] class Pinger(setting: Setting) extends RemoteService
 
 }
 
-// TODO: group tasklog, messenger, peer sync, coordinator for consistent 
-//       management e.g. watch child actor, etc.
-//       slotseq, hamaHome, task.
 trait Computation extends LocalService { self: Container => 
+
+  protected var tasklog: Option[ActorRef] = None
+  protected var messenger: Option[ActorRef] = None
+  protected var peer: Option[ActorRef] = None
+  protected var coordinator: Option[ActorRef] = None
+
+  protected def initialize(setting: Setting, task: Task, hamaHome: String,
+                           seq: Int) {
+    val log = spawn(TaskLogger.simpleName(setting), classOf[TaskLogger], 
+                    hamaHome, task.getId)
+    context watch log 
+    tasklog = Option(log)
+
+    val mgr = spawn(MessageExecutive.simpleName(setting), 
+                    classOf[MessageExecutive[BSPMessageBundle[Writable]]],
+                    setting, seq, task.getId, self, log)
+    context watch mgr 
+    messenger = Option(mgr)
+
+    val syncer = spawn(PeerClient.simpleName(setting), classOf[PeerClient], 
+                 setting, task.getId, 
+                 CuratorBarrier(setting, task.getId, task.getTotalBSPTasks),
+                 CuratorRegistrator(setting), log)
+    context watch syncer
+    peer = Option(syncer)
+
+    val c = spawn(Coordinator.simpleName(setting), classOf[Coordinator], 
+                  setting.hama, task, self, mgr, syncer, log)
+
+    context watch c 
+    coordinator = Option(c)
+  }
+
+  /**
+   * Force children to stop by calling context.stop(reference).
+   */
+  protected def destroy() { 
+    tasklog.map { log => stop(log) }
+    tasklog = None
+    messenger.map { mgr => stop(mgr) }
+    messenger = None
+    peer.map { p => stop(p) }
+    peer = None
+    coordinator.map { c => stop(c) }
+    coordinator = None
+  }
   
 }
 
@@ -175,15 +218,12 @@ trait Computation extends LocalService { self: Container =>
 // TODO: when coordinator finishes its execution. notify task counsellor and
 //       update slot's task attempt id to none.
 class Container(sys: String, slotSeq: Int, host: String, port: Int, 
-                taskCounsellor: ActorRef) extends LocalService {
+                taskCounsellor: ActorRef) 
+  extends LocalService with Computation {
 
   import Container._
 
   protected var setting = Setting.container(sys, slotSeq, host, port) 
-  protected var tasklog: Option[ActorRef] = None
-  protected var messenger: Option[ActorRef] = None
-  protected var peer: Option[ActorRef] = None
-  protected var coordinator: Option[ActorRef] = None
 
   /**
    * Capture exceptions thrown by coordinator, etc.
@@ -198,29 +238,16 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
   override val supervisorStrategy = 
     OneForOneStrategy(maxNrOfRetries = 3, withinTimeRange = 3 minutes) {
       case e: InstantiationFailure => {
-        LOG.error("Fail to instantiate child because {}", e)
+        LOG.error("Fail to instantiate superstep because {}", e)
         Restart
       }
       case e: Exception => {  
         LOG.error("Unknown exception: {}", e)
-        stopChildren
+        destroy
         Stop 
       }
     }
 
-  /**
-   * Force children to stop by calling context.stop(reference).
-   */
-  protected def stopChildren() { // TODO: move to computation trait
-    tasklog.map { log => stop(log) }
-    tasklog = None
-    messenger.map { mgr => stop(mgr) }
-    messenger = None
-    peer.map { p => stop(p) }
-    peer = None
-    coordinator.map { c => stop(c) }
-    coordinator = None
-  }
 
   /**
    * Check if the task worker is running. true if a worker is running; false 
@@ -250,33 +277,7 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
    * Start executing the task in another actor.
    * @param task that is supplied to be executed.
    */
-  // TODO: group child actors together for management
-  def doLaunch(task: Task) { 
-      
-    val log = spawn(TaskLogger.simpleName(setting), classOf[TaskLogger], 
-                    hamaHome, task.getId)
-    context watch log 
-    tasklog = Option(log)
-
-    val mgr = spawn(MessageExecutive.simpleName(setting), 
-                    classOf[MessageExecutive[BSPMessageBundle[Writable]]],
-                    setting, slotSeq, task.getId, self, log)
-    context watch mgr 
-    messenger = Option(mgr)
-
-    val syncer = spawn(PeerClient.simpleName(setting), classOf[PeerClient], 
-                 setting, task.getId, 
-                 CuratorBarrier(setting, task.getId, task.getTotalBSPTasks),
-                 CuratorRegistrator(setting), log)
-    context watch syncer
-    peer = Option(syncer)
-
-    val c = spawn(Coordinator.simpleName(setting), classOf[Coordinator], 
-                  setting.hama, task, self, mgr, syncer, log)
-
-    context watch c 
-    coordinator = Option(c)
-  }
+  def doLaunch(task: Task) =  initialize(setting, task, hamaHome, slotSeq)   
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) {}
 
@@ -309,12 +310,13 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
     }
   }
 
-  def doCancel(taskAttemptId: TaskAttemptID) = stopChildren // TODO: any other operations?
+  // TODO: any other operations?
+  def doCancel(taskAttemptId: TaskAttemptID) = destroy 
 
   def postCancel(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) = 
     from ! new CancelAck(slotSeq, taskAttemptId)
 
-  override def stopServices() =  stopChildren
+  override def stopServices() =  destroy
 
   /**
    * Shutdown the entire system. The spawned process will be stopped as well.
@@ -343,7 +345,7 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
       self ! ShutdownContainer
     } else if(nameEquals(tasklog, target) || nameEquals(messenger, target) ||
        nameEquals(peer, target) || nameEquals(coordinator, target)) {
-      stopChildren
+      destroy
       stop  // TODO: replaced by reporting task failure to task counsellor?
     } else LOG.warning("Unexpected actor {} is offline!", target.path.name)
 

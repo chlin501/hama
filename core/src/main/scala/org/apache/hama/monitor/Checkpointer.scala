@@ -72,6 +72,15 @@ object Checkpointer {
     "%s/%s%s%s".format(dir(root(setting), jobId(id), superstep), 
                       id.toString, dot, suffix)
 
+  def simpleName(setting: Setting): String = {
+    val name = setting.get("monitor.checkpointer.name", 
+                           classOf[Checkpointer].getSimpleName)
+    val superstep = setting.getLong("monitor.checkpointer.superstep", -1)
+    require(-1 != superstep, "Task superstep shouldn't be "+superstep+"!")
+    val id = setting.get("monitor.checkpointer.task.id")
+    require(null != id && !"".equals(id), "Task id is missing!")
+    name + superstep + "-" + id
+  }  
 }
 
 /**

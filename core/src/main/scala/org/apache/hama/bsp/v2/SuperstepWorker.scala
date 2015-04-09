@@ -20,6 +20,7 @@ package org.apache.hama.bsp.v2
 import akka.actor.ActorRef
 import org.apache.hadoop.io.Writable
 import org.apache.hama.Agent
+import org.apache.hama.conf.Setting
 import org.apache.hama.monitor.GetMapVarNextClass
 import org.apache.hama.monitor.MapVarNextClass
 
@@ -33,6 +34,18 @@ final case class Variables(variables: Map[String, Writable])
 final case class Compute(peer: BSPPeer) extends SuperstepMessage
 final case class NextSuperstepClass(next: Class[_]) extends SuperstepMessage
 final case class Cleanup(peer: BSPPeer) extends SuperstepMessage
+
+object SuperstepWorker {
+
+  def simpleName(setting: Setting): String = {
+    val name = setting.get("superstep.worker.name", 
+                           classOf[SuperstepWorker].getSimpleName)
+    val clz = setting.get("superstep.class.name")
+    require(null != clz, "Superstep class name is missing!")
+    name + clz 
+  }
+  
+}
 
 class SuperstepWorker(superstep: Superstep, coordinator: ActorRef) 
       extends Agent {
