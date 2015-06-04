@@ -188,7 +188,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   override def initializeServices = {
     groom ! SubscribeEvent(DirectiveArrivalEvent)// TODO: unsubscriveEvent(...)
-    if(requestTask) tick(self, TaskRequest)
+    if(requestTask) tick(self, TaskRequest) 
   }
 
   protected def deploy(sys: String, seq: Int, host: String, port: Int): 
@@ -206,7 +206,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
     Option(container)
   }  
 
-  protected def requestTask(): Boolean = 
+  protected def requestTask(): Boolean = // TODO: check sys load, etc.
     setting.hama.getBoolean("groom.request.task", true) 
 
   /**

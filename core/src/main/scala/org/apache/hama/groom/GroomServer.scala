@@ -52,13 +52,24 @@ final case object GroomTaskFailureEvent extends Event
  */
 final case object DirectiveArrivalEvent extends Event
 
+/**
+ * GroomServer entry point. 
+ */
 object GroomServer {
 
+  /**
+   * The name of GroomServer to be launched. 
+   * @param setting contains specific configuration to this groom.
+   * @return String that represents the GroomServer.
+   */
   def simpleName(setting: Setting): String = setting.get(
     "groom.name",
     classOf[GroomServer].getSimpleName
   )
 
+  /**
+   * The entry point to launch GroomServer.
+   */
   def main(args: Array[String]) {
     val groom = Setting.groom
     val sys = ActorSystem(groom.info.getActorSystemName, groom.config)
