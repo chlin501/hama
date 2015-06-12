@@ -171,7 +171,7 @@ class BSPMaster(setting: Setting, identifier: String) extends LocalService
   override def setting(): Setting = setting
 
   override def initializeServices {
-    cleaner
+    cleaner // TODO: check if need to clean up underlying hdfs; for decoupling from hdfs.
     register
     join(seedNodes)
     subscribe(self)

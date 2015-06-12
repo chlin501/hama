@@ -129,11 +129,10 @@ class TestExecutor extends TestEnv(TestExecutor.actorSystemName,
     super.beforeAll
     System.getProperty("hama.home.dir") match {
       case null => {
-        val pwd = System.getProperty("user.dir")
-        LOG.info("Configure `hama.home.dir' to {}", pwd)
-        System.setProperty("hama.home.dir", pwd)
+        LOG.info("Configure `hama.home.dir' to {}", testRootPath)
+        System.setProperty("hama.home.dir", testRootPath) 
       }
-      case pwd@_ => LOG.info("`hama.home.dir' is configured to {}", pwd)
+      case logs@_ => LOG.info("`hama.home.dir' is configured to {}", logs)
     }
     launchZk 
   }
@@ -153,6 +152,7 @@ class TestExecutor extends TestEnv(TestExecutor.actorSystemName,
     conf.set("bsp.working.dir", testRoot.getCanonicalPath)
     //conf.setClass("container.main", classOf[Container], classOf[Container])
     conf.setBoolean("groom.request.task", false)
+    conf.setBoolean("groom.executor.use.lib", false)
   }
 
   it("test task management, executor, and container ...") {
@@ -178,6 +178,10 @@ class TestExecutor extends TestEnv(TestExecutor.actorSystemName,
     LOG.info("Task2's id is {}", task2.getId) // attempt_test_0003_000001_3
 
     Thread.sleep(5*1000)
+
+    val task3 = createTask("test", 4, 1, 2)
+    val directive3 = newDirective(Cancel, task3) // cancel task
+    groom ! directive3
 
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_3")
     expectAnyOf("attempt_test_0001_000007_2", "attempt_test_0003_000001_3")

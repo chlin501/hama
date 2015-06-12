@@ -102,11 +102,12 @@ final class ProcessFailureException(seq: Int) extends ExecutorException {
 
 trait ExecutorLog { // TODO: refactor this after all log is switched Logging
 
+  import Executor._
+
   def log(name: String, input: InputStream, conf: HamaConfiguration, 
           executor: ActorRef, ext: String, error: (String, Any*) => Unit) {
     import scala.language.postfixOps
-    try { 
-      val logPath = System.getProperty("hama.log.dir")
+    try {  
       logPath match {
         case null | "" => logWith(conf, "/tmp/hama/logs", executor, input, ext)
         case _ => logWith(conf, logPath, executor, input, ext) 
@@ -161,10 +162,11 @@ class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
 
 object Executor extends CommonLog {
 
+  // TODO: group to Setting for unifying access system attributes
   val javaHome = System.getProperty("java.home")
   val hamaHome = System.getProperty("hama.home.dir")   
   val javacp: String  = System.getProperty("java.class.path") 
-  val logPath: String = System.getProperty("hama.log.dir") 
+  val logPath: String = hamaHome + "/logs"
 
   def javabin(): String = new File(new File(javaHome, "bin"), "java").
     getCanonicalPath
@@ -232,16 +234,17 @@ class Executor(groomSetting: Setting, slotSeq: Int) extends Service
     if(null == hamaHome)  // TODO: find better to handle side effect 
       throw ClasspathException(slotSeq, "Variable hama.home.dir is not set!")
     var cp = "./:%s:%s/conf".format(parentClasspath, hamaHome)
-    // TODO: when testing, mkdir lib under test classpath?
-    val lib = new File(hamaHome, "lib") 
-    if(!lib.exists) {
-      LOG.warning("Create hama lib path because it doesn't exist: {}", 
-                  lib.getAbsolutePath)
-      lib.mkdirs
+    if(groomSetting.getBoolean("groom.executor.use.lib", true)) { 
+      val lib = new File(hamaHome, "lib") 
+      if(!lib.exists) {
+        LOG.warning("Create hama lib path because it doesn't exist: {}", 
+                    lib.getAbsolutePath)
+        lib.mkdirs
+      }
+      lib.listFiles(new FilenameFilter {
+        def accept(dir: File, name: String): Boolean = true
+      }).foreach( jar => { cp += ":"+jar })
     }
-    lib.listFiles(new FilenameFilter {
-      def accept(dir: File, name: String): Boolean = true
-    }).foreach( jar => { cp += ":"+jar })
     LOG.debug("Classpath is configured to {}", cp)
     cp
   }

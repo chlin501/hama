@@ -293,13 +293,11 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    */
   protected def whenReceive(d: Directive)(from: ActorRef) =
     if(slotManager.hasFreeSlot(directiveQueue.size)) d.action match {
-      case Launch | Resume => {
-        initializeOrDispatch(d) 
-      }
+      case Launch | Resume => initializeOrDispatch(d) 
       case Cancel => slotManager.findSlotBy(d.task.getId) match { 
         case Some(slot) => slot.container match { 
           case Some(container) => container ! new CancelTask(d.task.getId)  
-          case None => LOG.error("No container is up. Can't cancel task {}!",
+          case None => LOG.error("No container is found. Can't cancel task {}!",
                                  d.task.getId)
         }
         case None => LOG.warning("Task {} may be stopped with task failure "+
@@ -316,8 +314,10 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * @param action is the CancelAck that contains {@link TaskAttemptID} and slot
    *               seq. 
    */
-  protected def doCancelAck(action: CancelAck) = 
+  protected def doCancelAck(action: CancelAck) = {
+    LOG.info("aaaaaaaaaaaa cancel ack is received for task {}! ", action.taskAttemptId)
     slotManager.clearSlotBy(action.slotSeq, action.taskAttemptId)
+  }
 
   protected def pushToLaunch(seq: Int, directive: Directive, 
                              container: ActorRef) {
@@ -453,8 +453,8 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
 
   protected def dispatchDirective(seq: Int, container: ActorRef) = 
     if(!directiveQueue.isEmpty) {
-      LOG.info("Directive queue is not empty and container {} is asking for "+
-               "task execution!", container.path.name)
+      LOG.debug("Directive queue is not empty and {} is asking for task!", 
+                container.path.name)
       val (d, rest) = directiveQueue.dequeue
       d.action match {
         case Launch => {
@@ -502,6 +502,7 @@ class TaskCounsellor(setting: Setting, groom: ActorRef, reporter: ActorRef)
    * Notify master the task with specific task attempt id is cancelled.
    */
   protected def postCancelAck(ack: CancelAck) { 
+    LOG.info("aaaaaaaaaaaa confirm task is cancelled to groom!")
     groom ! TaskCancelled(ack.taskAttemptId.toString)
   }
 

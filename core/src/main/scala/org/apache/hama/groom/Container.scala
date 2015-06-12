@@ -58,7 +58,7 @@ import scala.util.Try
 
 object Container extends CommonLog {
 
-  // TODO: group for global attribute setting
+  // TODO: group for global attribute setting (e.g. Setting)
   def hamaHome: String = System.getProperty("hama.home.dir") 
 
   /**
@@ -170,6 +170,7 @@ trait Computation extends LocalService { self: Actor =>
 
   protected def initialize(setting: Setting, task: Task, hamaHome: String,
                            seq: Int, container: ActorRef) {
+    // TODO: when testing, hamaHome is null!!!
     val log = spawn(TaskLogger.simpleName(setting), classOf[TaskLogger], 
                     hamaHome, task.getId)
     context watch log 

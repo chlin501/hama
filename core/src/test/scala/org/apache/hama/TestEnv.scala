@@ -60,10 +60,11 @@ class TestEnv(actorSystem: ActorSystem) extends TestKit(actorSystem)
 
   import TestEnv._
 
-  val probe = TestProbe()
-  val conf = new HamaConfiguration()
-  val testRootPath = "/tmp/hama"
-  lazy val client = createWithArgs("MockClient", classOf[MockClient])
+  protected val probe = TestProbe()
+  protected val conf = new HamaConfiguration()
+  protected lazy val testRootPath = "/tmp/hama"
+  protected lazy val client = createWithArgs("MockClient", classOf[MockClient])
+  protected lazy val testLogPath = testRootPath+"/logs"
 
   /**
    * Instantiate test environment with name only.

@@ -20,6 +20,7 @@ package org.apache.hama.conf
 import akka.actor.Actor
 import java.io.DataInput
 import java.io.DataOutput
+import java.io.File
 import java.io.IOException
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -84,6 +85,33 @@ protected trait Akka {
     """)
 }
 
+// TODO: merge executor, container system setting to here
+trait Hama { 
+
+  def home: String = System.getProperty("hama.home.dir") match {
+    case null | "" => System.setProperty("hama.home.dir", 
+      System.getProperty("user.dir")) 
+    case value@_ => value
+  }
+
+  def logs: String = new File(home, "logs").getCanonicalPath
+
+  def java: String = System.getProperty("java.home") match {
+    case null | "" => throw new RuntimeException("JAVA_HOME is not set!")
+    case value@_ => new File(new File(value, "bin"), "java").getCanonicalPath
+  }
+
+  def classpath: Array[String] = System.getProperty("java.class.path") match {
+    case null | "" => Array("")
+    case value@_ => value.split(" ")
+  }
+
+  def lib: Array[String]  // TODO: apply filter, obtain from configuration
+
+  def options: Array[String]  // TODO: obtain from configuration
+
+}
+
 object Setting {
 
   // TODO: rename to fromString?
@@ -99,8 +127,17 @@ object Setting {
     }
   )
 
+  /**
+   * Create default setting for the master server.
+   * @return Setting contians default configuration for the master machine.
+   */
   def master(): Setting = master(new HamaConfiguration)
 
+  /**
+   * Create setting for the master server with configuration specified.
+   * @param conf is the configuration to be applied to the master machine.
+   * @return Setting contians configuration sepcific for the master machine.
+   */
   def master(conf: HamaConfiguration): Setting = new MasterSetting(conf)
 
   def groom(): Setting = groom(new HamaConfiguration)
