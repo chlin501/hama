@@ -21,6 +21,7 @@ import akka.actor.Actor
 import java.io.DataInput
 import java.io.DataOutput
 import java.io.File
+import java.io.FilenameFilter
 import java.io.IOException
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -85,30 +86,50 @@ protected trait Akka {
     """)
 }
 
-// TODO: merge executor, container system setting to here
+// TODO: merge groom.executor, groom.container system setting to here
 trait Hama { 
 
-  def home: String = System.getProperty("hama.home.dir") match {
+  /**
+   * Obtain Hama's home directory from Java system property "hama.home.dir".
+   * @return String that is the representative of this property.
+   */
+  def hamaHome: String = System.getProperty("hama.home.dir") match {
     case null | "" => System.setProperty("hama.home.dir", 
       System.getProperty("user.dir")) 
     case value@_ => value
   }
 
-  def logs: String = new File(home, "logs").getCanonicalPath
+  /**
+   * The logs directory under hama home.
+   * @return String is the representative of the log path. 
+   */
+  def logs: String = new File(hamaHome, "logs").getCanonicalPath
 
-  def java: String = System.getProperty("java.home") match {
+  /**
+   * Java home directory.
+   * @return String is the path pointed to JAVA_HOME path.
+   */
+  def javaHome: String = System.getProperty("java.home") match {
     case null | "" => throw new RuntimeException("JAVA_HOME is not set!")
     case value@_ => new File(new File(value, "bin"), "java").getCanonicalPath
   }
 
+  /**
+   * Java binary file.
+   * @return String that points to the path of Java binary file within bin 
+   *                folder.
+   */
+  def java: String = new File(new File(javaHome, "bin"), "java").
+    getCanonicalPath 
+
+  /**
+   * Path used to find directories and JAR archives containing class files.
+   * @return String that contains related paths for this process.
+   */
   def classpath: Array[String] = System.getProperty("java.class.path") match {
-    case null | "" => Array("")
-    case value@_ => value.split(" ")
+    case null | "" => Array("./")
+    case str@_ => str.split(":")
   }
-
-  def lib: Array[String]  // TODO: apply filter, obtain from configuration
-
-  def options: Array[String]  // TODO: obtain from configuration
 
 }
 
@@ -289,7 +310,7 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
 
 }
 
-class ContainerSetting(conf: HamaConfiguration) extends Setting {
+class ContainerSetting(conf: HamaConfiguration) extends Setting with Hama {
 
   import Setting._
 
@@ -320,7 +341,24 @@ class ContainerSetting(conf: HamaConfiguration) extends Setting {
   override def host(): String = hama.get("container.host", Utils.hostname)
 
   override def port(): Int = hama.getInt("container.port", 61000)
- 
+
+  /**
+   * Override original classpath setting by including jar files under lib 
+   * folder and conf folder.
+   * @return Array[String] of all jar files are included under lib directory 
+   *                       and conf folder.
+   */
+  override def classpath: Array[String] = { 
+    var cp = "./" +: super.classpath :+ (hamaHome +"/conf")
+    val lib = new File(hamaHome, "lib")
+    lib.exists match {
+      case true => lib.listFiles(new FilenameFilter { 
+        def accept(dir: File, name: String): Boolean = true
+      }).foreach( jar => cp ++= Array(jar.getCanonicalPath) ) 
+      case false => 
+    }
+    cp.toArray
+  }
 }
 
 class ClientSetting(conf: HamaConfiguration) extends Setting {

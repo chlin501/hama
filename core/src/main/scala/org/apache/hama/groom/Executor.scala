@@ -162,7 +162,7 @@ class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
 
 object Executor extends CommonLog {
 
-  // TODO: group to Setting for unifying access system attributes
+  // TODO: group to Setting for unifying access system attributes 
   val javaHome = System.getProperty("java.home")
   val hamaHome = System.getProperty("hama.home.dir")   
   val javacp: String  = System.getProperty("java.class.path") 
@@ -171,7 +171,7 @@ object Executor extends CommonLog {
   def javabin(): String = new File(new File(javaHome, "bin"), "java").
     getCanonicalPath
 
-  def javaOpts(conf: HamaConfiguration): String = 
+  def javaOpts(conf: HamaConfiguration): String =  
     conf.get("container.java.opts", "-Xmx200m")
 
   def simpleName(setting: Setting): String = 
