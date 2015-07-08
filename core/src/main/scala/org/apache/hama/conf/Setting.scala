@@ -243,6 +243,8 @@ trait Setting extends Akka with SystemProperties {
 
   // TODO: def configuration.getXXXXX e.g. getClass, etc.
 
+  def javaopts: String 
+
 }
 
 class MasterSetting(conf: HamaConfiguration) extends Setting {
@@ -274,6 +276,8 @@ class MasterSetting(conf: HamaConfiguration) extends Setting {
   override def host(): String = conf.get("master.host", Utils.hostname)
 
   override def port(): Int = conf.getInt("master.port", 40000)
+
+  override def javaopts: String = hama.get("master.java.opts", "-Xmx200m") 
 
 }
 
@@ -307,6 +311,7 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
 
   override def port(): Int = conf.getInt("groom.port", 50000)
 
+  override def javaopts: String = hama.get("groom.java.opts", "-Xmx200m") 
 }
 
 class ContainerSetting(conf: HamaConfiguration) extends Setting {
@@ -358,6 +363,9 @@ class ContainerSetting(conf: HamaConfiguration) extends Setting {
     }
     cp.toArray
   }
+
+  override def javaopts: String = hama.get("container.java.opts", "-Xmx200m") 
+
 }
 
 class ClientSetting(conf: HamaConfiguration) extends Setting {
@@ -390,5 +398,7 @@ class ClientSetting(conf: HamaConfiguration) extends Setting {
   override def host(): String = conf.get("client.host", Utils.hostname)
 
   override def port(): Int = conf.getInt("client.port", 1947)
+
+  override def javaopts: String = hama.get("client.java.opts", "-Xmx200m") 
   
 }

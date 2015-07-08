@@ -104,13 +104,14 @@ trait ExecutorLog { // TODO: refactor this after all log is switched Logging
 
   import Executor._
 
-  def log(name: String, input: InputStream, conf: HamaConfiguration, 
+  def log(name: String, input: InputStream, setting: Setting, 
           executor: ActorRef, ext: String, error: (String, Any*) => Unit) {
     import scala.language.postfixOps
     try {  
-      logPath match {
-        case null | "" => logWith(conf, "/tmp/hama/logs", executor, input, ext)
-        case _ => logWith(conf, logPath, executor, input, ext) 
+      setting.logs match { 
+        case null | "" => logWith(setting.hama, "/tmp/hama/logs", executor, 
+                                  input, ext)
+        case logs@_ => logWith(setting.hama, logs, executor, input, ext) 
       }
     } catch { 
       case e: Exception => {
@@ -122,10 +123,10 @@ trait ExecutorLog { // TODO: refactor this after all log is switched Logging
     }
   }
 
-  def logWith(conf: HamaConfiguration, logPath: String, executor: ActorRef,
+  def logWith(conf: HamaConfiguration, logs: String, executor: ActorRef,
               input: InputStream, ext: String) = 
     if(!conf.getBoolean("groom.executor.log.console", false)) {
-      val logDir = new File(logPath)
+      val logDir = new File(logs)
       if(!logDir.exists) logDir.mkdirs
       val out = new FileOutputStream(new File(logDir, 
         "%s.%s".format(executor.path.name, ext)))
@@ -137,11 +138,14 @@ trait ExecutorLog { // TODO: refactor this after all log is switched Logging
 }
 
 // TODO: refactor using logging.Logging
-class StdOut(input: InputStream, conf: HamaConfiguration, executor: ActorRef) 
+/**
+ * @param setting is the container setting.
+ */ 
+class StdOut(input: InputStream, setting: Setting, executor: ActorRef) 
       extends Agent with ExecutorLog { 
   
   override def preStart = 
-    log(name, input, conf, executor, "log", LOG.error)
+    log(name, input, setting, executor, "log", LOG.error)
 
   override def receive = { 
     case msg@_ => LOG.warning("Unknown stdout message {}", msg)
@@ -149,11 +153,14 @@ class StdOut(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
 }
 
 // TODO: refactor using logging.Logging
-class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef) 
+/**
+ * @param setting is the container setting.
+ */ 
+class StdErr(input: InputStream, setting: Setting, executor: ActorRef) 
       extends Agent with ExecutorLog {
 
   override def preStart = 
-    log(name, input, conf, executor, "err", LOG.error)
+    log(name, input, setting, executor, "err", LOG.error)
 
   override def receive = { 
     case msg@_ => LOG.warning("Unknown stderr message {}", msg)
@@ -161,18 +168,6 @@ class StdErr(input: InputStream, conf: HamaConfiguration, executor: ActorRef)
 }
 
 object Executor extends CommonLog {
-
-  // TODO: group to Setting for unifying access system attributes 
-  val javaHome = System.getProperty("java.home")
-  val hamaHome = System.getProperty("hama.home.dir")   
-  val javacp: String  = System.getProperty("java.class.path") 
-  val logPath: String = hamaHome + "/logs"
-
-  def javabin(): String = new File(new File(javaHome, "bin"), "java").
-    getCanonicalPath
-
-  def javaOpts(conf: HamaConfiguration): String =  
-    conf.get("container.java.opts", "-Xmx200m")
 
   def simpleName(setting: Setting): String = 
     GroomServer.simpleName(setting) + "_executor_" + 
@@ -207,8 +202,7 @@ class Executor(groomSetting: Setting, slotSeq: Int) extends Service
    * @param cp is the classpath.
    * @param setting is the container setting.
    */
-  protected def javaArgs(cp: String, setting: Setting): Seq[String] = {
-    val opts = javaOpts(setting.hama)
+  protected def javaArgs(setting: Setting): Seq[String] = {
     val bspClassName = setting.main.getName 
     val sys = setting.sys
     // decide to which address the peer will listen, default to 0.0.0.0 (?)
@@ -216,7 +210,7 @@ class Executor(groomSetting: Setting, slotSeq: Int) extends Service
     val port = taskPort
     LOG.debug("Container process will be created at {}{}@{}:{}", sys, slotSeq, 
               listeningTo, port)
-    val command = Seq(javabin) ++ Seq(opts) ++  
+    val command = Seq(setting.java) ++ Seq(setting.javaopts) ++  
                   Seq("-classpath") ++ Seq(setting.classpath.mkString(":")) ++ 
                   Seq(bspClassName) ++ Seq(sys) ++ 
                   Seq(listeningTo) ++ Seq(port) ++ Seq(slotSeq.toString)
@@ -228,7 +222,7 @@ class Executor(groomSetting: Setting, slotSeq: Int) extends Service
    * Fork a child process based on command assembled.
    */
   protected def fork(containerSetting: Setting) {
-    val cmd = javaArgs(javacp, containerSetting) 
+    val cmd = javaArgs(containerSetting) 
     newContainer(containerSetting, cmd) match {
       case Success(instance) => {
         LOG.info("Container {} exists normally!", slotSeq)
@@ -257,9 +251,9 @@ class Executor(groomSetting: Setting, slotSeq: Int) extends Service
       builder.directory(new File(Operation.defaultWorkingDirectory(conf)))
       val process = builder.start
       val stdout = spawn("stdout%s".format(seq), classOf[StdOut], 
-                         process.getInputStream, conf, self)
+                         process.getInputStream, setting, self)
       val stderr = spawn("stderr%s".format(seq), classOf[StdErr], 
-                         process.getErrorStream, conf, self)
+                         process.getErrorStream, setting, self)
       this.instances = Option(Instances(process, stdout, stderr))
       val exitValue = process.waitFor // blocking call
       require(0 == exitValue, "Non 0 exit value found: "+exitValue)

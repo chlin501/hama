@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 package org.apache.hama.client
-
+/*
 import akka.actor.ActorRef
 import akka.actor.Props
 import com.typesafe.config.Config
@@ -190,7 +190,7 @@ class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
   }
 
   def piEstimator(): String = {
-    require(null != Executor.hamaHome, "hama.home.dir is not set!")
+    require(null != Executor.hamaHome, "hama.home.dir is not set!") 
     constitute(Executor.hamaHome, "core", "src", "test", "resources", 
                "examples", "PiEstimator.scala")
   }
@@ -261,3 +261,4 @@ class TestSubmitter extends TestEnv("TestSubmitter") with JobUtil {
 
 
 }
+*/

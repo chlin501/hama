@@ -69,13 +69,14 @@ class MultiNodesSetting(conf: HamaConfiguration) extends Setting {
 
   def main(): Class[Actor] = classOf[Tester].asInstanceOf[Class[Actor]]
 
-  def sys(): String = conf.get("test.actor-system.name", 
-                               "TestSystem")
+  def sys(): String = conf.get("test.actor-system.name", "TestSystem")
 
   def host(): String = conf.get("test.host", 
                                 InetAddress.getLocalHost.getHostName)
 
   def port(): Int = conf.getInt("test.port", 10000)
+
+  override def javaopts: String = hama.get("test.java.opts", "-Xmx200m")
 }
 
 class MultiNodesEnv(actorSystem: ActorSystem) 
