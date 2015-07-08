@@ -86,11 +86,10 @@ protected trait Akka {
     """)
 }
 
-// TODO: merge groom.executor, groom.container system setting to here
-trait Hama { 
+trait SystemProperties { 
 
   /**
-   * Obtain Hama's home directory from Java system property "hama.home.dir".
+   * Obtain Hama home directory from Java system property "hama.home.dir".
    * @return String that is the representative of this property.
    */
   def hamaHome: String = System.getProperty("hama.home.dir") match {
@@ -194,7 +193,7 @@ object Setting {
 
 }
 
-trait Setting extends Akka {
+trait Setting extends Akka with SystemProperties {
 
   import Setting._
 
@@ -310,7 +309,7 @@ class GroomSetting(conf: HamaConfiguration) extends Setting {
 
 }
 
-class ContainerSetting(conf: HamaConfiguration) extends Setting with Hama {
+class ContainerSetting(conf: HamaConfiguration) extends Setting {
 
   import Setting._
 

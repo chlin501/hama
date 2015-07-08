@@ -217,36 +217,11 @@ class Executor(groomSetting: Setting, slotSeq: Int) extends Service
     LOG.debug("Container process will be created at {}{}@{}:{}", sys, slotSeq, 
               listeningTo, port)
     val command = Seq(javabin) ++ Seq(opts) ++  
-                  Seq("-classpath") ++ Seq(classpath(hamaHome, cp)) ++
+                  Seq("-classpath") ++ Seq(setting.classpath.mkString(":")) ++ 
                   Seq(bspClassName) ++ Seq(sys) ++ 
                   Seq(listeningTo) ++ Seq(port) ++ Seq(slotSeq.toString)
     LOG.debug("Java command to be executed: {}", command.mkString(" "))
     command
-  }
-
-  /**
-   * Collect jar files found under ${HAMA_HOME}/lib to form the classpath 
-   * variable for the child process.
-   * @param hamaHome is pointed to hama home.dir directory.
-   * @return String of classpath value.
-   */
-  protected def classpath(hamaHome: String, parentClasspath: String): String = {
-    if(null == hamaHome)  // TODO: find better to handle side effect 
-      throw ClasspathException(slotSeq, "Variable hama.home.dir is not set!")
-    var cp = "./:%s:%s/conf".format(parentClasspath, hamaHome)
-    if(groomSetting.getBoolean("groom.executor.use.lib", true)) { 
-      val lib = new File(hamaHome, "lib") 
-      if(!lib.exists) {
-        LOG.warning("Create hama lib path because it doesn't exist: {}", 
-                    lib.getAbsolutePath)
-        lib.mkdirs
-      }
-      lib.listFiles(new FilenameFilter {
-        def accept(dir: File, name: String): Boolean = true
-      }).foreach( jar => { cp += ":"+jar })
-    }
-    LOG.debug("Classpath is configured to {}", cp)
-    cp
   }
 
   /**
