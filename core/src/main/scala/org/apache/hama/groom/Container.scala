@@ -58,9 +58,6 @@ import scala.util.Try
 
 object Container extends CommonLog {
 
-  // TODO: group for global attribute setting (e.g. Setting)
-  //def hamaHome: String = System.getProperty("hama.home.dir") 
-
   /**
    * Configure command line arguments to setting.
    * @param setting is the container setting.
@@ -170,7 +167,6 @@ trait Computation extends LocalService { self: Actor =>
 
   protected def initialize(setting: Setting, task: Task, seq: Int, 
                            container: ActorRef) {
-    LOG.info("xxxxxxxxxxxxxxxxxx Container setting's hama home value: {}", setting.hamaHome)
     val log = spawn(TaskLogger.simpleName(setting), classOf[TaskLogger], 
                     setting.hamaHome, task.getId) 
     context watch log 
@@ -226,7 +222,8 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
   import Container._
 
   /**
-   * Construct container setting. 
+   * Construct container setting from the related information such as host, 
+   * etc. 
    */
   protected var setting = Setting.container(sys, slotSeq, host, port) 
 

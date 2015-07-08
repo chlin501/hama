@@ -172,6 +172,7 @@ object Setting {
     container(conf)
   }
 
+  // TODO: check if logs dir is overriden
   def container(sys: String, seq: Int, host: String, port: Int): Setting = {
     val conf = new HamaConfiguration
     require(null != sys && !"".equals(sys) , "Container system name is empty!")

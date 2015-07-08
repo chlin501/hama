@@ -127,6 +127,8 @@ class TestExecutor extends TestEnv(TestExecutor.actorSystemName,
 
   override def beforeAll { 
     super.beforeAll
+    // TODO: instead of setting hama.home.dir, override logs path in 
+    //       ContainerSetting.
     System.getProperty("hama.home.dir") match {
       case null => {
         LOG.info("Configure `hama.home.dir' to {}", testRootPath)
