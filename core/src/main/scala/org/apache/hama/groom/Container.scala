@@ -59,7 +59,7 @@ import scala.util.Try
 object Container extends CommonLog {
 
   // TODO: group for global attribute setting (e.g. Setting)
-  def hamaHome: String = System.getProperty("hama.home.dir") 
+  //def hamaHome: String = System.getProperty("hama.home.dir") 
 
   /**
    * Configure command line arguments to setting.
@@ -168,11 +168,11 @@ trait Computation extends LocalService { self: Actor =>
   protected var peer: Option[ActorRef] = None
   protected var coordinator: Option[ActorRef] = None
 
-  protected def initialize(setting: Setting, task: Task, hamaHome: String,
-                           seq: Int, container: ActorRef) {
-    // TODO: when testing, hamaHome is null!!!
+  protected def initialize(setting: Setting, task: Task, seq: Int, 
+                           container: ActorRef) {
+    LOG.info("xxxxxxxxxxxxxxxxxx Container setting's hama home value: {}", setting.hamaHome)
     val log = spawn(TaskLogger.simpleName(setting), classOf[TaskLogger], 
-                    hamaHome, task.getId)
+                    setting.hamaHome, task.getId) 
     context watch log 
     tasklog = Option(log)
 
@@ -225,6 +225,9 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
 
   import Container._
 
+  /**
+   * Construct container setting. 
+   */
   protected var setting = Setting.container(sys, slotSeq, host, port) 
 
   /**
@@ -279,7 +282,7 @@ class Container(sys: String, slotSeq: Int, host: String, port: Int,
    * Start executing the task in another actor.
    * @param task that is supplied to be executed.
    */
-  def doLaunch(task: Task) = initialize(setting, task, hamaHome, slotSeq, self)
+  def doLaunch(task: Task) = initialize(setting, task, slotSeq, self)
 
   def postLaunch(slotSeq: Int, taskAttemptId: TaskAttemptID, from: ActorRef) {}
 
