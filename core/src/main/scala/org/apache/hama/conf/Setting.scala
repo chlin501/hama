@@ -110,7 +110,7 @@ trait SystemProperties {
    */
   def javaHome: String = System.getProperty("java.home") match {
     case null | "" => throw new RuntimeException("JAVA_HOME is not set!")
-    case value@_ => new File(new File(value, "bin"), "java").getCanonicalPath
+    case value@_ => value
   }
 
   /**
