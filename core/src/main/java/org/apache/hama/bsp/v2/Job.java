@@ -40,11 +40,23 @@ import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.io.PartitionedSplit;
 
 /**
- * Job informaion data.
+ * Job informaion.
  */
 public final class Job implements Writable {
 
   public static final Log LOG = LogFactory.getLog(Job.class);
+
+/* TODO: representative of a groom server.
+  public static class Node { 
+    final String host; 
+    final int port; 
+    public Node(final String host, final int port) {
+      this.host = host;
+      this.port = port;
+    }
+    @Override public String toString() { return this.host+":"+this.port; }
+  }
+*/
 
   /* Id for this job. */
   private BSPJobID id;
@@ -326,6 +338,9 @@ public final class Job implements Writable {
       conf.setStrings("bsp.target.grooms", targets);
       return this;
     }
+
+    // TODO: see public class Node ...
+    //public Builder setTargets(final Node[] targets) {
      
     /**
      * Add a target GroomServer on which the task may run.
