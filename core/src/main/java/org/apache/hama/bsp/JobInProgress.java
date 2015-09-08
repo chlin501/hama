@@ -262,15 +262,21 @@ public class JobInProgress {
       } finally {
         splitFile.close();
       }
-      numBSPTasks = splits.length;
-      LOG.info("num BSPTasks: " + numBSPTasks);
+      LOG.debug("numBSPTasks: " + numBSPTasks + ", splits.length: "
+          + splits.length);
 
       // adjust number of BSP tasks to actual number of splits
       this.tasks = new TaskInProgress[numBSPTasks];
-      for (int i = 0; i < numBSPTasks; i++) {
+      for (int i = 0; i < splits.length; i++) {
         tasks[i] = new TaskInProgress(getJobID(), this.jobFile.toString(),
             splits[i], this.conf, this, i);
       }
+
+      for (int i = splits.length; i < numBSPTasks; i++) {
+        tasks[i] = new TaskInProgress(getJobID(), this.jobFile.toString(),
+            null, this.conf, this, i);
+      }
+
     } else {
       this.tasks = new TaskInProgress[numBSPTasks];
       for (int i = 0; i < numBSPTasks; i++) {
@@ -328,6 +334,13 @@ public class JobInProgress {
     return this.taskToGroomMap.get(t);
   }
 
+  /**
+   * Gets the task for the first <code>TaskInProgress</code> that is not already
+   * running
+   * 
+   * @param groomStatuses Map of statuses for available groom servers
+   * @return
+   */
   public synchronized Task obtainNewTask(
       Map<String, GroomServerStatus> groomStatuses) {
     this.clusterSize = groomStatuses.size();
@@ -342,26 +355,52 @@ public class JobInProgress {
 
     for (TaskInProgress task : tasks) {
       if (!task.isRunning() && !task.isComplete()) {
-
-        String[] selectedGrooms = taskAllocationStrategy.selectGrooms(
-            groomStatuses, taskCountInGroomMap, resources, task);
-        GroomServerStatus groomStatus = taskAllocationStrategy
-            .getGroomToAllocate(groomStatuses, selectedGrooms,
-                taskCountInGroomMap, resources, task);
-        if (groomStatus != null) {
-          result = task.constructTask(groomStatus);
-        } else if (LOG.isDebugEnabled()) {
-          LOG.debug("Could not find a groom to schedule task");
-        }
-        if (result != null) {
-          updateGroomTaskDetails(task.getGroomServerStatus(), result);
-        }
+        result = obtainNewTask(task, groomStatuses, resources);
         break;
       }
     }
 
-    counters.incrCounter(JobCounter.LAUNCHED_TASKS, 1L);
     return result;
+  }
+
+  /**
+   * Creates a new task based on the provided <code>TaskInProgress</code>
+   * 
+   * @param task The <code>TaskInProgress</code> for which to create a task
+   * @param groomStatuses The statuses of available groom servers
+   * @param resources Available resources of the given groom server
+   * @return The <code>Task</code> to to execute
+   */
+  public synchronized Task obtainNewTask(TaskInProgress task,
+      Map<String, GroomServerStatus> groomStatuses, BSPResource[] resources) {
+    Task result = null;
+    String[] selectedGrooms = taskAllocationStrategy.selectGrooms(
+        groomStatuses, taskCountInGroomMap, resources, task);
+    GroomServerStatus groomStatus = taskAllocationStrategy.getGroomToAllocate(
+        groomStatuses, selectedGrooms, taskCountInGroomMap, resources, task);
+    if (groomStatus != null) {
+      result = task.constructTask(groomStatus);
+    } else if (LOG.isDebugEnabled()) {
+      LOG.debug("Could not find a groom to schedule task");
+    }
+    if (result != null) {
+      updateGroomTaskDetails(task.getGroomServerStatus(), result);
+      counters.incrCounter(JobCounter.LAUNCHED_TASKS, 1L);
+    }
+    return result;
+  }
+
+  /**
+   * Get the ideal grooms on which to run a given task for the provided
+   * constraints
+   * 
+   * @return
+   */
+  public String[] getPreferredGrooms(TaskInProgress task,
+      Map<String, GroomServerStatus> groomStatuses, BSPResource[] resources) {
+    String[] grooms = taskAllocationStrategy.selectGrooms(groomStatuses,
+        taskCountInGroomMap, resources, task);
+    return grooms;
   }
 
   public void recoverTasks(Map<String, GroomServerStatus> groomStatuses,

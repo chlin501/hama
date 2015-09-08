@@ -17,6 +17,7 @@
  */
 package org.apache.hama.graph;
 
+import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
@@ -24,7 +25,6 @@ import java.io.IOException;
 import org.apache.hadoop.io.DataInputBuffer;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.MapWritable;
-import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.io.WritableComparator;
 import org.apache.hadoop.util.ReflectionUtils;
@@ -40,15 +40,19 @@ public final class GraphJobMessage implements
   public static final int MAP_FLAG = 0x01;
   public static final int VERTEX_FLAG = 0x02;
   public static final int VERTICES_SIZE_FLAG = 0x04;
+  public static final int PARTITION_FLAG = 0x08;
 
   // default flag to -1 "unknown"
   private int flag = -1;
   private MapWritable map;
   @SuppressWarnings("rawtypes")
   private WritableComparable vertexId;
-  private Writable vertexValue;
-  private IntWritable verticesSize;
+  private IntWritable integerMessage;
   private static GraphJobMessageComparator comparator;
+  
+  private int numOfValues = 0;
+
+  private final ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
 
   static {
     if (comparator == null) {
@@ -66,15 +70,62 @@ public final class GraphJobMessage implements
     this.map = map;
   }
 
-  public GraphJobMessage(WritableComparable<?> vertexId, Writable vertexValue) {
+  public GraphJobMessage(WritableComparable<?> vertexId, byte[] vertexValue) {
     this.flag = VERTEX_FLAG;
     this.vertexId = vertexId;
-    this.vertexValue = vertexValue;
+
+    if (vertexValue != null)
+      add(vertexValue);
   }
 
   public GraphJobMessage(IntWritable size) {
     this.flag = VERTICES_SIZE_FLAG;
-    this.verticesSize = size;
+    this.integerMessage = size;
+  }
+
+  public GraphJobMessage(byte[] vertex) {
+    this.flag = PARTITION_FLAG;
+    
+    add(vertex);
+  }
+  
+  public MapWritable getMap() {
+    return map;
+  }
+  
+  public void setVertexId(WritableComparable<?> vertexId) {
+    this.vertexId = vertexId;
+  }
+
+  public WritableComparable<?> getVertexId() {
+    return vertexId;
+  }
+
+  public byte[] getValuesBytes() {
+    return byteBuffer.toByteArray();
+  }
+
+  public void addValuesBytes(byte[] values, int numOfValues) {
+    try {
+      byteBuffer.write(values);
+      this.numOfValues += numOfValues;
+    } catch (IOException e) {
+      // TODO Auto-generated catch block
+      e.printStackTrace();
+    }
+  }
+
+  public void add(byte[] value) {
+    try {
+      byteBuffer.write(value);
+      numOfValues++;
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+
+  public int getNumOfValues() {
+    return this.numOfValues;
   }
 
   @Override
@@ -84,11 +135,18 @@ public final class GraphJobMessage implements
       // we don't need to write the classes because the other side has the same
       // classes for the two entities.
       vertexId.write(out);
-      vertexValue.write(out);
+
+      out.writeInt(numOfValues);
+      out.writeInt(byteBuffer.size());
+      out.write(byteBuffer.toByteArray());
     } else if (isMapMessage()) {
       map.write(out);
     } else if (isVerticesSizeMessage()) {
-      verticesSize.write(out);
+      integerMessage.write(out);
+    } else if (isPartitioningMessage()) {
+      out.writeInt(numOfValues);
+      out.writeInt(byteBuffer.size());
+      out.write(byteBuffer.toByteArray());
     } else {
       vertexId.write(out);
     }
@@ -107,8 +165,8 @@ public final class GraphJobMessage implements
       map = new MapWritable();
       map.readFields(in);
     } else if (isVerticesSizeMessage()) {
-      verticesSize = new IntWritable();
-      verticesSize.readFields(in);
+      integerMessage = new IntWritable();
+      integerMessage.readFields(in);
     } else {
       vertexId = ReflectionUtils.newInstance(GraphJobRunner.VERTEX_ID_CLASS,
           null);
@@ -122,14 +180,24 @@ public final class GraphJobMessage implements
     if (isVertexMessage()) {
       vertexId = GraphJobRunner.createVertexIDObject();
       vertexId.readFields(in);
-      vertexValue = GraphJobRunner.createVertexValue();
-      vertexValue.readFields(in);
+
+      this.numOfValues = in.readInt();
+      int bytesLength = in.readInt();
+      byte[] temp = new byte[bytesLength];
+      in.readFully(temp);
+      byteBuffer.write(temp);
     } else if (isMapMessage()) {
       map = new MapWritable();
       map.readFields(in);
     } else if (isVerticesSizeMessage()) {
-      verticesSize = new IntWritable();
-      verticesSize.readFields(in);
+      integerMessage = new IntWritable();
+      integerMessage.readFields(in);
+    } else if (isPartitioningMessage()) {
+      this.numOfValues = in.readInt();
+      int bytesLength = in.readInt();
+      byte[] temp = new byte[bytesLength];
+      in.readFully(temp);
+      byteBuffer.write(temp);
     } else {
       vertexId = ReflectionUtils.newInstance(GraphJobRunner.VERTEX_ID_CLASS,
           null);
@@ -152,21 +220,15 @@ public final class GraphJobMessage implements
     return 0;
   }
 
-  public MapWritable getMap() {
-    return map;
-  }
-
-  @SuppressWarnings("rawtypes")
-  public WritableComparable getVertexId() {
-    return vertexId;
-  }
-
-  public Writable getVertexValue() {
-    return vertexValue;
+  /**
+   * @return the number of values
+   */
+  public int size() {
+    return this.numOfValues;
   }
 
   public IntWritable getVerticesSize() {
-    return verticesSize;
+    return integerMessage;
   }
 
   public boolean isMapMessage() {
@@ -181,17 +243,21 @@ public final class GraphJobMessage implements
     return flag == VERTICES_SIZE_FLAG;
   }
 
+  public boolean isPartitioningMessage() {
+    return flag == PARTITION_FLAG;
+  }
+  
   @Override
   public String toString() {
     if (isVertexMessage()) {
-      return "ID: " + vertexId + " Val: " + vertexValue;
+      return "ID: " + vertexId + " Val: " + numOfValues;
     } else if (isMapMessage()) {
       return "Map: " + map;
     } else if (isVerticesSizeMessage()) {
-      return "#Vertices: " + verticesSize;
+      return "#Vertices: " + integerMessage;
     } else {
       return "GraphJobMessage [flag=" + flag + ", map=" + map + ", vertexId="
-          + vertexId + ", vertexValue=" + vertexValue + "]";
+          + vertexId + ", vertexValue=" + numOfValues + "]";
     }
   }
 
@@ -233,4 +299,9 @@ public final class GraphJobMessage implements
       return compare(key1, key2); // compare them
     }
   }
+
+  public void setFlag(int partitionFlag) {
+    this.flag = partitionFlag;
+  }
+
 }

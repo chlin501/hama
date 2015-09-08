@@ -17,20 +17,18 @@
  */
 package org.apache.hama.bsp;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.DataInput;
-import java.io.DataInputStream;
 import java.io.DataOutput;
-import java.io.DataOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
+import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.io.Writable;
-import org.apache.hadoop.util.ReflectionUtils;
-import org.apache.hama.bsp.message.compress.BSPMessageCompressor;
+import org.apache.hama.util.ReflectionUtils;
 
 /**
  * BSPMessageBundle stores a group of messages so that they can be sent in batch
@@ -38,45 +36,14 @@ import org.apache.hama.bsp.message.compress.BSPMessageCompressor;
  * 
  */
 public class BSPMessageBundle<M extends Writable> implements Writable,
-    Iterable<M> {
+    Iterable<M>, BSPMessageBundleInterface<M> {
 
   public static final Log LOG = LogFactory.getLog(BSPMessageBundle.class);
 
-  private BSPMessageCompressor<M> compressor = null;
-  private long threshold = 128;
-
-  private String className = null;
-  private int bundleSize = 0;
-  private int bundleLength = 0;
-
-  ByteArrayOutputStream byteBuffer = null;
-  DataOutputStream bufferDos = null;
-
-  ByteArrayInputStream bis = null;
-  DataInputStream dis = null;
+  private List<M> messages = new ArrayList<M>();
 
   public BSPMessageBundle() {
-    byteBuffer = new ByteArrayOutputStream();
-    bufferDos = new DataOutputStream(byteBuffer);
-
-    bundleSize = 0;
-    bundleLength = 0;
   }
-
-  ByteArrayOutputStream mbos = null;
-  DataOutputStream mdos = null;
-  ByteArrayInputStream mbis = null;
-  DataInputStream mdis = null;
-
-  public byte[] serialize(M message) throws IOException {
-    mbos = new ByteArrayOutputStream();
-    mdos = new DataOutputStream(mbos);
-    message.write(mdos);
-    return mbos.toByteArray();
-  }
-
-  private byte[] compressed;
-  private byte[] serialized;
 
   /**
    * Add message to this bundle.
@@ -84,139 +51,55 @@ public class BSPMessageBundle<M extends Writable> implements Writable,
    * @param message BSPMessage to add.
    */
   public void addMessage(M message) {
-    try {
-      serialized = serialize(message);
+    messages.add(message);
+  }
 
-      if (compressor != null && serialized.length > threshold) {
-        bufferDos.writeBoolean(true);
-        compressed = compressor.compress(serialized);
-        bufferDos.writeInt(compressed.length);
-        bufferDos.write(compressed);
-
-        bundleLength += compressed.length;
-      } else {
-        bufferDos.writeBoolean(false);
-        bufferDos.write(serialized);
-
-        bundleLength += serialized.length;
-      }
-    } catch (IOException e) {
-      // TODO Auto-generated catch block
-      e.printStackTrace();
-    }
-
-    if (className == null) {
-      className = message.getClass().getName();
-    }
-    bundleSize++;
+  public void addMessages(Collection<M> msgs) {
+    messages.addAll(msgs);
   }
 
   public Iterator<M> iterator() {
-    bis = new ByteArrayInputStream(byteBuffer.toByteArray());
-    dis = new DataInputStream(bis);
-
-    Iterator<M> it = new Iterator<M>() {
-      M msg;
-      byte[] decompressed;
-
-      @Override
-      public boolean hasNext() {
-        try {
-          if (dis.available() > 0) {
-            return true;
-          } else {
-            return false;
-          }
-        } catch (IOException e) {
-          return false;
-        }
-      }
-
-      @SuppressWarnings("unchecked")
-      @Override
-      public M next() {
-        boolean isCompressed = false;
-        try {
-          isCompressed = dis.readBoolean();
-        } catch (IOException e1) {
-          e1.printStackTrace();
-        }
-
-        Class<M> clazz = null;
-        try {
-          clazz = (Class<M>) Class.forName(className);
-        } catch (ClassNotFoundException e) {
-          LOG.error("Class was not found.", e);
-        }
-        msg = ReflectionUtils.newInstance(clazz, null);
-
-        try {
-          if (isCompressed) {
-            int length = dis.readInt();
-            compressed = new byte[length];
-            dis.readFully(compressed);
-            decompressed = compressor.decompress(compressed);
-
-            mbis = new ByteArrayInputStream(decompressed);
-            mdis = new DataInputStream(mbis);
-            msg.readFields(mdis);
-          } else {
-            msg.readFields(dis);
-          }
-
-        } catch (IOException e) {
-          // TODO Auto-generated catch block
-          e.printStackTrace();
-        }
-
-        return msg;
-      }
-
-      @Override
-      public void remove() {
-        // TODO Auto-generated method stub
-      }
-    };
-    return it;
+    return messages.iterator();
   }
 
   public int size() {
-    return bundleSize;
+    return messages.size();
   }
 
-  public void setCompressor(BSPMessageCompressor<M> compressor, long threshold) {
-    this.compressor = compressor;
-    this.threshold = threshold;
-  }
-
-  /**
-   * @return the byte length of messages
-   * @throws IOException
-   */
-  public long getLength() throws IOException {
-    return bundleLength;
-  }
-
+  @SuppressWarnings("unchecked")
   @Override
   public void write(DataOutput out) throws IOException {
-    out.writeInt(bundleSize);
-    if (bundleSize > 0) {
-      out.writeUTF(className);
-      byte[] messages = byteBuffer.toByteArray();
-      out.writeInt(messages.length);
-      out.write(messages);
+    out.writeInt(messages.size());
+
+    if (messages.size() > 0) {
+      Class<M> clazz = (Class<M>) messages.get(0).getClass();
+      out.writeUTF(clazz.getName());
+
+      for (M m : messages) {
+        m.write(out);
+      }
     }
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public void readFields(DataInput in) throws IOException {
-    int numMessages = in.readInt();
-    if (numMessages > 0) {
-      className = in.readUTF();
-      int bytesLength = in.readInt();
-      byte[] temp = new byte[bytesLength];
-      in.readFully(temp);
-      bufferDos.write(temp);
+    int num = in.readInt();
+
+    if (num > 0) {
+      Class<M> clazz = null;
+      try {
+        clazz = (Class<M>) Class.forName(in.readUTF());
+      } catch (ClassNotFoundException e) {
+        LOG.error("Class was not found.", e);
+      }
+
+      for (int i = 0; i < num; i++) {
+        M msg = ReflectionUtils.newInstance(clazz);
+        msg.readFields(in);
+        messages.add(msg);
+      }
     }
   }
+
 }

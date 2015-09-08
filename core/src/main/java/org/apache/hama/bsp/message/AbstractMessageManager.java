@@ -28,7 +28,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.io.Writable;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.bsp.BSPMessageBundle;
@@ -37,7 +36,6 @@ import org.apache.hama.bsp.BSPPeerImpl;
 import org.apache.hama.bsp.TaskAttemptID;
 import org.apache.hama.bsp.message.compress.BSPMessageCompressor;
 import org.apache.hama.bsp.message.compress.BSPMessageCompressorFactory;
-import org.apache.hama.bsp.message.queue.DiskQueue;
 import org.apache.hama.bsp.message.queue.MemoryQueue;
 import org.apache.hama.bsp.message.queue.MessageQueue;
 import org.apache.hama.bsp.message.queue.SingleLockQueue;
@@ -96,7 +94,7 @@ public abstract class AbstractMessageManager<M extends Writable> implements
 
     this.compressor = new BSPMessageCompressorFactory<M>().getCompressor(conf);
     this.outgoingMessageManager = getOutgoingMessageManager();
-    this.outgoingMessageManager.init(conf, compressor);
+    this.outgoingMessageManager.init(conf);
   }
 
   /*
@@ -108,14 +106,6 @@ public abstract class AbstractMessageManager<M extends Writable> implements
     try {
       outgoingMessageManager.clear();
       localQueue.close();
-      // remove possible disk queues from the path
-      try {
-        FileSystem.get(conf).delete(
-            DiskQueue.getQueueDir(conf, attemptId,
-                conf.get(DiskQueue.DISK_QUEUE_PATH_KEY)), true);
-      } catch (IOException e) {
-        LOG.warn("Queue dir couldn't be deleted");
-      }
     } finally {
       notifyClose();
     }
@@ -140,6 +130,10 @@ public abstract class AbstractMessageManager<M extends Writable> implements
     return localQueue.size();
   }
 
+  public void clearIncomingMessages() {
+    localQueue.clear();
+  }
+
   /*
    * (non-Javadoc)
    * @see org.apache.hama.bsp.message.MessageManager#clearOutgoingQueues()
@@ -151,27 +145,14 @@ public abstract class AbstractMessageManager<M extends Writable> implements
     if (conf.getBoolean(MessageQueue.PERSISTENT_QUEUE, false)
         && localQueue.size() > 0) {
 
-      if (localQueue.isMemoryBasedQueue()
-          && localQueueForNextIteration.isMemoryBasedQueue()) {
-
-        // To reduce the number of element additions
-        if (localQueue.size() > localQueueForNextIteration.size()) {
-          localQueue.addAll(localQueueForNextIteration);
-        } else {
-          localQueueForNextIteration.addAll(localQueue);
-          localQueue = localQueueForNextIteration.getMessageQueue();
-        }
-
+      // To reduce the number of element additions
+      if (localQueue.size() > localQueueForNextIteration.size()) {
+        localQueue.addAll(localQueueForNextIteration);
       } else {
-
-        // TODO find the way to switch disk-based queue efficiently.
         localQueueForNextIteration.addAll(localQueue);
-        if (localQueue != null) {
-          localQueue.close();
-        }
         localQueue = localQueueForNextIteration.getMessageQueue();
-
       }
+
     } else {
       if (localQueue != null) {
         localQueue.close();
@@ -194,6 +175,7 @@ public abstract class AbstractMessageManager<M extends Writable> implements
   public void send(String peerName, M msg) throws IOException {
     outgoingMessageManager.addMessage(peerName, msg);
     peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_SENT, 1L);
+
     notifySentMessage(peerName, msg);
   }
 
@@ -257,6 +239,13 @@ public abstract class AbstractMessageManager<M extends Writable> implements
     }
   }
 
+  private void notifyReceivedMessage(BSPMessageBundle<M> bundle)
+      throws IOException {
+    for (MessageEventListener<M> aMessageListenerQueue : this.messageListenerQueue) {
+      aMessageListenerQueue.onBundleReceived(bundle);
+    }
+  }
+
   private void notifyInit() {
     for (MessageEventListener<M> aMessageListenerQueue : this.messageListenerQueue) {
       aMessageListenerQueue.onInitialized();
@@ -278,23 +267,18 @@ public abstract class AbstractMessageManager<M extends Writable> implements
   }
 
   @Override
-  public void loopBackMessages(BSPMessageBundle<M> bundle) throws IOException {
-    bundle.setCompressor(compressor,
-        conf.getLong("hama.messenger.compression.threshold", 128));
-
-    Iterator<? extends Writable> it = bundle.iterator();
-    while (it.hasNext()) {
-      loopBackMessage(it.next());
-    }
+  public void loopBackBundle(BSPMessageBundle<M> bundle) throws IOException {
+    peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_RECEIVED,
+        bundle.size());
+    this.localQueueForNextIteration.addBundle(bundle);
+    notifyReceivedMessage(bundle);
   }
 
   @SuppressWarnings("unchecked")
   @Override
   public void loopBackMessage(Writable message) throws IOException {
     this.localQueueForNextIteration.add((M) message);
-    peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_RECEIVED, 1L);
     notifyReceivedMessage((M) message);
-
   }
 
 }

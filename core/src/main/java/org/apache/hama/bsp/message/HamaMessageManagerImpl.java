@@ -17,6 +17,10 @@
  */
 package org.apache.hama.bsp.message;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.BindException;
 import java.net.InetSocketAddress;
@@ -26,6 +30,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Writable;
+import org.apache.hama.Constants;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.bsp.BSPMessageBundle;
 import org.apache.hama.bsp.BSPPeer;
@@ -46,7 +51,11 @@ public final class HamaMessageManagerImpl<M extends Writable> extends
   private static final Log LOG = LogFactory
       .getLog(HamaMessageManagerImpl.class);
 
+  private static final int MAX_RETRY = 5;
+
   private Server server;
+
+  private static int retry = 0;
 
   private LRUCache<InetSocketAddress, HamaMessageManager<M>> peersLRUCache = null;
 
@@ -55,6 +64,7 @@ public final class HamaMessageManagerImpl<M extends Writable> extends
   public final void init(TaskAttemptID attemptId, BSPPeer<?, ?, ?, ?, M> peer,
       HamaConfiguration conf, InetSocketAddress peerAddress) {
     super.init(attemptId, peer, conf, peerAddress);
+    retry = 0;
     startRPCServer(conf, peerAddress);
     peersLRUCache = new LRUCache<InetSocketAddress, HamaMessageManager<M>>(
         maxCachedConnections) {
@@ -82,7 +92,6 @@ public final class HamaMessageManagerImpl<M extends Writable> extends
   }
 
   private void startServer(String hostName, int port) throws IOException {
-    int retry = 0;
     try {
       this.server = RPC.getServer(this, hostName, port,
           conf.getInt("hama.default.messenger.handler.threads.num", 5), false,
@@ -92,13 +101,13 @@ public final class HamaMessageManagerImpl<M extends Writable> extends
       LOG.info("BSPPeer address:" + server.getListenerAddress().getHostName()
           + " port:" + server.getListenerAddress().getPort());
     } catch (BindException e) {
-      LOG.warn("Address already in use. Retrying " + hostName + ":" + port + 1);
-      startServer(hostName, port + 1);
-      retry++;
-
-      if (retry > 5) {
+      final int nextPort = port + 1;
+      LOG.warn("Address already in use. Retrying " + hostName + ":"
+              + nextPort);
+      if (retry++ >= MAX_RETRY) {
         throw new RuntimeException("RPC Server could not be launched!");
       }
+      startServer(hostName, nextPort);
     }
   }
 
@@ -118,14 +127,24 @@ public final class HamaMessageManagerImpl<M extends Writable> extends
       throw new IllegalArgumentException("Can not find " + addr.toString()
           + " to transfer messages to!");
     } else {
-      peer.incrementCounter(BSPPeerImpl.PeerCounter.MESSAGE_BYTES_TRANSFERED, bundle.getLength());
-      bspPeerConnection.put(bundle);
+      if (conf.getBoolean(Constants.MESSENGER_RUNTIME_COMPRESSION, false)) {
+        ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
+        DataOutputStream bufferDos = new DataOutputStream(byteBuffer);
+        bundle.write(bufferDos);
+
+        byte[] compressed = compressor.compress(byteBuffer.toByteArray());
+        peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_COMPRESSED_BYTES_TRANSFERED, compressed.length);
+        peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_DECOMPRESSED_BYTES, byteBuffer.size());
+        bspPeerConnection.put(compressed);
+      } else {
+        //peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGE_BYTES_TRANSFERED, bundle.getLength());
+        bspPeerConnection.put(bundle);
+      }
     }
   }
 
   /**
-   * @param addr, socket address to which BSP Peer Connection will be
-   *          established
+   * @param addr socket address to which BSP Peer Connection will be established
    * @return BSP Peer Connection, tried to return cached connection, else
    *         returns a new connection and caches it
    * @throws IOException
@@ -151,8 +170,20 @@ public final class HamaMessageManagerImpl<M extends Writable> extends
   }
 
   @Override
-  public final void put(BSPMessageBundle<M> messages) throws IOException {
-    loopBackMessages(messages);
+  public final void put(BSPMessageBundle<M> bundle) throws IOException {
+    loopBackBundle(bundle);
+  }
+
+  @Override
+  public final void put(byte[] compressedBundle) throws IOException {
+    byte[] decompressed = compressor.decompress(compressedBundle);
+
+    BSPMessageBundle<M> bundle = new BSPMessageBundle<M>();
+    ByteArrayInputStream bis = new ByteArrayInputStream(decompressed);
+    DataInputStream dis = new DataInputStream(bis);
+    bundle.readFields(dis);
+
+    loopBackBundle(bundle);
   }
 
   @Override
@@ -167,6 +198,17 @@ public final class HamaMessageManagerImpl<M extends Writable> extends
       return this.server.getListenerAddress();
     }
     return null;
+  }
+
+  @Override
+  public void transfer(InetSocketAddress addr, M msg) throws IOException {
+    HamaMessageManager<M> bspPeerConnection = this.getBSPPeerConnection(addr);
+    if (bspPeerConnection == null) {
+      throw new IllegalArgumentException("Can not find " + addr.toString()
+          + " to transfer messages to!");
+    } else {
+      bspPeerConnection.put(msg);
+    }
   }
 
 }

@@ -33,7 +33,6 @@ import org.apache.hama.bsp.TextOutputFormat;
 import org.apache.hama.graph.Edge;
 import org.apache.hama.graph.GraphJob;
 import org.apache.hama.graph.GraphJobRunner.GraphJobCounter;
-import org.apache.hama.graph.MapVerticesInfo;
 import org.apache.hama.graph.Vertex;
 import org.apache.hama.graph.VertexInputReader;
 
@@ -51,7 +50,10 @@ import org.apache.hama.graph.VertexInputReader;
  * Output example: sum 10
  */
 public class DynamicGraph {
-
+  private static enum DYNAMIC_GRAPH_COUNTER {
+    ADDED_VERTEX
+  }
+  
   public static class GraphTextReader extends
       VertexInputReader<LongWritable, Text, Text, NullWritable, IntWritable> {
 
@@ -74,6 +76,8 @@ public class DynamicGraph {
         Text new_id = new Text("sum");
         this.addVertex(new_id, new ArrayList<Edge<Text, NullWritable>>(),
             new IntWritable(0));
+
+        this.getCounter(DYNAMIC_GRAPH_COUNTER.ADDED_VERTEX).increment(1);;
       }
     }
 
@@ -137,10 +141,6 @@ public class DynamicGraph {
   private static GraphJob createJob(String[] args, HamaConfiguration conf)
       throws IOException {
 
-    // NOTE: Graph modification APIs can be used only with MapVerticesInfo.
-    conf.set("hama.graph.vertices.info",
-        "org.apache.hama.graph.MapVerticesInfo");
-
     GraphJob graphJob = new GraphJob(conf, DynamicGraph.class);
     graphJob.setJobName("Dynamic Graph");
     graphJob.setVertexClass(GraphVertex.class);
@@ -153,7 +153,9 @@ public class DynamicGraph {
     graphJob.setEdgeValueClass(NullWritable.class);
 
     graphJob.setInputFormat(TextInputFormat.class);
-
+    graphJob.setInputKeyClass(LongWritable.class);
+    graphJob.setInputValueClass(Text.class);
+    
     graphJob.setVertexInputReaderClass(GraphTextReader.class);
     graphJob.setPartitioner(HashPartitioner.class);
 

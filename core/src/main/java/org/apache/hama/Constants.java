@@ -61,6 +61,8 @@ public interface Constants {
 
   public static final String MAX_TASKS_PER_GROOM = "bsp.tasks.maximum";
 
+  public static final String MAX_TASKS = "bsp.tasks.maximum.total";
+
   public static final String MAX_TASK_ATTEMPTS = "bsp.tasks.max.attempts";
 
   public static final String MAX_TASKS_PER_JOB = "bsp.max.tasks.per.job";
@@ -95,9 +97,15 @@ public interface Constants {
   public static final short DEFAULT_CHECKPOINT_INTERVAL = 1;
 
   // /////////////////////////////////////////////
+  // Executor related parameters.
+  // /////////////////////////////////////////////
+  public static final String TASK_EXECUTOR_CLASS = "bsp.master.TaskWorkerManager.class";
+  
+  // /////////////////////////////////////////////
   // Job configuration related parameters.
   // /////////////////////////////////////////////
   public static final String JOB_INPUT_DIR = "bsp.input.dir";
+  public static final String JOB_OUTPUT_DIR = "bsp.output.dir";
   public static final String JOB_PEERS_COUNT = "bsp.peers.num";
   public static final String INPUT_FORMAT_CLASS = "bsp.input.format.class";
   public static final String OUTPUT_FORMAT_CLASS = "bsp.output.format.class";
@@ -120,9 +128,11 @@ public interface Constants {
   public static final String RUNTIME_PARTITIONING_CLASS = "bsp.input.partitioner.class";
   public static final String RUNTIME_DESIRED_PEERS_COUNT = "desired.num.of.tasks";
   public static final String RUNTIME_PARTITION_RECORDCONVERTER = "bsp.runtime.partition.recordconverter";
+  public static final String PARTITION_SORT_BY_KEY = "bsp.partition.sort.by.converted.record";
 
-  public static final String PARTITION_SORT_BY_KEY = "bsp.partition.sort.by.converted.record";   
-
+  // If true, framework launches the number of tasks by user settings.
+  public static final String FORCE_SET_BSP_TASKS = "hama.force.set.bsp.tasks";
+  
   // /////////////////////////////////////
   // Constants for ZooKeeper
   // /////////////////////////////////////
@@ -155,7 +165,8 @@ public interface Constants {
   static final String CLUSTER_IS_DISTRIBUTED = "true";
 
   // Other constants
-
+  static final String MESSENGER_RUNTIME_COMPRESSION = "hama.messenger.runtime.compression";
+  
   /**
    * An empty instance.
    */

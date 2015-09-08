@@ -31,8 +31,7 @@ import org.apache.hadoop.io.Text;
 import org.apache.hama.Constants;
 import org.apache.hama.HamaCluster;
 import org.apache.hama.HamaConfiguration;
-import org.apache.hama.bsp.message.compress.SnappyCompressor;
-import org.apache.hama.bsp.message.queue.DiskQueue;
+import org.apache.hama.bsp.message.compress.Bzip2Compressor;
 import org.apache.hama.examples.ClassSerializePrinting;
 
 public class TestBSPMasterGroomServer extends HamaCluster {
@@ -50,11 +49,11 @@ public class TestBSPMasterGroomServer extends HamaCluster {
   public TestBSPMasterGroomServer() {
     configuration = new HamaConfiguration();
     configuration.set("bsp.master.address", "localhost");
-    configuration.set("hama.child.redirect.log.console", "true");
+    configuration.setBoolean("hama.child.redirect.log.console", true);
+    configuration.setBoolean("hama.messenger.runtime.compression", true);
     assertEquals("Make sure master addr is set to localhost:", "localhost",
         configuration.get("bsp.master.address"));
     configuration.set("bsp.local.dir", "/tmp/hama-test");
-    configuration.set(DiskQueue.DISK_QUEUE_PATH_KEY, TMP_OUTPUT_PATH);
     configuration.set(Constants.ZOOKEEPER_QUORUM, "localhost");
     configuration.setInt(Constants.ZOOKEEPER_CLIENT_PORT, 21810);
     configuration.set("hama.sync.client.class",
@@ -86,8 +85,7 @@ public class TestBSPMasterGroomServer extends HamaCluster {
     bsp.setOutputValueClass(Text.class);
     bsp.setOutputPath(OUTPUT_PATH);
 
-    bsp.setCompressionCodec(SnappyCompressor.class);
-    bsp.setCompressionThreshold(40);
+    bsp.setCompressionCodec(Bzip2Compressor.class);
 
     BSPJobClient jobClient = new BSPJobClient(configuration);
     configuration.setInt(Constants.ZOOKEEPER_SESSION_TIMEOUT, 6000);

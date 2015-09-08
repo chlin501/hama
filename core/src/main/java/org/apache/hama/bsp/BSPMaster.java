@@ -146,6 +146,8 @@ public class BSPMaster implements JobSubmissionProtocol, MasterProtocol,
 
   private final List<JobInProgressListener> jobInProgressListeners = new CopyOnWriteArrayList<JobInProgressListener>();
 
+  private final List<GroomStatusListener> groomStatusListeners = new CopyOnWriteArrayList<GroomStatusListener>();
+
   private final AtomicReference<Supervisor> supervisor = new AtomicReference<Supervisor>();
 
   /**
@@ -186,6 +188,9 @@ public class BSPMaster implements JobSubmissionProtocol, MasterProtocol,
               jip.completedTask(tip, ts);
               // increment counters only if successful
               jip.getCounters().incrAllCounters(ts.getCounters());
+              for (GroomStatusListener listener : groomStatusListeners) {
+                  listener.taskComplete(groomStatus, tip);
+              }
             } else if (ts.getRunState() == TaskStatus.State.RUNNING) {
               jip.getStatus().setProgress(ts.getSuperstepCount());
               jip.getStatus().setSuperstepCount(ts.getSuperstepCount());
@@ -195,6 +200,13 @@ public class BSPMaster implements JobSubmissionProtocol, MasterProtocol,
               } else {
                 jip.status.setRunState(JobStatus.FAILED);
                 jip.failedTask(tip, ts);
+                for (JobInProgressListener listener : jobInProgressListeners) {
+                  try {
+                    listener.jobRemoved(jip);
+                  } catch (IOException ioe) {
+                    LOG.error("Fail to alter scheduler a job is moved.", ioe);
+                  }
+                }
               }
             }
             if (jip.getStatus().getRunState() == JobStatus.SUCCEEDED) {
@@ -218,6 +230,14 @@ public class BSPMaster implements JobSubmissionProtocol, MasterProtocol,
               } catch (IOException ioe) {
                 throw new DirectiveException("Error when dispatching kill task"
                     + " action.", ioe);
+              }
+              
+              for (JobInProgressListener listener : jobInProgressListeners) {
+                try {
+                  listener.jobRemoved(jip);
+                } catch (IOException ioe) {
+                  LOG.error("Fail to alter scheduler a job is moved.", ioe);
+                }
               }
             }
           }
@@ -400,11 +420,16 @@ public class BSPMaster implements JobSubmissionProtocol, MasterProtocol,
       LOG.error("Fail to register GroomServer " + status.getGroomName(), e);
       return false;
     }
+    
+    for (GroomStatusListener listener : groomStatusListeners) {
+        listener.groomServerRegistered(status);
+    }
+    
     LOG.info(status.getGroomName() + " is added.");
     return true;
   }
 
-  private static InetSocketAddress resolveWorkerAddress(String data) {
+  public static InetSocketAddress resolveWorkerAddress(String data) {
     return new InetSocketAddress(data.split(":")[0], Integer.parseInt(data
         .split(":")[1]));
   }
@@ -480,7 +505,7 @@ public class BSPMaster implements JobSubmissionProtocol, MasterProtocol,
    * 
    * @param conf The Hama configuration
    * @param identifier Identifier for the job.
-   * @return
+   * @return an instance of BSPMaster
    * @throws IOException
    * @throws InterruptedException
    */
@@ -635,7 +660,7 @@ public class BSPMaster implements JobSubmissionProtocol, MasterProtocol,
     }
 
     int tasksPerGroom = conf.getInt(Constants.MAX_TASKS_PER_GROOM, 3);
-    this.totalTaskCapacity = tasksPerGroom * numGroomServers;
+    this.totalTaskCapacity = conf.getInt(Constants.MAX_TASKS, tasksPerGroom * numGroomServers);
 
     if (detailed) {
       return new ClusterStatus(groomsMap, totalTasks, totalTaskCapacity,
@@ -671,6 +696,17 @@ public class BSPMaster implements JobSubmissionProtocol, MasterProtocol,
     jobInProgressListeners.remove(listener);
   }
 
+  @Override
+  public void addGroomStatusListener(GroomStatusListener listener) {
+    groomStatusListeners.add(listener);
+	
+  }
+
+  @Override
+  public void removeGroomStatusListener(GroomStatusListener listener) {
+    groomStatusListeners.remove(listener);
+  }
+  
   @Override
   public void moveToBlackList(String host) {
     LOG.info("[moveToBlackList()]Host to be moved to black list: " + host);

@@ -33,7 +33,6 @@ import org.apache.hama.bsp.PartitioningRunner.RecordConverter;
 import org.apache.hama.bsp.message.MessageManager;
 import org.apache.hama.bsp.message.OutgoingMessageManager;
 import org.apache.hama.bsp.message.queue.MessageQueue;
-import org.apache.hama.bsp.message.queue.SortedMemoryQueue;
 
 import com.google.common.base.Preconditions;
 
@@ -58,9 +57,11 @@ public class GraphJob extends BSPJob {
       throws IOException {
     super(conf);
     conf.setClass(MessageManager.OUTGOING_MESSAGE_MANAGER_CLASS,
-        OutgoingVertexMessagesManager.class, OutgoingMessageManager.class);
+        OutgoingVertexMessageManager.class, OutgoingMessageManager.class);
+    conf.setBoolean(Constants.FORCE_SET_BSP_TASKS, true);
+    conf.setBoolean(Constants.ENABLE_RUNTIME_PARTITIONING, false);
+    conf.setBoolean("hama.use.unsafeserialization", true);
     
-    this.setBoolean(Constants.PARTITION_SORT_BY_KEY, true);
     this.setBspClass(GraphJobRunner.class);
     this.setJarByClass(exampleClass);
     this.setVertexIDClass(Text.class);
@@ -128,20 +129,19 @@ public class GraphJob extends BSPJob {
   /**
    * Sets the input reader for parsing the input to vertices.
    */
-  public void setVertexInputReaderClass(@SuppressWarnings("rawtypes")
-  Class<? extends VertexInputReader> cls) {
+  public void setVertexInputReaderClass(
+      @SuppressWarnings("rawtypes") Class<? extends VertexInputReader> cls) {
     ensureState(JobState.DEFINE);
     conf.setClass(Constants.RUNTIME_PARTITION_RECORDCONVERTER, cls,
         RecordConverter.class);
-    conf.setBoolean(Constants.ENABLE_RUNTIME_PARTITIONING, true);
   }
 
   /**
    * Sets the output writer for materializing vertices to the output sink. If
    * not set, the default DefaultVertexOutputWriter will be used.
    */
-  public void setVertexOutputWriterClass(@SuppressWarnings("rawtypes")
-  Class<? extends VertexOutputWriter> cls) {
+  public void setVertexOutputWriterClass(
+      @SuppressWarnings("rawtypes") Class<? extends VertexOutputWriter> cls) {
     ensureState(JobState.DEFINE);
     conf.setClass(VERTEX_OUTPUT_WRITER_CLASS_ATTR, cls,
         VertexOutputWriter.class);
@@ -154,10 +154,9 @@ public class GraphJob extends BSPJob {
   }
 
   @Override
-  public void setPartitioner(@SuppressWarnings("rawtypes")
-  Class<? extends Partitioner> theClass) {
+  public void setPartitioner(
+      @SuppressWarnings("rawtypes") Class<? extends Partitioner> theClass) {
     super.setPartitioner(theClass);
-    conf.setBoolean(Constants.ENABLE_RUNTIME_PARTITIONING, true);
   }
 
   @Override
@@ -201,9 +200,8 @@ public class GraphJob extends BSPJob {
       this.setVertexOutputWriterClass(DefaultVertexOutputWriter.class);
     }
 
-    // add the default message queue to the sorted one
     this.getConfiguration().setClass(MessageManager.RECEIVE_QUEUE_TYPE_CLASS,
-        SortedMemoryQueue.class, MessageQueue.class);
+        IncomingVertexMessageManager.class, MessageQueue.class);
 
     super.submit();
   }

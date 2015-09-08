@@ -17,15 +17,16 @@
  */
 package org.apache.hama.bsp.message.queue;
 
-import java.util.Iterator;
-
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.io.Writable;
+import org.apache.hama.bsp.BSPMessageBundle;
 import org.apache.hama.bsp.TaskAttemptID;
 
 /**
  * A global mutex based synchronized queue.
  */
-public final class SingleLockQueue<T> implements SynchronizedQueue<T> {
+public final class SingleLockQueue<T extends Writable> implements
+    SynchronizedQueue<T> {
 
   private final MessageQueue<T> queue;
   private final Object mutex;
@@ -38,17 +39,6 @@ public final class SingleLockQueue<T> implements SynchronizedQueue<T> {
   private SingleLockQueue(MessageQueue<T> queue, Object mutex) {
     this.queue = queue;
     this.mutex = mutex;
-  }
-
-  /*
-   * (non-Javadoc)
-   * @see org.apache.hama.bsp.message.SynchronizedQueue#iterator()
-   */
-  @Override
-  public Iterator<T> iterator() {
-    synchronized (mutex) {
-      return queue.iterator();
-    }
   }
 
   /*
@@ -101,17 +91,6 @@ public final class SingleLockQueue<T> implements SynchronizedQueue<T> {
 
   /*
    * (non-Javadoc)
-   * @see org.apache.hama.bsp.message.SynchronizedQueue#prepareRead()
-   */
-  @Override
-  public void prepareRead() {
-    synchronized (mutex) {
-      queue.prepareRead();
-    }
-  }
-
-  /*
-   * (non-Javadoc)
    * @see
    * org.apache.hama.bsp.message.SynchronizedQueue#addAll(java.util.Collection)
    */
@@ -131,6 +110,13 @@ public final class SingleLockQueue<T> implements SynchronizedQueue<T> {
   public void add(T item) {
     synchronized (mutex) {
       queue.add(item);
+    }
+  }
+
+  @Override
+  public void addBundle(BSPMessageBundle<T> bundle) {
+    synchronized (mutex) {
+      queue.addBundle(bundle);
     }
   }
 
@@ -181,24 +167,14 @@ public final class SingleLockQueue<T> implements SynchronizedQueue<T> {
   /*
    * static constructor methods to be type safe
    */
-  public static <T> SynchronizedQueue<T> synchronize(MessageQueue<T> queue) {
-    if(queue.isMemoryBasedQueue()) {
-      return (SynchronizedQueue<T>) queue;
-    }
-    
-    return new SingleLockQueue<T>(queue);
+  public static <T extends Writable> SynchronizedQueue<T> synchronize(
+      MessageQueue<T> queue) {
+    return (SynchronizedQueue<T>) queue;
   }
 
-  public static <T> SynchronizedQueue<T> synchronize(MessageQueue<T> queue,
-      Object mutex) {
+  public static <T extends Writable> SynchronizedQueue<T> synchronize(
+      MessageQueue<T> queue, Object mutex) {
     return new SingleLockQueue<T>(queue, mutex);
-  }
-
-  @Override
-  public void prepareWrite() {
-    synchronized (mutex) {
-      queue.prepareWrite();
-    }
   }
 
   @Override
@@ -209,14 +185,9 @@ public final class SingleLockQueue<T> implements SynchronizedQueue<T> {
   }
 
   @Override
-  public boolean isMessageSerialized() {
-    synchronized (mutex) {
-      return queue.isMessageSerialized();
-    }
+  public void prepareRead() {
+    // TODO Auto-generated method stub
+    
   }
 
-  @Override
-  public boolean isMemoryBasedQueue() {
-    return true;
-  }
 }

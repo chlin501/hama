@@ -131,7 +131,7 @@ public class TestCheckpoint extends TestCase {
     }
 
     @Override
-    public void loopBackMessages(BSPMessageBundle<Text> bundle) {
+    public void loopBackBundle(BSPMessageBundle<Text> bundle) {
       this.loopbackBundle = (BSPMessageBundle<Text>) bundle;
     }
 
@@ -149,6 +149,12 @@ public class TestCheckpoint extends TestCase {
     public InetSocketAddress getListenerAddress() {
       // TODO Auto-generated method stub
       return null;
+    }
+
+    @Override
+    public void transfer(InetSocketAddress addr, Text msg) throws IOException {
+      // TODO Auto-generated method stub
+      
     }
 
   }
@@ -301,6 +307,12 @@ public class TestCheckpoint extends TestCase {
       return null;
     }
 
+    @Override
+    public String[] getAdjacentPeerNames() {
+      // TODO Auto-generated method stub
+      return null;
+    }
+
   }
 
   public static class TempSyncClient extends BSPPeerSyncClient {
@@ -423,7 +435,7 @@ public class TestCheckpoint extends TestCase {
     }
 
     @Override
-    public String[] getAllPeerNames(TaskAttemptID taskId) {
+    public String[] getAllPeerNames(BSPJobID jobID) {
       return null;
     }
 
@@ -647,7 +659,7 @@ public class TestCheckpoint extends TestCase {
 
     BSPMessageBundle<Text> bundleRead = messenger.getLoopbackBundle();
     assertEquals(5, bundleRead.size());
-
+    
     String recoveredMsg = bundleRead.iterator().next().toString();
     assertEquals(recoveredMsg, "data");
     dfs.delete(new Path("checkpoint"), true);

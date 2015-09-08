@@ -29,7 +29,7 @@ public class BSPMessageCompressorFactory<M extends Writable> {
    * Returns a compressor via reflection based on what was configured.
    * 
    * @param conf
-   * @return
+   * @return a compressor that was configured.
    */
   @SuppressWarnings("unchecked")
   public BSPMessageCompressor<M> getCompressor(Configuration conf) {
@@ -37,7 +37,7 @@ public class BSPMessageCompressorFactory<M extends Writable> {
       try {
         return (BSPMessageCompressor<M>) ReflectionUtils.newInstance(conf
             .getClassByName(conf.get(COMPRESSION_CODEC_CLASS,
-                SnappyCompressor.class.getCanonicalName())), conf);
+                Bzip2Compressor.class.getCanonicalName())), conf);
       } catch (ClassNotFoundException e) {
         e.printStackTrace();
       }

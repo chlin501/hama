@@ -29,7 +29,7 @@ import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.bsp.BSPPeer;
-import org.apache.hama.bsp.Partitioner;
+import org.apache.hama.bsp.Counters.Counter;
 
 /**
  * Vertex is a abstract definition of Google Pregel Vertex. For implementing a
@@ -59,9 +59,13 @@ public abstract class Vertex<V extends WritableComparable, E extends Writable, M
   private List<Edge<V, E>> edges;
 
   private boolean votedToHalt = false;
+  private long lastComputedSuperstep = 0;
 
   public HamaConfiguration getConf() {
     return runner.getPeer().getConfiguration();
+  }
+
+  public Vertex() {
   }
 
   @Override
@@ -75,43 +79,17 @@ public abstract class Vertex<V extends WritableComparable, E extends Writable, M
 
   @Override
   public void sendMessage(Edge<V, E> e, M msg) throws IOException {
-    runner.getPeer().send(getDestinationPeerName(e),
-        new GraphJobMessage(e.getDestinationVertexID(), msg));
-  }
-
-  /**
-   * @return the destination peer name of the destination of the given directed
-   *         edge.
-   */
-  public String getDestinationPeerName(Edge<V, E> edge) {
-    return getDestinationPeerName(edge.getDestinationVertexID());
-  }
-
-  /**
-   * @return the destination peer name of the given vertex id, determined by the
-   *         partitioner.
-   */
-  public String getDestinationPeerName(V vertexId) {
-    return runner.getPeer().getPeerName(
-        getPartitioner().getPartition(vertexId, value,
-            runner.getPeer().getNumPeers()));
-  }
-
-  @Override
-  public void sendMessageToNeighbors(M msg) throws IOException {
-    final List<Edge<V, E>> outEdges = this.getEdges();
-    for (Edge<V, E> e : outEdges) {
-      sendMessage(e, msg);
-    }
+    runner.sendMessage(e.getDestinationVertexID(), msg);
   }
 
   @Override
   public void sendMessage(V destinationVertexID, M msg) throws IOException {
-    int partition = getPartitioner().getPartition(destinationVertexID, msg,
-        runner.getPeer().getNumPeers());
-    String destPeer = runner.getPeer().getAllPeerNames()[partition];
-    runner.getPeer().send(destPeer,
-        new GraphJobMessage(destinationVertexID, msg));
+    runner.sendMessage(destinationVertexID, msg);
+  }
+
+  @Override
+  public void sendMessageToNeighbors(M msg) throws IOException {
+    runner.sendMessage(this.getEdges(), msg);
   }
 
   private void alterVertexCounter(int i) throws IOException {
@@ -130,12 +108,8 @@ public abstract class Vertex<V extends WritableComparable, E extends Writable, M
     vertex.setVertexID(vertexID);
 
     msg.put(GraphJobRunner.FLAG_VERTEX_INCREASE, vertex);
-    // Find the proper partition to host the new vertex.
-    int partition = getPartitioner().getPartition(vertexID, value,
-        runner.getPeer().getNumPeers());
-    String destPeer = runner.getPeer().getAllPeerNames()[partition];
-
-    runner.getPeer().send(destPeer, new GraphJobMessage(msg));
+    runner.getPeer().send(runner.getHostName(vertexID),
+        new GraphJobMessage(msg));
 
     alterVertexCounter(1);
   }
@@ -203,15 +177,8 @@ public abstract class Vertex<V extends WritableComparable, E extends Writable, M
     return runner.getPeer();
   }
 
-  /**
-   * @return the configured partitioner instance to message vertices.
-   */
-  public Partitioner<V, M> getPartitioner() {
-    return runner.getPartitioner();
-  }
-
   @Override
-  public long getNumVertices() {
+  public long getTotalNumVertices() {
     return runner.getNumberVertices();
   }
 
@@ -226,6 +193,14 @@ public abstract class Vertex<V extends WritableComparable, E extends Writable, M
 
   public boolean isHalted() {
     return votedToHalt;
+  }
+
+  void setComputed() {
+    this.lastComputedSuperstep = this.getSuperstepCount();
+  }
+
+  public boolean isComputed() {
+    return (lastComputedSuperstep == this.getSuperstepCount()) ? true : false;
   }
 
   void setVotedToHalt(boolean votedToHalt) {
@@ -275,6 +250,8 @@ public abstract class Vertex<V extends WritableComparable, E extends Writable, M
       this.value.readFields(in);
     }
 
+    this.lastComputedSuperstep = in.readLong();
+
     this.edges = new ArrayList<Edge<V, E>>();
     if (in.readBoolean()) {
       int num = in.readInt();
@@ -312,6 +289,9 @@ public abstract class Vertex<V extends WritableComparable, E extends Writable, M
       out.writeBoolean(true);
       value.write(out);
     }
+
+    out.writeLong(lastComputedSuperstep);
+
     if (this.edges == null) {
       out.writeBoolean(false);
     } else {
@@ -366,7 +346,7 @@ public abstract class Vertex<V extends WritableComparable, E extends Writable, M
   protected GraphJobRunner<V, E, M> getRunner() {
     return runner;
   }
-  
+
   @Override
   public void aggregate(int index, M value) throws IOException {
     this.runner.getAggregationRunner().aggregateVertex(index, oldValue, value);
@@ -378,14 +358,14 @@ public abstract class Vertex<V extends WritableComparable, E extends Writable, M
    * index is defined by the order you set the aggregator classes in
    * {@link GraphJob#setAggregatorClass(Class...)}. Index is starting at zero,
    * so if you have a single aggregator you can retrieve it via
-   * {@link #getLastAggregatedValue}(0).
+   * {@link GraphJobRunner#getLastAggregatedValue}(0).
    */
   @SuppressWarnings("unchecked")
   @Override
   public M getAggregatedValue(int index) {
     return (M) runner.getLastAggregatedValue(index);
   }
-  
+
   /**
    * Get the number of aggregated vertices in the last superstep. Or null if no
    * aggregator is available.You have to supply an index, the index is defined
@@ -396,5 +376,15 @@ public abstract class Vertex<V extends WritableComparable, E extends Writable, M
    */
   public IntWritable getNumLastAggregatedVertices(int index) {
     return runner.getNumLastAggregatedVertices(index);
+  }
+
+  @Override
+  public Counter getCounter(Enum<?> name) {
+    return runner.getPeer().getCounter(name);
+  }
+
+  @Override
+  public Counter getCounter(String group, String name) {
+    return runner.getPeer().getCounter(group, name);
   }
 }

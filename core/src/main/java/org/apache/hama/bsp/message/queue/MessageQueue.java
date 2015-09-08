@@ -19,12 +19,14 @@ package org.apache.hama.bsp.message.queue;
 
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.io.Writable;
+import org.apache.hama.bsp.BSPMessageBundle;
 import org.apache.hama.bsp.TaskAttemptID;
 
 /**
  * Simple queue interface.
  */
-public interface MessageQueue<M> extends Iterable<M>, Configurable {
+public interface MessageQueue<M extends Writable> extends Configurable {
 
   public static final String PERSISTENT_QUEUE = "hama.queue.behaviour.persistent";
 
@@ -39,16 +41,6 @@ public interface MessageQueue<M> extends Iterable<M>, Configurable {
   public void close();
 
   /**
-   * Called to prepare a queue for reading.
-   */
-  public void prepareRead();
-
-  /**
-   * Called to prepare a queue for writing.
-   */
-  public void prepareWrite();
-
-  /**
    * Adds a whole Java Collection to the implementing queue.
    */
   public void addAll(Iterable<M> col);
@@ -57,6 +49,13 @@ public interface MessageQueue<M> extends Iterable<M>, Configurable {
    * Adds the other queue to this queue.
    */
   public void addAll(MessageQueue<M> otherqueue);
+
+  /**
+   * Adds the received bundle
+   * 
+   * @param bundle
+   */
+  public void addBundle(BSPMessageBundle<M> bundle);
 
   /**
    * Adds a single item to the implementing queue.
@@ -81,11 +80,8 @@ public interface MessageQueue<M> extends Iterable<M>, Configurable {
   public int size();
 
   /**
-   * 
-   * @return true if the messages in the queue are serialized to byte buffers.
+   * Called to prepare a queue for reading.
    */
-  public boolean isMessageSerialized();
-  
-  public boolean isMemoryBasedQueue();
+  public void prepareRead();
 
 }

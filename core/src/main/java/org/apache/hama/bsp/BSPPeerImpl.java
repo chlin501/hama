@@ -21,7 +21,10 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map.Entry;
 
 import org.apache.commons.logging.Log;
@@ -48,6 +51,7 @@ import org.apache.hama.bsp.sync.SyncServiceFactory;
 import org.apache.hama.commons.util.KeyValuePair;
 import org.apache.hama.ipc.BSPPeerProtocol;
 import org.apache.hama.pipes.util.DistributedCacheUtil;
+import org.apache.hama.util.BSPNetUtils;
 import org.apache.hama.util.DistCacheUtils;
 
 /**
@@ -59,7 +63,7 @@ public final class BSPPeerImpl<K1, V1, K2, V2, M extends Writable> implements
   private static final Log LOG = LogFactory.getLog(BSPPeerImpl.class);
 
   public static enum PeerCounter {
-    COMPRESSED_MESSAGES, SUPERSTEP_SUM, TASK_INPUT_RECORDS, TASK_OUTPUT_RECORDS, IO_BYTES_READ, MESSAGE_BYTES_TRANSFERED, MESSAGE_BYTES_RECEIVED, TOTAL_MESSAGES_SENT, TOTAL_MESSAGES_RECEIVED, TOTAL_MESSAGES_COMBINED, COMPRESSED_BYTES_SENT, COMPRESSED_BYTES_RECEIVED, TIME_IN_SYNC_MS
+    TOTAL_DECOMPRESSED_BYTES, SUPERSTEP_SUM, TASK_INPUT_RECORDS, TASK_OUTPUT_RECORDS, IO_BYTES_READ, TOTAL_MESSAGE_BYTES_TRANSFERED, MESSAGE_BYTES_RECEIVED, TOTAL_MESSAGES_SENT, TOTAL_MESSAGES_RECEIVED, TOTAL_MESSAGES_COMBINED, TIME_IN_SYNC_MS, TOTAL_COMPRESSED_BYTES_TRANSFERED
   }
 
   private final HamaConfiguration conf;
@@ -164,7 +168,7 @@ public final class BSPPeerImpl<K1, V1, K2, V2, M extends Writable> implements
         Constants.DEFAULT_PEER_HOST);
     int bindPort = conf
         .getInt(Constants.PEER_PORT, Constants.DEFAULT_PEER_PORT);
-    
+
     peerAddress = new InetSocketAddress(bindAddress, bindPort);
 
     // This function call may change the current peer address
@@ -247,7 +251,7 @@ public final class BSPPeerImpl<K1, V1, K2, V2, M extends Writable> implements
     try {
       if (splitClass != null) {
         inputSplit = (InputSplit) ReflectionUtils.newInstance(
-            getConfiguration().getClassByName(splitClass), getConfiguration());
+            conf.getClassByName(splitClass), conf);
       }
     } catch (ClassNotFoundException exp) {
       IOException wrap = new IOException("Split class " + splitClass
@@ -312,12 +316,14 @@ public final class BSPPeerImpl<K1, V1, K2, V2, M extends Writable> implements
   @SuppressWarnings("unchecked")
   public final void initializeIO() throws Exception {
 
-    initInput();
+    if (conf.get(Constants.JOB_INPUT_DIR) != null) {
+      initInput();
+    }
 
     String outdir = null;
-    if (conf.get("bsp.output.dir") != null) {
-      Path outputDir = new Path(conf.get("bsp.output.dir",
-          "tmp-" + System.currentTimeMillis()), Task.getOutputName(partition));
+    if (conf.get(Constants.JOB_OUTPUT_DIR) != null) {
+      Path outputDir = new Path(conf.get(Constants.JOB_OUTPUT_DIR, "tmp-"
+          + System.currentTimeMillis()), Task.getOutputName(partition));
       outdir = outputDir.makeQualified(fs).toString();
     }
     outWriter = bspJob.getOutputFormat().getRecordWriter(fs, bspJob, outdir);
@@ -354,7 +360,26 @@ public final class BSPPeerImpl<K1, V1, K2, V2, M extends Writable> implements
 
   @Override
   public final void send(String peerName, M msg) throws IOException {
-    messenger.send(peerName, msg);
+    if (!conf.getBoolean("hama.bsp.messenger.bundle", true)) {
+      sendDirectly(peerName, msg);
+    } else {
+      messenger.send(peerName, msg);
+    }
+  }
+
+  private final HashMap<String, InetSocketAddress> peerSocketCache = new HashMap<String, InetSocketAddress>();
+
+  public final void sendDirectly(String peerName, M msg) throws IOException {
+    InetSocketAddress targetPeerAddress = null;
+    // Get socket for target peer.
+    if (peerSocketCache.containsKey(peerName)) {
+      targetPeerAddress = peerSocketCache.get(peerName);
+    } else {
+      targetPeerAddress = BSPNetUtils.getAddress(peerName);
+      peerSocketCache.put(peerName, targetPeerAddress);
+    }
+
+    messenger.transfer(targetPeerAddress, msg);
   }
 
   /*
@@ -366,15 +391,15 @@ public final class BSPPeerImpl<K1, V1, K2, V2, M extends Writable> implements
       InterruptedException {
 
     // normally all messages should been send now, finalizing the send phase
-    Iterator<Entry<InetSocketAddress, BSPMessageBundle<M>>> it = messenger
-        .getOutgoingBundles();
+    Iterator<Entry<InetSocketAddress, BSPMessageBundle<M>>> it;
+    it = messenger.getOutgoingBundles();
 
     while (it.hasNext()) {
       Entry<InetSocketAddress, BSPMessageBundle<M>> entry = it.next();
       final InetSocketAddress addr = entry.getKey();
 
       final BSPMessageBundle<M> bundle = entry.getValue();
-      
+
       // remove this message during runtime to save a bit of memory
       it.remove();
       try {
@@ -523,6 +548,19 @@ public final class BSPPeerImpl<K1, V1, K2, V2, M extends Writable> implements
   }
 
   @Override
+  public final String[] getAdjacentPeerNames() {
+    initPeerNames();
+    List<String> localPeers = new ArrayList<String>();
+    for (String peerName : allPeers) {
+      if (peerName.startsWith(peerAddress.getHostName() + ":")) {
+        localPeers.add(peerName);
+      }
+    }
+
+    return localPeers.toArray(new String[localPeers.size()]);
+  }
+
+  @Override
   public final String getPeerName(int index) {
     initPeerNames();
     return allPeers[index];
@@ -541,7 +579,7 @@ public final class BSPPeerImpl<K1, V1, K2, V2, M extends Writable> implements
 
   private final void initPeerNames() {
     if (allPeers == null) {
-      allPeers = syncClient.getAllPeerNames(taskId);
+      allPeers = syncClient.getAllPeerNames(taskId.getJobID());
     }
   }
 
@@ -592,11 +630,17 @@ public final class BSPPeerImpl<K1, V1, K2, V2, M extends Writable> implements
 
   @Override
   public final boolean readNext(K1 key, V1 value) throws IOException {
-    return in.next(key, value);
+    if(in != null)
+      return in.next(key, value);
+    else
+      return false;
   }
 
   @Override
   public final KeyValuePair<K1, V1> readNext() throws IOException {
+    if (split == null)
+      return null;
+
     K1 k = in.createKey();
     V1 v = in.createValue();
     if (in.next(k, v)) {

@@ -20,7 +20,6 @@ package org.apache.hama.bsp;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.util.Iterator;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CyclicBarrier;
@@ -242,8 +241,7 @@ public class LocalBSPRunner implements JobSubmissionProtocol {
 
       String splitname = null;
       BytesWritable realBytes = null;
-      if (splits != null) {
-        LOG.debug(id + ", " + splits[id].getPartitionID());
+      if (splits != null && splits.length > id) {
         splitname = splits[id].getClassName();
         realBytes = splits[id].getBytes();
       }
@@ -351,22 +349,24 @@ public class LocalBSPRunner implements JobSubmissionProtocol {
     @Override
     public void transfer(InetSocketAddress addr, BSPMessageBundle<M> bundle)
         throws IOException {
-      peer.incrementCounter(BSPPeerImpl.PeerCounter.MESSAGE_BYTES_TRANSFERED,
-          bundle.getLength());
-      bundle.setCompressor(compressor,
-          conf.getLong("hama.messenger.compression.threshold", 512));
+      // peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGE_BYTES_TRANSFERED,
+      // bundle.getLength());
 
-      Iterator<M> it = bundle.iterator();
-      while (it.hasNext()) {
-        MANAGER_MAP.get(addr).localQueueForNextIteration.add(it.next());
-        peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_RECEIVED,
-            1L);
-      }
+      MANAGER_MAP.get(addr).localQueueForNextIteration.addBundle(bundle);
+      peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_RECEIVED,
+          bundle.size());
     }
 
     @Override
     public InetSocketAddress getListenerAddress() {
       return selfAddress;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public void transfer(InetSocketAddress addr, M msg) throws IOException {
+      MANAGER_MAP.get(addr).localQueueForNextIteration.add(msg);
+      peer.incrementCounter(BSPPeerImpl.PeerCounter.TOTAL_MESSAGES_RECEIVED, 1);
     }
   }
 
@@ -469,11 +469,6 @@ public class LocalBSPRunner implements JobSubmissionProtocol {
     }
 
     @Override
-    public String[] getAllPeerNames(TaskAttemptID taskId) {
-      return peerNames;
-    }
-
-    @Override
     public void deregisterFromBarrier(BSPJobID jobId, TaskAttemptID taskId,
         String hostAddress, long port) {
 
@@ -530,6 +525,11 @@ public class LocalBSPRunner implements JobSubmissionProtocol {
     @Override
     public boolean remove(String key, SyncEventListener listener) {
       return false;
+    }
+
+    @Override
+    public String[] getAllPeerNames(BSPJobID jobID) {
+      return peerNames;
     }
   }
 

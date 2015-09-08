@@ -45,7 +45,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.DataOutputBuffer;
-import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.MapWritable;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.SequenceFile.CompressionType;
 import org.apache.hadoop.io.Text;
@@ -58,6 +58,11 @@ import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.apache.hama.Constants;
 import org.apache.hama.HamaConfiguration;
+import org.apache.hama.bsp.message.MessageManager;
+import org.apache.hama.bsp.message.OutgoingMessageManager;
+import org.apache.hama.bsp.message.OutgoingPOJOMessageBundle;
+import org.apache.hama.bsp.message.queue.MemoryQueue;
+import org.apache.hama.bsp.message.queue.MessageQueue;
 import org.apache.hama.ipc.HamaRPCProtocolVersion;
 import org.apache.hama.ipc.JobSubmissionProtocol;
 import org.apache.hama.ipc.RPC;
@@ -303,14 +308,22 @@ public class BSPJobClient extends Configured implements Tool {
     BSPJob job = pJob;
     job.setJobID(jobId);
 
-    ClusterStatus clusterStatus = getClusterStatus(true);
-    int maxTasks = job.getConfiguration().getInt(Constants.MAX_TASKS_PER_JOB,
-        clusterStatus.getMaxTasks() - clusterStatus.getTasks());
+    int maxTasks;
+    int configured = job.getConfiguration().getInt(Constants.MAX_TASKS_PER_JOB,
+        job.getNumBspTask());
 
-    if (maxTasks < job.getNumBspTask()) {
-      LOG.warn("The configured number of tasks has exceeded the maximum allowed. Job will run with "
-          + maxTasks + " tasks.");
-      job.setNumBspTask(maxTasks);
+    ClusterStatus clusterStatus = getClusterStatus(true);
+    // Re-adjust the maxTasks based on cluster status.
+    if (clusterStatus != null) {
+      maxTasks = clusterStatus.getMaxTasks() - clusterStatus.getTasks();
+
+      if (configured > maxTasks) {
+        LOG.warn("The configured number of tasks has exceeded the maximum allowed. Job will run with "
+            + (maxTasks) + " tasks.");
+        job.setNumBspTask(maxTasks);
+      }
+    } else {
+      maxTasks = configured;
     }
 
     Path submitJobDir = new Path(getSystemDir(), "submit_"
@@ -331,15 +344,20 @@ public class BSPJobClient extends Configured implements Tool {
     short replication = (short) job.getInt("bsp.submit.replication", 10);
 
     // only create the splits if we have an input
-    if ((job.get("bsp.input.dir") != null)
+    if ((job.get(Constants.JOB_INPUT_DIR) != null)
         || (job.get("bsp.join.expr") != null)) {
       // Create the splits for the job
       LOG.debug("Creating splits at " + fs.makeQualified(submitSplitFile));
 
-      InputSplit[] splits = job.getInputFormat().getSplits(job, maxTasks);
+      InputSplit[] splits = job.getInputFormat().getSplits(job,
+          (maxTasks > configured) ? configured : maxTasks);
 
-      job = partition(job, splits, maxTasks);
-      maxTasks = job.getInt("hama.partition.count", maxTasks);
+      if (job.getConfiguration().getBoolean(
+          Constants.ENABLE_RUNTIME_PARTITIONING, false)) {
+        LOG.info("Run pre-partitioning job");
+        job = partition(job, splits, maxTasks);
+        maxTasks = job.getInt("hama.partition.count", maxTasks);
+      }
 
       if (job.getBoolean("input.has.partitioned", false)) {
         splits = job.getInputFormat().getSplits(job, maxTasks);
@@ -351,7 +369,13 @@ public class BSPJobClient extends Configured implements Tool {
                 + splits.length + ", The number of max tasks: " + maxTasks);
       }
 
-      job.setNumBspTask(writeSplits(job, splits, submitSplitFile, maxTasks));
+      int numOfSplits = writeSplits(job, splits, submitSplitFile, maxTasks);
+      if (numOfSplits > configured
+          || !job.getConfiguration().getBoolean(Constants.FORCE_SET_BSP_TASKS,
+              false)) {
+        job.setNumBspTask(numOfSplits);
+      }
+
       job.set("bsp.job.split.file", submitSplitFile.toString());
     }
 
@@ -395,7 +419,6 @@ public class BSPJobClient extends Configured implements Tool {
   protected BSPJob partition(BSPJob job, InputSplit[] splits, int maxTasks)
       throws IOException {
     String inputPath = job.getConfiguration().get(Constants.JOB_INPUT_DIR);
-
     Path partitionDir = new Path("/tmp/hama-parts/" + job.getJobID() + "/");
     if (fs.exists(partitionDir)) {
       fs.delete(partitionDir, true);
@@ -430,10 +453,9 @@ public class BSPJobClient extends Configured implements Tool {
 
         HamaConfiguration conf = new HamaConfiguration(job.getConfiguration());
 
-        conf.setInt(Constants.RUNTIME_DESIRED_PEERS_COUNT, numTasks);
         if (job.getConfiguration().get(Constants.RUNTIME_PARTITIONING_DIR) != null) {
-          conf.set(Constants.RUNTIME_PARTITIONING_DIR, job.getConfiguration()
-              .get(Constants.RUNTIME_PARTITIONING_DIR));
+          partitionDir = new Path(job.getConfiguration().get(
+              Constants.RUNTIME_PARTITIONING_DIR));
         }
 
         conf.set(Constants.RUNTIME_PARTITIONING_CLASS,
@@ -443,13 +465,25 @@ public class BSPJobClient extends Configured implements Tool {
             + partitioningJob.getJobName());
         LOG.debug("partitioningJob input: "
             + partitioningJob.get(Constants.JOB_INPUT_DIR));
+
+        partitioningJob.getConfiguration().setClass(
+            MessageManager.OUTGOING_MESSAGE_MANAGER_CLASS,
+            OutgoingPOJOMessageBundle.class, OutgoingMessageManager.class);
+        partitioningJob.getConfiguration().setClass(
+            MessageManager.RECEIVE_QUEUE_TYPE_CLASS, MemoryQueue.class,
+            MessageQueue.class);
+
+        partitioningJob.setBoolean(Constants.FORCE_SET_BSP_TASKS, true);
         partitioningJob.setInputFormat(job.getInputFormat().getClass());
         partitioningJob.setInputKeyClass(job.getInputKeyClass());
         partitioningJob.setInputValueClass(job.getInputValueClass());
-        partitioningJob.setOutputFormat(NullOutputFormat.class);
-        partitioningJob.setOutputKeyClass(NullWritable.class);
-        partitioningJob.setOutputValueClass(NullWritable.class);
+
+        partitioningJob.setOutputFormat(SequenceFileOutputFormat.class);
+        partitioningJob.setOutputKeyClass(job.getInputKeyClass());
+        partitioningJob.setOutputValueClass(job.getInputValueClass());
+
         partitioningJob.setBspClass(PartitioningRunner.class);
+        partitioningJob.setMessageClass(MapWritable.class);
         partitioningJob.set("bsp.partitioning.runner.job", "true");
         partitioningJob.getConfiguration().setBoolean(
             Constants.ENABLE_RUNTIME_PARTITIONING, false);
@@ -548,12 +582,10 @@ public class BSPJobClient extends Configured implements Tool {
 
         // set partitionID to rawSplit
         if (split.getClass().getName().equals(FileSplit.class.getName())
-            && job.getConfiguration().get(Constants.RUNTIME_PARTITIONING_CLASS) != null
-            && job.get("bsp.partitioning.runner.job") == null) {
-          LOG.debug(((FileSplit) split).getPath().getName());
-          String[] extractPartitionID = ((FileSplit) split).getPath().getName()
-              .split("[-]");
-          rawSplit.setPartitionID(Integer.parseInt(extractPartitionID[1]));
+            && job.getBoolean("input.has.partitioned", false)) {
+          String[] extractPartitionID = ((FileSplit) split).getPath().getName().split("[-]");
+          if(extractPartitionID.length > 1)
+            rawSplit.setPartitionID(Integer.parseInt(extractPartitionID[1]));
         }
 
         rawSplit.setClassName(split.getClass().getName());
@@ -787,7 +819,8 @@ public class BSPJobClient extends Configured implements Tool {
    * @throws IOException
    */
   public ClusterStatus getClusterStatus(boolean detailed) throws IOException {
-    return jobSubmitClient.getClusterStatus(detailed);
+    return (jobSubmitClient != null) ? jobSubmitClient
+        .getClusterStatus(detailed) : null;
   }
 
   // for the testcase
@@ -1073,16 +1106,16 @@ public class BSPJobClient extends Configured implements Tool {
       bytes.set(data, offset, length);
     }
 
-    public void setClassName(String className) {
-      splitClass = className;
-    }
-
     public void setPartitionID(int id) {
       this.partitionID = id;
     }
 
     public int getPartitionID() {
       return partitionID;
+    }
+
+    public void setClassName(String className) {
+      splitClass = className;
     }
 
     public String getClassName() {
@@ -1109,8 +1142,8 @@ public class BSPJobClient extends Configured implements Tool {
     public void readFields(DataInput in) throws IOException {
       splitClass = Text.readString(in);
       dataLength = in.readLong();
-      partitionID = in.readInt();
       bytes.readFields(in);
+      partitionID = in.readInt();
       int len = WritableUtils.readVInt(in);
       locations = new String[len];
       for (int i = 0; i < len; ++i) {
@@ -1122,8 +1155,8 @@ public class BSPJobClient extends Configured implements Tool {
     public void write(DataOutput out) throws IOException {
       Text.writeString(out, splitClass);
       out.writeLong(dataLength);
-      out.writeInt(partitionID);
       bytes.write(out);
+      out.writeInt(partitionID);
       WritableUtils.writeVInt(out, locations.length);
       for (String location : locations) {
         Text.writeString(out, location);

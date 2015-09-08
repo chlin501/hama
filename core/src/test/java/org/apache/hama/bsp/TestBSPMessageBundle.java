@@ -64,6 +64,7 @@ public class TestBSPMessageBundle extends TestCase {
       testMessages[i] = msg;
       bundle.addMessage(testMessages[i]);
     }
+    
     // Serialize it.
     ByteArrayOutputStream baos = new ByteArrayOutputStream();
     bundle.write(new DataOutputStream(baos));

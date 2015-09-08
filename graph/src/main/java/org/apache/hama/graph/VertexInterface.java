@@ -23,6 +23,7 @@ import java.util.List;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hama.HamaConfiguration;
+import org.apache.hama.bsp.Counters.Counter;
 
 /**
  * The vertex interface.
@@ -51,12 +52,12 @@ public interface VertexInterface<V extends WritableComparable, E extends Writabl
   public V getVertexID();
 
   /**
-   * @return the number of vertices in the input graph.
+   * @return the total number of vertices.
    */
-  public long getNumVertices();
+  public long getTotalNumVertices();
 
   /**
-   * The user-defined function
+   * The user-defined function.
    */
   public void compute(Iterable<M> messages) throws IOException;
 
@@ -117,7 +118,7 @@ public interface VertexInterface<V extends WritableComparable, E extends Writabl
     *
     * @throws IOException
     *
-    * @param name identifies a aggregator
+    * @param index identifies a aggregator
     * @param value value to be aggregated
     */
    public void aggregate(int index, M value) throws IOException;
@@ -127,4 +128,8 @@ public interface VertexInterface<V extends WritableComparable, E extends Writabl
     */
    public Writable getAggregatedValue(int index);
 
+   /** Counters */
+   public Counter getCounter(Enum<?> name);
+   
+   public Counter getCounter(String group, String name);
 }

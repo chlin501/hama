@@ -42,7 +42,7 @@ import org.junit.Test;
 
 public class BipartiteMatchingTest extends TestCase {
 
-  private String[] input = { "A L:B", "B R:A", "C L:B D", "D R:A C" };
+  private String[] input = { "A L:B", "B R:A", "C L:D", "D R:A C" };
 
   private final static String DELIMETER = "\t";
 
@@ -108,7 +108,7 @@ public class BipartiteMatchingTest extends TestCase {
 
   private void verifyResult() throws IOException {
     FileStatus[] files = fs.globStatus(new Path(OUTPUT + "/part-*"));
-    assertTrue("Not enough files found: " + files.length, files.length == 2);
+    assertTrue("Not enough files found: " + files.length, files.length == 1);
 
     for (FileStatus file : files) {
       if (file.getLen() > 0) {
@@ -152,6 +152,7 @@ public class BipartiteMatchingTest extends TestCase {
       GraphJob job = BipartiteMatching.createJob(new String[] { INPUT, OUTPUT,
           "30", "2" }, conf);
       job.setPartitioner(CustomTextPartitioner.class);
+      job.setNumBspTask(1);
 
       long startTime = System.currentTimeMillis();
       if (job.waitForCompletion(true)) {

@@ -17,30 +17,23 @@
  */
 package org.apache.hama.bsp.message.queue;
 
-import java.util.Iterator;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.PriorityBlockingQueue;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.WritableComparable;
+import org.apache.hama.bsp.BSPMessageBundle;
 import org.apache.hama.bsp.TaskAttemptID;
-import org.apache.hama.bsp.message.bundle.BSPMessageBundle;
-import org.apache.hama.bsp.message.bundle.POJOMessageBundle;
 
 /**
  * Heap (Java's priority queue) based message queue implementation that supports
  * sorted receive and send.
  */
 public final class SortedMemoryQueue<M extends WritableComparable<M>>
-    implements SynchronizedQueue<M>, BSPMessageInterface<M> {
+    implements SynchronizedQueue<M> {
 
   private final BlockingQueue<M> queue = new PriorityBlockingQueue<M>();
   private Configuration conf;
-
-  @Override
-  public Iterator<M> iterator() {
-    return queue.iterator();
-  }
 
   @Override
   public void setConf(Configuration conf) {
@@ -50,6 +43,11 @@ public final class SortedMemoryQueue<M extends WritableComparable<M>>
   @Override
   public Configuration getConf() {
     return conf;
+  }
+
+  @Override
+  public void addBundle(BSPMessageBundle<M> bundle) {
+    addAll(bundle);
   }
 
   @Override
@@ -87,10 +85,9 @@ public final class SortedMemoryQueue<M extends WritableComparable<M>>
   }
 
   // empty, not needed to implement
-
   @Override
   public void init(Configuration conf, TaskAttemptID id) {
-
+    this.conf = conf;
   }
 
   @Override
@@ -99,33 +96,14 @@ public final class SortedMemoryQueue<M extends WritableComparable<M>>
   }
 
   @Override
-  public void prepareRead() {
-
-  }
-
-  @Override
-  public void prepareWrite() {
-
-  }
-
-  @Override
-  public boolean isMessageSerialized() {
-    return false;
-  }
-
-  @Override
-  public void add(BSPMessageBundle<M> bundle) {
-    addAll((POJOMessageBundle<M>) bundle);
-  }
-
-  @Override
-  public boolean isMemoryBasedQueue() {
-    return true;
-  }
-
-  @Override
   public MessageQueue<M> getMessageQueue() {
     return this;
+  }
+
+  @Override
+  public void prepareRead() {
+    // TODO Auto-generated method stub
+    
   }
 
 }

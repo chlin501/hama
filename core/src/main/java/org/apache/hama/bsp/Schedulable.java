@@ -24,13 +24,12 @@ import java.io.IOException;
  */
 public interface Schedulable {
 
-  /**
-   * Schedule job to designated GroomServer(s) immediately.
-   * 
-   * @param job to be scheduled.
-   * @param statuses of GroomServer(s).
-   * @throws IOException
-   */
-  void schedule(JobInProgress job, GroomServerStatus... statuses)
-      throws IOException;
+	  /**
+	   * Schedule job immediately.
+	   * 
+	   * @param job to be scheduled.
+	   * @throws IOException
+	   */
+	  void schedule(JobInProgress job)
+	      throws IOException;
 }

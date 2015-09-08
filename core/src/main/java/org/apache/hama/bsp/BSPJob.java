@@ -458,15 +458,6 @@ public class BSPJob extends BSPJobContext { // TODO: builder, immutable
     conf.setBoolean(Constants.CHECKPOINT_ENABLED, enableCheckPoint);
   }
 
-  /**
-   * Set compression threshold in bytes.
-   * 
-   * @param ct
-   */
-  public void setCompressionThreshold(long ct) {
-    conf.setLong("hama.messenger.compression.threshold", ct);
-  }
-
   public void setMessageQueueBehaviour(String queueBehaviour) {
     if (queueBehaviour.equals(MessageQueue.PERSISTENT_QUEUE))
       conf.setBoolean(MessageQueue.PERSISTENT_QUEUE, true);

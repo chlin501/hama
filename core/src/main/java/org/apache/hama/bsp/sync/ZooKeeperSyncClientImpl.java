@@ -237,16 +237,25 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
   @Override
   public void register(BSPJobID jobId, TaskAttemptID taskId,
       String hostAddress, long port) {
-    try {
-      String jobRegisterKey = constructKey(jobId, "peers");
-      if (zk.exists(jobRegisterKey, false) == null) {
+    int count = 0;
+    String jobRegisterKey = constructKey(jobId, "peers");
+    Stat stat = null;
+
+    while (stat != null) {
+      try {
+        stat = zk.exists(jobRegisterKey, false);
         zk.create(jobRegisterKey, new byte[0], Ids.OPEN_ACL_UNSAFE,
             CreateMode.PERSISTENT);
+        Thread.sleep(1000);
+      } catch (Exception e) {
+        LOG.debug(e); // ignore it.
       }
-    } catch (KeeperException e) {
-      LOG.error(e);
-    } catch (InterruptedException e) {
-      LOG.error(e);
+      count++;
+
+      // retry 10 times.
+      if (count > 9) {
+        throw new RuntimeException("can't create root node.");
+      }
     }
     registerTask(jobId, hostAddress, port, taskId);
   }
@@ -255,9 +264,7 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
    * Registers the task from outside, most of the time used by the groom which
    * uses this at task spawn-time.
    * 
-   * @param zk
    * @param jobId
-   * @param taskId
    * @param hostAddress
    * @param port
    * @param taskId
@@ -273,18 +280,16 @@ public class ZooKeeperSyncClientImpl extends ZKSyncClient implements
   }
 
   @Override
-  public String[] getAllPeerNames(TaskAttemptID taskId) {
+  public String[] getAllPeerNames(BSPJobID jobID) {
     if (allPeers == null) {
       TreeMap<Integer, String> sortedMap = new TreeMap<Integer, String>();
       try {
-        List<String> var = zk.getChildren(
-            constructKey(taskId.getJobID(), "peers"), this);
+        List<String> var = zk.getChildren(constructKey(jobID, "peers"), this);
         allPeers = var.toArray(new String[var.size()]);
 
         TreeMap<TaskAttemptID, String> taskAttemptSortedMap = new TreeMap<TaskAttemptID, String>();
         for (String s : allPeers) {
-          byte[] data = zk.getData(constructKey(taskId.getJobID(), "peers", s),
-              this, null);
+          byte[] data = zk.getData(constructKey(jobID, "peers", s), this, null);
           TaskAttemptID thatTask = new TaskAttemptID();
           boolean result = getValueFromBytes(data, thatTask);
 

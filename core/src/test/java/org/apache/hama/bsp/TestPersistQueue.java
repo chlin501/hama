@@ -37,15 +37,9 @@ public class TestPersistQueue extends TestCase {
 
   public static final Log LOG = LogFactory.getLog(TestPartitioning.class);
 
-  public void testDiskQueue() throws Exception {
-    BSPJob bsp = getNewJobConf();
-    bsp.set(MessageManager.RECEIVE_QUEUE_TYPE_CLASS,
-        "org.apache.hama.bsp.message.queue.DiskQueue");
-
-    assertTrue(bsp.waitForCompletion(true));
-  }
-
   public void testMemoryQueue() throws Exception {
+    BSPMessageBundle<IntWritable> x = new BSPMessageBundle<IntWritable>();
+    System.out.println(x.getClass().getCanonicalName() + ", " + BSPMessageBundle.class.getCanonicalName());
     BSPJob bsp = getNewJobConf();
     bsp.set(MessageManager.RECEIVE_QUEUE_TYPE_CLASS,
         "org.apache.hama.bsp.message.queue.MemoryQueue");
@@ -57,14 +51,6 @@ public class TestPersistQueue extends TestCase {
     BSPJob bsp = getNewJobConf();
     bsp.set(MessageManager.RECEIVE_QUEUE_TYPE_CLASS,
         "org.apache.hama.bsp.message.queue.SortedMemoryQueue");
-
-    assertTrue(bsp.waitForCompletion(true));
-  }
-
-  public void testSpillingQueue() throws Exception {
-    BSPJob bsp = getNewJobConf();
-    bsp.set(MessageManager.RECEIVE_QUEUE_TYPE_CLASS,
-        "org.apache.hama.bsp.message.queue.SpillingQueue");
 
     assertTrue(bsp.waitForCompletion(true));
   }
@@ -100,7 +86,9 @@ public class TestPersistQueue extends TestCase {
       }
 
       int cnt = 0;
-      while ((peer.getCurrentMessage()) != null) {
+      IntWritable result = null;
+      while ((result = peer.getCurrentMessage()) != null) {
+        System.out.println(result);
         cnt++;
       }
 

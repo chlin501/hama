@@ -36,7 +36,7 @@ import org.apache.hama.bsp.HashPartitioner;
 import org.apache.hama.bsp.SequenceFileInputFormat;
 import org.apache.hama.bsp.SequenceFileOutputFormat;
 import org.apache.hama.bsp.TestBSPMasterGroomServer;
-import org.apache.hama.bsp.message.compress.SnappyCompressor;
+import org.apache.hama.bsp.message.compress.Bzip2Compressor;
 import org.apache.hama.commons.io.TextArrayWritable;
 import org.apache.hama.graph.example.PageRank;
 import org.apache.hama.graph.example.PageRank.PagerankSeqReader;
@@ -61,9 +61,7 @@ public class TestSubmitGraphJob extends TestBSPMasterGroomServer {
   @Before
   public void setUp() throws Exception {
     super.setUp();
-    vi.add(ListVerticesInfo.class);
-    vi.add(DiskVerticesInfo.class);
-    vi.add(OffHeapVerticesInfo.class);
+    vi.add(MapVerticesInfo.class);
   }
 
   @Override
@@ -86,7 +84,9 @@ public class TestSubmitGraphJob extends TestBSPMasterGroomServer {
     // set the defaults
     bsp.setMaxIteration(30);
 
-    bsp.setCompressionCodec(SnappyCompressor.class);
+    bsp.setNumBspTask(2);
+    
+    bsp.setCompressionCodec(Bzip2Compressor.class);
     bsp.setAggregatorClass(AverageAggregator.class);
 
     bsp.setInputFormat(SequenceFileInputFormat.class);
@@ -120,7 +120,7 @@ public class TestSubmitGraphJob extends TestBSPMasterGroomServer {
   @SuppressWarnings("rawtypes")
   protected void injectVerticesInfo() {
     Class<? extends VerticesInfo> verticesInfoClass = vi.get(Math
-        .abs(new Random().nextInt() % 3));
+        .abs(new Random().nextInt() % 1));
     LOG.info("using vertices info of type : " + verticesInfoClass.getName());
   }
 

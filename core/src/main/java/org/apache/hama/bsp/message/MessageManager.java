@@ -85,6 +85,8 @@ public interface MessageManager<M extends Writable> {
   public void transfer(InetSocketAddress addr, BSPMessageBundle<M> bundle)
       throws IOException;
 
+  public void transfer(InetSocketAddress addr, M msg) throws IOException;
+  
   /**
    * Clears the outgoing queue. Can be used to switch queues.
    */
@@ -97,13 +99,13 @@ public interface MessageManager<M extends Writable> {
   public int getNumCurrentMessages();
 
   /**
-   * Send the messages to self to receive in the next superstep.
+   * Send the message bundle to self to receive in the next superstep.
    */
-  public void loopBackMessages(BSPMessageBundle<M> bundle)
+  public void loopBackBundle(BSPMessageBundle<M> bundle)
       throws IOException;
 
   /**
-   * Send the message to self to receive in the next superstep.
+   * Send the single message to self to receive in the next superstep.
    */
   public void loopBackMessage(Writable message) throws IOException;
 
@@ -122,4 +124,5 @@ public interface MessageManager<M extends Writable> {
    * on.
    */
   public InetSocketAddress getListenerAddress();
+
 }

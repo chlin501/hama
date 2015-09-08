@@ -1,17 +1,58 @@
 Hama Change Log
 
-Release 0.7.0 (unreleased changes)
+Release 0.7.1 (unreleased changes)
 
   NEW FEATURES
 
   BUG FIXES
-  
+
+    HAMA-965: Infinite loop because of recursive function call (JongYoon Lim via edwardyoon)
+    HAMA-966: NioServerListener doesn't throw any exceptions (JongYoon Lim via edwardyoon)
+
+  IMPROVEMENTS
+
+    HAMA-967: Remove a meaningless checking condition (JongYoon Lim via edwardyoon)
+
+Release 0.7.0 - Jun 14, 2015
+
+  NEW FEATURES
+
+   HAMA-942: DockFile for Hama (Hoseog Lee via edwardyoon)
+   HAMA-894: Implement K-core algorithm (Jaegwon Seo via edwardyoon)
+   HAMA-907: Add MaxFlow example (Zhengjun via edwardyoon)
+   HAMA-915: Add Kryo serializer (edwardyoon)
+   HAMA-726: Hama on Mesos (Jeff Fenchel via edwardyoon)
+   HAMA-863: Implement SparseVector (Yexi Jiang)
+
+  BUG FIXES
+
+   HAMA-943: java.lang.IllegalAccessError occur at run time when set default "bsp.user.name" (Minho Kim via edwardyoon)
+   HAMA-935: Doesn't operate if hostname doesn't match between AppMaster and Zookeeper quorum (Minho Kim via edwardyoon)
+   HAMA-931: Make the HAMA base path configurable (Minho Kim via edwardyoon)
+   HAMA-930: Add hama-yarn to binary distribution (Minho Kim via edwardyoon)  
+   HAMA-848: Refactor YARN module for hadoop 2.x stable version (Minho Kim via edwardyoon)
+   HAMA-906: Automatic activation of halted vertices without received messages (edwardyoon)
+   HAMA-905: Fix Pi Estimator Example (Martin Illecker)
    HAMA-889: NonDefaultIterator of DenseDoubleVector never reaches the end (Yexi Jiang)
    HAMA-888: Add more test cases for DenseDoubleVector (Yexi Jiang)
    HAMA-885: Semi-Clustering is not producing expected output (Renil J via edwardyoon)
 
   IMPROVEMENTS
-
+  
+   HAMA-939: Refactoring which was implement using out-of-date status response (Minho Kim via edwardyoon)
+   HAMA-955: Support UnsafeByteArrayInputStream and UnSafeByteArrayOutputStream (Minho Kim via edwardyoon)
+   HAMA-944: Add JSON format option to fastgen command (Minho Kim via edwardyoon)
+   HAMA-919: Manage messages per Vertex (edwardyoon)
+   HAMA-923: add a toString() method for FloatArrayWritable and TextArrayWritable classes (edwardyoon)
+   HAMA-921: Polish doSuperstep() function and VertexMessageIterable class (Anastasis Andronidis)
+   HAMA-913: Add RPC implementation using netty(bsmin)  
+   HAMA-914: Boolean flag (isCompressed) is required only when runtime compression is enabled (edwardyoon)
+   HAMA-910: Web UI Improvement (Victor Lee via edwardyoon)
+   HAMA-909: Improve Mesos Scheduler's Fault Tolerance (Jeff Fenchel via edwardyoon)
+   HAMA-823: Remove javadoc warnings (Victor Lee via edwardyoon)  
+   HAMA-886: Refactoring core.bundle package (edwardyoon)
+   HAMA-899: Add getAdjacentPeerNames() that returns the names of locally adjacent peers (edwardyoon)
+   HAMA-847: Vertex should provide Counters (edwardyoon)
    HAMA-568: Add faster synchronized collections for message queues (edwardyoon)
 
 Release 0.6.4 - Mar 5, 2014
